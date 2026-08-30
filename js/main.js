@@ -372,6 +372,16 @@
       "🔒 Editar menú del club", "Introduce la contraseña para editar este club.");
   }
 
+  // Reutilizable desde CUALQUIER otro módulo (renderizadores.js: Sancionados
+  // solo-admin, quitar Lesionados/Sancionados solo-admin) — mismo overlay/
+  // candado de siempre (747), 0 KB nuevos, solo un punto de entrada público.
+  function pedirPinAdmin(onOk, titulo, subtitulo) {
+    abrirCandado(ADMIN_PASSWORD, onOk,
+      titulo || "🔒 Acción de administrador",
+      subtitulo || "Introduce la contraseña de administrador para continuar.");
+  }
+  window.Main = { pedirPinAdmin: pedirPinAdmin };
+
   // ---------- Pantalla 2: Panel Admin ----------
   var ADMIN_VISTAS = {
     calendario: {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=20">
+<link rel="stylesheet" href="css/estilos.css?v=21">
 </head>
 <body>
 
@@ -181,6 +181,12 @@
       <span class="previa-meta-item" id="previa-forma">—</span>
     </div>
 
+    <!-- "Activar Prórroga y Penaltis" (solo eliminatorias a partido único)
+         vive AQUÍ, no en la pantalla en vivo — se decide ANTES de empezar
+         el partido. Lo rellena abrirPreviaPartido() en js/renderizadores.js;
+         js/acta.js lee su checkbox (si existe) al arrancar el partido. -->
+    <div id="previa-formato-box"></div>
+
     <div class="live-separador"></div>
 
     <div class="live-lista-block">
@@ -218,20 +224,10 @@
 
     <!-- VISTA A: registrar eventos -->
     <div id="live-entrada">
-      <div class="live-separador"></div>
-
-      <div id="live-formato-box"></div>
-
       <div class="live-form-row">
         <label class="live-label live-label--full">Minuto
           <select id="live-minuto" class="live-select live-select--full"></select>
         </label>
-        <button type="button" class="btn-descanso btn-descanso--inline" id="live-descanso">🛌 Descanso</button>
-      </div>
-
-      <div class="live-equipo-toggle live-equipo-toggle--full" id="live-equipo-toggle">
-        <button type="button" class="live-toggle-btn is-active" data-lado="local">Local</button>
-        <button type="button" class="live-toggle-btn" data-lado="visitante">Visitante</button>
       </div>
 
       <div class="live-form-row" id="live-jugador-row">
@@ -240,23 +236,23 @@
         </label>
       </div>
 
+      <!-- 3x3 "como videojuego" — icono grande arriba, etiqueta corta
+           debajo (icono+span, ver .live-evt-btn). Descanso es la 9ª caja
+           en vez de un botón aparte — libera espacio y cierra el 3x3. -->
       <div class="live-eventos-grid">
-        <button type="button" class="live-evt-btn" data-tipo="GOL">⚽ Gol</button>
-        <button type="button" class="live-evt-btn" data-tipo="AUTOGOL">🥅 Autogol</button>
-        <button type="button" class="live-evt-btn" data-tipo="GOL_FAV_FALTA">🎯 Gol de falta</button>
-        <button type="button" class="live-evt-btn" data-tipo="PENALTI_GOL">🟢 Penalti anotado</button>
-        <button type="button" class="live-evt-btn" data-tipo="PENALTI_FALLADO">🔴 Penalti fallado</button>
-        <button type="button" class="live-evt-btn" data-tipo="AMARILLA">🟨 Amarilla</button>
-        <button type="button" class="live-evt-btn" data-tipo="ROJA">🟥 Roja</button>
-        <button type="button" class="live-evt-btn" data-tipo="MVP">⭐ MVP</button>
+        <button type="button" class="live-evt-btn" data-tipo="GOL">⚽<span>GOL</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="AUTOGOL">🚫<span>AUTOGOL</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="GOL_FAV_FALTA">🎯<span>GOL FALTA</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="PENALTI_GOL">🥅<span>GOL PENAL</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="PENALTI_FALLADO">❌<span>PENAL FALLADO</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="AMARILLA">🟨<span>AMARILLA</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="ROJA">🟥<span>ROJA</span></button>
+        <button type="button" class="live-evt-btn" data-tipo="MVP">⭐<span>MVP</span></button>
+        <button type="button" class="live-evt-btn live-evt-btn--descanso" id="live-descanso">🛌<span>DESCANSO</span></button>
       </div>
 
       <div id="live-tanda-info" class="live-tanda-info" hidden>
         🎯 Tanda de penaltis: <strong id="live-tanda-marcador">0 - 0</strong>
-      </div>
-
-      <div class="live-acta-lista" id="live-acta-lista">
-        <div class="live-acta-vacia">Todavía no hay eventos registrados.</div>
       </div>
 
       <div class="live-footer">
@@ -288,17 +284,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=20" defer></script>
-<script src="js/sync.js?v=20" defer></script>
-<script src="js/renderizadores.js?v=20" defer></script>
-<script src="js/sistema-temporadas.js?v=20" defer></script>
-<script src="js/acta.js?v=20" defer></script>
-<script src="js/estadios.js?v=20" defer></script>
-<script src="js/balones.js?v=20" defer></script>
-<script src="js/escudos.js?v=20" defer></script>
-<script src="js/calendario.js?v=20" defer></script>
-<script src="js/persistencia.js?v=20" defer></script>
-<script src="js/main.js?v=20" defer></script>
+<script src="js/estado.js?v=21" defer></script>
+<script src="js/sync.js?v=21" defer></script>
+<script src="js/renderizadores.js?v=21" defer></script>
+<script src="js/sistema-temporadas.js?v=21" defer></script>
+<script src="js/acta.js?v=21" defer></script>
+<script src="js/estadios.js?v=21" defer></script>
+<script src="js/balones.js?v=21" defer></script>
+<script src="js/escudos.js?v=21" defer></script>
+<script src="js/calendario.js?v=21" defer></script>
+<script src="js/persistencia.js?v=21" defer></script>
+<script src="js/main.js?v=21" defer></script>
 
 </body>
 </html>

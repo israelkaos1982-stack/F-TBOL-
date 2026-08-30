@@ -11,10 +11,10 @@
 
   var TIPOS_EVENTO = {
     GOL: { emoji: "⚽", label: "Gol", esGol: true, autogol: false },
-    AUTOGOL: { emoji: "🥅", label: "Autogol", esGol: true, autogol: true },
+    AUTOGOL: { emoji: "🚫", label: "Autogol", esGol: true, autogol: true },
     GOL_FAV_FALTA: { emoji: "🎯", label: "Gol de falta", esGol: true, autogol: false },
-    PENALTI_GOL: { emoji: "🟢", label: "Penalti anotado", esGol: true, autogol: false },
-    PENALTI_FALLADO: { emoji: "🔴", label: "Penalti fallado", esGol: false, autogol: false },
+    PENALTI_GOL: { emoji: "🥅", label: "Gol de penalti", esGol: true, autogol: false },
+    PENALTI_FALLADO: { emoji: "❌", label: "Penalti fallado", esGol: false, autogol: false },
     AMARILLA: { emoji: "🟨", label: "Amarilla", esGol: false, autogol: false },
     ROJA: { emoji: "🟥", label: "Roja", esGol: false, autogol: false },
     MVP: { emoji: "⭐", label: "MVP", esGol: false, autogol: false }
@@ -189,7 +189,7 @@
       var op = document.createElement("option");
       op.value = String(m);
       op.textContent = m + "'";
-      if (m === 45) op.selected = true;
+      if (m === 5) op.selected = true;
       sel.appendChild(op);
     }
 
@@ -228,28 +228,6 @@
     marcador.textContent = penL + " - " + penV;
   }
 
-  // Casilla "Activar Prórroga y Penaltis" (solo eliminatoria única) /
-  // aviso informativo de "gol de fuera cuenta doble" (solo ida y
-  // vuelta) — Liga no muestra ninguna caja. El modo "desempate" (tercer
-  // partido) cae dentro de eliminatoria-unica a propósito.
-  function renderFormatoBox() {
-    var box = document.getElementById("live-formato-box");
-    if (!box || !_partidoActivo) return;
-    var modo = _partidoActivo.modo;
-    if (modo === "eliminatoria-unica") {
-      box.innerHTML =
-        '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle"' +
-        (_partidoActivo.prorroga ? " checked" : "") +
-        '><span>Activar Prórroga y Penaltis</span></label>' +
-        '<p class="live-formato-hint">⏱️ Actívala si el partido termina empatado en el 90\' — habilita los minutos de prórroga (95\'-120\') y la tanda de penaltis.</p>';
-    } else if (modo === "ida-vuelta") {
-      box.innerHTML =
-        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Partido de ida y vuelta — recuerda que <strong>el gol marcado fuera de casa cuenta doble</strong> en caso de empate global. (Solo informativo, no afecta a este marcador.)</p>';
-    } else {
-      box.innerHTML = "";
-    }
-  }
-
   function poblarSelectJugador() {
     var sel = document.getElementById("live-jugador");
     var fila = document.getElementById("live-jugador-row");
@@ -275,41 +253,44 @@
   function seleccionarLado(lado) {
     if (!_partidoActivo) return;
     _partidoActivo.lado = lado;
-    document.querySelectorAll(".live-toggle-btn").forEach(function (b) {
+    document.querySelectorAll(".live-team-nombre").forEach(function (b) {
       b.classList.toggle("is-active", b.dataset.lado === lado);
     });
     poblarSelectJugador();
   }
 
+  // El acta ya NO sale en una lista única al final de la pantalla (con
+  // marcador + equipos + acta, la captura no cabía entera en la
+  // pantalla) — cada evento se pinta DEBAJO del escudo/nombre de SU
+  // propio equipo, en letra pequeña (0 KB de "(local)"/"(visitante)":
+  // la posición ya lo dice).
+  function _miniActaFila(ev) {
+    var meta = TIPOS_EVENTO[ev.tipo];
+    var etiquetaMinuto = ev.minuto === MINUTO_TANDA ? "🎯" : ev.minuto + "'";
+    return (
+      '<div class="live-acta-mini-item">' +
+      '<span class="live-acta-mini-min">' + etiquetaMinuto + "</span>" +
+      '<span class="live-acta-mini-tipo">' + meta.emoji + "</span>" +
+      '<span class="live-acta-mini-jugador">' + (ev.jugador_nombre || "—") + "</span>" +
+      '<button type="button" class="live-acta-mini-del" data-id-evento="' + ev.id_evento + '" aria-label="Eliminar evento">✕</button>' +
+      "</div>"
+    );
+  }
   function pintarActaLista() {
-    var cont = document.getElementById("live-acta-lista");
-    if (!cont) return;
-    cont.innerHTML = "";
-
-    if (!actaTemporal.length) {
-      var vacio = document.createElement("div");
-      vacio.className = "live-acta-vacia";
-      vacio.textContent = "Todavía no hay eventos registrados.";
-      cont.appendChild(vacio);
-      actualizarTandaInfo();
-      return;
-    }
+    var contL = document.getElementById("live-acta-local");
+    var contV = document.getElementById("live-acta-visitante");
+    if (!contL || !contV || !_partidoActivo) return;
 
     function ordenMinuto(ev) { return ev.minuto === MINUTO_TANDA ? 999 : ev.minuto; }
     var ordenado = actaTemporal.slice().sort(function (a, b) { return ordenMinuto(a) - ordenMinuto(b); });
+
+    var htmlL = "", htmlV = "";
     ordenado.forEach(function (ev) {
-      var meta = TIPOS_EVENTO[ev.tipo];
-      var equipo = ev.equipo_id === _partidoActivo.local.id ? _partidoActivo.local : _partidoActivo.visitante;
-      var etiquetaMinuto = ev.minuto === MINUTO_TANDA ? "🎯" : ev.minuto + "'";
-      var fila = document.createElement("div");
-      fila.className = "live-acta-item";
-      fila.innerHTML =
-        '<span class="live-acta-min">' + etiquetaMinuto + "</span>" +
-        '<span class="live-acta-tipo">' + meta.emoji + " " + meta.label + "</span>" +
-        '<span class="live-acta-jugador">' + (ev.jugador_nombre || "—") + " <em>(" + equipo.siglas + ")</em></span>" +
-        '<button type="button" class="live-acta-del" data-id-evento="' + ev.id_evento + '" aria-label="Eliminar evento">✕</button>';
-      cont.appendChild(fila);
+      if (ev.equipo_id === _partidoActivo.local.id) htmlL += _miniActaFila(ev);
+      else if (ev.equipo_id === _partidoActivo.visitante.id) htmlV += _miniActaFila(ev);
     });
+    contL.innerHTML = htmlL;
+    contV.innerHTML = htmlV;
 
     actualizarTandaInfo();
   }
@@ -332,26 +313,33 @@
     actaTemporal = [];
     var R = window.Renderizadores;
     var modo = R.detectarModoPartido ? R.detectarModoPartido(partido) : "eliminatoria-unica";
-    _partidoActivo = { partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo, prorroga: false };
+
+    // "Activar Prórroga y Penaltis" ya se decide en la PANTALLA DE PREVIA
+    // (ver js/renderizadores.js::abrirPreviaPartido), ANTES de llegar
+    // aquí — su checkbox sigue existiendo en el DOM (la previa solo se
+    // OCULTA, no se destruye), así que basta con leer su estado actual.
+    var prorrogaChk = document.getElementById("live-prorroga-toggle");
+    _partidoActivo = { partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo, prorroga: !!(prorrogaChk && prorrogaChk.checked) };
 
     document.getElementById("live-comp").textContent =
       (R.COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
 
+    // El nombre de cada equipo ES el selector de "¿a quién le añado el
+    // evento?" (antes había una fila de botones Local/Visitante aparte,
+    // duplicando el nombre que ya se ve debajo del escudo) — con borde
+    // resaltado (CSS .live-team-nombre.is-active) se entiende de un
+    // vistazo a quién se le está registrando el evento. Debajo, su
+    // propio mini-acta (ver pintarActaLista).
     document.getElementById("live-team-local").innerHTML =
-      R.crearEscudoHTML(local, "escudo--lg") + '<span class="previa-team-nombre">' + local.nombre + "</span>";
+      R.crearEscudoHTML(local, "escudo--lg") +
+      '<button type="button" class="live-team-nombre" data-lado="local">' + local.nombre + "</button>" +
+      '<div class="live-acta-mini" id="live-acta-local"></div>';
     document.getElementById("live-team-visitante").innerHTML =
-      R.crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>";
+      R.crearEscudoHTML(visitante, "escudo--lg") +
+      '<button type="button" class="live-team-nombre" data-lado="visitante">' + visitante.nombre + "</button>" +
+      '<div class="live-acta-mini" id="live-acta-visitante"></div>';
 
-    // El toggle "¿a qué equipo le añado el evento?" muestra el NOMBRE
-    // real de cada equipo (no "Local"/"Visitante" genérico) — con un
-    // borde resaltado (CSS .live-toggle-btn.is-active) se entiende de
-    // un vistazo a quién se le está registrando el evento.
-    document.querySelectorAll("#live-equipo-toggle .live-toggle-btn").forEach(function (btn) {
-      btn.textContent = btn.dataset.lado === "local" ? local.nombre : visitante.nombre;
-    });
-
-    renderFormatoBox();
     poblarSelectMinuto();
     seleccionarLado("local");
     pintarActaLista();
@@ -423,6 +411,15 @@
 
   function confirmarPartido() {
     if (!_partidoActivo) return;
+
+    // Recordatorio de MVP — solo si nadie lo ha marcado todavía (no
+    // bloquea de verdad: cancelable, por si el admin de verdad no quiere
+    // elegir MVP en este partido).
+    var tieneMvp = actaTemporal.some(function (e) { return e.tipo === "MVP"; });
+    if (!tieneMvp && !window.confirm("⭐ Todavía no has elegido el MVP del partido. ¿Confirmar de todas formas?")) return;
+
+    window.alert("📸 Vas a FINALIZAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
+
     var r = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
     var resultado = finalizarYSubirPartido(_partidoActivo.partido.id, r.golesLocal, r.golesVisitante);
 
@@ -461,7 +458,16 @@
 
   // ---------- Delegación de eventos de la pantalla en vivo ----------
   document.addEventListener("click", function (ev) {
-    var toggleBtn = ev.target.closest && ev.target.closest(".live-toggle-btn");
+    // Descanso ANTES que el chequeo genérico de .live-evt-btn: es la 9ª
+    // caja del grid (misma clase), pero no registra ningún evento del
+    // acta — solo el aviso de captura.
+    var descansoBtn = ev.target.closest && ev.target.closest("#live-descanso");
+    if (descansoBtn) {
+      window.alert("📸 Descanso — haz una captura del marcador actual para el Grupo WhatsApp LIGA antes de continuar la 2ª parte.");
+      return;
+    }
+
+    var toggleBtn = ev.target.closest && ev.target.closest(".live-team-nombre");
     if (toggleBtn) { seleccionarLado(toggleBtn.dataset.lado); return; }
 
     var evtBtn = ev.target.closest && ev.target.closest(".live-evt-btn");
@@ -492,16 +498,11 @@
       return;
     }
 
-    var delBtn = ev.target.closest && ev.target.closest(".live-acta-del");
+    var delBtn = ev.target.closest && ev.target.closest(".live-acta-mini-del");
     if (delBtn && delBtn.dataset.idEvento) {
       eliminarEventoDeActa(delBtn.dataset.idEvento);
       pintarActaLista();
       pintarMarcadorEnVivo();
-      return;
-    }
-
-    if (ev.target.id === "live-descanso") {
-      window.alert("🛌 Descanso — haz una captura del marcador actual antes de continuar la 2ª parte.");
       return;
     }
 
@@ -527,16 +528,13 @@
     }
   });
 
-  // Minuto (mostrar/ocultar la caja de tanda al vuelo) + casilla de
-  // Prórroga y Penaltis (regenera el rango de minutos del select).
+  // Minuto: mostrar/ocultar la caja de tanda al vuelo. "Activar Prórroga
+  // y Penaltis" ya no vive en esta pantalla (se decide en la previa,
+  // ANTES de empezar) — su valor solo se LEE una vez, al arrancar el
+  // partido (ver iniciarPartidoEnVivo).
   document.addEventListener("change", function (ev) {
     if (ev.target.id === "live-minuto") {
       actualizarTandaInfo();
-      return;
-    }
-    if (ev.target.id === "live-prorroga-toggle" && _partidoActivo) {
-      _partidoActivo.prorroga = !!ev.target.checked;
-      poblarSelectMinuto();
       return;
     }
   });

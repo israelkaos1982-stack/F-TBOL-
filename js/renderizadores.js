@@ -1720,6 +1720,31 @@
     _renderListaJugadores("sancionados", "previa-sancionados-lista", "Sin sancionados registrados.");
   }
 
+  // Casilla "Activar Prórroga y Penaltis" (solo eliminatoria única) /
+  // aviso informativo de "gol de fuera cuenta doble" (solo ida y
+  // vuelta) — Liga no muestra ninguna caja. El modo "desempate" (tercer
+  // partido) cae dentro de eliminatoria-unica a propósito. Vive AQUÍ (la
+  // PREVIA, antes de empezar) y no en la pantalla en vivo — el checkbox
+  // se decide de antemano; js/acta.js solo lee su `.checked` al arrancar
+  // el partido (mismo id `live-prorroga-toggle`, el DOM sobrevive porque
+  // la previa se OCULTA, no se destruye, al pulsar "▶ Empezar partido").
+  function _renderFormatoBoxPrevia(partido) {
+    var box = document.getElementById("previa-formato-box");
+    if (!box) return;
+    var modo = detectarModoPartido(partido);
+    if (modo === "eliminatoria-unica") {
+      box.innerHTML =
+        '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
+        '<span>Activar Prórroga y Penaltis</span></label>' +
+        '<p class="live-formato-hint">⏱️ Actívala si el partido termina empatado en el 90\' — habilita los minutos de prórroga (95\'-120\') y la tanda de penaltis.</p>';
+    } else if (modo === "ida-vuelta") {
+      box.innerHTML =
+        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Partido de ida y vuelta — recuerda que <strong>el gol marcado fuera de casa cuenta doble</strong> en caso de empate global. (Solo informativo, no afecta a este marcador.)</p>';
+    } else {
+      box.innerHTML = "";
+    }
+  }
+
   // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
@@ -1775,6 +1800,7 @@
     document.getElementById("previa-nivel").textContent = metaPartido.nivel;
     document.getElementById("previa-forma").textContent = metaPartido.forma;
 
+    _renderFormatoBoxPrevia(partido);
     renderListasJugadores();
 
     // El motor en vivo (js/acta.js) nunca necesitó el roster del rival —
@@ -2443,14 +2469,24 @@
 
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
+      window.alert("📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
       cerrarPreviaPartido();
       window.Acta.iniciarPartidoEnVivo(btnEmpezar.dataset.partidoId, _ultimoContexto);
       return;
     }
 
-    if (ev.target.id === "previa-lesionado-add" || ev.target.id === "previa-sancionado-add") {
-      var tipoLista = ev.target.id === "previa-lesionado-add" ? "lesionados" : "sancionados";
-      _abrirPickerJugadorLista(tipoLista);
+    // Lesionados: ➕ Añadir sigue abierto a cualquiera (como hasta ahora).
+    // Sancionados: ➕ Añadir es EXCLUSIVO del administrador (PIN 747) — el
+    // usuario pidió que solo él pueda marcar sanciones.
+    if (ev.target.id === "previa-lesionado-add") {
+      _abrirPickerJugadorLista("lesionados");
+      return;
+    }
+    if (ev.target.id === "previa-sancionado-add") {
+      if (window.Main) {
+        window.Main.pedirPinAdmin(function () { _abrirPickerJugadorLista("sancionados"); },
+          "🔒 Añadir sancionado", "Solo el administrador puede sancionar jugadores.");
+      }
       return;
     }
 
@@ -2468,10 +2504,18 @@
       return;
     }
 
+    // Quitar (✕) un lesionado o sancionado ya listado — SIEMPRE requiere
+    // el PIN de administrador: un humano normal ya no puede des-lesionar/
+    // des-sancionar a su propio jugador por su cuenta.
     var delBtnLista = ev.target.closest && ev.target.closest(".live-acta-del[data-tipo-lista]");
     if (delBtnLista && window._idManagerActivo && window.Estado) {
-      window.Estado.quitarJugadorDeLista(window._idManagerActivo, delBtnLista.dataset.tipoLista, Number(delBtnLista.dataset.indice));
-      renderListasJugadores();
+      var tipoDel = delBtnLista.dataset.tipoLista, indiceDel = Number(delBtnLista.dataset.indice);
+      if (window.Main) {
+        window.Main.pedirPinAdmin(function () {
+          window.Estado.quitarJugadorDeLista(window._idManagerActivo, tipoDel, indiceDel);
+          renderListasJugadores();
+        }, "🔒 Quitar de la lista", "Solo el administrador puede quitar lesionados/sancionados.");
+      }
       return;
     }
   });

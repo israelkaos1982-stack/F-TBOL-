@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css">
+<link rel="stylesheet" href="css/estilos.css?v=2">
 </head>
 <body>
 
@@ -170,10 +170,16 @@
       <div class="previa-info-item"><dt>🏟️ Estadio</dt><dd id="previa-estadio">—</dd></div>
       <div class="previa-info-item"><dt>🌦️ Clima</dt><dd id="previa-clima">—</dd></div>
       <div class="previa-info-item"><dt>⚽ Balón</dt><dd id="previa-balon">—</dd></div>
-      <div class="previa-info-item"><dt>⏱️ Tiempo</dt><dd id="previa-tiempo">—</dd></div>
-      <div class="previa-info-item"><dt>🤖 Nivel</dt><dd id="previa-nivel">—</dd></div>
-      <div class="previa-info-item"><dt>🔋 Forma</dt><dd id="previa-forma">—</dd></div>
     </dl>
+
+    <!-- Tiempo · Nivel · Forma en una sola línea horizontal, sin
+         etiqueta de texto — el emoji + valor corto ya viene resuelto
+         desde JS (ver _calcularMetaPartido en js/renderizadores.js). -->
+    <div class="previa-meta-row">
+      <span class="previa-meta-item" id="previa-tiempo">—</span>
+      <span class="previa-meta-item" id="previa-nivel">—</span>
+      <span class="previa-meta-item" id="previa-forma">—</span>
+    </div>
 
     <div class="live-separador"></div>
 
@@ -276,17 +282,22 @@
   </div>
 </div>
 
-<!-- Motor JS -->
-<script src="js/estado.js" defer></script>
-<script src="js/renderizadores.js" defer></script>
-<script src="js/sistema-temporadas.js" defer></script>
-<script src="js/acta.js" defer></script>
-<script src="js/estadios.js" defer></script>
-<script src="js/balones.js" defer></script>
-<script src="js/escudos.js" defer></script>
-<script src="js/calendario.js" defer></script>
-<script src="js/persistencia.js" defer></script>
-<script src="js/main.js" defer></script>
+<!-- Motor JS — el ?v=N es OBLIGATORIO: sin él, un navegador/host que ya
+     cacheó estos archivos NO recibe los cambios aunque el código en el
+     repo ya esté arreglado (bug real 2026: "el balón sigue siendo el
+     viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
+     de estos .js, sube el número de esta MISMA versión en TODOS los
+     tags a la vez (no hace falta subir cada uno por separado). -->
+<script src="js/estado.js?v=2" defer></script>
+<script src="js/renderizadores.js?v=2" defer></script>
+<script src="js/sistema-temporadas.js?v=2" defer></script>
+<script src="js/acta.js?v=2" defer></script>
+<script src="js/estadios.js?v=2" defer></script>
+<script src="js/balones.js?v=2" defer></script>
+<script src="js/escudos.js?v=2" defer></script>
+<script src="js/calendario.js?v=2" defer></script>
+<script src="js/persistencia.js?v=2" defer></script>
+<script src="js/main.js?v=2" defer></script>
 
 </body>
 </html>

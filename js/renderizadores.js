@@ -345,11 +345,19 @@
   // `.team-box[data-team-id="atletico-madrid"]::before` con franjas
   // repetidas rojo/blanco en css/estilos.css — `primario` se deja aquí
   // solo como fallback por si ese override desaparece.
+  //
+  // Liverpool (escudo monocromático, sin más colores que sacar de él):
+  // `secundario` (0%, lado del texto) es el rojo carmesí REAL del
+  // Liverbird/las letras "L.F.C." (mismo `#c8102e` ya usado como
+  // colorPrimario en data/equipos.json — reutilizado, cero valores
+  // nuevos inventados); `primario` (100%, esquina opuesta) es negro con
+  // un ligero tinte granate para dar profundidad sin caer en gris puro
+  // (0 KB — solo 2 valores hex, igual que el resto de este mapa).
   var CAJA_INICIO_COLORES = {
     arsenal: { primario: "#7a1024", secundario: "#ef0107" },
     "atletico-madrid": { primario: "#ffffff", secundario: "#cb3524" },
     "real-madrid": { primario: "#e3b13c", secundario: "#5b2c8c" },
-    liverpool: { primario: "#2b0a10", secundario: "#7a0d1f" }
+    liverpool: { primario: "#170406", secundario: "#c8102e" }
   };
 
   function renderizarInicioEquipos() {

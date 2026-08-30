@@ -278,12 +278,13 @@
   }
 
   // Escudo de CUALQUIER equipo (humano o IA), listo para Inicio/calendario/
-  // previa/acta en vivo. Si el equipo trae `crest` (URL real — 5 de los 6
-  // humanos reusan los SVG que ya sirve la app Flask hermana en
-  // /static/img/escudos-*/, cero KB nuevos), se pinta la imagen real sobre
-  // un fondo claro para que se lea con contraste. Sin `crest` (PSG, y los
-  // 300+ equipos IA) cae al blasón CSS de siempre — nunca se rompe nada
-  // para un equipo sin imagen todavía.
+  // previa/acta en vivo. Si el equipo trae `crest` (URL real — los 6
+  // humanos: 5 reusan los SVG que ya sirve la app Flask hermana en
+  // /static/img/escudos-*/, el del PSG es un vector propio en el mismo
+  // sitio; cero KB nuevos en ningún caso), se pinta la imagen real sobre
+  // un fondo claro para que se lea con contraste. Sin `crest` (los 300+
+  // equipos IA) cae al blasón CSS de siempre — nunca se rompe nada para
+  // un equipo sin imagen todavía.
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
 
@@ -324,15 +325,30 @@
   // colorSecundario (que visten TODA la pantalla del club activo: menú,
   // cards de partido…, ver js/main.js::abrirClub). El usuario pidió una
   // combinación concreta por caja, pensada solo para esta rejilla, que no
-  // siempre coincide con el tema real del club (p.ej. Real Madrid en
-  // blanco+morado) — así que vive en su propio mapa, sin tocar el tema
-  // compartido. `secundario` cae en el lado del texto (0%, más oscuro
-  // para que el nombre en blanco se lea bien); `primario` es el color que
-  // asoma limpio en la esquina opuesta.
+  // siempre coincide con el tema real del club — así que vive en su propio
+  // mapa, sin tocar el tema compartido. `secundario` cae en el lado del
+  // texto (0%, más oscuro para que el nombre en blanco se lea bien);
+  // `primario` es el color que asoma limpio en la esquina opuesta.
+  //
+  // `primario: "#ffffff"` (Arsenal/Atlético/Real Madrid, versión anterior)
+  // se veía "genérico" porque `.team-box::before` interpola ese tramo
+  // contra `--bg-1` (casi negro) — negro→blanco es una rampa DE GRIS PURO,
+  // así que la mitad de la caja perdía todo el color del club por mucho
+  // que `secundario` fuera vivo. Fix (petición usuario, degradados por
+  // escudo real): Arsenal y Real Madrid pasan a un 2º tono DENTRO de la
+  // familia de color del club (nunca blanco) para que la caja entera se
+  // lea con su color — rojo vibrante → burdeos (Arsenal), púrpura
+  // heráldico → dorado del monograma (Real Madrid). Atlético SÍ pide
+  // blanco explícitamente ("degradado que alterne entre rojo y blanco,
+  // las franjas del escudo") — para eso no vale el degradado liso de 3
+  // paradas (recae en el mismo gris), así que tiene su propio
+  // `.team-box[data-team-id="atletico-madrid"]::before` con franjas
+  // repetidas rojo/blanco en css/estilos.css — `primario` se deja aquí
+  // solo como fallback por si ese override desaparece.
   var CAJA_INICIO_COLORES = {
-    arsenal: { primario: "#ffffff", secundario: "#ef0107" },
+    arsenal: { primario: "#7a1024", secundario: "#ef0107" },
     "atletico-madrid": { primario: "#ffffff", secundario: "#cb3524" },
-    "real-madrid": { primario: "#ffffff", secundario: "#5b2c8c" },
+    "real-madrid": { primario: "#e3b13c", secundario: "#5b2c8c" },
     liverpool: { primario: "#2b0a10", secundario: "#7a0d1f" }
   };
 

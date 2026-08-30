@@ -259,6 +259,22 @@ button { font-family: inherit; cursor: pointer; }
   background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 100%);
 }
 
+/* Atlético Madrid — franjas rojo/blanco ALTERNAS (petición usuario, "un
+   degradado que alterne entre rojo y blanco, las franjas del escudo").
+   El degradado liso de 3 paradas de arriba no sirve aquí: interpolar
+   --bg-1 (casi negro) contra blanco puro es una rampa de GRIS, así que
+   la caja se veía "genérica" en vez de con la identidad del escudo —
+   las franjas SÍ la transmiten, y de paso evitan ese tramo gris del todo. */
+.team-box[data-team-id="atletico-madrid"]::before {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--secondary) 0px,
+    var(--secondary) 24px,
+    #ffffff 24px,
+    #ffffff 32px
+  );
+}
+
 .team-box-inner {
   position: relative;
   z-index: 2;

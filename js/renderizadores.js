@@ -889,8 +889,8 @@
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo) {
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, cantidad: 0 };
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
       bucket[jugadorId].cantidad++;
     }
 
@@ -916,10 +916,10 @@
           if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
           var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
           if (!nombreJ) return;
-          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre);
-          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre);
-          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre);
-          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre);
+          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
         });
 
         if (!portero || !p.resultado) return;
@@ -936,7 +936,7 @@
       // mano en el texto pegado (ver LIGA1REF_STATS.zamora).
       if (portero && zamoraPartidos > 0) {
         acumulado.zamora[portero.id] = {
-          nombre: portero.nombre, equipo: e.nombre,
+          nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
           cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
         };
       }
@@ -1085,12 +1085,19 @@
       tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
+        // Fila del propio jugador humano (equipoId = el club activo) —
+        // mismo badge "TÚ" + resalte verde neón que ya usa la clasificación
+        // de equipos (clasificacion-fila--activo / clasificacion-tag), 0 KB
+        // de CSS nuevo. Un jugador de la IA (sin equipoId, viene del texto
+        // pegado) nunca lo lleva.
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila";
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
-          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
           '<td class="clasificacion-pts">' + valor + "</td>";
         tbody.appendChild(tr);

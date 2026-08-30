@@ -1015,6 +1015,35 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-volver-btn { padding: 5px 10px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
 .liga1ref-tabla { min-width: 380px; }
 
+/* Las 5 tablas de estadísticas (Pichichi/MVP/Amarillas/Rojas/Zamora) solo
+   tienen 4 columnas (#, Jugador, Equipo, valor) — el min-width de 380px
+   de la tabla de clasificación (9 columnas) les sobraba y las obligaba a
+   scroll horizontal para nada. table-layout:fixed + anchos en % + texto
+   recortado con "…" en vez de expandir la tabla: las 15 filas caben en
+   pantalla sin desplazar nada. */
+.liga1ref-stat-tabla {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.liga1ref-stat-tabla th, .liga1ref-stat-tabla td {
+  padding: 6px 4px;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.liga1ref-stat-tabla th:nth-child(1), .liga1ref-stat-tabla td:nth-child(1) { width: 8%; }
+.liga1ref-stat-tabla th:nth-child(2), .liga1ref-stat-tabla td:nth-child(2) { width: 39%; }
+.liga1ref-stat-tabla th:nth-child(3), .liga1ref-stat-tabla td:nth-child(3) { width: 33%; }
+.liga1ref-stat-tabla th:nth-child(4), .liga1ref-stat-tabla td:nth-child(4) { width: 20%; }
+.liga1ref-stat-tabla .clasificacion-equipo {
+  min-width: 0;
+  white-space: nowrap;
+  text-align: left;
+}
+.liga1ref-stat-equipo { text-align: left; color: var(--text-lo); }
+
 /* Zonas por posición ABSOLUTA, relativas al Nº TOTAL de equipos de la
    tabla (11 IA reales + 5 humanos = 16 con la liga completa): 1-4
    ascenso directo a Hypermotion, 5 promoción de ascenso, los últimos 4

@@ -790,29 +790,39 @@
   // registran al "+ Añadir evento" en un partido en vivo). Ninguna caja
   // guarda un contador aparte — se recalculan en caliente igual que el
   // resto de estadísticas de este archivo.
+  // Zamora es la ÚNICA categoría con semántica distinta al resto: NO es
+  // un contador (más es mejor) sino la MEDIA de goles encajados por
+  // partido (menos es mejor) — el propio Trofeo Zamora real. `asc:true`
+  // ordena de menor a mayor; `decimales:true` muestra siempre 2 cifras
+  // decimales (0.90, no 0.9), aunque el número interno sea entero.
   var LIGA1REF_STATS = [
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Porterías a 0" }
+    {
+      key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true,
+      placeholder: "1 Sem Westerveld - Real Zaragoza  0.90\n2 Ramón Vila - Eldense  0.90"
+    }
   ];
 
   // Formato de línea (texto libre, una por jugador): "Nº Nombre Jugador -
   // Equipo  Cantidad" — el Nº/separador inicial es opcional (se
   // recalcula solo, igual que Pos en la clasificación de equipos); el
-  // ÚLTIMO número de la línea es la cantidad, y el "-" INMEDIATO anterior
-  // separa nombre de equipo (si no hay "-", todo es el nombre y el
-  // equipo queda vacío).
+  // ÚLTIMO número de la línea es la cantidad (admite decimales, con "."
+  // o "," — la media de Zamora la calcula y teclea el propio admin,
+  // aquí solo se guarda tal cual) y el "-" INMEDIATO anterior separa
+  // nombre de equipo (si no hay "-", todo es el nombre y el equipo
+  // queda vacío).
   function parsearLiga1RefStatTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
       l = l.replace(/^\d+[ºª°]?[.\-)]?\s*/, ""); // quita "1º ", "12.", "3) "...
-      var m = l.match(/^(.*\S)\s+(\d+)\s*$/);
+      var m = l.match(/^(.*\S)\s+(\d+(?:[.,]\d+)?)\s*$/);
       if (!m) return;
-      var cantidad = Number(m[2]);
+      var cantidad = Number(m[2].replace(",", "."));
       if (isNaN(cantidad)) return;
       var partes = m[1].split(/\s-\s/);
       var equipo = partes.length > 1 ? partes.pop().trim() : "";
@@ -851,6 +861,7 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
       var portero = _liga1RefPorteroPrincipal(e.id);
+      var zamoraEncajados = 0, zamoraPartidos = 0;
 
       // SOLO los partidos donde ESTE club es local o visitante — sin este
       // filtro, con varios humanos en la MISMA liga (todos comparten
@@ -877,8 +888,21 @@
         if (!portero || !p.resultado) return;
         var encajados = p.local === e.id ? p.resultado.golesVisitante
           : p.visitante === e.id ? p.resultado.golesLocal : null;
-        if (encajados === 0) sumar(acumulado.zamora, portero.id, portero.nombre, e.nombre);
+        if (encajados === null) return;
+        zamoraEncajados += encajados;
+        zamoraPartidos++;
       });
+
+      // Zamora del portero titular = media de goles encajados por partido
+      // (menos es mejor, el Trofeo Zamora real) — no un contador de
+      // porterías a 0, para que case con el número que el admin escribe a
+      // mano en el texto pegado (ver LIGA1REF_STATS.zamora).
+      if (portero && zamoraPartidos > 0) {
+        acumulado.zamora[portero.id] = {
+          nombre: portero.nombre, equipo: e.nombre,
+          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
+        };
+      }
     });
 
     var salida = {};
@@ -890,9 +914,11 @@
 
   // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
   // top 15 por cantidad (empate -> alfabético, mismo criterio que el
-  // resto de tablas de este archivo).
+  // resto de tablas de este archivo). Zamora es la ÚNICA que ordena
+  // ascendente (menos goles de media es mejor) — ver LIGA1REF_STATS.
   function calcularLiga1RefStatsCombinado(datos, categoria) {
     var equiposHumanos = _liga1RefEquiposHumanos(datos);
+    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
     var filas = [];
 
     var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
@@ -903,7 +929,10 @@
 
     (calcularLiga1RefStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
 
-    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    filas.sort(function (a, b) {
+      var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
+      return diff || a.nombre.localeCompare(b.nombre);
+    });
     return filas.slice(0, 15);
   }
 
@@ -1015,17 +1044,18 @@
       var wrap = document.createElement("div");
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
-      tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
       tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var tr = document.createElement("tr");
         tr.className = "clasificacion-fila";
+        var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) + "</td>" +
-          "<td>" + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + valor + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -1085,7 +1115,7 @@
     textarea.id = "liga1ref-stat-textarea";
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 14;
-    textarea.placeholder = "1º Carlos Fernández - CD Mirandés  7\n2º Ander Herrera - Real Zaragoza  6";
+    textarea.placeholder = meta.placeholder || "1º Carlos Fernández - CD Mirandés  7\n2º Ander Herrera - Real Zaragoza  6";
     textarea.value = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
     contenedor.appendChild(textarea);
 

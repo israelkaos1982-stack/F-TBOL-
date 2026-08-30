@@ -81,6 +81,17 @@
     return e.resultados[partidoId] || null;
   }
 
+  // Borra el resultado guardado de un partido — vuelve a "sin jugar"
+  // para poder repetirlo (pruebas). Acción destructiva: la UI que la
+  // dispara la gatea SIEMPRE detrás del PIN de administrador (ver
+  // js/renderizadores.js, window.Main.pedirPinAdmin).
+  function reiniciarResultadoPartido(partidoId) {
+    var e = cargarEstado();
+    if (!e.resultados[partidoId]) return false;
+    delete e.resultados[partidoId];
+    return guardarEstado();
+  }
+
   function registrarPartidoGenerado(partido) {
     var e = cargarEstado();
     e.partidosGenerados[partido.id] = partido;
@@ -304,28 +315,31 @@
     }
   }
 
-  // ---------- Nombre de la LIGA principal (editable) ----------
+  // ---------- Nombre de la LIGA principal — UNA por CADA club humano ----------
   // El badge del calendario ("LIGA_EA_SPORTS" -> "LIGA EA SPORTS") venía
   // derivado a pelo de la clave interna de data/equipos_ia.json — un
-  // resto del primer mock del proyecto. La liga real de estos 6 clubes es
-  // "1ª REF" (así la llama ya el propio roadmap de arriba, "🇪🇸 1ª REF -
-  // 1ªJornada de Liga"); el admin la deja como quiera desde el lápiz
-  // junto al badge del calendario (js/main.js::editarNombreLiga).
-  var LIGA_NOMBRE_KEY = "ef7_liga_principal_nombre_v1";
+  // resto del primer mock del proyecto; el admin lo renombraba pulsando
+  // el propio badge (js/main.js::editarNombreLiga). Antes era UN solo
+  // nombre compartido por los 6 clubes — pero cada uno puede jugar una
+  // liga real distinta (p.ej. el PSG SÍ juega la Ligue 1 de verdad, el
+  // resto no), y al ascender/descender de división el nombre cambia por
+  // club, no para los 6 a la vez — así que cada club guarda el suyo,
+  // indexado por su id (petición usuario).
+  var LIGA_NOMBRE_KEY_BASE = "ef7_liga_principal_nombre_v1";
   var LIGA_NOMBRE_DEFECTO = "1ª REF";
-  function obtenerNombreLiga() {
+  function obtenerNombreLiga(clubId) {
     try {
-      var v = localStorage.getItem(LIGA_NOMBRE_KEY);
+      var v = localStorage.getItem(LIGA_NOMBRE_KEY_BASE + "_" + clubId);
       return v && v.trim() ? v : LIGA_NOMBRE_DEFECTO;
     } catch (err) {
       return LIGA_NOMBRE_DEFECTO;
     }
   }
-  function guardarNombreLiga(valor) {
+  function guardarNombreLiga(clubId, valor) {
     var limpio = (valor || "").trim();
-    if (!limpio) return false;
+    if (!clubId || !limpio) return false;
     try {
-      localStorage.setItem(LIGA_NOMBRE_KEY, limpio);
+      localStorage.setItem(LIGA_NOMBRE_KEY_BASE + "_" + clubId, limpio);
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el nombre de la liga:", err);
@@ -922,6 +936,7 @@
     guardarEstado: guardarEstado,
     registrarResultadoPartido: registrarResultadoPartido,
     obtenerResultadoOverride: obtenerResultadoOverride,
+    reiniciarResultadoPartido: reiniciarResultadoPartido,
     registrarPartidoGenerado: registrarPartidoGenerado,
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,

@@ -540,16 +540,21 @@
     if (window.Renderizadores) window.Renderizadores.pintarTemporada();
   }
 
-  // ---------- Nombre de la liga principal editable (badge del calendario) ----------
-  // Compartido por los 6 clubes humanos (todos juegan la misma liga) — se
-  // edita una vez y se ve en todas las cajas, igual que la Temporada.
+  // ---------- Nombre de la liga — editable pulsando el propio badge ----------
+  // Cada club humano tiene SU PROPIA liga (nombre distinto por club, ver
+  // js/estado.js::obtenerNombreLiga/guardarNombreLiga) — al ascender o
+  // descender de división, o cuando un club juega su liga real (p.ej. el
+  // PSG en la Ligue 1), cada caja necesita su propio nombre, no uno
+  // compartido por los 6. Se pulsa directamente el badge del calendario
+  // (ya no hay lápiz aparte al lado).
   function editarNombreLiga() {
-    if (!window.Estado) return;
-    var actual = window.Estado.obtenerNombreLiga();
-    var nueva = window.prompt("Nombre de la liga principal:", actual);
+    var clubId = window._idManagerActivo;
+    if (!clubId || !window.Estado) return;
+    var actual = window.Estado.obtenerNombreLiga(clubId);
+    var nueva = window.prompt("Nombre de la liga de este club:", actual);
     if (nueva === null) return; // cancelado
     if (!nueva.trim()) return;
-    window.Estado.guardarNombreLiga(nueva);
+    window.Estado.guardarNombreLiga(clubId, nueva);
     var badge = document.getElementById("calendar-liga-badge");
     if (badge) badge.textContent = nueva.trim();
   }
@@ -564,7 +569,7 @@
     var btnTemporada = document.getElementById("btn-editar-temporada");
     if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);
 
-    var btnLigaNombre = document.getElementById("btn-editar-liga-nombre");
+    var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
     var grid = document.getElementById("team-select-grid");

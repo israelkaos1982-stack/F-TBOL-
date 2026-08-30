@@ -1553,9 +1553,14 @@
 
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
     // icono, para que quepa siempre entre los 2 bloques de equipo), más
-    // el separador "vs" debajo, entre medias de los 2 nombres.
+    // el separador "vs" debajo, entre medias de los 2 nombres. El
+    // marcador de un partido YA jugado es TAMBIÉN un botón — pulsarlo
+    // reinicia el partido (vuelve a "sin jugar", para poder repetirlo
+    // en pruebas), pero SOLO el administrador puede hacerlo (PIN, ver
+    // la delegación de eventos más abajo) — petición usuario.
     var centroTop = (partido.jugado && partido.resultado)
-      ? '<span class="match-card-marcador">' + partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</span>"
+      ? '<button type="button" class="match-card-marcador" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' +
+        partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</button>"
       : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
 
     card.innerHTML =
@@ -1597,7 +1602,7 @@
 
         if (badge) {
           badge.textContent = (ligaActual === "LIGA_EA_SPORTS" && window.Estado && window.Estado.obtenerNombreLiga)
-            ? window.Estado.obtenerNombreLiga()
+            ? window.Estado.obtenerNombreLiga(idEquipoHumanoActivo)
             : (ligaActual || "").replace(/_/g, " ");
         }
 
@@ -2528,6 +2533,20 @@
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest(".match-card-btn");
     if (btn) { abrirPreviaPartido(btn.dataset.partidoId); return; }
+
+    // Reiniciar un partido ya jugado (pruebas) — EXCLUSIVO del
+    // administrador (PIN), igual que Sancionados/quitar de la lista.
+    var btnReiniciar = ev.target.closest && ev.target.closest('[data-accion="reiniciar-partido"]');
+    if (btnReiniciar) {
+      var idReiniciar = btnReiniciar.dataset.partidoId;
+      if (idReiniciar && window.Estado && window.Main) {
+        window.Main.pedirPinAdmin(function () {
+          window.Estado.reiniciarResultadoPartido(idReiniciar);
+          if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
+        }, "🔒 Reiniciar partido", "Solo el administrador puede reiniciar un partido ya jugado.");
+      }
+      return;
+    }
 
     if (ev.target.id === "previa-close" || ev.target.id === "previa-overlay") {
       cerrarPreviaPartido();

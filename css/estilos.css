@@ -48,8 +48,28 @@ html, body { margin: 0; padding: 0; }
   --gold-glow: 0 0 8px rgba(241, 196, 15, 0.45);
 
   /* Marrón — zona de "promoción de descenso" de Liga 1ª REF. Distinto del
-     rojo (descenso directo) para que no se confundan de un vistazo. */
+     rojo (descenso directo) para que no se confundan de un vistazo.
+     También reutilizado como color de la etiqueta "Supercopa de España"
+     en las cards de partido (ver .match-card-comp.comp-supercopa). */
   --brown: #a8714a;
+
+  /* Paleta de COMPETICIÓN de las cards de partido (texto + borde) —
+     petición usuario: cada competición con su propio color, ninguna
+     apagada. LIGA/COPA/SUPERCOPA/CHAMPIONS ya reusan --accent-2/--gold/
+     --brown/--info de arriba; estas 6 son nuevas y solo las usa
+     .match-card-comp/.match-card (ver sección 7, "card de partido"). */
+  --gris-comp: #98a2b3; /* Promoción Ascenso/Descenso */
+  --morado: #8b5cf6; /* Previa Champions */
+  --naranja: #ff7a29; /* Europa League */
+  --amarillo-vivo: #ffe600; /* Intercontinental — "amarillo llamativo", distinto del dorado de Copa */
+  --plata: #c9d3dc; /* Supercopa de Europa */
+  --rosa: #ff4fa8; /* Selecciones */
+
+  /* Resalte de "próximo partido" EXCLUSIVO de FC Barcelona — su propio
+     azul de club (colorPrimario) hace que el --info azul de abajo pase
+     desapercibido ahí; para las otras 5 cajas --info se queda igual. */
+  --info-barca: #ff2f8f;
+  --info-barca-glow: 0 0 10px rgba(255, 47, 143, 0.5), 0 0 22px rgba(255, 47, 143, 0.22);
 
   --radius-s: 8px;
   --radius-m: 14px;
@@ -1130,18 +1150,32 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 1px;
   text-transform: uppercase;
   text-align: center;
-  color: var(--accent-2);
-  /* Mismo truco de nitidez que el resto de textos con glow del proyecto
-     (ver --neon-glow más arriba) — sin esto, "LIGA J5" se veía borrosa
-     en pantallas pequeñas al ser tan chica y en mayúsculas. */
-  text-shadow: var(--accent-2-glow);
+  /* Sin clase de competición (no debería pasar — _claseComp siempre
+     devuelve una — pero por si acaso) cae en el mismo gris neutro que
+     .comp-otro. */
+  color: var(--text-lo);
 }
-/* Copa del Rey en dorado, para diferenciarla de Liga a golpe de vista.
-   El resto de competiciones (Supercopa, Champions, Europa League,
-   Conference League, Recopa, Supercopa de Europa) + cualquier nombre
-   libre tecleado en el calendario extra de un club caen en un tono
-   neutro común — no hacía falta inventar un color por cada una. */
+/* Una clase .comp-XXX por competición — texto Y borde de la card (ver
+   ".match-card.comp-XXX" más abajo) en el MISMO color, para que la
+   etiqueta llame la atención de un vistazo (antes casi todas caían en
+   el mismo gris apagado "comp-otro"). Recopa de Europa y cualquier
+   nombre libre tecleado en el calendario extra de un club SIGUEN en
+   ese gris neutro común a propósito — no se pidió color para ellas.
+   El glow de cada una es un ÚNICO text-shadow suave (no el doble-capa
+   de --accent-2-glow/--neon-glow, que sobre texto tan chico en
+   mayúsculas se leía "borroso" — el mismo patrón que ya usaba
+   .comp-copa con --gold-glow, ahora generalizado a todas). */
+.match-card-comp.comp-liga { color: var(--accent-2); text-shadow: 0 0 8px rgba(255, 59, 92, 0.45); }
 .match-card-comp.comp-copa { color: var(--gold); text-shadow: var(--gold-glow); }
+.match-card-comp.comp-supercopa { color: var(--brown); text-shadow: 0 0 8px rgba(168, 113, 74, 0.5); }
+.match-card-comp.comp-promocion { color: var(--gris-comp); text-shadow: none; }
+.match-card-comp.comp-champions { color: var(--info); text-shadow: 0 0 8px rgba(59, 167, 255, 0.45); }
+.match-card-comp.comp-previa { color: var(--morado); text-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
+.match-card-comp.comp-uel { color: var(--naranja); text-shadow: 0 0 8px rgba(255, 122, 41, 0.45); }
+.match-card-comp.comp-uecl { color: var(--neon); text-shadow: 0 0 8px rgba(57, 255, 106, 0.4); }
+.match-card-comp.comp-intercontinental { color: var(--amarillo-vivo); text-shadow: 0 0 8px rgba(255, 230, 0, 0.55); }
+.match-card-comp.comp-usc { color: var(--plata); text-shadow: 0 0 6px rgba(201, 211, 220, 0.4); }
+.match-card-comp.comp-selecciones { color: var(--rosa); text-shadow: 0 0 8px rgba(255, 79, 168, 0.45); }
 .match-card-comp.comp-otro { color: var(--text-lo); text-shadow: none; }
 
 /* Fila única — bloque LOCAL (escudo + nombre completo, "cuadrado" — ambos
@@ -1230,6 +1264,30 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
 }
 
+/* Borde de COMPETICIÓN — mismo color que la etiqueta de arriba
+   (.match-card-comp.comp-XXX), reemplazando el borde/franja lateral
+   por defecto (color del propio club). Recopa de Europa y cualquier
+   competición libre del calendario extra se quedan sin regla propia
+   aquí a propósito — siguen con el borde por defecto de arriba.
+   Declaradas DESPUÉS de ".match-card:hover" (misma especificidad que
+   un ".match-card--X" — ver comentario de "Borde de resultado" más
+   abajo) para que sí le ganen al hover; y ANTES de "Borde de
+   resultado"/"Próximo partido" para que UN PARTIDO JUGADO o el
+   PRÓXIMO A JUGAR sigan mandando sobre el color de su competición —
+   ese orden de prioridad no cambia, solo se añade el color de
+   competición como base para los partidos pendientes normales. */
+.match-card.comp-liga { border-color: rgba(255, 59, 92, 0.4); border-left-color: var(--accent-2); }
+.match-card.comp-copa { border-color: rgba(241, 196, 15, 0.4); border-left-color: var(--gold); }
+.match-card.comp-supercopa { border-color: rgba(168, 113, 74, 0.45); border-left-color: var(--brown); }
+.match-card.comp-promocion { border-color: rgba(152, 162, 179, 0.4); border-left-color: var(--gris-comp); }
+.match-card.comp-champions { border-color: rgba(59, 167, 255, 0.4); border-left-color: var(--info); }
+.match-card.comp-previa { border-color: rgba(139, 92, 246, 0.4); border-left-color: var(--morado); }
+.match-card.comp-uel { border-color: rgba(255, 122, 41, 0.4); border-left-color: var(--naranja); }
+.match-card.comp-uecl { border-color: rgba(57, 255, 106, 0.4); border-left-color: var(--neon); }
+.match-card.comp-intercontinental { border-color: rgba(255, 230, 0, 0.45); border-left-color: var(--amarillo-vivo); }
+.match-card.comp-usc { border-color: rgba(201, 211, 220, 0.45); border-left-color: var(--plata); }
+.match-card.comp-selecciones { border-color: rgba(255, 79, 168, 0.4); border-left-color: var(--rosa); }
+
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
    PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el
    marcador en el centro, ver construirTarjetaPartido), así que no hace
@@ -1262,6 +1320,18 @@ button { font-family: inherit; cursor: pointer; }
   border-color: var(--info);
   border-left-color: var(--info);
   box-shadow: var(--info-glow);
+}
+
+/* FC Barcelona: su propio azul de club (colorPrimario, ver
+   js/main.js::abrirClub) hace que el resalte azul de arriba pase
+   desapercibido — "azul es su estética". Solo para esta caja
+   (".is-club-fc-barcelona" en #screen-club) el "próximo partido" se
+   resalta en rosa; --info sigue en azul para las otras 5 y para el
+   resto del proyecto (Liga1Ref, etc.). */
+#screen-club.is-club-fc-barcelona .match-card.match-card--siguiente {
+  border-color: var(--info-barca);
+  border-left-color: var(--info-barca);
+  box-shadow: var(--info-barca-glow);
 }
 
 /* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */

@@ -368,20 +368,31 @@
 
   var COMP_LABEL = {
     liga: "Liga", copa: "Copa del Rey", supercopa: "Supercopa de España",
-    champions: "Champions League", uel: "Europa League", uecl: "Conference League",
-    recopa: "Recopa de Europa", usc: "Supercopa de Europa"
+    promocion: "Promoción",
+    champions: "Champions League", "ucl-previa": "Previa Champions",
+    uel: "Europa League", uecl: "Conference League",
+    recopa: "Recopa de Europa", usc: "Supercopa de Europa",
+    intercontinental: "Intercontinental",
+    selecciones: "Selecciones", "sel-clasif": "Selecciones · Clasif."
   };
 
-  // Color de la etiqueta de competición — Liga (rojo, por defecto — sin
-  // clase extra) y Copa (dorado) se diferencian a golpe de vista, tal
-  // como se pidió; el resto de competiciones conocidas + cualquier
-  // nombre libre tecleado por el admin (calendario extra) caen en un
-  // tono neutro común ("comp-otro") en vez de inventar un color para
-  // cada una. Ver reglas .match-card-comp* en css/estilos.css.
+  // Color de la etiqueta de competición — cada una con el SUYO propio
+  // (Liga rojo, Copa dorado, Supercopa España marrón, Promoción gris,
+  // Champions azul, Previa Champions morado, Europa League naranja,
+  // Conference League verde, Intercontinental amarillo vivo, Supercopa
+  // de Europa plata, Selecciones rosa), para que ninguna se pierda de
+  // un vistazo entre las demás. Recopa de Europa + cualquier nombre
+  // libre tecleado por el admin (calendario extra) caen en un tono
+  // neutro común ("comp-otro") — no se pidió color para ellas. Ver
+  // reglas .match-card-comp*/.match-card.comp-* en css/estilos.css.
   var COMP_CLASE = {
-    liga: "", copa: "comp-copa", supercopa: "comp-otro",
-    champions: "comp-otro", uel: "comp-otro", uecl: "comp-otro",
-    recopa: "comp-otro", usc: "comp-otro"
+    liga: "comp-liga", copa: "comp-copa", supercopa: "comp-supercopa",
+    promocion: "comp-promocion",
+    champions: "comp-champions", "ucl-previa": "comp-previa",
+    uel: "comp-uel", uecl: "comp-uecl",
+    recopa: "comp-otro", usc: "comp-usc",
+    intercontinental: "comp-intercontinental",
+    selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones"
   };
   function _claseComp(competicion) {
     return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
@@ -1155,11 +1166,27 @@
         : (golesActivo === golesRival ? " match-card--empate" : " match-card--perdio");
     }
 
-    card.className = "match-card" + (partido.jugado ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
+    // `partido.competicion` de un partido REAL ya es el compKey interno
+    // ("liga", "copa"...), pero el de un partido del "Calendario extra"
+    // (ver parsearPartidosExtraTexto) es texto LIBRE tecleado por el
+    // admin ("Champions League", "Copa Intercontinental"...). Reusamos
+    // el MISMO alias que ya normaliza esos nombres para el balón
+    // (_resolverCompKeyBalon, más arriba) — así una competición extra
+    // también sale con su color real, no siempre en gris "comp-otro".
+    var compKeyResuelto = _resolverCompKeyBalon(partido.competicion);
+
+    // La misma clase .comp-XXX tiñe el borde de la card ENTERA (abajo)
+    // y la etiqueta interior (más abajo, en el innerHTML) — mismo color
+    // en los dos sitios, a petición del usuario. Un partido ya jugado
+    // (--gano/--empate/--perdio) o el próximo a jugar (--siguiente)
+    // siguen mandando sobre este color de competición — están
+    // declarados DESPUÉS en el CSS a propósito (ver css/estilos.css).
+    var claseComp = _claseComp(compKeyResuelto);
+    card.className = "match-card" + (claseComp ? " " + claseComp : "") +
+      (partido.jugado ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
     card.dataset.partidoId = partido.id;
 
-    var compLabel = COMP_LABEL[partido.competicion] || partido.competicion;
-    var claseComp = _claseComp(partido.competicion);
+    var compLabel = COMP_LABEL[compKeyResuelto] || partido.competicion;
     var etiquetaRonda = partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · J" + partido.jornada : "");
 
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin

@@ -657,6 +657,25 @@
   // aquí también.
   var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
 
+  function _liga1RefEquiposHumanos(datos) {
+    return (datos.equipos.equipos || []).filter(function (e) {
+      return LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
+  }
+
+  // ¿El nombre libre que acaba de pegar el admin (equipo de la
+  // clasificación, o "equipo" de una fila de estadística) es en realidad
+  // uno de los clubes humanos? Comparte el mismo criterio tolerante
+  // (normalizado + substring) en clasificación y en las 5 cajas de stats.
+  function _liga1RefEsNombreHumano(nombre, equiposHumanos) {
+    var norm = _normNombre(nombre || "");
+    if (!norm) return false;
+    return equiposHumanos.some(function (e) {
+      var n = _normNombre(e.nombre);
+      return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
+    });
+  }
+
   // La fusión: texto pegado (solo IA) + los clubes humanos que SÍ juegan
   // esta liga, con sus propios partidos de Liga ya jugados dentro de la
   // app (Estado.calcularClasificacion sobre la liga ACTUAL de cada club —
@@ -666,19 +685,12 @@
   // error, esa línea se descarta; su fila sale SIEMPRE de sus propios
   // partidos (una sola fuente de verdad por equipo).
   function calcularLiga1RefCombinada(datos) {
-    var equiposHumanos = (datos.equipos.equipos || []).filter(function (e) {
-      return LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
-    });
+    var equiposHumanos = _liga1RefEquiposHumanos(datos);
     var filas = [];
 
     var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
-      var norm = _normNombre(f.nombre);
-      var esHumano = equiposHumanos.some(function (e) {
-        var n = _normNombre(e.nombre);
-        return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
-      });
-      if (esHumano) return; // su fila la aporta el bloque de abajo, nunca el texto
+      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo, nunca el texto
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
         pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
@@ -721,6 +733,134 @@
     return "";
   }
 
+  // ============================================================
+  // 3c-quater. LIGA 1ª REF — Pichichi/MVP/Tarjetas/Zamora
+  // ============================================================
+  // Mismo espíritu que la clasificación de equipos: texto libre pegado
+  // por el admin (para los jugadores IA, sin ficha real en la app) +
+  // auto-suma desde los partidos ya jugados de los clubes humanos (para
+  // esos SÍ hay ficha e id de jugador real, vía los eventos que se
+  // registran al "+ Añadir evento" en un partido en vivo). Ninguna caja
+  // guarda un contador aparte — se recalculan en caliente igual que el
+  // resto de estadísticas de este archivo.
+  var LIGA1REF_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Porterías a 0" }
+  ];
+
+  // Formato de línea (texto libre, una por jugador): "Nº Nombre Jugador -
+  // Equipo  Cantidad" — el Nº/separador inicial es opcional (se
+  // recalcula solo, igual que Pos en la clasificación de equipos); el
+  // ÚLTIMO número de la línea es la cantidad, y el "-" INMEDIATO anterior
+  // separa nombre de equipo (si no hay "-", todo es el nombre y el
+  // equipo queda vacío).
+  function parsearLiga1RefStatTexto(texto) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      l = l.replace(/^\d+[ºª°]?[.\-)]?\s*/, ""); // quita "1º ", "12.", "3) "...
+      var m = l.match(/^(.*\S)\s+(\d+)\s*$/);
+      if (!m) return;
+      var cantidad = Number(m[2]);
+      if (isNaN(cantidad)) return;
+      var partes = m[1].split(/\s-\s/);
+      var equipo = partes.length > 1 ? partes.pop().trim() : "";
+      var nombre = partes.join(" - ").trim();
+      if (!nombre) return;
+      items.push({ nombre: nombre, equipo: equipo, cantidad: cantidad });
+    });
+    return items;
+  }
+
+  // El portero "titular" de un club humano a efectos de Zamora: el
+  // primero (por dorsal) de su plantilla con posición POR y nombre ya
+  // puesto. Sin plantilla de porteros rellena todavía, ese club
+  // simplemente no aporta Zamora automática (nunca se inventa un nombre).
+  function _liga1RefPorteroPrincipal(clubId, datos) {
+    var porteros = obtenerJugadoresClub(clubId, datos).filter(function (j) {
+      return j.posicion === "POR" && j.nombre;
+    });
+    return porteros.length ? porteros[0] : null;
+  }
+
+  // Recorre, para cada club humano de esta liga, sus propios partidos de
+  // Liga ya jugados (misma fuente que la clasificación) y suma goles/MVP/
+  // amarillas/rojas por jugador (solo eventos es_humano:true — los de la
+  // IA no tienen ficha real, igual que en Estado.calcularEstadisticasJugador)
+  // + porterías a 0 del equipo, atribuidas a su portero principal.
+  function calcularLiga1RefStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+
+    function sumar(bucket, jugadorId, nombre, equipo) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, cantidad: 0 };
+      bucket[jugadorId].cantidad++;
+    }
+
+    _liga1RefEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id, datos).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+      var portero = _liga1RefPorteroPrincipal(e.id, datos);
+
+      // SOLO los partidos donde ESTE club es local o visitante — sin este
+      // filtro, con varios humanos en la MISMA liga (todos comparten
+      // ligaActual="LIGA_EA_SPORTS"), el partido de un club se procesaba
+      // también en el bucle de los otros 4, multiplicando el conteo.
+      var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+        return p.jugado && p.competicion === "liga" && p.liga === e.ligaActual &&
+          (p.local === e.id || p.visitante === e.id);
+      });
+
+      partidos.forEach(function (p) {
+        (p.eventos || []).forEach(function (ev) {
+          // SOLO eventos de ESTE club (equipo_id) — un partido humano-vs-
+          // humano trae eventos de AMBOS lados; cada club solo suma los suyos.
+          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
+          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          if (!nombreJ) return;
+          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre);
+          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre);
+          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre);
+          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre);
+        });
+
+        if (!portero || !p.resultado) return;
+        var encajados = p.local === e.id ? p.resultado.golesVisitante
+          : p.visitante === e.id ? p.resultado.golesLocal : null;
+        if (encajados === 0) sumar(acumulado.zamora, portero.id, portero.nombre, e.nombre);
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 por cantidad (empate -> alfabético, mismo criterio que el
+  // resto de tablas de este archivo).
+  function calcularLiga1RefStatsCombinado(datos, categoria) {
+    var equiposHumanos = _liga1RefEquiposHumanos(datos);
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
+    parsearLiga1RefStatTexto(texto).forEach(function (it) {
+      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
+      filas.push(it);
+    });
+
+    (calcularLiga1RefStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
   function renderizarLiga1RefClasificacion(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -730,11 +870,13 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
+      // Leyenda mini (los propios emoji de color hacen de swatch, sin CSS
+      // extra) a la izquierda del ✏️ — sustituye al título "1ª REF" (ya se
+      // ve arriba del modal) y a la leyenda larga que había abajo.
       var header = document.createElement("div");
       header.className = "liga1ref-header";
-      var tituloTxt = (window.Estado ? window.Estado.obtenerNombreLiga() : "1ª REF").toUpperCase();
       header.innerHTML =
-        '<span class="liga1ref-titulo">' + escapeHTML(tituloTxt) + "</span>" +
+        '<span class="liga1ref-leyenda-mini">🟦Ascenso 🟨Promoción 🟥Descenso 🟫Promoción</span>' +
         '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-club-id="' +
         (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
       contenedor.appendChild(header);
@@ -743,6 +885,84 @@
 
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
+      } else {
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+        var tbody = document.createElement("tbody");
+
+        filas.forEach(function (f, i) {
+          var pos = i + 1;
+          var dg = f.gf - f.gc;
+          var zona = _liga1RefZona(pos, filas.length);
+          var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
+          if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
+
+          var tr = document.createElement("tr");
+          tr.className = claseFila;
+          tr.innerHTML =
+            '<td class="clasificacion-pos">' + pos + "</td>" +
+            '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
+            (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+            '<td class="clasificacion-pts">' + f.pts + "</td>" +
+            "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+            "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
+            "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+          tbody.appendChild(tr);
+        });
+        tablaEl.appendChild(tbody);
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      }
+
+      // Cajas de estadísticas — Pichichi/MVP/Tarjetas/Zamora. Cada una
+      // abre su propio ranking (top 15) dentro de este mismo contenedor.
+      var statsGrid = document.createElement("div");
+      statsGrid.className = "liga1ref-stats-grid";
+      statsGrid.innerHTML = LIGA1REF_STATS.map(function (s) {
+        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-liga1ref-stat" data-club-id="' +
+          (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+          s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+      }).join("");
+      contenedor.appendChild(statsGrid);
+    });
+  }
+
+  // Ranking (top 15) de UNA categoría — pinta DENTRO del mismo contenedor
+  // que la clasificación, con un botón "← Volver" para regresar sin
+  // cerrar el modal (mismo patrón que el editor inline de la tabla).
+  function renderizarLiga1RefStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-liga1ref" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularLiga1RefStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
       }
 
@@ -750,42 +970,21 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
-      tablaEl.innerHTML =
-        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
-        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
       var tbody = document.createElement("tbody");
-
       filas.forEach(function (f, i) {
-        var pos = i + 1;
-        var dg = f.gf - f.gc;
-        var zona = _liga1RefZona(pos, filas.length);
-        var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
-        if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
-
         var tr = document.createElement("tr");
-        tr.className = claseFila;
+        tr.className = "clasificacion-fila";
         tr.innerHTML =
-          '<td class="clasificacion-pos">' + pos + "</td>" +
-          '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
-          (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
-          '<td class="clasificacion-pts">' + f.pts + "</td>" +
-          "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
-          "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
-          "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) + "</td>" +
+          "<td>" + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
-
-      var leyenda = document.createElement("div");
-      leyenda.className = "liga1ref-leyenda";
-      leyenda.innerHTML =
-        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--ascenso"></i>Asciende a Hypermotion</span>' +
-        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--promo-ascenso"></i>Promoción de ascenso</span>' +
-        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--descenso"></i>Desciende a 2ª REF</span>' +
-        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--promo-descenso"></i>Promoción de descenso</span>';
-      contenedor.appendChild(leyenda);
     });
   }
 
@@ -817,6 +1016,38 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA categoría de estadística (PIN 646) — mismo
+  // patrón exacto que pintarEditorLiga1Ref, pinta dentro del contenedor
+  // del ranking para poder Guardar/Cancelar sin cerrar el modal.
+  function pintarEditorLiga1RefStat(contenedor, idClubActivo, categoria) {
+    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido — no hace falta escribirlos aquí.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "liga1ref-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Carlos Fernández - CD Mirandés  7\n2º Ander Herrera - Real Zaragoza  6";
+    textarea.value = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -1898,6 +2129,8 @@
     parsearPlantillaTexto: parsearPlantillaTexto,
     renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
+    renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,
+    pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarProximamente: renderizarProximamente,

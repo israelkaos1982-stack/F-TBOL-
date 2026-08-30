@@ -258,6 +258,30 @@
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
   }
 
+  // ---------- Liga 1ª REF — Pichichi/MVP/Tarjetas/Zamora (mismo contenedor) ----------
+  function verLiga1RefStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  }
+  function volverLiga1Ref(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+  }
+  function editarLiga1RefStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(CLUB_EDIT_PASSWORD, function () {
+      var cont = document.getElementById("liga1ref-content");
+      if (cont) window.Renderizadores.pintarEditorLiga1RefStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "PIN de administrador (646)");
+  }
+  function guardarLiga1RefStat(clubId, categoria) {
+    var ta = document.getElementById("liga1ref-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarLiga1RefStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  }
+  function cancelarLiga1RefStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  }
+
   function salirDelClub() {
     window._idManagerActivo = null;
     document.querySelectorAll(".team-box").forEach(function (b) {
@@ -628,6 +652,11 @@
         case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId); break;
         case "guardar-liga1ref": guardarLiga1Ref(d.clubId); break;
         case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId); break;
+        case "ver-liga1ref-stat": verLiga1RefStat(d.clubId, d.categoria); break;
+        case "volver-liga1ref": volverLiga1Ref(d.clubId); break;
+        case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria); break;
+        case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria); break;
+        case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria); break;
       }
     });
 

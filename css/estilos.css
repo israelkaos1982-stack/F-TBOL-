@@ -984,26 +984,33 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 12px;
 }
-.liga1ref-titulo {
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  color: var(--text-hi);
+/* Leyenda mini a la izquierda del ✏️ (sustituye al título "1ª REF" —
+   ya se ve arriba de este modal — y a la leyenda larga que había abajo).
+   Los propios emoji de color (🟦🟨🟥🟫) hacen de swatch — cero CSS extra
+   para pintar cuadraditos de color. */
+.liga1ref-leyenda-mini {
+  flex: 1;
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-lo);
+  letter-spacing: 0.2px;
 }
 .liga1ref-editar-btn {
   border: 1px solid var(--line);
   background: var(--bg-3);
   color: var(--text-hi);
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
   border-radius: 50%;
-  font-size: 13px;
+  font-size: 11px;
   flex-shrink: 0;
 }
+.liga1ref-volver-btn { padding: 5px 10px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
 .liga1ref-tabla { min-width: 380px; }
 
 /* Zonas por posición ABSOLUTA, relativas al Nº TOTAL de equipos de la
@@ -1023,36 +1030,54 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-zona-promo-ascenso .clasificacion-equipo,
 .liga1ref-zona-promo-ascenso .clasificacion-pts { color: var(--gold); }
 
-.liga1ref-zona-descenso { background: rgba(194, 24, 91, 0.12); }
+/* Descenso — reusa el rojo "peligro" ya definido en :root (--accent-2,
+   el mismo de los avisos/borrados admin) en vez del granate --wine
+   (demasiado apagado sobre fondo oscuro — difícil de leer). --wine NO
+   se toca: sigue siendo el color de "partido perdido" en el calendario,
+   un significado distinto que no debe cambiar con este ajuste. */
+.liga1ref-zona-descenso { background: rgba(255, 59, 92, 0.14); }
 .liga1ref-zona-descenso .clasificacion-pos,
 .liga1ref-zona-descenso .clasificacion-equipo,
-.liga1ref-zona-descenso .clasificacion-pts { color: var(--wine); }
+.liga1ref-zona-descenso .clasificacion-pts { color: var(--accent-2); }
 
 .liga1ref-zona-promo-descenso { background: rgba(168, 113, 74, 0.18); }
 .liga1ref-zona-promo-descenso .clasificacion-pos,
 .liga1ref-zona-promo-descenso .clasificacion-equipo,
 .liga1ref-zona-promo-descenso .clasificacion-pts { color: var(--brown); }
 
-.liga1ref-leyenda {
-  display: flex;
-  flex-direction: column;
+/* ---------- 6e. LIGA 1ª REF — cajas de estadísticas (Pichichi/MVP/Tarjetas/Zamora) ---------- */
+.liga1ref-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
   gap: 6px;
   margin-top: 14px;
-  font-size: 10.5px;
+}
+.liga1ref-stat-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+}
+.liga1ref-stat-box:active { border-color: var(--neon-soft); }
+.liga1ref-stat-box-icono { font-size: 17px; line-height: 1; }
+.liga1ref-stat-box-label {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-align: center;
+  text-transform: uppercase;
   color: var(--text-lo);
 }
-.liga1ref-leyenda-item { display: flex; align-items: center; gap: 7px; }
-.liga1ref-swatch {
-  width: 10px;
-  height: 10px;
-  min-width: 10px;
-  border-radius: 3px;
-  display: inline-block;
+.liga1ref-stat-titulo {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text-hi);
+  margin: 0 0 10px;
 }
-.liga1ref-swatch--ascenso { background: var(--info); }
-.liga1ref-swatch--promo-ascenso { background: var(--gold); }
-.liga1ref-swatch--descenso { background: var(--wine); }
-.liga1ref-swatch--promo-descenso { background: var(--brown); }
 
 /* ---------- 7. CALENDARIO — jornadas del club activo ---------- */
 .calendar-header {

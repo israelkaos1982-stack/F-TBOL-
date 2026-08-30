@@ -1579,21 +1579,6 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: var(--neon-glow);
   white-space: nowrap;
 }
-/* El marcador EN VIVO ya NO va encajado ENTRE los 2 escudos (eso
-   estrujaba el ancho disponible para el nombre del equipo, cortándolo
-   — foto usuario) — va SOLO, en su propia fila, arriba del todo: más
-   grande y llamativo, y libera toda la fila de abajo para los nombres
-   completos. Ver el markup nuevo de #partido-live-overlay en index.html. */
-#live-marcador {
-  text-align: center;
-  font-size: 34px;
-  font-weight: 900;
-  letter-spacing: 0.5px;
-  color: var(--neon);
-  text-shadow: var(--neon-glow);
-  margin-bottom: 12px;
-}
-
 .previa-info-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1738,11 +1723,10 @@ button { font-family: inherit; cursor: pointer; }
    (Local/Visitante) duplicando el nombre que ya se ve aquí; ahora se
    pulsa directamente y el borde verde indica cuál está activo.
    Sustituye a .previa-team-nombre SOLO en la pantalla en vivo (la
-   previa sigue con el <span> de siempre, no interactivo). Con el
-   marcador ya fuera de esta fila (ver #live-marcador) hay ancho de
-   sobra, pero se permite el salto de línea igualmente para GARANTIZAR
-   que el nombre nunca se corte (petición usuario), en vez de recortar
-   con "…". */
+   previa sigue con el <span> de siempre, no interactivo). Se permite
+   el salto de línea (en vez de recortar con "…") para GARANTIZAR que
+   el nombre nunca se corte (petición usuario), aunque el marcador
+   (#live-marcador) comparta la fila entre los 2 escudos. */
 .live-team-nombre {
   max-width: 100%;
   white-space: normal;
@@ -1761,15 +1745,6 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--neon);
   border-color: var(--neon);
 }
-
-/* Fila de escudos+nombres de la pantalla EN VIVO: top-aligned (nunca
-   centrado verticalmente) para que ambos escudos queden SIEMPRE a la
-   misma altura — antes, al vivir la mini-acta dentro de esta misma
-   columna, el equipo con más eventos "empujaba" su propia columna a
-   ser más alta y el centrado vertical de la fila lo desplazaba hacia
-   arriba respecto al otro equipo (bug: "el escudo se va desplazando",
-   foto usuario). Ahora la mini-acta vive FUERA, en .live-acta-row. */
-.live-teams-row { align-items: flex-start; }
 
 .live-acta-sep {
   border-top: 1px solid var(--line);
@@ -1994,11 +1969,11 @@ button { font-family: inherit; cursor: pointer; }
 .live-footer .btn-confirmar,
 .live-footer .btn-whatsapp { margin-top: 0; flex: 1; }
 
-.live-resumen-texto {
+.live-captura-hint {
   text-align: center;
-  font-size: 20px;
-  font-weight: 900;
-  color: var(--text-hi);
+  font-size: 13px;
+  font-weight: 800;
+  color: #7fd3ff;
   margin: 4px 0 14px;
 }
 .live-eliminatoria {

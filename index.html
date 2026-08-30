@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=24">
+<link rel="stylesheet" href="css/estilos.css?v=25">
 </head>
 <body>
 
@@ -218,15 +218,17 @@
 
     <div class="previa-comp" id="live-comp">—</div>
 
-    <!-- El marcador va SOLO, arriba del todo — así los 2 equipos tienen
-         toda la fila para ellos y el nombre completo nunca se corta.
-         Escudo+nombre quedan FIJOS: la mini-acta de cada equipo vive
-         DEBAJO de la barra separadora, en su propia fila, para que
-         añadir eventos nunca desplace los escudos (ver js/acta.js). -->
-    <div id="live-marcador">0 - 0</div>
-
-    <div class="previa-teams live-teams-row">
+    <!-- El marcador vuelve a ir ENTRE los 2 escudos (como en la previa,
+         #previa-marcador) — en su fila propia arriba quedaba "feo"
+         (petición usuario). Con el formato compacto "0-1" (sin espacios,
+         ver pintarMarcadorEnVivo en js/acta.js) cabe de sobra sin
+         empujar los escudos ni cortar el nombre. Escudo+nombre quedan
+         FIJOS: la mini-acta de cada equipo vive DEBAJO de la barra
+         separadora, en su propia fila, para que añadir eventos nunca
+         los desplace (ver js/acta.js). -->
+    <div class="previa-teams">
       <div class="previa-team" id="live-team-local"></div>
+      <div class="previa-marcador" id="live-marcador">0-0</div>
       <div class="previa-team" id="live-team-visitante"></div>
     </div>
 
@@ -276,9 +278,14 @@
       </div>
     </div>
 
-    <!-- VISTA B: resumen post-partido -->
+    <!-- VISTA B: resumen post-partido — el resultado y los equipos ya se
+         ven arriba (marcador + escudos, fijos y siempre visibles), así
+         que repetirlos aquí en texto es redundante (petición usuario).
+         La captura para el Grupo WhatsApp se hace AHORA, con el partido
+         ya finalizado — no antes de confirmar (ver confirmarPartido en
+         js/acta.js). -->
     <div id="live-resumen" hidden>
-      <p class="live-resumen-texto" id="live-resumen-texto"></p>
+      <p class="live-captura-hint">📸 Haz una captura de esta pantalla para el Grupo WhatsApp LIGA.</p>
       <div id="live-resumen-eliminatoria"></div>
       <div id="live-resumen-clasificacion"></div>
 
@@ -299,17 +306,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=24" defer></script>
-<script src="js/sync.js?v=24" defer></script>
-<script src="js/renderizadores.js?v=24" defer></script>
-<script src="js/sistema-temporadas.js?v=24" defer></script>
-<script src="js/acta.js?v=24" defer></script>
-<script src="js/estadios.js?v=24" defer></script>
-<script src="js/balones.js?v=24" defer></script>
-<script src="js/escudos.js?v=24" defer></script>
-<script src="js/calendario.js?v=24" defer></script>
-<script src="js/persistencia.js?v=24" defer></script>
-<script src="js/main.js?v=24" defer></script>
+<script src="js/estado.js?v=25" defer></script>
+<script src="js/sync.js?v=25" defer></script>
+<script src="js/renderizadores.js?v=25" defer></script>
+<script src="js/sistema-temporadas.js?v=25" defer></script>
+<script src="js/acta.js?v=25" defer></script>
+<script src="js/estadios.js?v=25" defer></script>
+<script src="js/balones.js?v=25" defer></script>
+<script src="js/escudos.js?v=25" defer></script>
+<script src="js/calendario.js?v=25" defer></script>
+<script src="js/persistencia.js?v=25" defer></script>
+<script src="js/main.js?v=25" defer></script>
 
 </body>
 </html>

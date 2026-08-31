@@ -782,6 +782,21 @@ button { font-family: inherit; cursor: pointer; }
   position: sticky;
   top: 0;
   align-self: start;
+  /* Con 8-9+ tarjetas (Títulos/Derbys/Objetivos/Plantilla/Liga 1ª REF/
+     Copa del Rey/Superliga/Promoción/Supercopa España... + las que el
+     admin añada con "+ Añadir competición") el menú puede ser MÁS ALTO
+     que el propio viewport. Sin este límite, en cuanto el sticky "se
+     clava" arriba (top:0) queda fijo ahí para siempre — seguir bajando
+     el calendario ya no mueve el menú ni un píxel más, así que las
+     últimas tarjetas (Promoción, Supercopa España...) quedaban por
+     debajo del borde inferior de la pantalla SIN NINGUNA FORMA de
+     alcanzarlas (reportado por el usuario: "no baja en scroll la parte
+     izquierda"). Acotando su alto al viewport y dándole su PROPIO
+     scroll vertical, el menú entero sigue siendo alcanzable con un
+     scroll táctil directamente sobre él, sin perder el sticky. */
+  max-height: 100vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .club-menu-btn {
   display: flex;

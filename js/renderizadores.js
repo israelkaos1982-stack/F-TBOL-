@@ -734,6 +734,12 @@
           colorSecundario: real.colorSecundario,
           escudoFormato: real.escudoFormato,
           valoracionPoder: real.valoracionPoder,
+          // Plantilla real de data/rivales_reales.json (ver
+          // js/acta.js::simularGoleadorAutomatorioIA) — sin esto, un
+          // equipo con `jugadores` puesto en el JSON seguía cayendo al
+          // pool de nombres genéricos porque este objeto sintético (el
+          // que de verdad usa el motor de eventos) nunca lo copiaba.
+          jugadores: real.jugadores,
           mostrarSiglas: true
         };
       } else {

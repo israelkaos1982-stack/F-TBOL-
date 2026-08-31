@@ -2057,9 +2057,15 @@
         return;
       }
 
+      // Separador ENTRE categorías (Clubes / Individuales / Selecciones —
+      // petición usuario: "un borde separador... para diferenciarlos"),
+      // nunca antes de la primera categoría que tenga algo que mostrar.
+      var primeraCategoriaPintada = true;
       TITULOS_CATEGORIA_ORDEN.forEach(function (cat) {
         var deEstaCategoria = ganados.filter(function (g) { return g.categoria === cat; });
         if (!deEstaCategoria.length) return;
+        if (!primeraCategoriaPintada) contenedor.appendChild(nodoSeparador());
+        primeraCategoriaPintada = false;
         var bloque = document.createElement("div");
         bloque.className = "titulos-bloque";
         bloque.innerHTML =
@@ -2334,6 +2340,12 @@
         var partidosDelClub = todosLosPartidos.filter(function (p) {
           var esSuyo = p.local === idEquipoHumanoActivo || p.visitante === idEquipoHumanoActivo;
           if (!esSuyo) return false;
+          // La Superliga NUNCA sale en el calendario GENERAL de un club
+          // (petición usuario): sus partidos surgen "por casualidad"
+          // cuando 2 humanos coinciden, no son partidos oficiales de la
+          // temporada del club — solo se ven dentro de su propia caja
+          // Superliga (renderizarSuperliga, calendario propio).
+          if (p.competicion === "superliga") return false;
           // Liga regular: solo la liga actual del mánager.
           // Torneos eliminatorios (Copa, Supercopa...): siempre, en paralelo.
           if (p.competicion === "liga") return p.liga === ligaActual;
@@ -2887,8 +2899,13 @@
       return stats[id];
     }
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+    // La Superliga NUNCA suma aquí (petición usuario): sus partidos solo
+    // cuentan para la clasificación/Pichichi-MVP DE LA PROPIA Superliga
+    // (calcularSuperliga/SUPERLIGA_STATS), nunca a la ficha del jugador
+    // dentro de su club — esos partidos surgen "por casualidad" cuando
+    // coinciden 2 humanos, no son partidos oficiales del club.
     var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
-      return p.jugado && (p.local === clubId || p.visitante === clubId);
+      return p.jugado && p.competicion !== "superliga" && (p.local === clubId || p.visitante === clubId);
     });
 
     partidos.forEach(function (p) {

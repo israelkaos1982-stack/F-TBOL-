@@ -1831,18 +1831,11 @@
   }
 
   // Chincheta "es el próximo partido de TU caja" — solo en la card ya
-  // resaltada con el borde azul (.match-card--siguiente), en los colores
-  // reales del club activo (mismo colorPrimario/colorSecundario que ya
-  // tiñe su escudo/caja de Inicio — 0 KB extra, ningún dato nuevo). El
-  // 📌 es el ÚNICO glifo (emoji, ya presente en el resto de la app);
-  // el color por-club sale del disco partido en 2 detrás, no del emoji.
-  function _pinProximoHTML(equipoActivo) {
-    var a = _colorInlineSeguro(equipoActivo && equipoActivo.colorPrimario);
-    var b = _colorInlineSeguro((equipoActivo && equipoActivo.colorSecundario) || (equipoActivo && equipoActivo.colorPrimario));
-    return (
-      '<span class="match-card-pin" style="--pin-a:' + a + "; --pin-b:" + b + ';" ' +
-      'title="Tu próximo partido">📌</span>'
-    );
+  // resaltada con el borde azul (.match-card--siguiente). Sin disco de
+  // color detrás (se probó con los colores del club y el usuario lo
+  // quitó): es solo el emoji 📌, más grande, sin envolverlo en nada.
+  function _pinProximoHTML() {
+    return '<span class="match-card-pin" title="Tu próximo partido">📌</span>';
   }
 
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente) {
@@ -1905,7 +1898,7 @@
       : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
 
     card.innerHTML =
-      (esSiguiente ? _pinProximoHTML(activo) : "") +
+      (esSiguiente ? _pinProximoHTML() : "") +
       '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
       '<div class="match-card-teams">' +
       _bloqueEquipoHTML(local, "match-card-team--local") +

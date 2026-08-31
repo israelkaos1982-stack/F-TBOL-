@@ -1600,6 +1600,17 @@ button { font-family: inherit; cursor: pointer; }
 .match-card.comp-selecciones { border-color: rgba(255, 79, 168, 0.4); border-left-color: var(--rosa); }
 .match-card.comp-superliga { border-color: rgba(217, 38, 201, 0.4); border-left-color: var(--fucsia); }
 
+/* Superliga — jornadas PARES en BLANCO en vez de fucsia (petición
+   usuario: con las 3 cards de cada Jornada idénticas, jornadas
+   consecutivas se veían "todas la misma"; alternando el color se
+   distinguen de un vistazo). Las impares se quedan con el fucsia de
+   .comp-superliga de arriba, sin tocar. Marcada por
+   renderizarSuperliga con la clase extra "superliga-jornada-par" en el
+   propio .match-card — misma especificidad que .comp-superliga (2
+   clases), así que gana por ir DESPUÉS en la hoja. */
+.match-card.superliga-jornada-par { border-color: rgba(255, 255, 255, 0.35); border-left-color: #ffffff; }
+.match-card.superliga-jornada-par .match-card-comp { color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.5); }
+
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
    PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el
    marcador en el centro, ver construirTarjetaPartido), así que no hace
@@ -1921,14 +1932,17 @@ button { font-family: inherit; cursor: pointer; }
    (Local/Visitante) duplicando el nombre que ya se ve aquí; ahora se
    pulsa directamente y el borde verde indica cuál está activo.
    Sustituye a .previa-team-nombre SOLO en la pantalla en vivo (la
-   previa sigue con el <span> de siempre, no interactivo). Se permite
-   el salto de línea (en vez de recortar con "…") para GARANTIZAR que
-   el nombre nunca se corte (petición usuario), aunque el marcador
-   (#live-marcador) comparta la fila entre los 2 escudos. */
+   previa sigue con el <span> de siempre, no interactivo). SIEMPRE en
+   UNA sola línea, nombre COMPLETO sin recortar — el salto de línea de
+   2 filas ("Atlético" / "Madrid") desplazaba el escudo hacia arriba y
+   quedaba mal (foto usuario). En vez de partir en 2 líneas o recortar
+   con "…", `_ajustarFuenteEquiposEnVivo` (js/acta.js) reduce el
+   font-size en píxeles reales hasta que el nombre COMPLETO quepa en una
+   sola línea — nunca se pierde ni una letra del nombre. */
 .live-team-nombre {
   max-width: 100%;
-  white-space: normal;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
   font-size: 12px;
   font-weight: 800;
   text-align: center;

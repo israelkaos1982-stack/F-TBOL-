@@ -1786,14 +1786,21 @@
         var calWrap = document.createElement("div");
         calWrap.className = "superliga-calendario";
         grupos.forEach(function (g, gi) {
-          var rondaTxt = (gi + 1) + "ª Jornada";
+          var numJornada = gi + 1;
+          var rondaTxt = numJornada + "ª Jornada";
+          // Jornadas pares en blanco en vez de fucsia (petición usuario:
+          // con las 3 cards de cada jornada idénticas, jornadas
+          // consecutivas se veían "todas la misma").
+          var esPar = numJornada % 2 === 0;
           var grupoEl = document.createElement("div");
           grupoEl.className = "superliga-calendario-grupo";
           g.partidos.forEach(function (p) {
             var clon = {};
             for (var k in p) if (p.hasOwnProperty(k)) clon[k] = p[k];
             clon.ronda = rondaTxt;
-            grupoEl.appendChild(construirTarjetaPartido(clon, idClubActivo, datos, null, false));
+            var card = construirTarjetaPartido(clon, idClubActivo, datos, null, false);
+            if (esPar) card.className += " superliga-jornada-par";
+            grupoEl.appendChild(card);
           });
           calWrap.appendChild(grupoEl);
         });

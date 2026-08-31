@@ -170,6 +170,11 @@
   // partido real (liga -> su propia jornada; torneos KO sin jornada ->
   // posición proporcional dentro de la temporada por fecha).
   function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs) {
+    // Superliga: condición FIJA de la competición (petición usuario) —
+    // siempre ☀️ Soleado, nunca entra en el motor estacional aleatorio.
+    if (partido.competicion === "superliga") {
+      return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
+    }
     if (partido.competicion === "liga" && typeof partido.jornada === "number") {
       return calcularClimaDinamicoPartido(partido.jornada, totalJornadasLiga);
     }
@@ -434,7 +439,8 @@
     uel: "Europa League", uecl: "Conference League",
     recopa: "Recopa de Europa", usc: "Supercopa de Europa",
     intercontinental: "Intercontinental",
-    selecciones: "Selecciones", "sel-clasif": "Selecciones · Clasif."
+    selecciones: "Selecciones", "sel-clasif": "Selecciones · Clasif.",
+    superliga: "Superliga"
   };
 
   // Color de la etiqueta de competición — cada una con el SUYO propio
@@ -453,7 +459,8 @@
     uel: "comp-uel", uecl: "comp-uecl",
     recopa: "comp-otro", usc: "comp-usc",
     intercontinental: "comp-intercontinental",
-    selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones"
+    selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones",
+    superliga: "comp-superliga"
   };
   function _claseComp(competicion) {
     return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
@@ -1539,6 +1546,330 @@
   }
 
   // ============================================================
+  // SUPERLIGA — los 6 clubes humanos, todos contra todos (calendario
+  // generado por Estado.listarPartidosResueltos, ver js/estado.js). A
+  // diferencia de Liga 1ª REF y Copa del Rey, NO hay texto libre que
+  // pegar — es 100% humano-vs-humano, así que la clasificación Y las 5
+  // estadísticas (Pichichi/MVP/Amarillas/Rojas/Zamora, igual que Liga 1ª
+  // REF) se auto-calculan siempre desde los partidos ya jugados, sin
+  // ningún editor ni PIN.
+  // ============================================================
+  var SUPERLIGA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+  ];
+
+  function _superligaEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  function _superligaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      return p.competicion === "superliga" && (p.local === clubId || p.visitante === clubId);
+    });
+  }
+
+  // Clasificación de la liguilla — misma fórmula (3/1/0, DG, goles a
+  // favor) que Estado.calcularClasificacion, pero sobre los partidos de
+  // Superliga de los 6 humanos (nunca hay rival IA que fusionar).
+  function calcularSuperliga(datos) {
+    var equipos = _superligaEquiposHumanos(datos);
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      return p.competicion === "superliga" && p.jugado && p.resultado;
+    });
+
+    var tabla = {};
+    equipos.forEach(function (e) {
+      tabla[e.id] = { equipo: e, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+    });
+
+    partidos.forEach(function (p) {
+      var L = tabla[p.local], V = tabla[p.visitante];
+      if (!L || !V) return;
+      var gl = p.resultado.golesLocal, gv = p.resultado.golesVisitante;
+      L.pj++; V.pj++;
+      L.gf += gl; L.gc += gv;
+      V.gf += gv; V.gc += gl;
+      if (gl > gv) { L.pg++; L.pts += 3; V.pp++; }
+      else if (gl < gv) { V.pg++; V.pts += 3; L.pp++; }
+      else { L.pe++; V.pe++; L.pts += 1; V.pts += 1; }
+    });
+
+    var filas = equipos.map(function (e) { return tabla[e.id]; });
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.equipo.nombre.localeCompare(b.equipo.nombre);
+    });
+    return filas;
+  }
+
+  // 🟪 CAMPEÓN (1º) · 🟨 SUBCAMPEÓN (2º) · 🟥 FAROLILLO (último) — los 3
+  // únicos puestos con badge, pedidos explícitamente por el usuario.
+  function _superligaZona(pos, total) {
+    if (pos === 1) return "campeon";
+    if (pos === 2) return "subcampeon";
+    if (total && pos === total) return "farolillo";
+    return "";
+  }
+
+  // Recorre, para cada uno de los 6 humanos, sus propios partidos de
+  // Superliga ya jugados y suma goles/MVP/amarillas/rojas por jugador
+  // (solo eventos es_humano:true — un partido HvH trae eventos de los 2
+  // lados, cada club suma solo los suyos) + Zamora (media de goles
+  // encajados por el portero titular) — mismo criterio EXACTO que
+  // calcularLiga1RefStatsHumanos/calcularCopaStatsHumanos.
+  function calcularSuperligaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[jugadorId].cantidad++;
+    }
+
+    _superligaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+      var portero = _porteroPrincipalClub(e.id);
+      var zamoraEncajados = 0, zamoraPartidos = 0;
+
+      _superligaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        (p.eventos || []).forEach(function (ev) {
+          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
+          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          if (!nombreJ) return;
+          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
+        });
+
+        if (!portero || !p.resultado) return;
+        var encajados = p.local === e.id ? p.resultado.golesVisitante
+          : p.visitante === e.id ? p.resultado.golesLocal : null;
+        if (encajados === null) return;
+        zamoraEncajados += encajados;
+        zamoraPartidos++;
+      });
+
+      if (portero && zamoraPartidos > 0) {
+        acumulado.zamora[portero.id] = {
+          nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
+          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
+        };
+      }
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría — top 15, sin texto pegado que
+  // fusionar (100% auto-suma). Zamora ordena ascendente (menos goles de
+  // media es mejor), igual que Liga 1ª REF.
+  function calcularSuperligaStatsCombinado(datos, categoria) {
+    var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    var filas = (calcularSuperligaStatsHumanos(datos)[categoria] || []).slice();
+    filas.sort(function (a, b) {
+      var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
+      return diff || a.nombre.localeCompare(b.nombre);
+    });
+    return filas.slice(0, 15);
+  }
+
+  // Agrupa los 15 partidos de Superliga del club activo por RIVAL (5
+  // grupos de 3 — un cruce SIEMPRE juega sus 3 partidos con la misma
+  // localía, ver Estado._partidosSuperliga), en el orden CANÓNICO de
+  // data/equipos.json (estable y predecible, no el orden de generación).
+  function _superligaGrupoPorRival(datos, clubId) {
+    var equipos = datos.equipos.equipos || [];
+    var partidos = _superligaPartidosDelClub(datos, clubId);
+    var porRival = {};
+    partidos.forEach(function (p) {
+      var esLocal = p.local === clubId;
+      var rivalId = esLocal ? p.visitante : p.local;
+      if (!porRival[rivalId]) porRival[rivalId] = { rivalId: rivalId, esLocal: esLocal, partidos: [] };
+      porRival[rivalId].partidos.push(p);
+    });
+    return equipos
+      .filter(function (e) { return e.id !== clubId && porRival[e.id]; })
+      .map(function (e) { return porRival[e.id]; });
+  }
+
+  // Reparte los 5 grupos de rivales en "Jornadas" alternando localía
+  // (H,A,H,A,H o A,H,A,H,A según cuál sea el grupo mayoritario — con 6
+  // clubes SIEMPRE es 3/2) — mismo espíritu que el ejemplo del usuario
+  // ("Superliga- 1ª Jornada... local / 2ª Jornada... visitante / 3ª
+  // Jornada... local"), sin depender de un calendario global sincronizado
+  // entre los 6 clubes (cada uno calcula el suyo al vuelo, en el render).
+  function _superligaOrdenJornadas(grupos) {
+    var casa = grupos.filter(function (g) { return g.esLocal; });
+    var fuera = grupos.filter(function (g) { return !g.esLocal; });
+    var mayor = casa.length >= fuera.length ? casa : fuera;
+    var menor = casa.length >= fuera.length ? fuera : casa;
+    var out = [];
+    for (var i = 0; i < mayor.length; i++) {
+      out.push(mayor[i]);
+      if (menor[i]) out.push(menor[i]);
+    }
+    return out;
+  }
+
+  function renderizarSuperliga(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML = '<span class="liga1ref-leyenda-mini">🟪 Campeón 🟨 Subcampeón 🟥 Farolillo</span>';
+      contenedor.appendChild(header);
+
+      var filas = calcularSuperliga(datos);
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+      tablaEl.innerHTML =
+        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var pos = i + 1;
+        var dg = f.gf - f.gc;
+        var zona = _superligaZona(pos, filas.length);
+        var esTuyo = f.equipo.id === idClubActivo;
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (zona ? " superliga-zona-" + zona : "") + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + pos + "</td>" +
+          '<td class="clasificacion-equipo">' + (f.equipo.misterEmoji || "") + escapeHTML(f.equipo.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="clasificacion-pts">' + f.pts + "</td>" +
+          "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+          "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
+          "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+
+      // Calendario — SOLO los 15 partidos del club activo (5 rivales x 3),
+      // nunca los 45 de toda la Superliga ("para no subir KB", petición
+      // usuario). Reusa construirTarjetaPartido tal cual (mismo botón
+      // PREVIA que el calendario general) — el partido.id es el MISMO
+      // objeto de Estado.listarPartidosResueltos, así que el click
+      // funciona sin cablear nada nuevo. `ronda` se clona SOLO para
+      // pintar la etiqueta "Nª Jornada" — nunca se persiste.
+      var equipoActivo = buscarEquipoPorId(idClubActivo, datos);
+      var grupos = _superligaOrdenJornadas(_superligaGrupoPorRival(datos, idClubActivo));
+      if (equipoActivo && grupos.length) {
+        var calTitulo = document.createElement("p");
+        calTitulo.className = "liga1ref-stat-titulo";
+        calTitulo.textContent = "🍇 Calendario de " + equipoActivo.nombre;
+        contenedor.appendChild(calTitulo);
+
+        var calWrap = document.createElement("div");
+        calWrap.className = "superliga-calendario";
+        grupos.forEach(function (g, gi) {
+          var rondaTxt = (gi + 1) + "ª Jornada";
+          var grupoEl = document.createElement("div");
+          grupoEl.className = "superliga-calendario-grupo";
+          g.partidos.forEach(function (p) {
+            var clon = {};
+            for (var k in p) if (p.hasOwnProperty(k)) clon[k] = p[k];
+            clon.ronda = rondaTxt;
+            grupoEl.appendChild(construirTarjetaPartido(clon, idClubActivo, datos, null, false));
+          });
+          calWrap.appendChild(grupoEl);
+        });
+        contenedor.appendChild(calWrap);
+      }
+
+      // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas/Zamora, sin
+      // ✏️ (no hay nada que pegar, se suman solas).
+      var statsGrid = document.createElement("div");
+      statsGrid.className = "liga1ref-stats-grid";
+      statsGrid.innerHTML = SUPERLIGA_STATS.map(function (s) {
+        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-superliga-stat" data-club-id="' +
+          (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+          s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+      }).join("");
+      contenedor.appendChild(statsGrid);
+    });
+  }
+
+  // Ranking (top 15) de UNA categoría de Superliga — mismo patrón que
+  // renderizarCopaStatDetalle, sin botón ✏️ (nada que editar).
+  function renderizarSuperligaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-superliga" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularSuperligaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos — se suman solos al añadir eventos en un partido de Superliga."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + valor + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // ============================================================
   // SALA DE TÍTULOS — catálogo cerrado (data/titulos.json). SIN
   // imágenes: cada trofeo es un icono (emoji) + su propio color de
   // fondo (ver .trofeo-card en css/estilos.css), 0 KB por trofeo —
@@ -2083,11 +2414,15 @@
   // icono fijo de _FORMA_POR_CLUB para el club gestionado, el mismo
   // esté quien esté al otro lado — petición usuario: deja de depender
   // de si el rival es humano o IA).
-  function _calcularMetaPartido(local, visitante, datos, contexto) {
+  // `partido` es opcional (solo lo necesita la excepción de Superliga,
+  // "🔋 Estado ambos🎲" fijo para los 2 lados — petición usuario). El
+  // resto de competiciones ignoran el parámetro, igual que antes.
+  function _calcularMetaPartido(local, visitante, datos, contexto, partido) {
     var par = _resolverGestionadoYRival(local, visitante, contexto);
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
+    var esSuperliga = !!partido && partido.competicion === "superliga";
     var forma = _FORMA_POR_CLUB[par.managed.id];
-    var formaIconoRival = forma ? forma.icono : "➡️";
+    var formaIconoRival = esSuperliga ? "🎲" : (forma ? forma.icono : "➡️");
     return {
       tiempo: "⏱️" + (rivalEsHumano ? "10 min" : "8 min"),
       nivel: "🤖" + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
@@ -2116,7 +2451,12 @@
   // partido 0-0) cae dentro de "eliminatoria-unica" a propósito — ya
   // resuelve sus penaltis leyendo el acta (ver sistema-temporadas.js).
   function detectarModoPartido(partido) {
-    if (partido.competicion && _normNombre(partido.competicion) === "liga") return "liga";
+    // Superliga comparte el modo "liga" (nunca prórroga ni penaltis — la
+    // caja del checkbox no se pinta) — petición usuario explícita.
+    if (partido.competicion) {
+      var compNorm = _normNombre(partido.competicion);
+      if (compNorm === "liga" || compNorm === "superliga") return "liga";
+    }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
     return "eliminatoria-unica";
   }
@@ -2270,7 +2610,7 @@
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
 
-    var metaPartido = _calcularMetaPartido(local, visitante, datos, _ultimoContexto);
+    var metaPartido = _calcularMetaPartido(local, visitante, datos, _ultimoContexto, partido);
     document.getElementById("previa-tiempo").textContent = metaPartido.tiempo;
     document.getElementById("previa-nivel").textContent = metaPartido.nivel;
     document.getElementById("previa-forma").textContent = metaPartido.forma;
@@ -2663,9 +3003,9 @@
 
   // Placeholder plano para los botones del menú del club que todavía no
   // existen como subsistema real en este simulador ligero (Derbys,
-  // Objetivos, Copa del Rey, Superliga pertenecen a OTRA app mucho más
-  // grande — no se inventan datos falsos aquí). Títulos ya SÍ es real
-  // (ver renderizarTitulos, catálogo cerrado data/titulos.json).
+  // Objetivos... pertenecen a OTRA app mucho más grande — no se inventan
+  // datos falsos aquí). Plantilla / Liga 1ª REF / Copa del Rey / Superliga
+  // / Títulos ya SÍ son reales (ver sus renderizar* respectivos).
   function renderizarProximamente(contenedorId, etiqueta) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -3094,6 +3434,9 @@
     renderizarCopaDelRey: renderizarCopaDelRey,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
+    renderizarSuperliga: renderizarSuperliga,
+    renderizarSuperligaStatDetalle: renderizarSuperligaStatDetalle,
+    calcularSuperliga: calcularSuperliga,
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,
     parsearTitulosTexto: parsearTitulosTexto,

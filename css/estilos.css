@@ -64,6 +64,7 @@ html, body { margin: 0; padding: 0; }
   --amarillo-vivo: #ffe600; /* Intercontinental — "amarillo llamativo", distinto del dorado de Copa */
   --plata: #c9d3dc; /* Supercopa de Europa */
   --rosa: #ff4fa8; /* Selecciones */
+  --fucsia: #d926c9; /* Superliga — distinto de --morado (Previa Champions) para que nunca se confundan en el mismo calendario */
 
   --radius-s: 8px;
   --radius-m: 14px;
@@ -1100,6 +1101,33 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-zona-promo-descenso .clasificacion-equipo,
 .liga1ref-zona-promo-descenso .clasificacion-pts { color: var(--brown); }
 
+/* ---------- SUPERLIGA — clasificación (🟪 Campeón / 🟨 Subcampeón /
+   🟥 Farolillo, solo los 3 puestos que pidió el usuario) — mismo patrón
+   que .liga1ref-zona-*, va DESPUÉS de .clasificacion-fila--activo por el
+   mismo motivo (la zona manda si el club activo cae en ella). */
+.superliga-zona-campeon { background: rgba(139, 92, 246, 0.16); }
+.superliga-zona-campeon .clasificacion-pos,
+.superliga-zona-campeon .clasificacion-equipo,
+.superliga-zona-campeon .clasificacion-pts { color: var(--morado); }
+
+.superliga-zona-subcampeon { background: rgba(241, 196, 15, 0.12); }
+.superliga-zona-subcampeon .clasificacion-pos,
+.superliga-zona-subcampeon .clasificacion-equipo,
+.superliga-zona-subcampeon .clasificacion-pts { color: var(--gold); }
+
+.superliga-zona-farolillo { background: rgba(255, 59, 92, 0.14); }
+.superliga-zona-farolillo .clasificacion-pos,
+.superliga-zona-farolillo .clasificacion-equipo,
+.superliga-zona-farolillo .clasificacion-pts { color: var(--accent-2); }
+
+/* Calendario del club activo dentro de la pantalla Superliga — mismo
+   layout flex-column que #calendar-content (id reservado para el
+   calendario general, no se puede duplicar), agrupado en bloques
+   "Jornada" (5 grupos de 3 cards .match-card idénticas, ver
+   renderizarSuperliga). */
+.superliga-calendario { display: flex; flex-direction: column; gap: 16px; margin-top: 4px; }
+.superliga-calendario-grupo { display: flex; flex-direction: column; gap: 8px; }
+
 /* ---------- 6e. LIGA 1ª REF — cajas de estadísticas (Pichichi/MVP/Tarjetas/Zamora) ---------- */
 .liga1ref-stats-grid {
   display: grid;
@@ -1455,6 +1483,7 @@ button { font-family: inherit; cursor: pointer; }
 .match-card-comp.comp-intercontinental { color: var(--amarillo-vivo); text-shadow: 0 0 8px rgba(255, 230, 0, 0.55); }
 .match-card-comp.comp-usc { color: var(--plata); text-shadow: 0 0 6px rgba(201, 211, 220, 0.4); }
 .match-card-comp.comp-selecciones { color: var(--rosa); text-shadow: 0 0 8px rgba(255, 79, 168, 0.45); }
+.match-card-comp.comp-superliga { color: var(--fucsia); text-shadow: 0 0 8px rgba(217, 38, 201, 0.5); }
 .match-card-comp.comp-otro { color: var(--text-lo); text-shadow: none; }
 
 /* Fila única — bloque LOCAL (escudo + nombre completo, "cuadrado" — ambos
@@ -1569,6 +1598,7 @@ button { font-family: inherit; cursor: pointer; }
 .match-card.comp-intercontinental { border-color: rgba(255, 230, 0, 0.45); border-left-color: var(--amarillo-vivo); }
 .match-card.comp-usc { border-color: rgba(201, 211, 220, 0.45); border-left-color: var(--plata); }
 .match-card.comp-selecciones { border-color: rgba(255, 79, 168, 0.4); border-left-color: var(--rosa); }
+.match-card.comp-superliga { border-color: rgba(217, 38, 201, 0.4); border-left-color: var(--fucsia); }
 
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
    PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el

@@ -226,17 +226,74 @@
     });
   }
 
+  // ---------- SUPERLIGA — los 6 clubes humanos, todos contra todos ----------
+  // A diferencia del Calendario extra (texto libre pegado por el admin) o
+  // Liga 1ª REF (snapshot IA + partidos propios), la Superliga es 100%
+  // determinista: NINGÚN dato se pega ni se persiste — el par de cada
+  // cruce, su localía y sus 3 partidos (SUPERLIGA_LEGS) se recalculan en
+  // cada llamada a partir de `datos.equipos.equipos`. 0 KB nuevos en
+  // localStorage; solo el resultado ya jugado (registrarResultadoPartido,
+  // por id, igual que cualquier otro partido) se guarda.
+  var SUPERLIGA_LEGS = 3;
+
+  // Localía FIJA por pareja (i<j, índices dentro de datos.equipos.equipos):
+  // con 6 clubes, cada índice se enfrenta a los otros 5 y siempre termina
+  // con un reparto balanceado — 3 partidos como local / 2 como visitante
+  // en los índices PARES (0,2,4) y 2 local / 3 visitante en los IMPARES
+  // (1,3,5), comprobado a mano para las 15 parejas posibles. La regla:
+  // `(j - i)` impar -> local el de índice MENOR (i); par -> local el de
+  // índice MAYOR (j). Nunca ida y vuelta — un mismo cruce SIEMPRE juega
+  // sus 3 partidos con la MISMA localía (petición usuario explícita).
+  function _superligaLocalIdx(i, j) {
+    return (j - i) % 2 === 1 ? i : j;
+  }
+
+  function _partidosSuperliga(datos) {
+    var equipos = (datos.equipos && datos.equipos.equipos) || [];
+    if (equipos.length < 2) return [];
+    var ahoraMs = Date.now();
+    var out = [];
+    var contador = 0;
+    for (var i = 0; i < equipos.length; i++) {
+      for (var j = i + 1; j < equipos.length; j++) {
+        var localIdx = _superligaLocalIdx(i, j);
+        var visitanteIdx = localIdx === i ? j : i;
+        var local = equipos[localIdx], visitante = equipos[visitanteIdx];
+        for (var leg = 1; leg <= SUPERLIGA_LEGS; leg++) {
+          out.push({
+            id: "superliga-" + i + "-" + j + "-" + leg,
+            competicion: "superliga",
+            liga: null,
+            ronda: null,
+            jornada: null,
+            local: local.id,
+            visitante: visitante.id,
+            fecha: null,
+            // Solo importa el orden RELATIVO entre los propios partidos de
+            // Superliga (mismo criterio que _fechaFallbackMs de arriba).
+            _fechaFallbackMs: ahoraMs + (contador++) * 86400000,
+            jugado: false,
+            resultado: null
+          });
+        }
+      }
+    }
+    return out;
+  }
+
   // Vista fusionada: partidos base (data/partidos.json) + Calendario extra
-  // de los 6 clubes humanos + generados (terceros partidos de desempate),
-  // con el resultado local superpuesto si existe. Es la ÚNICA fuente de
-  // verdad que debe leer cualquier pantalla (calendario, clasificación,
-  // estadísticas de jugador).
+  // de los 6 clubes humanos + Superliga (los 6 humanos, todos contra
+  // todos) + generados (terceros partidos de desempate), con el resultado
+  // local superpuesto si existe. Es la ÚNICA fuente de verdad que debe
+  // leer cualquier pantalla (calendario, clasificación, estadísticas de
+  // jugador).
   function listarPartidosResueltos(datos) {
     var e = cargarEstado();
     var base = (datos.partidos.partidos || []).slice();
     var extra = _partidosExtraDeTodosLosClubes(datos, e.resultados);
+    var superliga = _partidosSuperliga(datos);
     var generados = Object.keys(e.partidosGenerados).map(function (id) { return e.partidosGenerados[id]; });
-    var todos = base.concat(extra).concat(generados);
+    var todos = base.concat(extra).concat(superliga).concat(generados);
 
     return todos.map(function (p) {
       var override = e.resultados[p.id];

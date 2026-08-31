@@ -1963,34 +1963,53 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-select--full { width: 100%; }
 
-/* El NOMBRE del equipo, debajo de su escudo, ES el selector de "¿a qué
-   equipo le añado el evento?" — antes había una fila de botones aparte
-   (Local/Visitante) duplicando el nombre que ya se ve aquí; ahora se
-   pulsa directamente y el borde verde indica cuál está activo.
-   Sustituye a .previa-team-nombre SOLO en la pantalla en vivo (la
-   previa sigue con el <span> de siempre, no interactivo). SIEMPRE en
-   UNA sola línea, nombre COMPLETO sin recortar — el salto de línea de
-   2 filas ("Atlético" / "Madrid") desplazaba el escudo hacia arriba y
-   quedaba mal (foto usuario). En vez de partir en 2 líneas o recortar
-   con "…", `_ajustarFuenteEquiposEnVivo` (js/acta.js) reduce el
-   font-size en píxeles reales hasta que el nombre COMPLETO quepa en una
-   sola línea — nunca se pierde ni una letra del nombre. Tamaño base
-   subido de 12 a 17px + más padding (petición usuario: quedaba mucho
-   hueco sin usar entre el escudo y el marcador "0-1" con un texto tan
-   pequeño) — el autofit sigue funcionando igual, solo cambia el tamaño
-   de PARTIDA del que arranca a reducir si un nombre no cabe. */
+/* Fila propia, a ANCHO COMPLETO de la tarjeta, para los 2 botones de
+   nombre — ver comentario junto a .live-teams-nombres en index.html.
+   Antes vivían DENTRO de .previa-team (columna compartida con el
+   escudo, exprimida además por #live-marcador en medio): con un nombre
+   largo tipo "Atlético Madrid" quedaba tan poco ancho real que el
+   autofit lo encogía hasta ser casi ilegible (foto usuario, "enanismo,
+   casi ilegible"). Aquí cada botón dispone de ~mitad del ancho TOTAL de
+   la tarjeta — bastante más que antes — sin competir con el marcador ni
+   con el ancho del escudo de la fila de arriba. */
+.live-teams-nombres {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+/* El NOMBRE del equipo ES el selector de "¿a qué equipo le añado el
+   evento?" — antes había una fila de botones aparte (Local/Visitante)
+   duplicando el nombre que ya se ve aquí; ahora se pulsa directamente y
+   el borde verde indica cuál está activo. Sustituye a
+   .previa-team-nombre SOLO en la pantalla en vivo (la previa sigue con
+   el <span> de siempre, no interactivo). SIEMPRE en UNA sola línea,
+   nombre COMPLETO sin recortar — el salto de línea de 2 filas
+   ("Atlético" / "Madrid") desplazaba el escudo hacia arriba y quedaba
+   mal (foto usuario, cuando el nombre aún vivía junto al escudo). En
+   vez de partir en 2 líneas o recortar con "…",
+   `_ajustarFuenteEquiposEnVivo` (js/acta.js) reduce el font-size en
+   píxeles reales hasta que el nombre COMPLETO quepa en una sola línea —
+   nunca se pierde ni una letra del nombre. `width:100%` (ocupa TODO su
+   hueco en .live-teams-nombres, no solo lo que el texto necesite) +
+   tamaño base grande (petición usuario: pill bien visible, "ocupar más
+   espacio como la foto que he creado yo") — el autofit sigue
+   funcionando igual, solo cambia el tamaño de PARTIDA del que arranca a
+   reducir si un nombre no cabe. */
 .live-team-nombre {
+  display: block;
+  width: 100%;
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 800;
   text-align: center;
   color: var(--text-lo);
   background: var(--bg-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  padding: 10px 16px;
+  padding: 12px 10px;
 }
 .live-team-nombre.is-active {
   background: rgba(57, 255, 106, 0.16);

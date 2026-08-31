@@ -2629,7 +2629,7 @@
     if (actual) {
       return (
         '<button type="button" class="previa-team-alias" ' + atributos + '>' +
-        "🎮 " + escapeHTML(actual) + " ✏️" +
+        "🎮 " + escapeHTML(actual) +
         "</button>"
       );
     }
@@ -3427,7 +3427,7 @@
       return;
     }
 
-    // "🎮 <alias> ✏️" / "➕ Añadir equipo eFootball" bajo el nombre de un
+    // "🎮 <alias>" / "➕ Añadir equipo eFootball" bajo el nombre de un
     // equipo sin licencia en el juego (ver _previaAliasHTML) — admin-only,
     // texto libre igual que el resto de editores de una línea de la app
     // (window.prompt, PIN 646). Se guarda por NOMBRE normalizado, así que

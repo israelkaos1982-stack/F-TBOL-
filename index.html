@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=44">
+<link rel="stylesheet" href="css/estilos.css?v=45">
 </head>
 <body>
 
@@ -230,14 +230,28 @@
          #previa-marcador) — en su fila propia arriba quedaba "feo"
          (petición usuario). Con el formato compacto "0-1" (sin espacios,
          ver pintarMarcadorEnVivo en js/acta.js) cabe de sobra sin
-         empujar los escudos ni cortar el nombre. Escudo+nombre quedan
-         FIJOS: la mini-acta de cada equipo vive DEBAJO de la barra
-         separadora, en su propia fila, para que añadir eventos nunca
-         los desplace (ver js/acta.js). -->
+         empujar los escudos. Los escudos quedan FIJOS: la mini-acta de
+         cada equipo vive DEBAJO de la barra separadora, en su propia
+         fila, para que añadir eventos nunca los desplace (ver
+         js/acta.js). -->
     <div class="previa-teams">
       <div class="previa-team" id="live-team-local"></div>
       <div class="previa-marcador" id="live-marcador">0-0</div>
       <div class="previa-team" id="live-team-visitante"></div>
+    </div>
+
+    <!-- Los 2 botones .live-team-nombre (= selector de "¿a quién le añado
+         el evento?") viven en SU PROPIA fila a ancho completo, FUERA de
+         .previa-teams — dentro de .previa-team compartían columna con el
+         escudo y esa columna además quedaba exprimida por #live-marcador
+         en medio, así que un nombre largo ("Atlético Madrid") tenía muy
+         poco ancho real y el autofit (js/acta.js::_ajustarFuenteEquiposEnVivo)
+         lo encogía hasta ser casi ilegible (foto usuario). Aquí cada
+         botón dispone de ~la mitad del ancho TOTAL de la tarjeta, sin
+         competir con el marcador ni con el ancho del escudo de arriba. -->
+    <div class="live-teams-nombres">
+      <div id="live-nombre-local"></div>
+      <div id="live-nombre-visitante"></div>
     </div>
 
     <div class="live-acta-sep"></div>
@@ -313,17 +327,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=44" defer></script>
-<script src="js/sync.js?v=44" defer></script>
-<script src="js/renderizadores.js?v=44" defer></script>
-<script src="js/sistema-temporadas.js?v=44" defer></script>
-<script src="js/acta.js?v=44" defer></script>
-<script src="js/estadios.js?v=44" defer></script>
-<script src="js/balones.js?v=44" defer></script>
-<script src="js/escudos.js?v=44" defer></script>
-<script src="js/calendario.js?v=44" defer></script>
-<script src="js/persistencia.js?v=44" defer></script>
-<script src="js/main.js?v=44" defer></script>
+<script src="js/estado.js?v=45" defer></script>
+<script src="js/sync.js?v=45" defer></script>
+<script src="js/renderizadores.js?v=45" defer></script>
+<script src="js/sistema-temporadas.js?v=45" defer></script>
+<script src="js/acta.js?v=45" defer></script>
+<script src="js/estadios.js?v=45" defer></script>
+<script src="js/balones.js?v=45" defer></script>
+<script src="js/escudos.js?v=45" defer></script>
+<script src="js/calendario.js?v=45" defer></script>
+<script src="js/persistencia.js?v=45" defer></script>
+<script src="js/main.js?v=45" defer></script>
 
 </body>
 </html>

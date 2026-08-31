@@ -2200,7 +2200,7 @@
     }
     return (
       '<button type="button" class="previa-team-alias previa-team-alias--vacio" ' + atributos + '>' +
-      "➕ Añadir equipo eFootball" +
+      "➕ Añadir" +
       "</button>"
     );
   }
@@ -2234,11 +2234,15 @@
     if (!ov) return;
 
     document.getElementById("previa-team-local").innerHTML =
-      crearEscudoHTML(local, "escudo--lg") + '<span class="previa-team-nombre">' + local.nombre + "</span>" +
-      _previaAliasHTML(local, "local");
+      crearEscudoHTML(local, "escudo--lg") + '<span class="previa-team-nombre">' + local.nombre + "</span>";
     document.getElementById("previa-team-visitante").innerHTML =
-      crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>" +
-      _previaAliasHTML(visitante, "visitante");
+      crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>";
+
+    // Fuera de .previa-team a propósito (ver comentario en index.html junto
+    // a #previa-alias-row) — así los 2 escudos quedan SIEMPRE a la misma
+    // altura, tenga o no alias uno de los 2 lados.
+    var aliasRow = document.getElementById("previa-alias-row");
+    if (aliasRow) aliasRow.innerHTML = _previaAliasHTML(local, "local") + _previaAliasHTML(visitante, "visitante");
 
     document.getElementById("previa-marcador").textContent =
       partido.jugado ? (partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante) : "VS";

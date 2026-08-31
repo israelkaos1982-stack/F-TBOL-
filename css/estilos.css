@@ -1686,16 +1686,29 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: var(--radius-s);
   padding: 4px 14px;
 }
-/* "🎮 <equipo real de eFootball>" — solo bajo el equipo SIN licencia en el
-   juego (ver crearEscudoHTML/_previaAliasHTML en js/renderizadores.js).
-   Es un <button> (no un <span>): PIN-gated, abre un prompt() para
+/* Fila con "🎮 <equipo real de eFootball>" del lado que no tenga licencia en
+   el juego (ver crearEscudoHTML/_previaAliasHTML en js/renderizadores.js) —
+   FUERA de .previa-team a propósito (ver comentario junto a
+   #previa-alias-row en index.html): así nunca desnivela los 2 escudos de
+   arriba, tenga o no alias uno de los 2 lados. Vacía -> :empty la colapsa a
+   0px, sin hueco de más cuando ningún lado lo necesita (el caso normal). */
+.previa-alias-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.previa-alias-row:empty { display: none; margin: 0; }
+/* Es un <button> (no un <span>): PIN-gated, abre un prompt() para
    añadir/editar el texto. white-space normal (a diferencia de
    .previa-team-nombre) porque el texto puede ser largo
    ("Continente - División - País - Equipo") y hay que poder leerlo entero
    para ir a buscarlo en el juego, nunca truncado con "...". */
 .previa-team-alias {
-  max-width: 100%;
-  padding: 3px 8px;
+  max-width: 70%;
+  padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid rgba(127, 211, 255, 0.35);
   background: rgba(127, 211, 255, 0.08);
@@ -1708,6 +1721,7 @@ button { font-family: inherit; cursor: pointer; }
   word-break: break-word;
 }
 .previa-team-alias--vacio {
+  max-width: none;
   border-color: var(--line);
   background: transparent;
   color: var(--text-lo);

@@ -318,6 +318,31 @@
     m.textContent = r.golesLocal + "-" + r.golesVisitante;
   }
 
+  // El botón .live-team-nombre va SIEMPRE en una sola línea, con el
+  // nombre COMPLETO (nunca recortado con "…", petición usuario ya
+  // documentada en css/estilos.css). Un nombre largo ("Atlético
+  // Madrid") puede no caber a font-size:12px en el hueco real que le
+  // deja el marcador entre los 2 escudos — en vez de partirlo en 2
+  // líneas (desplazaba el escudo hacia arriba, foto usuario), se reduce
+  // el font-size en pasos de 0.5px hasta que el ancho real (scrollWidth)
+  // quepa en el ancho del botón (clientWidth). Solo actúa si de verdad
+  // desborda — un nombre corto ("Liverpool") nunca se toca. Debe
+  // ejecutarse DESPUÉS de que el overlay esté visible (clientWidth es 0
+  // con el elemento oculto), por eso se llama diferido a
+  // requestAnimationFrame tras mostrar #partido-live-overlay.
+  function _ajustarFuenteEquiposEnVivo() {
+    document.querySelectorAll(".live-team-nombre").forEach(function (el) {
+      el.style.fontSize = ""; // vuelve al tamaño base del CSS antes de medir
+      var size = parseFloat(getComputedStyle(el).fontSize) || 12;
+      var guard = 0;
+      while (el.scrollWidth > el.clientWidth + 1 && size > 8 && guard < 20) {
+        size -= 0.5;
+        el.style.fontSize = size + "px";
+        guard++;
+      }
+    });
+  }
+
   function iniciarPartidoEnVivo(partidoId, ultimoContexto) {
     var partido = ultimoContexto.partidosPorId[partidoId];
     if (!partido) return;
@@ -365,6 +390,7 @@
     document.getElementById("live-entrada").hidden = false;
     document.getElementById("live-resumen").hidden = true;
     document.getElementById("partido-live-overlay").hidden = false;
+    requestAnimationFrame(_ajustarFuenteEquiposEnVivo);
   }
 
   function cerrarPartidoEnVivo() {

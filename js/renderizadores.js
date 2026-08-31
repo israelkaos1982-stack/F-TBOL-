@@ -995,9 +995,12 @@
 
   // Recorre, para cada club humano de esta liga, sus propios partidos de
   // Liga ya jugados (misma fuente que la clasificación) y suma goles/MVP/
-  // amarillas/rojas por jugador (solo eventos es_humano:true — los de la
-  // IA no tienen ficha real, igual que en calcularStatsRosterClub, más
-  // abajo) + porterías a 0 del equipo, atribuidas a su portero principal.
+  // amarillas/rojas por jugador — de ESTE club (es_humano:true, ficha
+  // real vía obtenerJugadoresClub) Y del RIVAL IA de cada partido
+  // (es_humano:false, nombre real generado por
+  // js/acta.js::simularGoleadorAutomatorioIA — petición usuario: los
+  // goles/tarjetas de la IA TAMBIÉN suben a Pichichi/MVP/etc) + porterías
+  // a 0 del equipo, atribuidas a su portero principal.
   function calcularLiga1RefStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
@@ -1005,6 +1008,12 @@
     function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
       bucket[jugadorId].cantidad++;
+    }
+    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
+      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
     }
 
     _liga1RefEquiposHumanos(datos).forEach(function (e) {
@@ -1023,16 +1032,22 @@
       });
 
       partidos.forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.eventos || []).forEach(function (ev) {
-          // SOLO eventos de ESTE club (equipo_id) — un partido humano-vs-
-          // humano trae eventos de AMBOS lados; cada club solo suma los suyos.
-          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
-          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
-          if (!nombreJ) return;
-          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          if (!ev.jugador_id) return;
+          if (ev.equipo_id === e.id) {
+            // Eventos de ESTE club — un partido humano-vs-humano trae
+            // eventos de AMBOS lados; cada club solo suma los suyos.
+            if (!ev.es_humano) return;
+            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+            if (!nombreJ) return;
+            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
+          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
+            // Rival IA de ESTE partido concreto (nunca otro humano — ese
+            // caso ya lo cubre su propia iteración de arriba).
+            if (!ev.jugador_nombre) return;
+            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+          }
         });
 
         if (!portero || !p.resultado) return;
@@ -1332,8 +1347,11 @@
   }
 
   // Recorre, para cada club humano, sus propios partidos de Copa ya
-  // jugados y suma goles/MVP/amarillas/rojas por jugador (solo eventos
-  // es_humano:true, igual que Liga 1ª REF — la IA no tiene ficha real).
+  // jugados y suma goles/MVP/amarillas/rojas por jugador — de ESTE club
+  // (es_humano:true, ficha real) Y del RIVAL IA de cada partido
+  // (es_humano:false, nombre real generado por
+  // js/acta.js::simularGoleadorAutomatorioIA — mismo criterio que Liga
+  // 1ª REF, ver calcularLiga1RefStatsHumanos más arriba).
   function calcularCopaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
@@ -1342,20 +1360,30 @@
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
       bucket[jugadorId].cantidad++;
     }
+    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
+      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    }
 
     _copaEquiposHumanos(datos).forEach(function (e) {
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
       _copaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.eventos || []).forEach(function (ev) {
-          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
-          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
-          if (!nombreJ) return;
-          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          if (!ev.jugador_id) return;
+          if (ev.equipo_id === e.id) {
+            if (!ev.es_humano) return;
+            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+            if (!nombreJ) return;
+            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
+          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
+            if (!ev.jugador_nombre) return;
+            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+          }
         });
       });
     });

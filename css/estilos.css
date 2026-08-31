@@ -1686,6 +1686,32 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: var(--radius-s);
   padding: 4px 14px;
 }
+/* "🎮 <equipo real de eFootball>" — solo bajo el equipo SIN licencia en el
+   juego (ver crearEscudoHTML/_previaAliasHTML en js/renderizadores.js).
+   Es un <button> (no un <span>): PIN-gated, abre un prompt() para
+   añadir/editar el texto. white-space normal (a diferencia de
+   .previa-team-nombre) porque el texto puede ser largo
+   ("Continente - División - País - Equipo") y hay que poder leerlo entero
+   para ir a buscarlo en el juego, nunca truncado con "...". */
+.previa-team-alias {
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(127, 211, 255, 0.35);
+  background: rgba(127, 211, 255, 0.08);
+  color: #7fd3ff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+.previa-team-alias--vacio {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text-lo);
+}
 .previa-info-grid {
   display: grid;
   grid-template-columns: 1fr;

@@ -782,6 +782,50 @@
     }
   }
 
+  // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
+  // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
+  // app simula — el admin ha comparado, equipo a equipo, nivel/escudo/
+  // uniforme y ha decidido a qué club REAL con licencia en el juego se
+  // parece cada uno (ej. "CE Europa" -> "Asia y Oceanía - 2ª Japón -
+  // Blaublitz Akita"). Va a hacer falta para MUCHOS equipos (cualquier
+  // rival IA o sintético del Calendario extra, potencialmente cientos),
+  // así que es UN solo mapa {nombreNormalizado -> texto} en vez de un
+  // campo aparte por cada catálogo — se añade sobre la marcha, según el
+  // admin vaya encontrando equipos sin alias en la PREVIA (ver
+  // js/renderizadores.js::abrirPreviaPartido / _previaAliasHTML).
+  // La clave es el nombre del equipo YA NORMALIZADO (Renderizadores._normNombre
+  // — minúsculas, sin tildes) para que sobreviva a que el mismo rival se
+  // resuelva desde catálogos IA distintos o desde un id sintético que
+  // cambia de sesión a sesión; nunca se guarda por id.
+  var ALIAS_EFOOTBALL_KEY = "ef7_alias_efootball_v1";
+  function _obtenerAliasEfootballMapa() {
+    try {
+      var raw = localStorage.getItem(ALIAS_EFOOTBALL_KEY);
+      var mapa = raw ? JSON.parse(raw) : null;
+      return mapa && typeof mapa === "object" ? mapa : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function obtenerAliasEfootball(clave) {
+    if (!clave) return "";
+    return _obtenerAliasEfootballMapa()[clave] || "";
+  }
+  function guardarAliasEfootball(clave, texto) {
+    if (!clave) return false;
+    try {
+      var mapa = _obtenerAliasEfootballMapa();
+      var limpio = String(texto || "").trim();
+      if (limpio) mapa[clave] = limpio;
+      else delete mapa[clave];
+      localStorage.setItem(ALIAS_EFOOTBALL_KEY, JSON.stringify(mapa));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el alias eFootball de \"" + clave + "\":", err);
+      return false;
+    }
+  }
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA
@@ -1029,6 +1073,8 @@
     guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
     obtenerCopaStatTexto: obtenerCopaStatTexto,
     guardarCopaStatTexto: guardarCopaStatTexto,
+    obtenerAliasEfootball: obtenerAliasEfootball,
+    guardarAliasEfootball: guardarAliasEfootball,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

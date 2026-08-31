@@ -760,27 +760,32 @@ button { font-family: inherit; cursor: pointer; }
    poder darles opacidad sin color-mix(), que no está en todos los móviles)
    en #screen-club al abrir la caja; el resto de este bloque solo los LEE.
    El "glow" es el MISMO truco ya usado en .team-box--active/--neon-glow —
-   box-shadow de 2 capas, sin filtros ni animaciones pesadas. */
+   box-shadow de 2 capas, sin filtros ni animaciones pesadas.
+
+   SCROLL — 2 REGIONES INDEPENDIENTES (petición usuario, 3ª iteración):
+   menú (izquierda) y calendario (derecha) se deslizan cada uno por su
+   lado, sin arrastrarse entre sí. Los 2 intentos anteriores fallaron por
+   el MISMO motivo de fondo: #screen-club (`.screen`) solo tenía
+   `min-height:100vh` — sin un alto REAL acotado, flex:1 en .club-layout
+   no tenía "hueco fijo" al que ajustarse, así que la página entera
+   crecía con el contenido y el scroll pasaba a ser el del navegador
+   (uno solo, para TODO) — de ahí que un intento con position:sticky
+   quedara "clavado" sin poder completarse y el otro sincronizara ambas
+   columnas en vez de dejarlas sueltas. Aquí #screen-club SÍ se acota
+   al viewport real (ver su regla más abajo) — con eso, .club-menu y
+   .club-calendar-col reciben cada uno la MISMA altura fija disponible
+   (grid con stretch, sin sticky) y su PROPIO overflow-y:auto puede
+   scrollear de verdad, siempre, hasta la última tarjeta. */
+#screen-club {
+  height: 100vh;
+  height: 100dvh; /* iOS/Android: descuenta la barra del navegador de verdad, evita cortar la última fila */
+  overflow: hidden; /* todo el scroll vive en los 2 hijos de abajo, nunca en la página */
+}
 .club-layout {
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 112px 1fr;
-  /* ÚNICO contenedor con scroll de esta pantalla (petición usuario tras
-     2 rondas de fixes fallidas — "sticky" en .club-menu + overflow-y
-     propio del menú NUNCA se sincronizó de verdad con el calendario: al
-     deslizar sobre el calendario el menú se quedaba quieto, y solo se
-     movía deslizando justo encima de esa franja estrecha de 112px, "a
-     trompicones"). Al mover el scroll AQUÍ arriba —el ANCESTRO común de
-     menú y calendario— un solo gesto, en cualquier punto de la pantalla,
-     mueve ambas columnas EXACTAMENTE a la vez, como un único documento.
-     Ya no hace falta position:sticky en .club-menu: al ya no haber dos
-     regiones de scroll independientes, la tarjeta "de arriba del todo"
-     deja de tener sentido — todas las tarjetas del menú (incluidas las
-     que el admin añada) quedan alcanzables con el MISMO gesto que ya usa
-     el usuario para bajar el calendario. */
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 .club-menu {
   display: flex;
@@ -789,6 +794,14 @@ button { font-family: inherit; cursor: pointer; }
   padding: 10px 6px;
   background: var(--bg-1);
   border-right: 1px solid var(--line);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* "Astrología fantasma" (petición usuario) bajo la última tarjeta —
+     sitio de sobra para que el dedo note con claridad que ya no hay
+     nada más debajo, en vez de tropezar justo contra el borde de la
+     última caja (aquí, Supercopa España o la que el admin añada al
+     final). */
+  padding-bottom: 90px;
 }
 .club-menu-btn {
   display: flex;
@@ -848,11 +861,14 @@ button { font-family: inherit; cursor: pointer; }
    señaló el usuario; se libera para que el menú de la izquierda (92px ->
    112px) tenga sitio para cajas/texto/icono más grandes sin que el
    calendario se sienta apretado.
-   SIN overflow-y propio: el scroll de esta pantalla vive en el padre
-   compartido .club-layout (ver su comentario) — una 2ª región de scroll
-   aquí competiría con esa y volvería a desincronizar menú/calendario. */
+   overflow-y propio (independiente del menú, ver #screen-club/.club-menu
+   más arriba): con #screen-club ya acotado al viewport real, este
+   scroll SÍ funciona de verdad — antes, sin ese acotado, competía con
+   el scroll nativo de la página entera y quedaba inerte casi siempre. */
 .club-calendar-col {
   min-width: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 14px 6px 60px 6px;
 }
 

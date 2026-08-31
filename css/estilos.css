@@ -1134,6 +1134,101 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 0 10px;
 }
 
+/* ---------- 6a-bis. COPA DEL REY — bloque de estado por club (ronda + rivales) ----------
+   Reutiliza .liga1ref-header/.liga1ref-leyenda-mini/.liga1ref-editar-btn/
+   .liga1ref-volver-btn/.liga1ref-stat-titulo/.liga1ref-stats-grid/
+   .liga1ref-stat-box/.clasificacion-tag/.clasificacion-fila--activo tal
+   cual (0 CSS nuevo para esa parte) — solo hace falta el bloque de "estado
+   del club" en sí, que no existe en Liga 1ª REF (ahí es una fila de tabla,
+   aquí es una tarjeta con su propia mini-lista de partidos). */
+.copa-club-block {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.copa-club-block--activo {
+  background: rgba(57, 255, 106, 0.08);
+  border-color: var(--neon-soft);
+}
+.copa-club-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.copa-club-nombre {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copa-club-block--activo .copa-club-nombre { color: var(--neon); }
+.copa-club-ronda {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-lo);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.copa-club-partidos {
+  display: flex;
+  flex-direction: column;
+}
+.copa-partido-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  border-top: 1px solid var(--line);
+}
+.copa-partido-row .escudo--sm { width: 22px; height: 22px; min-width: 22px; border-radius: 5px; }
+.copa-partido-ronda {
+  flex: 0 0 auto;
+  min-width: 62px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-lo);
+}
+.copa-partido-rival {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.copa-partido-resultado {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-hi);
+}
+/* Mismos colores que .match-card--gano/--empate/--perdio del calendario
+   (--neon/--info/--wine) — un partido de Copa "gana/empata/pierde" con el
+   mismo significado exacto que uno de Liga. */
+.copa-partido-row--gano .copa-partido-resultado { color: var(--neon); }
+.copa-partido-row--empate .copa-partido-resultado { color: var(--info); }
+.copa-partido-row--perdio .copa-partido-resultado { color: var(--wine); }
+.copa-partido-row--pendiente .copa-partido-resultado {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+}
+
 /* ---------- 6b. SALA DE TÍTULOS — sin imágenes, icono + color CSS ----------
    Cada trofeo cuesta 0 KB (emoji + --trofeo-color puesto inline por
    _trofeoCardHtml, mismo truco que --team-color en match-card-team) —

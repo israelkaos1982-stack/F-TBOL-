@@ -82,6 +82,9 @@
     } else if (vista === "liga1ref") {
       body.innerHTML = '<div id="liga1ref-content"></div>';
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+    } else if (vista === "copadelrey") {
+      body.innerHTML = '<div id="copa-content"></div>';
+      window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -279,6 +282,33 @@
   }
   function cancelarLiga1RefStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  }
+
+  // ---------- Copa del Rey — estado del cuadro + Pichichi/MVP/Amarillas/Rojas ----------
+  // Sin editor de "clasificación" (no es una liguilla, no hay tabla que
+  // pegar) — solo las 4 cajas de estadísticas tienen PIN, mismo patrón
+  // EXACTO que Liga 1ª REF, reutilizando el mismo contenedor "copa-content".
+  function verCopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
+  }
+  function volverCopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
+  }
+  function editarCopaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("copa-content");
+      if (cont) window.Renderizadores.pintarEditorCopaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "PIN de administrador (646)");
+  }
+  function guardarCopaStat(clubId, categoria) {
+    var ta = document.getElementById("copa-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarCopaStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
+  }
+  function cancelarCopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
   }
 
   // ---------- Sala de Títulos ----------
@@ -717,6 +747,11 @@
         case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria); break;
         case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria); break;
         case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria); break;
+        case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
+        case "volver-copa": volverCopa(d.clubId); break;
+        case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;
+        case "guardar-copa-stat": guardarCopaStat(d.clubId, d.categoria); break;
+        case "cancelar-copa-stat": cancelarCopaStat(d.clubId, d.categoria); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;

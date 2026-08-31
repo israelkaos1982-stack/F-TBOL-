@@ -766,6 +766,21 @@ button { font-family: inherit; cursor: pointer; }
   min-height: 0;
   display: grid;
   grid-template-columns: 112px 1fr;
+  /* ÚNICO contenedor con scroll de esta pantalla (petición usuario tras
+     2 rondas de fixes fallidas — "sticky" en .club-menu + overflow-y
+     propio del menú NUNCA se sincronizó de verdad con el calendario: al
+     deslizar sobre el calendario el menú se quedaba quieto, y solo se
+     movía deslizando justo encima de esa franja estrecha de 112px, "a
+     trompicones"). Al mover el scroll AQUÍ arriba —el ANCESTRO común de
+     menú y calendario— un solo gesto, en cualquier punto de la pantalla,
+     mueve ambas columnas EXACTAMENTE a la vez, como un único documento.
+     Ya no hace falta position:sticky en .club-menu: al ya no haber dos
+     regiones de scroll independientes, la tarjeta "de arriba del todo"
+     deja de tener sentido — todas las tarjetas del menú (incluidas las
+     que el admin añada) quedan alcanzables con el MISMO gesto que ya usa
+     el usuario para bajar el calendario. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .club-menu {
   display: flex;
@@ -774,29 +789,6 @@ button { font-family: inherit; cursor: pointer; }
   padding: 10px 6px;
   background: var(--bg-1);
   border-right: 1px solid var(--line);
-  /* El calendario es mucho más alto que el menú y la página entera hace
-     scroll (sin recuadros anidados con su propio overflow — más ligero).
-     "sticky" clava el menú arriba del viewport SIN JS ni recálculo en
-     cada frame, así queda siempre visible junto al calendario aunque se
-     baje mucho en la jornada. */
-  position: sticky;
-  top: 0;
-  align-self: start;
-  /* Con 8-9+ tarjetas (Títulos/Derbys/Objetivos/Plantilla/Liga 1ª REF/
-     Copa del Rey/Superliga/Promoción/Supercopa España... + las que el
-     admin añada con "+ Añadir competición") el menú puede ser MÁS ALTO
-     que el propio viewport. Sin este límite, en cuanto el sticky "se
-     clava" arriba (top:0) queda fijo ahí para siempre — seguir bajando
-     el calendario ya no mueve el menú ni un píxel más, así que las
-     últimas tarjetas (Promoción, Supercopa España...) quedaban por
-     debajo del borde inferior de la pantalla SIN NINGUNA FORMA de
-     alcanzarlas (reportado por el usuario: "no baja en scroll la parte
-     izquierda"). Acotando su alto al viewport y dándole su PROPIO
-     scroll vertical, el menú entero sigue siendo alcanzable con un
-     scroll táctil directamente sobre él, sin perder el sticky. */
-  max-height: 100vh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 .club-menu-btn {
   display: flex;
@@ -855,10 +847,12 @@ button { font-family: inherit; cursor: pointer; }
 /* Padding lateral recortado (izq. y der.) — es el margen "de sobra" que
    señaló el usuario; se libera para que el menú de la izquierda (92px ->
    112px) tenga sitio para cajas/texto/icono más grandes sin que el
-   calendario se sienta apretado. */
+   calendario se sienta apretado.
+   SIN overflow-y propio: el scroll de esta pantalla vive en el padre
+   compartido .club-layout (ver su comentario) — una 2ª región de scroll
+   aquí competiría con esa y volvería a desincronizar menú/calendario. */
 .club-calendar-col {
   min-width: 0;
-  overflow-y: auto;
   padding: 14px 6px 60px 6px;
 }
 

@@ -396,17 +396,17 @@
   // fuente entre ambos — petición usuario explícita ("con la misma
   // fuente"): reducir cada botón a SU PROPIO tamaño mínimo (como se hizo
   // en un primer intento) deja "Real Madrid" grande y "Atlético Madrid"
-  // pequeño, dos tamaños distintos que además pueden dar 2 alturas de
-  // botón ligeramente distintas y desnivelar los escudos de encima
-  // (ambos van en columna dentro de .previa-team, centrados por fila en
-  // .previa-teams — un botón más alto que el otro empuja su escudo).
-  // Por eso: se calcula el tamaño mínimo que necesita CADA nombre por
-  // separado (sin tocar el DOM más que para medir) y se aplica a AMBOS
-  // botones el MENOR de los dos — el más restrictivo. Solo actúa si
-  // alguno de los 2 desborda; con 2 nombres cortos no se toca nada.
-  // Debe ejecutarse DESPUÉS de que el overlay esté visible (clientWidth
-  // es 0 con el elemento oculto), por eso se llama diferido a
-  // requestAnimationFrame tras mostrar #partido-live-overlay.
+  // pequeño, dos tamaños distintos que no combinan bien al ser un par
+  // visual (aunque, desde que los nombres viven en su propia fila
+  // .live-teams-nombres — ver index.html —, ya NO pueden desnivelar los
+  // escudos de arriba; son 2 filas independientes). Por eso: se calcula
+  // el tamaño mínimo que necesita CADA nombre por separado (sin tocar el
+  // DOM más que para medir) y se aplica a AMBOS botones el MENOR de los
+  // dos — el más restrictivo. Solo actúa si alguno de los 2 desborda;
+  // con 2 nombres cortos no se toca nada. Debe ejecutarse DESPUÉS de que
+  // el overlay esté visible (clientWidth es 0 con el elemento oculto),
+  // por eso se llama diferido a requestAnimationFrame tras mostrar
+  // #partido-live-overlay.
   function _ajustarFuenteEquiposEnVivo() {
     var els = document.querySelectorAll(".live-team-nombre");
     if (!els.length) return;
@@ -464,11 +464,11 @@
     // cada equipo vive en su propio contenedor, ya existente en el HTML,
     // debajo de una barra separadora — ver #live-acta-local/visitante en
     // index.html y pintarActaLista() más abajo.
-    document.getElementById("live-team-local").innerHTML =
-      R.crearEscudoHTML(local, "escudo--lg") +
+    document.getElementById("live-team-local").innerHTML = R.crearEscudoHTML(local, "escudo--lg");
+    document.getElementById("live-team-visitante").innerHTML = R.crearEscudoHTML(visitante, "escudo--lg");
+    document.getElementById("live-nombre-local").innerHTML =
       '<button type="button" class="live-team-nombre" data-lado="local">' + local.nombre + "</button>";
-    document.getElementById("live-team-visitante").innerHTML =
-      R.crearEscudoHTML(visitante, "escudo--lg") +
+    document.getElementById("live-nombre-visitante").innerHTML =
       '<button type="button" class="live-team-nombre" data-lado="visitante">' + visitante.nombre + "</button>";
 
     poblarSelectMinuto();

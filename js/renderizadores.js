@@ -2170,6 +2170,41 @@
     }
   }
 
+  // ---------- Alias eFootball — qué equipo real elegir en el juego ----------
+  // Cualquier equipo SIN `crest` (los 6 humanos son los ÚNICOS con escudo
+  // real — ver crearEscudoHTML) puede no tener licencia en eFootball, así
+  // que la PREVIA le pinta debajo del nombre el club real que el admin ha
+  // decidido que se le parece más (nivel/escudo/uniforme) — o un botón
+  // para añadirlo si todavía no existe. La clave del mapa es el nombre
+  // YA NORMALIZADO (nunca el id: un rival sintético del Calendario extra
+  // puede llegar con un id distinto cada vez que se resuelve).
+  function _claveAliasEquipo(equipo) {
+    return _normNombre(equipo && equipo.nombre);
+  }
+  function _previaAliasHTML(equipo, lado) {
+    if (!equipo || equipo.crest) return ""; // los 6 humanos siempre existen en el juego
+    var clave = _claveAliasEquipo(equipo);
+    if (!clave) return "";
+    var actual = window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "";
+    var claveAttr = escapeHTML(clave);
+    var nombreAttr = escapeHTML(equipo.nombre || "");
+    var atributos =
+      'data-accion="alias-efootball" data-alias-clave="' + claveAttr + '" ' +
+      'data-alias-nombre="' + nombreAttr + '" data-alias-lado="' + lado + '"';
+    if (actual) {
+      return (
+        '<button type="button" class="previa-team-alias" ' + atributos + '>' +
+        "🎮 " + escapeHTML(actual) + " ✏️" +
+        "</button>"
+      );
+    }
+    return (
+      '<button type="button" class="previa-team-alias previa-team-alias--vacio" ' + atributos + '>' +
+      "➕ Añadir equipo eFootball" +
+      "</button>"
+    );
+  }
+
   // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
@@ -2199,9 +2234,11 @@
     if (!ov) return;
 
     document.getElementById("previa-team-local").innerHTML =
-      crearEscudoHTML(local, "escudo--lg") + '<span class="previa-team-nombre">' + local.nombre + "</span>";
+      crearEscudoHTML(local, "escudo--lg") + '<span class="previa-team-nombre">' + local.nombre + "</span>" +
+      _previaAliasHTML(local, "local");
     document.getElementById("previa-team-visitante").innerHTML =
-      crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>";
+      crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>" +
+      _previaAliasHTML(visitante, "visitante");
 
     document.getElementById("previa-marcador").textContent =
       partido.jugado ? (partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante) : "VS";
@@ -2942,6 +2979,39 @@
       if (window.Main) {
         window.Main.pedirPinAdmin(function () { _abrirPickerJugadorLista("sancionados"); },
           "🔒 Añadir sancionado", "Solo el administrador puede sancionar jugadores.");
+      }
+      return;
+    }
+
+    // "🎮 <alias> ✏️" / "➕ Añadir equipo eFootball" bajo el nombre de un
+    // equipo sin licencia en el juego (ver _previaAliasHTML) — admin-only,
+    // texto libre igual que el resto de editores de una línea de la app
+    // (window.prompt, PIN 646). Se guarda por NOMBRE normalizado, así que
+    // el mismo equipo lo hereda en TODAS las previas donde vuelva a salir.
+    var btnAlias = ev.target.closest && ev.target.closest('[data-accion="alias-efootball"]');
+    if (btnAlias) {
+      var claveAlias = btnAlias.dataset.aliasClave;
+      var nombreAlias = btnAlias.dataset.aliasNombre || "";
+      if (claveAlias && window.Estado && window.Main) {
+        window.Main.pedirPinAdmin(function () {
+          var actual = window.Estado.obtenerAliasEfootball(claveAlias);
+          var nuevo = window.prompt(
+            '"' + nombreAlias + '" no tiene licencia en eFootball — ¿qué equipo REAL debe buscar el jugador ' +
+            "en el juego para representarlo? (mismo nivel/escudo/uniforme)\n" +
+            "Formato: Continente/región - División - País - Nombre del equipo\n" +
+            'Ej: "Asia y Oceanía - 2ª Japón - Blaublitz Akita"\n\n' +
+            "(déjalo vacío y acepta para borrar el alias)",
+            actual
+          );
+          if (nuevo === null) return; // cancelado
+          window.Estado.guardarAliasEfootball(claveAlias, nuevo);
+          // Repinta la previa entera (misma partido, misma pantalla abierta)
+          // para que el botón refleje el alias recién guardado/borrado.
+          var btnEmpezarActual = document.getElementById("previa-empezar");
+          if (btnEmpezarActual && btnEmpezarActual.dataset.partidoId) {
+            abrirPreviaPartido(btnEmpezarActual.dataset.partidoId);
+          }
+        }, "🔒 Equipo eFootball", "Solo el administrador puede fijar qué equipo real elegir en el juego.");
       }
       return;
     }

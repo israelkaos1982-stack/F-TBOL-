@@ -753,6 +753,35 @@
     }
   }
 
+  // ---------- Copa del Rey — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que las 5 cajas de Liga 1ª REF de arriba (texto
+  // libre pegado para la IA + auto-suma de los 6 humanos), pero con su
+  // PROPIA clave de guardado — nunca comparte contador con Liga 1ª REF, son
+  // 2 competiciones distintas con estadísticas propias. Sin Zamora: no
+  // aplica a un cuadro eliminatorio (no hay "media de la temporada" en una
+  // Copa que un club puede jugar 1 solo partido). Ver
+  // js/renderizadores.js::COPA_STATS/calcularCopaStatsCombinado/
+  // renderizarCopaStatDetalle.
+  function _copaStatKey(categoria) {
+    return "ef7_copa_stat_" + categoria + "_v1";
+  }
+  function obtenerCopaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_copaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarCopaStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_copaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Copa del Rey:", err);
+      return false;
+    }
+  }
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA
@@ -998,6 +1027,8 @@
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,
     guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
+    obtenerCopaStatTexto: obtenerCopaStatTexto,
+    guardarCopaStatTexto: guardarCopaStatTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

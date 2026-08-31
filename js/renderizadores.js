@@ -1255,6 +1255,290 @@
   }
 
   // ============================================================
+  // 3c-quinquies. COPA DEL REY — estado de cada club (ronda + rivales) +
+  // Pichichi/MVP/Amarillas/Rojas
+  // ============================================================
+  // A diferencia de Liga 1ª REF, la Copa NO es una liguilla con clasificación
+  // — es un cuadro eliminatorio a partido único donde cada club humano
+  // avanza por SU PROPIO camino (rival distinto en cada ronda, puede caer
+  // eliminado en cualquiera). No hay "tabla" que pegar: la pantalla es
+  // puramente lo que YA está en el calendario de cada club (Calendario
+  // extra, competición = "Copa del Rey") — mismo dato, sin duplicar nada
+  // nuevo que mantener sincronizado. Las 4 cajas de estadísticas SÍ
+  // reutilizan el mismo mecanismo de Liga 1ª REF (texto IA + auto-suma
+  // humana) pero con su PROPIA clave — nunca comparten contador con Liga.
+  // Sin Zamora: no tiene sentido una "media de la temporada" en un cuadro
+  // donde un club puede jugar un solo partido (petición usuario).
+  var COPA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" }
+  ];
+
+  // Los 6 clubes humanos pueden jugar Copa del Rey (a diferencia de Liga
+  // 1ª REF, PSG NO queda excluido: el admin decide libremente en qué
+  // competiciones mete a cada club vía "Calendario extra" — si PSG nunca
+  // tiene líneas de Copa, sencillamente no aporta ningún bloque aquí).
+  function _copaEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de Copa de UN club, ordenados por fecha — misma fuente y
+  // mismo criterio de orden que el calendario de la propia caja.
+  function _copaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "copa" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Copa ya
+  // jugados y suma goles/MVP/amarillas/rojas por jugador (solo eventos
+  // es_humano:true, igual que Liga 1ª REF — la IA no tiene ficha real).
+  function calcularCopaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[jugadorId].cantidad++;
+    }
+
+    _copaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _copaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        (p.eventos || []).forEach(function (ev) {
+          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
+          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          if (!nombreJ) return;
+          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularLiga1RefStatsCombinado pero sobre
+  // el almacén propio de Copa (Estado.obtenerCopaStatTexto).
+  function calcularCopaStatsCombinado(datos, categoria) {
+    var equiposHumanos = _copaEquiposHumanos(datos);
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerCopaStatTexto(categoria) : "";
+    parsearLiga1RefStatTexto(texto).forEach(function (it) {
+      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
+      filas.push(it);
+    });
+
+    (calcularCopaStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de la Copa" de UN club: ronda actual (la de su partido
+  // MÁS RECIENTE por fecha, jugado o no — es literalmente "dónde está" en
+  // el cuadro ahora mismo) + la lista de sus partidos, cada uno con su
+  // ronda/rival/resultado. Devuelve null si el club no tiene ningún
+  // partido de Copa todavía (no aporta bloque).
+  function _copaEstadoClub(datos, e) {
+    var partidos = _copaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  function _copaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function renderizarCopaDelRey(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML = '<span class="liga1ref-leyenda-mini">🏆 Estado de cada club en el cuadro</span>';
+      contenedor.appendChild(header);
+
+      // El club activo va primero (es el que se acaba de abrir); el resto,
+      // alfabético — nunca por "quién va más lejos" (no hay clasificación
+      // que ordenar en un cuadro eliminatorio).
+      var equiposHumanos = _copaEquiposHumanos(datos).slice().sort(function (a, b) {
+        if (a.id === idClubActivo) return -1;
+        if (b.id === idClubActivo) return 1;
+        return a.nombre.localeCompare(b.nombre);
+      });
+
+      var bloques = equiposHumanos
+        .map(function (e) { return _copaEstadoClub(datos, e); })
+        .filter(Boolean);
+
+      if (!bloques.length) {
+        contenedor.appendChild(nodoEstado("🏆", "Todavía no hay partidos de Copa del Rey. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Copa del Rey»)."));
+      } else {
+        bloques.forEach(function (b) {
+          var esActivo = b.equipo.id === idClubActivo;
+          var bloque = document.createElement("div");
+          bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+          bloque.innerHTML =
+            '<div class="copa-club-header">' +
+            crearEscudoHTML(b.equipo, "escudo--sm") +
+            '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+            (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+            '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+            "</div>" +
+            '<div class="copa-club-partidos">' +
+            b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+            "</div>";
+          contenedor.appendChild(bloque);
+        });
+      }
+
+      // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas (sin Zamora).
+      var statsGrid = document.createElement("div");
+      statsGrid.className = "liga1ref-stats-grid";
+      statsGrid.innerHTML = COPA_STATS.map(function (s) {
+        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-copa-stat" data-club-id="' +
+          (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+          s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+      }).join("");
+      contenedor.appendChild(statsGrid);
+    });
+  }
+
+  // Ranking (top 15) de UNA categoría de Copa — mismo patrón exacto que
+  // renderizarLiga1RefStatDetalle, con su propio botón "← Volver".
+  function renderizarCopaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = COPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-copa" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-copa-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularCopaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de Copa (PIN 646) —
+  // mismo patrón exacto que pintarEditorLiga1RefStat.
+  function pintarEditorCopaStat(contenedor, idClubActivo, categoria) {
+    var meta = COPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de Copa — no hace falta escribirlos aquí.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "copa-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Carlos Fernández - CD Mirandés  3\n2º Ander Herrera - Real Zaragoza  2";
+    textarea.value = window.Estado ? window.Estado.obtenerCopaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-copa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-copa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
   // SALA DE TÍTULOS — catálogo cerrado (data/titulos.json). SIN
   // imágenes: cada trofeo es un icono (emoji) + su propio color de
   // fondo (ver .trofeo-card en css/estilos.css), 0 KB por trofeo —
@@ -2724,6 +3008,9 @@
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
+    renderizarCopaDelRey: renderizarCopaDelRey,
+    renderizarCopaStatDetalle: renderizarCopaStatDetalle,
+    pintarEditorCopaStat: pintarEditorCopaStat,
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,
     parsearTitulosTexto: parsearTitulosTexto,

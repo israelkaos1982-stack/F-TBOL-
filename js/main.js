@@ -85,6 +85,9 @@
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
+    } else if (vista === "superliga") {
+      body.innerHTML = '<div id="superliga-content"></div>';
+      window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -309,6 +312,16 @@
   }
   function cancelarCopaStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
+  }
+
+  // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
+  // Zamora (mismo contenedor "superliga-content"). Sin editor/PIN: es
+  // 100% humano-vs-humano, se auto-calcula todo (0 texto que pegar).
+  function verSuperligaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperligaStatDetalle("superliga-content", clubId, categoria);
+  }
+  function volverSuperliga(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
   }
 
   // ---------- Sala de Títulos ----------
@@ -752,6 +765,8 @@
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;
         case "guardar-copa-stat": guardarCopaStat(d.clubId, d.categoria); break;
         case "cancelar-copa-stat": cancelarCopaStat(d.clubId, d.categoria); break;
+        case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
+        case "volver-superliga": volverSuperliga(d.clubId); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;

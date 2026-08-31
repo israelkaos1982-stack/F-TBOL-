@@ -432,6 +432,18 @@
     });
   }
 
+  // Construye el atributo style="--team-color-a:...;--team-color-b:..."
+  // para el botón del nombre del equipo, a partir de sus colores de
+  // escudo. Solo se usa si colorPrimario existe (equipos sintéticos
+  // muy antiguos podrían no tenerlo). Los valores son hex de nuestros
+  // propios JSON (no input de usuario), no requieren escapado.
+  function _colorEscudoStyleAttr(equipo) {
+    var a = equipo && equipo.colorPrimario;
+    if (!a) return "";
+    var b = (equipo && equipo.colorSecundario) || a;
+    return ' style="--team-color-a:' + a + ";--team-color-b:" + b + '"';
+  }
+
   function iniciarPartidoEnVivo(partidoId, ultimoContexto) {
     var partido = ultimoContexto.partidosPorId[partidoId];
     if (!partido) return;
@@ -466,10 +478,18 @@
     // index.html y pintarActaLista() más abajo.
     document.getElementById("live-team-local").innerHTML = R.crearEscudoHTML(local, "escudo--lg");
     document.getElementById("live-team-visitante").innerHTML = R.crearEscudoHTML(visitante, "escudo--lg");
+    // Texto del nombre con degradado de los colores del propio escudo
+    // (petición usuario: "mezcla los colores del equipo en el texto").
+    // colorPrimario/colorSecundario YA viven en cada equipo (equipos.json,
+    // equipos_ia.json, rivales_reales.json) — coste 0 KB extra, solo se
+    // inyectan como custom properties CSS (--team-color-a/-b) que el
+    // degradado de .tiene-color-escudo (css/estilos.css) consume. Sin
+    // colorPrimario (no debería pasar, pero por si acaso) el botón se
+    // queda con el color plano de siempre.
     document.getElementById("live-nombre-local").innerHTML =
-      '<button type="button" class="live-team-nombre" data-lado="local">' + local.nombre + "</button>";
+      '<button type="button" class="live-team-nombre' + (local.colorPrimario ? " tiene-color-escudo" : "") + '" data-lado="local"' + _colorEscudoStyleAttr(local) + ">" + local.nombre + "</button>";
     document.getElementById("live-nombre-visitante").innerHTML =
-      '<button type="button" class="live-team-nombre" data-lado="visitante">' + visitante.nombre + "</button>";
+      '<button type="button" class="live-team-nombre' + (visitante.colorPrimario ? " tiene-color-escudo" : "") + '" data-lado="visitante"' + _colorEscudoStyleAttr(visitante) + ">" + visitante.nombre + "</button>";
 
     poblarSelectMinuto();
     seleccionarLado("local");

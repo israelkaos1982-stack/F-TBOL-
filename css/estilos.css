@@ -2002,7 +2002,7 @@ button { font-family: inherit; cursor: pointer; }
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
-  font-size: 18px;
+  font-size: 14.4px; /* -20% sobre 18px, petición usuario */
   font-weight: 800;
   text-align: center;
   color: var(--text-lo);
@@ -2011,8 +2011,26 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: var(--radius-s);
   padding: 11px 10px;
 }
+/* Nombre "pintado" con los colores del propio escudo (petición usuario:
+   "mezcla los colores del equipo en el texto"). Coste 0 KB: reutiliza
+   colorPrimario/colorSecundario que YA vienen con cada equipo — solo se
+   inyectan como --team-color-a/-b (js/acta.js) y aquí se leen con un
+   degradado de texto. Con @supports como red de seguridad: si el
+   navegador no soporta background-clip:text, esta regla ni se aplica y
+   el color plano de arriba (var(--text-lo)) se queda tal cual. */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .live-team-nombre.tiene-color-escudo {
+    background-image: linear-gradient(120deg, var(--team-color-a) 0%, var(--team-color-a) 55%, var(--team-color-b, var(--team-color-a)) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
 .live-team-nombre.is-active {
   background: rgba(57, 255, 106, 0.16);
+  background-image: none; /* anula el degradado de tiene-color-escudo */
+  -webkit-text-fill-color: currentColor; /* idem, para que el color de abajo se vea */
   color: var(--neon);
   border-color: var(--neon);
 }

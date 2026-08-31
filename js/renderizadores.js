@@ -486,6 +486,18 @@
     return div;
   }
 
+  // Línea separadora entre secciones apiladas dentro de un mismo modal
+  // (clasificación / calendario / estadísticas / bloque de equipo en
+  // Copa) — petición usuario: sin ella todo se veía "apelmazado", sin
+  // ningún corte visual entre zonas. Reutilizable en cualquier pantalla
+  // que apile secciones dentro del mismo contenedor (Superliga, Liga 1ª
+  // REF, Copa del Rey, y cualquier futura).
+  function nodoSeparador() {
+    var hr = document.createElement("hr");
+    hr.className = "seccion-separador";
+    return hr;
+  }
+
   // Hash determinista simple (mismo texto -> mismo número, siempre) — lo
   // reutilizan el id estable de "Calendario extra", el color del escudo
   // sintético y el valoracionPoder sintético, sin duplicar el bucle 3 veces.
@@ -1121,6 +1133,8 @@
         contenedor.appendChild(wrap);
       }
 
+      contenedor.appendChild(nodoSeparador());
+
       // Cajas de estadísticas — Pichichi/MVP/Tarjetas/Zamora. Cada una
       // abre su propio ranking (top 15) dentro de este mismo contenedor.
       var statsGrid = document.createElement("div");
@@ -1427,7 +1441,12 @@
       if (!bloques.length) {
         contenedor.appendChild(nodoEstado("🏆", "Todavía no hay partidos de Copa del Rey. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Copa del Rey»)."));
       } else {
-        bloques.forEach(function (b) {
+        bloques.forEach(function (b, bi) {
+          // Separador ENTRE bloques de equipo (nunca antes del primero —
+          // el header ya hace de corte ahí) — petición usuario: cada club
+          // tiene su propio cuadro completo (1/64 → Final), sin ninguna
+          // línea que marque dónde acaba uno y empieza el siguiente.
+          if (bi > 0) contenedor.appendChild(nodoSeparador());
           var esActivo = b.equipo.id === idClubActivo;
           var bloque = document.createElement("div");
           bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
@@ -1444,6 +1463,8 @@
           contenedor.appendChild(bloque);
         });
       }
+
+      contenedor.appendChild(nodoSeparador());
 
       // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas (sin Zamora).
       var statsGrid = document.createElement("div");
@@ -1778,9 +1799,11 @@
       var equipoActivo = buscarEquipoPorId(idClubActivo, datos);
       var grupos = _superligaOrdenJornadas(_superligaGrupoPorRival(datos, idClubActivo));
       if (equipoActivo && grupos.length) {
+        contenedor.appendChild(nodoSeparador());
+
         var calTitulo = document.createElement("p");
         calTitulo.className = "liga1ref-stat-titulo";
-        calTitulo.textContent = "🍇 Calendario de " + equipoActivo.nombre;
+        calTitulo.textContent = "📅 Calendario de " + equipoActivo.nombre;
         contenedor.appendChild(calTitulo);
 
         var calWrap = document.createElement("div");
@@ -1806,6 +1829,8 @@
         });
         contenedor.appendChild(calWrap);
       }
+
+      contenedor.appendChild(nodoSeparador());
 
       // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas/Zamora, sin
       // ✏️ (no hay nada que pegar, se suman solas).

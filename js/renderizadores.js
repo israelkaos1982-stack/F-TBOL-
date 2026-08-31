@@ -498,6 +498,17 @@
     return hr;
   }
 
+  // Título "📊 Estadísticas" que abre la fila de cajas (Pichichi/MVP/
+  // Tarjetas/Zamora), justo después del separador — petición usuario: en
+  // cursiva y sin negrita, igual estilo que "📅 Calendario de X" en
+  // Superliga. Reutilizado por Superliga/Liga 1ª REF/Copa del Rey.
+  function nodoTituloEstadisticas() {
+    var p = document.createElement("p");
+    p.className = "liga1ref-stat-titulo titulo-cursiva";
+    p.textContent = "📊 Estadísticas";
+    return p;
+  }
+
   // Hash determinista simple (mismo texto -> mismo número, siempre) — lo
   // reutilizan el id estable de "Calendario extra", el color del escudo
   // sintético y el valoracionPoder sintético, sin duplicar el bucle 3 veces.
@@ -1134,6 +1145,7 @@
       }
 
       contenedor.appendChild(nodoSeparador());
+      contenedor.appendChild(nodoTituloEstadisticas());
 
       // Cajas de estadísticas — Pichichi/MVP/Tarjetas/Zamora. Cada una
       // abre su propio ranking (top 15) dentro de este mismo contenedor.
@@ -1465,6 +1477,7 @@
       }
 
       contenedor.appendChild(nodoSeparador());
+      contenedor.appendChild(nodoTituloEstadisticas());
 
       // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas (sin Zamora).
       var statsGrid = document.createElement("div");
@@ -1802,7 +1815,7 @@
         contenedor.appendChild(nodoSeparador());
 
         var calTitulo = document.createElement("p");
-        calTitulo.className = "liga1ref-stat-titulo";
+        calTitulo.className = "liga1ref-stat-titulo titulo-cursiva";
         calTitulo.textContent = "📅 Calendario de " + equipoActivo.nombre;
         contenedor.appendChild(calTitulo);
 
@@ -1831,6 +1844,7 @@
       }
 
       contenedor.appendChild(nodoSeparador());
+      contenedor.appendChild(nodoTituloEstadisticas());
 
       // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas/Zamora, sin
       // ✏️ (no hay nada que pegar, se suman solas).

@@ -867,6 +867,22 @@
   // real), se crea una nueva partiendo de 0 — un resultado ya jugado en
   // la app JAMÁS se pierde. Un partido humano-vs-humano NO genera fila
   // IA (su rival es otro humano, con fila propia más abajo).
+  // Resultado de UN partido, visto desde un lado concreto (golesPropios
+  // vs golesRival) — {pj:1, pe, pp, gf, gc, pts}. Único punto que decide
+  // 3/1/0 puntos; lo comparten `propia` (fila del humano) y `destino`
+  // (fila del rival IA) para no poder desincronizarse entre sí.
+  function _liga1RefResultadoLado(golesPropios, golesRival) {
+    var r = { pj: 1, pe: 0, pp: 0, gf: golesPropios, gc: golesRival, pts: 0 };
+    if (golesPropios > golesRival) r.pts = 3;
+    else if (golesPropios === golesRival) { r.pe = 1; r.pts = 1; }
+    else r.pp = 1;
+    return r;
+  }
+  function _liga1RefSumar(acc, r) {
+    acc.pj += r.pj; acc.pe += r.pe; acc.pp += r.pp;
+    acc.gf += r.gf; acc.gc += r.gc; acc.pts += r.pts;
+  }
+
   function calcularLiga1RefCombinada(datos) {
     var equiposHumanos = _liga1RefEquiposHumanos(datos);
     var idsHumanos = {};
@@ -882,15 +898,38 @@
       });
     });
 
-    equiposHumanos.forEach(function (e) {
-      var propia = window.Estado ? window.Estado.calcularClasificacion(datos, e.ligaActual) : [];
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
 
-      // Rivales IA de los partidos de ESTE humano — se suman sobre la
-      // fila pegada correspondiente (o se crea una nueva si no existía).
-      propia.forEach(function (r) {
-        if (r.equipoId === e.id || idsHumanos[r.equipoId]) return; // fila propia o de otro humano (HvH), no es rival IA
-        var rival = buscarEquipoPorId(r.equipoId, datos);
-        var nombreRival = rival ? rival.nombre : r.equipoId;
+    equiposHumanos.forEach(function (e) {
+      // SOLO los partidos donde ESTE club es local o visitante — mismo
+      // fix ya aplicado en calcularLiga1RefStatsHumanos (ver su
+      // comentario): con varios humanos compartiendo la MISMA liga
+      // (todos ligaActual="LIGA_EA_SPORTS"), Estado.calcularClasificacion
+      // devuelve la tabla GLOBAL de esa liga — llamarla una vez POR CADA
+      // humano y volver a sumar la fila de un mismo rival IA en cada
+      // vuelta multiplicaba sus puntos/PJ por el nº de humanos (bug real,
+      // foto usuario: Huesca ganó 1 partido de verdad y su fila sumaba
+      // como si hubiera jugado y ganado 5 veces). Filtrando a los
+      // partidos de ESTE club, cada partido se cuenta UNA sola vez.
+      var partidos = todosPartidos.filter(function (p) {
+        return p.jugado && p.resultado && p.competicion === "liga" && p.liga === e.ligaActual &&
+          (p.local === e.id || p.visitante === e.id);
+      });
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+
+      partidos.forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+
+        if (idsHumanos[oponenteId]) return; // HvH: la fila del rival humano la aporta SU PROPIA iteración
+
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
         var destino = filas.find(function (fl) {
           return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival);
         });
@@ -898,17 +937,14 @@
           destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
           filas.push(destino);
         }
-        destino.pts += r.pts; destino.pj += r.pj; destino.pe += r.pe; destino.pp += r.pp;
-        destino.gf += r.gf; destino.gc += r.gc;
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      var fila = propia.find(function (r) { return r.equipoId === e.id; });
       filas.push({
         nombre: e.nombre,
         nombreMostrado: (e.misterEmoji || "") + e.nombre,
         equipoId: e.id,
-        pts: fila ? fila.pts : 0, pj: fila ? fila.pj : 0, pe: fila ? fila.pe : 0,
-        pp: fila ? fila.pp : 0, gf: fila ? fila.gf : 0, gc: fila ? fila.gc : 0
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
       });
     });
 

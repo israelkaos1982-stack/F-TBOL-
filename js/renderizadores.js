@@ -1173,13 +1173,19 @@
         var tablaEl = document.createElement("table");
         tablaEl.className = "clasificacion-tabla liga1ref-tabla";
         tablaEl.innerHTML =
-          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
           "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
         var tbody = document.createElement("tbody");
 
         filas.forEach(function (f, i) {
           var pos = i + 1;
           var dg = f.gf - f.gc;
+          // PG (partidos ganados) no se guarda aparte: PJ = PG+PE+PP
+          // siempre (cada partido suma exactamente 1 a PJ y a UNO solo
+          // de PG/PE/PP — ver _liga1RefResultadoLado), así que se
+          // deriva aquí sin tocar el cálculo ni el texto pegado por el
+          // admin (que tampoco trae PG, solo Pts/PJ/PE/PP/G+/G-).
+          var pg = f.pj - f.pe - f.pp;
           var zona = _liga1RefZona(pos, filas.length);
           var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
           if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
@@ -1191,7 +1197,7 @@
             '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
             (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
             '<td class="clasificacion-pts">' + f.pts + "</td>" +
-            "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+            "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
             "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
             "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
           tbody.appendChild(tr);
@@ -1848,7 +1854,7 @@
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
-        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
         "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
@@ -1863,7 +1869,7 @@
           '<td class="clasificacion-equipo">' + (f.equipo.misterEmoji || "") + escapeHTML(f.equipo.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="clasificacion-pts">' + f.pts + "</td>" +
-          "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+          "<td>" + f.pj + "</td><td>" + f.pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
           "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
           "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
         tbody.appendChild(tr);
@@ -2313,7 +2319,7 @@
     return '<span class="match-card-pin" title="Tu próximo partido">📌</span>';
   }
 
-  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente) {
+  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
     var rival = buscarEquipoPorId(rivalId, datos);
@@ -2353,8 +2359,13 @@
     // siguen mandando sobre este color de competición — están
     // declarados DESPUÉS en el CSS a propósito (ver css/estilos.css).
     var claseComp = _claseComp(compKeyResuelto);
+    // Ronda de Copa del Rey (u otra eliminación directa) POSTERIOR a la
+    // derrota que ya eliminó al club de esa competición: se pinta apagada
+    // igual que un partido jugado (misma opacidad .is-played) aunque no
+    // haya marcador real — el club ya no participa, no hay nada que
+    // jugar (ver detección en generarCalendarioLateralDerecho).
     card.className = "match-card" + (claseComp ? " " + claseComp : "") +
-      (partido.jugado ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
+      ((partido.jugado || esEliminado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
     card.dataset.partidoId = partido.id;
 
     var compLabel = COMP_LABEL[compKeyResuelto] || partido.competicion;
@@ -2370,7 +2381,9 @@
     var centroTop = (partido.jugado && partido.resultado)
       ? '<button type="button" class="match-card-marcador" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' +
         partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</button>"
-      : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
+      : (esEliminado
+        ? '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>'
+        : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>');
 
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
@@ -2460,17 +2473,43 @@
 
         _ultimoContexto = { datos: datos, equipo: equipo, totalJornadas: totalJornadas, partidosPorId: partidosPorId };
 
+        // Eliminación en Copa del Rey (partido único, sin fase de grupos):
+        // en cuanto el club pierde una ronda ya jugada, TODAS las rondas
+        // POSTERIORES de esa misma competición (mismo orden que ya usa
+        // "próximo partido" — fecha real o, sin ella, el orden en que se
+        // pegó la línea en el Calendario extra) dejan de ser jugables —
+        // se pintan apagadas en vez de activas con un rival "?" pendiente
+        // y un botón PREVIA que no lleva a ningún partido real. Acotado a
+        // "copa" (Copa del Rey): a diferencia de una liga/grupo, aquí
+        // perder SIEMPRE elimina — otras competiciones del calendario
+        // extra (Selecciones, Champions...) pueden tener fase de grupos
+        // donde perder un partido no te saca del todo.
+        var _eliminadoEnComp = {};
+        var idsEliminados = {};
+        partidosDelClub.forEach(function (p) {
+          var compKeyP = _resolverCompKeyBalon(p.competicion);
+          if (compKeyP !== "copa") return;
+          if (_eliminadoEnComp[compKeyP]) { idsEliminados[p.id] = true; return; }
+          if (p.jugado && p.resultado) {
+            var esLocalP = p.local === idEquipoHumanoActivo;
+            var golesActivoP = esLocalP ? p.resultado.golesLocal : p.resultado.golesVisitante;
+            var golesRivalP = esLocalP ? p.resultado.golesVisitante : p.resultado.golesLocal;
+            if (golesActivoP < golesRivalP) _eliminadoEnComp[compKeyP] = true;
+          }
+        });
+
         // El primer partido sin jugar de la lista (ya ordenada por fecha)
         // es "el próximo" — se resalta con su propia clase para que
-        // destaque de un vistazo cuál toca jugar ahora.
+        // destaque de un vistazo cuál toca jugar ahora. Una ronda ya
+        // eliminada nunca puede ser "el próximo partido".
         var idSiguiente = null;
         for (var i = 0; i < partidosDelClub.length; i++) {
-          if (!partidosDelClub[i].jugado) { idSiguiente = partidosDelClub[i].id; break; }
+          if (!partidosDelClub[i].jugado && !idsEliminados[partidosDelClub[i].id]) { idSiguiente = partidosDelClub[i].id; break; }
         }
 
         var frag = document.createDocumentFragment();
         partidosDelClub.forEach(function (p) {
-          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente));
+          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente, !!idsEliminados[p.id]));
         });
         contenedor.appendChild(frag);
 

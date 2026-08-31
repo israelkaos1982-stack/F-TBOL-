@@ -1614,6 +1614,19 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* Ronda de una eliminación directa (Copa del Rey) posterior a la
+   derrota que ya dejó al club fuera — la card entera ya va apagada
+   (.is-played, ver más abajo), esto solo sustituye al botón PREVIA
+   por una etiqueta sin interacción (no hay partido real que abrir). */
+.match-card-eliminado {
+  padding: 4px 6px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-lo);
+}
 .match-card-vs-sep {
   color: var(--text-lo);
   font-size: 10px;
@@ -1923,18 +1936,6 @@ button { font-family: inherit; cursor: pointer; }
   transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 .btn-confirmar:hover { background: rgba(57, 255, 106, 0.2); box-shadow: var(--neon-glow); }
-
-.btn-whatsapp {
-  width: 100%;
-  padding: 12px;
-  border-radius: var(--radius-s);
-  border: 1px solid rgba(37, 211, 102, 0.5);
-  background: rgba(37, 211, 102, 0.14);
-  color: #25d366;
-  font-size: 14px;
-  font-weight: 800;
-}
-.btn-whatsapp:hover { background: rgba(37, 211, 102, 0.24); }
 
 @keyframes resaltadoPulso {
   0%, 100% { box-shadow: 0 0 0 rgba(57, 255, 106, 0); }
@@ -2286,8 +2287,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-top: 14px;
 }
 .live-footer .btn-ghost { flex: 1; justify-content: center; }
-.live-footer .btn-confirmar,
-.live-footer .btn-whatsapp { margin-top: 0; flex: 1; }
+.live-footer .btn-confirmar { margin-top: 0; flex: 1; }
 
 .live-captura-hint {
   text-align: center;

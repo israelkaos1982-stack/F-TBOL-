@@ -1,6 +1,5 @@
 /* ============================================================
-   acta.js — Acta en vivo: registro de eventos, cierre en cadena
-   y comparte en WhatsApp.
+   acta.js — Acta en vivo: registro de eventos y cierre en cadena.
    ============================================================ */
 (function () {
   "use strict";
@@ -226,23 +225,9 @@
   }
 
   // ============================================================
-  // 4. COMPARTIR EN WHATSAPP
-  // ============================================================
-  function compartirEnWhatsApp(resumen) {
-    var localTxt = resumen.local.nombre + (resumen.localEsHumano ? "" : " (IA)");
-    var visitanteTxt = resumen.visitante.nombre + (resumen.visitanteEsHumano ? "" : " (IA)");
-    var mensaje = "⚽ ¡eFOOTBALL Resultadazo! " + localTxt + " " + resumen.golesL + " - " + resumen.golesV +
-      " " + visitanteTxt + ". ¡Acta oficial cerrada! 📋";
-    var url = "https://api.whatsapp.com/send?text=" + encodeURIComponent(mensaje);
-    window.open(url, "_blank", "noopener");
-    return mensaje;
-  }
-
-  // ============================================================
   // PANTALLA EN VIVO — wiring de la UI (formulario de eventos + acta)
   // ============================================================
   var _partidoActivo = null; // { partido, local, visitante, datos, lado, modo, prorroga }
-  var _ultimoResumen = null;
 
   function esEquipoHumano(equipoId, datos) {
     return (datos.equipos.equipos || []).some(function (e) { return e.id === equipoId; });
@@ -550,18 +535,6 @@
     var r = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
     var resultado = finalizarYSubirPartido(_partidoActivo.partido.id, r.golesLocal, r.golesVisitante);
 
-    var localEsHumano = esEquipoHumano(_partidoActivo.local.id, _partidoActivo.datos);
-    var visitanteEsHumano = esEquipoHumano(_partidoActivo.visitante.id, _partidoActivo.datos);
-
-    _ultimoResumen = {
-      local: _partidoActivo.local,
-      visitante: _partidoActivo.visitante,
-      golesL: resultado.golesL,
-      golesV: resultado.golesV,
-      localEsHumano: localEsHumano,
-      visitanteEsHumano: visitanteEsHumano
-    };
-
     document.getElementById("live-resumen-eliminatoria").innerHTML = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
 
     document.getElementById("live-entrada").hidden = true;
@@ -636,14 +609,8 @@
       return;
     }
 
-    if (ev.target.id === "live-whatsapp" && _ultimoResumen) {
-      compartirEnWhatsApp(_ultimoResumen);
-      return;
-    }
-
     if (ev.target.id === "live-cerrar-resumen") {
       document.getElementById("partido-live-overlay").hidden = true;
-      _ultimoResumen = null;
       return;
     }
   });
@@ -666,7 +633,6 @@
     simularGoleadorAutomatorioIA: simularGoleadorAutomatorioIA,
     calcularMarcadorDesdeActa: calcularMarcadorDesdeActa,
     finalizarYSubirPartido: finalizarYSubirPartido,
-    compartirEnWhatsApp: compartirEnWhatsApp,
     iniciarPartidoEnVivo: iniciarPartidoEnVivo,
     obtenerActaTemporal: function () { return actaTemporal.slice(); }
   };

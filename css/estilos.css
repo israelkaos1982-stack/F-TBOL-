@@ -1611,6 +1611,21 @@ button { font-family: inherit; cursor: pointer; }
 .match-card.superliga-jornada-par { border-color: rgba(255, 255, 255, 0.35); border-left-color: #ffffff; }
 .match-card.superliga-jornada-par .match-card-comp { color: #ffffff; text-shadow: 0 0 8px rgba(255, 255, 255, 0.5); }
 
+/* Clasificación de Superliga: SIN estirar a 100% del ancho del móvil.
+   .clasificacion-tabla (min-width:460px) + .liga1ref-tabla (min-width:380px)
+   + .clasificacion-equipo (min-width:130px, white-space:normal — la ÚNICA
+   columna "flexible" de la fila) hacían que TODO el ancho sobrante del
+   width:100% de la tabla se lo tragara la columna EQUIPO, dejando un
+   hueco enorme entre el nombre del club y PTS/PJ/PE/PP/G+/G-/DG — con
+   solo 6 equipos de nombre corto ni hacía falta ese ancho (foto usuario,
+   pedía "juntarlos más para ver casi todas las estadísticas en la misma
+   pantalla"). Ancho NATURAL (auto, sin min-width) — las columnas quedan
+   pegadas al nombre; si aun así no cupiera en un móvil muy estrecho,
+   .clasificacion-wrap ya tiene overflow-x:auto (scroll horizontal). El
+   ID gana por especificidad sin depender del orden en la hoja. */
+#superliga-content .clasificacion-tabla { width: auto; min-width: 0; }
+#superliga-content .clasificacion-equipo { min-width: 0; white-space: nowrap; }
+
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
    PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el
    marcador en el centro, ver construirTarjetaPartido), así que no hace

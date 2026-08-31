@@ -318,28 +318,45 @@
     m.textContent = r.golesLocal + "-" + r.golesVisitante;
   }
 
-  // El botón .live-team-nombre va SIEMPRE en una sola línea, con el
-  // nombre COMPLETO (nunca recortado con "…", petición usuario ya
-  // documentada en css/estilos.css). Un nombre largo ("Atlético
-  // Madrid") puede no caber a font-size:12px en el hueco real que le
-  // deja el marcador entre los 2 escudos — en vez de partirlo en 2
-  // líneas (desplazaba el escudo hacia arriba, foto usuario), se reduce
-  // el font-size en pasos de 0.5px hasta que el ancho real (scrollWidth)
-  // quepa en el ancho del botón (clientWidth). Solo actúa si de verdad
-  // desborda — un nombre corto ("Liverpool") nunca se toca. Debe
-  // ejecutarse DESPUÉS de que el overlay esté visible (clientWidth es 0
-  // con el elemento oculto), por eso se llama diferido a
+  // Los 2 botones .live-team-nombre (local + visitante) van SIEMPRE en
+  // una sola línea, con el nombre COMPLETO (nunca recortado con "…",
+  // petición usuario ya documentada en css/estilos.css) y con la MISMA
+  // fuente entre ambos — petición usuario explícita ("con la misma
+  // fuente"): reducir cada botón a SU PROPIO tamaño mínimo (como se hizo
+  // en un primer intento) deja "Real Madrid" grande y "Atlético Madrid"
+  // pequeño, dos tamaños distintos que además pueden dar 2 alturas de
+  // botón ligeramente distintas y desnivelar los escudos de encima
+  // (ambos van en columna dentro de .previa-team, centrados por fila en
+  // .previa-teams — un botón más alto que el otro empuja su escudo).
+  // Por eso: se calcula el tamaño mínimo que necesita CADA nombre por
+  // separado (sin tocar el DOM más que para medir) y se aplica a AMBOS
+  // botones el MENOR de los dos — el más restrictivo. Solo actúa si
+  // alguno de los 2 desborda; con 2 nombres cortos no se toca nada.
+  // Debe ejecutarse DESPUÉS de que el overlay esté visible (clientWidth
+  // es 0 con el elemento oculto), por eso se llama diferido a
   // requestAnimationFrame tras mostrar #partido-live-overlay.
   function _ajustarFuenteEquiposEnVivo() {
-    document.querySelectorAll(".live-team-nombre").forEach(function (el) {
+    var els = document.querySelectorAll(".live-team-nombre");
+    if (!els.length) return;
+    els.forEach(function (el) {
       el.style.fontSize = ""; // vuelve al tamaño base del CSS antes de medir
-      var size = parseFloat(getComputedStyle(el).fontSize) || 12;
+    });
+    var base = parseFloat(getComputedStyle(els[0]).fontSize) || 12;
+    var minSize = base;
+    els.forEach(function (el) {
+      var size = base;
       var guard = 0;
       while (el.scrollWidth > el.clientWidth + 1 && size > 8 && guard < 20) {
         size -= 0.5;
-        el.style.fontSize = size + "px";
+        el.style.fontSize = size + "px"; // aplicar para poder re-medir scrollWidth
         guard++;
       }
+      if (size < minSize) minSize = size;
+    });
+    // Tamaño final: el MENOR necesario de los 2 (el más restrictivo),
+    // aplicado a AMBOS por igual — nunca 2 tamaños distintos.
+    els.forEach(function (el) {
+      el.style.fontSize = minSize < base ? minSize + "px" : "";
     });
   }
 

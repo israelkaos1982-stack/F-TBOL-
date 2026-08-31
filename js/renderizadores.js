@@ -788,17 +788,26 @@
     });
   }
 
+  // Comparación tolerante de 2 nombres libres (normalizado + substring,
+  // con un mínimo de 3 letras para el substring — evita que "CD" o "FC"
+  // sueltos empaten con cualquier cosa). Único criterio de "¿es el mismo
+  // equipo?" en toda esta pantalla: lo usa tanto _liga1RefEsNombreHumano
+  // (¿el nombre pegado es en realidad uno de los 6 humanos?) como la
+  // fusión de rivales IA de más abajo (¿este rival ya tiene fila en el
+  // texto pegado, con otra grafía?).
+  function _liga1RefNombresCoinciden(a, b) {
+    var na = _normNombre(a || ""), nb = _normNombre(b || "");
+    if (!na || !nb) return false;
+    return na === nb || (na.length > 2 && nb.length > 2 && (na.indexOf(nb) !== -1 || nb.indexOf(na) !== -1));
+  }
+
   // ¿El nombre libre que acaba de pegar el admin (equipo de la
   // clasificación, o "equipo" de una fila de estadística) es en realidad
   // uno de los clubes humanos? Comparte el mismo criterio tolerante
   // (normalizado + substring) en clasificación y en las 5 cajas de stats.
   function _liga1RefEsNombreHumano(nombre, equiposHumanos) {
-    var norm = _normNombre(nombre || "");
-    if (!norm) return false;
-    return equiposHumanos.some(function (e) {
-      var n = _normNombre(e.nombre);
-      return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
-    });
+    if (!_normNombre(nombre || "")) return false;
+    return equiposHumanos.some(function (e) { return _liga1RefNombresCoinciden(nombre, e.nombre); });
   }
 
   // La fusión: texto pegado (solo IA) + los clubes humanos que SÍ juegan
@@ -809,8 +818,23 @@
   // NUNCA sale del texto pegado — si el admin escribe su nombre ahí por
   // error, esa línea se descarta; su fila sale SIEMPRE de sus propios
   // partidos (una sola fuente de verdad por equipo).
+  //
+  // El rival IA de un partido humano-vs-IA es la ÚNICA fila de esta
+  // tabla que, sin esto, nunca se movía del snapshot pegado por el admin
+  // (bug real: Atlético Madrid empata 3-3 con Tenerife, el punto/empate/
+  // goles del propio Atlético SÍ se ven en su fila — pero el de Tenerife
+  // no, porque su fila entera venía copiada tal cual de fuera de la app
+  // y nada volvía a tocarla). Se suma la aportación de CADA partido de
+  // liga humano-vs-IA ya jugado sobre la fila pegada de ESE rival (por
+  // nombre, mismo criterio tolerante que ya identifica a los 6 humanos);
+  // si el rival no tenía fila pegada (nunca se copió su clasificación
+  // real), se crea una nueva partiendo de 0 — un resultado ya jugado en
+  // la app JAMÁS se pierde. Un partido humano-vs-humano NO genera fila
+  // IA (su rival es otro humano, con fila propia más abajo).
   function calcularLiga1RefCombinada(datos) {
     var equiposHumanos = _liga1RefEquiposHumanos(datos);
+    var idsHumanos = {};
+    equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
     var filas = [];
 
     var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
@@ -824,6 +848,24 @@
 
     equiposHumanos.forEach(function (e) {
       var propia = window.Estado ? window.Estado.calcularClasificacion(datos, e.ligaActual) : [];
+
+      // Rivales IA de los partidos de ESTE humano — se suman sobre la
+      // fila pegada correspondiente (o se crea una nueva si no existía).
+      propia.forEach(function (r) {
+        if (r.equipoId === e.id || idsHumanos[r.equipoId]) return; // fila propia o de otro humano (HvH), no es rival IA
+        var rival = buscarEquipoPorId(r.equipoId, datos);
+        var nombreRival = rival ? rival.nombre : r.equipoId;
+        var destino = filas.find(function (fl) {
+          return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival);
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          filas.push(destino);
+        }
+        destino.pts += r.pts; destino.pj += r.pj; destino.pe += r.pe; destino.pp += r.pp;
+        destino.gf += r.gf; destino.gc += r.gc;
+      });
+
       var fila = propia.find(function (r) { return r.equipoId === e.id; });
       filas.push({
         nombre: e.nombre,

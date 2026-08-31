@@ -65,6 +65,18 @@ html, body { margin: 0; padding: 0; }
   --plata: #c9d3dc; /* Supercopa de Europa */
   --rosa: #ff4fa8; /* Selecciones */
 
+  /* Borde blanco de LEGIBILIDAD para texto en color sobre fondo oscuro
+     (etiqueta de competición de cada card, números de Títulos…) — 8
+     sombras de 1px, una por dirección, en vez de -webkit-text-stroke
+     (soporte irregular en algunos WebView Android). Se combina con el
+     glow propio de cada elemento poniéndolo PRIMERO en su propio
+     text-shadow: "text-shadow: var(--text-outline-white), <su glow>;"
+     — 0 KB extra, es texto puro, no una imagen/fuente nueva. */
+  --text-outline-white:
+    -1px -1px 0 #fff, 0 -1px 0 #fff, 1px -1px 0 #fff,
+    -1px  0   0 #fff,                1px  0   0 #fff,
+    -1px  1px 0 #fff, 0  1px 0 #fff, 1px  1px 0 #fff;
+
   --radius-s: 8px;
   --radius-m: 14px;
   --radius-l: 20px;
@@ -1306,7 +1318,10 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 22px;
   font-weight: 900;
   color: var(--trofeo-color, var(--text-hi));
-  text-shadow: 0 0 10px var(--trofeo-color, transparent);
+  /* Borde blanco de legibilidad (--text-outline-white, ver :root) +
+     el glow propio de la competición — petición usuario: los números
+     de Títulos se leían mal contra un fondo de color parecido. */
+  text-shadow: var(--text-outline-white), 0 0 10px var(--trofeo-color, transparent);
 }
 .trofeo-icono {
   font-size: 26px;
@@ -1390,6 +1405,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* card de partido */
 .match-card {
+  position: relative;
   border: 1px solid var(--line);
   border-left: 3px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.55);
   background: var(--bg-2);
@@ -1399,6 +1415,29 @@ button { font-family: inherit; cursor: pointer; }
   flex-direction: column;
   gap: 8px;
   transition: border-color 0.15s ease;
+}
+/* Chincheta 📌 del "próximo partido de tu caja" (ver construirTarjetaPartido
+   / _pinProximoHTML en js/renderizadores.js) — disco partido en 2 con los
+   colores REALES del club activo detrás del emoji, tamaño a juego con los
+   iconos del menú (20-26px). Solo sale en la ÚNICA card ya marcada con el
+   borde azul .match-card--siguiente, esquina superior derecha. */
+.match-card-pin {
+  position: absolute;
+  top: -9px;
+  right: -7px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--pin-a, #39ff6a) 50%, var(--pin-b, #101114) 50%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  transform: rotate(18deg);
+  z-index: 2;
 }
 .match-card:hover { border-color: rgba(255, 255, 255, 0.16); }
 
@@ -1412,6 +1451,9 @@ button { font-family: inherit; cursor: pointer; }
      devuelve una — pero por si acaso) cae en el mismo gris neutro que
      .comp-otro. */
   color: var(--text-lo);
+  /* Borde blanco de legibilidad SIEMPRE, aunque no case ningún .comp-XXX
+     de abajo (mismo --text-outline-white de :root, ver más arriba). */
+  text-shadow: var(--text-outline-white);
 }
 /* Una clase .comp-XXX por competición — texto Y borde de la card (ver
    ".match-card.comp-XXX" más abajo) en el MISMO color, para que la
@@ -1422,19 +1464,24 @@ button { font-family: inherit; cursor: pointer; }
    El glow de cada una es un ÚNICO text-shadow suave (no el doble-capa
    de --accent-2-glow/--neon-glow, que sobre texto tan chico en
    mayúsculas se leía "borroso" — el mismo patrón que ya usaba
-   .comp-copa con --gold-glow, ahora generalizado a todas). */
-.match-card-comp.comp-liga { color: var(--accent-2); text-shadow: 0 0 8px rgba(255, 59, 92, 0.45); }
-.match-card-comp.comp-copa { color: var(--gold); text-shadow: var(--gold-glow); }
-.match-card-comp.comp-supercopa { color: var(--brown); text-shadow: 0 0 8px rgba(168, 113, 74, 0.5); }
-.match-card-comp.comp-promocion { color: var(--gris-comp); text-shadow: none; }
-.match-card-comp.comp-champions { color: var(--info); text-shadow: 0 0 8px rgba(59, 167, 255, 0.45); }
-.match-card-comp.comp-previa { color: var(--morado); text-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
-.match-card-comp.comp-uel { color: var(--naranja); text-shadow: 0 0 8px rgba(255, 122, 41, 0.45); }
-.match-card-comp.comp-uecl { color: var(--neon); text-shadow: 0 0 8px rgba(57, 255, 106, 0.4); }
-.match-card-comp.comp-intercontinental { color: var(--amarillo-vivo); text-shadow: 0 0 8px rgba(255, 230, 0, 0.55); }
-.match-card-comp.comp-usc { color: var(--plata); text-shadow: 0 0 6px rgba(201, 211, 220, 0.4); }
-.match-card-comp.comp-selecciones { color: var(--rosa); text-shadow: 0 0 8px rgba(255, 79, 168, 0.45); }
-.match-card-comp.comp-otro { color: var(--text-lo); text-shadow: none; }
+   .comp-copa con --gold-glow, ahora generalizado a todas). Todas
+   arrastran PRIMERO el borde blanco de arriba (--text-outline-white) —
+   un text-shadow nuevo reemplaza el anterior entero, así que hay que
+   repetirlo en cada regla, no solo declararlo una vez en .match-card-comp
+   (petición usuario: "LIGA 4ª JORNADA" y el resto de etiquetas se leían
+   mal sobre fondos oscuros/con glow de color similar). */
+.match-card-comp.comp-liga { color: var(--accent-2); text-shadow: var(--text-outline-white), 0 0 8px rgba(255, 59, 92, 0.45); }
+.match-card-comp.comp-copa { color: var(--gold); text-shadow: var(--text-outline-white), var(--gold-glow); }
+.match-card-comp.comp-supercopa { color: var(--brown); text-shadow: var(--text-outline-white), 0 0 8px rgba(168, 113, 74, 0.5); }
+.match-card-comp.comp-promocion { color: var(--gris-comp); text-shadow: var(--text-outline-white); }
+.match-card-comp.comp-champions { color: var(--info); text-shadow: var(--text-outline-white), 0 0 8px rgba(59, 167, 255, 0.45); }
+.match-card-comp.comp-previa { color: var(--morado); text-shadow: var(--text-outline-white), 0 0 8px rgba(139, 92, 246, 0.5); }
+.match-card-comp.comp-uel { color: var(--naranja); text-shadow: var(--text-outline-white), 0 0 8px rgba(255, 122, 41, 0.45); }
+.match-card-comp.comp-uecl { color: var(--neon); text-shadow: var(--text-outline-white), 0 0 8px rgba(57, 255, 106, 0.4); }
+.match-card-comp.comp-intercontinental { color: var(--amarillo-vivo); text-shadow: var(--text-outline-white), 0 0 8px rgba(255, 230, 0, 0.55); }
+.match-card-comp.comp-usc { color: var(--plata); text-shadow: var(--text-outline-white), 0 0 6px rgba(201, 211, 220, 0.4); }
+.match-card-comp.comp-selecciones { color: var(--rosa); text-shadow: var(--text-outline-white), 0 0 8px rgba(255, 79, 168, 0.45); }
+.match-card-comp.comp-otro { color: var(--text-lo); text-shadow: var(--text-outline-white); }
 
 /* Fila única — bloque LOCAL (escudo + nombre completo, "cuadrado" — ambos
    agrupados y alineados entre sí) · centro (PREVIA/marcador + "vs") ·
@@ -1644,6 +1691,7 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--accent-2);
+  text-shadow: var(--text-outline-white);
   margin-bottom: 14px;
 }
 

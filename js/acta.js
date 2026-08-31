@@ -25,21 +25,87 @@
     return "evt-" + Date.now() + "-" + _contadorEventoId;
   }
 
-  // Elige, de la mini-plantilla de texto de un equipo IA, un jugador de
-  // Medio o Delantero al azar (fallback a cualquiera si no hay). NUNCA
-  // pide selección manual — es automático e instantáneo.
-  function simularGoleadorAutomatorioIA(idEquipoIA, datos) {
-    var equipo = window.Renderizadores.buscarEquipoPorId(idEquipoIA, datos);
-    if (!equipo || !equipo.jugadores || !equipo.jugadores.length) {
-      return { id: null, nombre: "Jugador IA" };
-    }
-    var candidatos = equipo.jugadores.filter(function (j) { return j.posicion === "MED" || j.posicion === "DEL"; });
-    if (!candidatos.length) candidatos = equipo.jugadores;
-    var elegido = candidatos[Math.floor(Math.random() * candidatos.length)];
-    return { id: null, nombre: elegido.nombre };
+  // ---------- Nombre REAL para el jugador IA que dispara un evento ----------
+  // Petición usuario: al pulsar GOL/AMARILLA/etc. del lado IA, el motor
+  // pone SOLO el nombre — el humano nunca elige ni escribe nada. Pool
+  // COMPARTIDO por TODOS los equipos IA/rivales (0 KB por equipo — no es
+  // un fichero nuevo, son ~40 nombres inline aquí mismo). El nombre que
+  // le toca a cada "hueco" de plantilla (posición dentro del equipo) es
+  // SIEMPRE el mismo — determinista por hash(equipoId + hueco) — para que
+  // el MISMO jugador pueda acumular sus goles/tarjetas entre partidos
+  // distintos (necesario para que sume en Pichichi/MVP, ver
+  // renderizadores.js). Cuando el admin quiera un plantel real para un
+  // equipo concreto, lo añade en data/equipos_ia.json o
+  // data/rivales_reales.json (campo `jugadores`) y ESE equipo deja de
+  // usar el pool — nada que tocar aquí.
+  var _POOL_NOMBRES_IA = [
+    "Marc Soler", "Iker Muñoz", "Alex Vidal", "Pau Ferrer", "Dani Roig",
+    "Sergi Camps", "Adrià Bosch", "Jordi Vela", "Nil Puig", "Aleix Serra",
+    "Rubén Calvo", "Hugo Prieto", "Mario Casas", "Diego Peña", "Álvaro Reyes",
+    "Óscar Miranda", "Iván Lozano", "Raúl Cordero", "Nacho Pastor", "Fran Nieto",
+    "Carlos Vega", "Javier Osuna", "Manu Sáez", "Toni Bravo", "Guille Aranda",
+    "Lucas Perales", "David Montoya", "Pol Escobar", "Bruno Salinas", "Yeray Cintas",
+    "Kevin Marín", "Samu Ortiz", "Gonzalo Rus", "Enzo Villalba", "Mateo Cobos",
+    "Adrián Solá", "Cristian Nova", "Fer Cuadrado", "Biel Rovira", "Ander Zubia"
+  ];
+
+  // Roster corto (1 portero + 4 de línea, sesgado a Medio/Delantero para
+  // que siempre haya candidato a goleador) para un equipo IA/rival SIN
+  // plantilla en los catálogos (todo lo que viene de
+  // data/rivales_reales.json, o cualquier rival tecleado a mano que ni
+  // siquiera está ahí — ver resolverRivalPorNombre). Se calcula AL VUELO,
+  // nunca se persiste ni pesa nada en los ficheros de datos.
+  var _SLOTS_ROSTER_SINTETICO = [
+    { slot: "POR1", posicion: "POR" },
+    { slot: "DEF1", posicion: "DEF" },
+    { slot: "MED1", posicion: "MED" },
+    { slot: "DEL1", posicion: "DEL" },
+    { slot: "DEL2", posicion: "DEL" }
+  ];
+
+  var RE_NOMBRE_PLACEHOLDER_IA = /^jugador\s*\d+$/i;
+
+  function _hashStrIA(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
   }
 
-  // opts: { tipo, minuto, equipoId, esHumano, jugadorId, jugadorNombre, datos }
+  function _nombreIAPara(equipoId, hueco) {
+    var h = _hashStrIA(String(equipoId) + "::" + hueco);
+    return _POOL_NOMBRES_IA[h % _POOL_NOMBRES_IA.length];
+  }
+
+  function _rosterSinteticoIA(equipoId) {
+    return _SLOTS_ROSTER_SINTETICO.map(function (s) {
+      return { nombre: _nombreIAPara(equipoId, s.slot), posicion: s.posicion, _hueco: s.slot };
+    });
+  }
+
+  // Elige, de la plantilla (real o sintética) de un equipo IA, un jugador
+  // de Medio o Delantero al azar (fallback a cualquiera si no hay). NUNCA
+  // pide selección manual — es automático e instantáneo. Devuelve un id
+  // ESTABLE (equipoId + hueco de plantilla) para que Pichichi/MVP puedan
+  // sumar los eventos de este mismo jugador entre partidos.
+  function simularGoleadorAutomatorioIA(idEquipoIA, datos) {
+    var equipo = window.Renderizadores.buscarEquipoPorId(idEquipoIA, datos);
+    var jugadores = (equipo && equipo.jugadores && equipo.jugadores.length) ? equipo.jugadores : _rosterSinteticoIA(idEquipoIA);
+
+    var candidatos = jugadores.filter(function (j) { return j.posicion === "MED" || j.posicion === "DEL"; });
+    if (!candidatos.length) candidatos = jugadores;
+    if (!candidatos.length) return { id: null, nombre: "Jugador IA" };
+
+    var elegido = candidatos[Math.floor(Math.random() * candidatos.length)];
+    var hueco = elegido._hueco || elegido.nombre;
+    // Un nombre placeholder ("Jugador 6", los 20 equipos de
+    // data/equipos_ia.json que aún no tienen plantel real) se sustituye
+    // por el del pool — SIEMPRE el mismo para el mismo hueco. Un nombre
+    // real ya puesto por el admin se respeta tal cual.
+    var nombreReal = RE_NOMBRE_PLACEHOLDER_IA.test(elegido.nombre) ? _nombreIAPara(idEquipoIA, hueco) : elegido.nombre;
+    return { id: idEquipoIA + "::" + hueco, nombre: nombreReal };
+  }
+
+  // opts: { tipo, minuto, equipoId, equipoNombre, esHumano, jugadorId, jugadorNombre, datos }
   function agregarEventoActa(opts) {
     var meta = TIPOS_EVENTO[opts.tipo];
     if (!meta) throw new Error("Tipo de evento desconocido: " + opts.tipo);
@@ -59,6 +125,12 @@
       minuto: opts.minuto,
       tipo: opts.tipo,
       equipo_id: opts.equipoId,
+      // Nombre del equipo cacheado EN el evento (no solo el id) — así
+      // cualquier pantalla de estadísticas puede mostrar/agrupar por
+      // equipo sin tener que volver a resolver el id contra los
+      // catálogos (los rivales sintéticos de Calendario extra solo
+      // existen en memoria de ESTA sesión — ver resolverRivalPorNombre).
+      equipo_nombre: opts.equipoNombre || null,
       es_humano: !!opts.esHumano,
       jugador_id: jugadorId,
       jugador_nombre: jugadorNombre
@@ -515,6 +587,7 @@
         tipo: evtBtn.dataset.tipo,
         minuto: minuto,
         equipoId: equipo.id,
+        equipoNombre: equipo.nombre,
         esHumano: esHumano,
         jugadorId: jugadorId,
         jugadorNombre: jugadorNombre,

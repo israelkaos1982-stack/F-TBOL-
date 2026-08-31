@@ -1974,19 +1974,23 @@ button { font-family: inherit; cursor: pointer; }
    quedaba mal (foto usuario). En vez de partir en 2 líneas o recortar
    con "…", `_ajustarFuenteEquiposEnVivo` (js/acta.js) reduce el
    font-size en píxeles reales hasta que el nombre COMPLETO quepa en una
-   sola línea — nunca se pierde ni una letra del nombre. */
+   sola línea — nunca se pierde ni una letra del nombre. Tamaño base
+   subido de 12 a 17px + más padding (petición usuario: quedaba mucho
+   hueco sin usar entre el escudo y el marcador "0-1" con un texto tan
+   pequeño) — el autofit sigue funcionando igual, solo cambia el tamaño
+   de PARTIDA del que arranca a reducir si un nombre no cabe. */
 .live-team-nombre {
   max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
-  font-size: 12px;
+  font-size: 17px;
   font-weight: 800;
   text-align: center;
   color: var(--text-lo);
   background: var(--bg-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
-  padding: 6px 10px;
+  padding: 10px 16px;
 }
 .live-team-nombre.is-active {
   background: rgba(57, 255, 106, 0.16);

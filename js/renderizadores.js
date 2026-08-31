@@ -1847,6 +1847,27 @@
         calTitulo.textContent = "📅 Calendario de " + equipoActivo.nombre;
         contenedor.appendChild(calTitulo);
 
+        // El botón PREVIA de cada card reutiliza abrirPreviaPartido, que
+        // resuelve el partido buscándolo en _ultimoContexto.partidosPorId
+        // (el mapa que rellena generarCalendarioLateralDerecho para el
+        // calendario GENERAL) — pero ese mapa EXCLUYE a propósito los
+        // partidos de Superliga (no salen en el calendario general, ver
+        // comentario ahí). Sin registrarlos aquí también, PREVIA se
+        // quedaba sin encontrar el partido y no hacía nada (bug real,
+        // foto usuario: "como si las cards hubieran sido eliminadas").
+        // Si el calendario general de este mismo club ya está pintado
+        // (caso normal — la Superliga se abre DESDE la pantalla del
+        // club), reutilizamos ese mismo contexto; si no existiera aún,
+        // se crea uno mínimo para este club.
+        if (!_ultimoContexto || !_ultimoContexto.equipo || _ultimoContexto.equipo.id !== idClubActivo) {
+          _ultimoContexto = {
+            datos: datos,
+            equipo: equipoActivo,
+            totalJornadas: TOTAL_JORNADAS_POR_LIGA[equipoActivo.ligaActual] || 38,
+            partidosPorId: {}
+          };
+        }
+
         var calWrap = document.createElement("div");
         calWrap.className = "superliga-calendario";
         grupos.forEach(function (g, gi) {
@@ -1859,6 +1880,7 @@
           var grupoEl = document.createElement("div");
           grupoEl.className = "superliga-calendario-grupo";
           g.partidos.forEach(function (p) {
+            _ultimoContexto.partidosPorId[p.id] = p;
             var clon = {};
             for (var k in p) if (p.hasOwnProperty(k)) clon[k] = p[k];
             clon.ronda = rondaTxt;
@@ -2448,12 +2470,21 @@
   // (usa _ultimoContexto.partidosPorId) — es lo normal, el botón vive en
   // la cabecera del propio calendario. Devuelve el nº de partidos que
   // quedaron reiniciados (0 si no había ninguno jugado).
+  //
+  // partidosPorId también puede llevar mezclados los partidos de
+  // Superliga (renderizarSuperliga los registra ahí para que su propio
+  // botón PREVIA los encuentre — ver esa función) — este botón general
+  // los IGNORA a propósito: "Reiniciar" vive en la cabecera del
+  // calendario GENERAL, que nunca muestra Superliga, así que no debe
+  // borrar de rebote partidos de una competición que ni siquiera se ve
+  // ahí.
   function reiniciarTodosPartidosClub(clubId) {
     if (!clubId || !window.Estado) return 0;
     var n = 0;
     if (_ultimoContexto && _ultimoContexto.equipo && _ultimoContexto.equipo.id === clubId) {
       var partidosPorId = _ultimoContexto.partidosPorId || {};
       Object.keys(partidosPorId).forEach(function (id) {
+        if (partidosPorId[id].competicion === "superliga") return;
         if (!partidosPorId[id].jugado) return;
         n++;
         window.Estado.reiniciarResultadoPartido(id);

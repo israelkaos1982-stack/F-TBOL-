@@ -1173,13 +1173,19 @@
         var tablaEl = document.createElement("table");
         tablaEl.className = "clasificacion-tabla liga1ref-tabla";
         tablaEl.innerHTML =
-          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
           "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
         var tbody = document.createElement("tbody");
 
         filas.forEach(function (f, i) {
           var pos = i + 1;
           var dg = f.gf - f.gc;
+          // PG (partidos ganados) no se guarda aparte: PJ = PG+PE+PP
+          // siempre (cada partido suma exactamente 1 a PJ y a UNO solo
+          // de PG/PE/PP — ver _liga1RefResultadoLado), así que se
+          // deriva aquí sin tocar el cálculo ni el texto pegado por el
+          // admin (que tampoco trae PG, solo Pts/PJ/PE/PP/G+/G-).
+          var pg = f.pj - f.pe - f.pp;
           var zona = _liga1RefZona(pos, filas.length);
           var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
           if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
@@ -1191,7 +1197,7 @@
             '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
             (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
             '<td class="clasificacion-pts">' + f.pts + "</td>" +
-            "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+            "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
             "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
             "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
           tbody.appendChild(tr);
@@ -1848,7 +1854,7 @@
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
-        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
         "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
@@ -1863,7 +1869,7 @@
           '<td class="clasificacion-equipo">' + (f.equipo.misterEmoji || "") + escapeHTML(f.equipo.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="clasificacion-pts">' + f.pts + "</td>" +
-          "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+          "<td>" + f.pj + "</td><td>" + f.pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
           "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
           "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
         tbody.appendChild(tr);

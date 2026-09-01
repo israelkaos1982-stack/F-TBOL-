@@ -404,6 +404,38 @@
     }
   }
 
+  // ---------- División actual de cada club (2ª REF/1ª REF/Hypermotion/Ea
+  // Sports) ----------
+  // Qué tabla de clasificación abre la tarjeta "Liga 1ª REF" del menú de
+  // CADA club. Antes esa tarjeta abría SIEMPRE la división "1ref" fuera
+  // cual fuera el club (bug: el PSG, que no juega 1ª REF, veía esa tabla
+  // igual que los demás) — con ascensos/descensos de temporada en
+  // temporada, cada club puede acabar en una división distinta. Se
+  // guarda por club (id de LIGA_NAV_ORDEN en js/renderizadores.js:
+  // "2ref"/"1ref"/"hypermotion"/"easports"), un string suelto por clave,
+  // 0 KB de más. Se fija desde el propio botón 📌 dentro de la pantalla
+  // de clasificación (candado 646) — ver js/main.js::fijarDivisionClub.
+  var LIGA_DIVISION_KEY_BASE = "ef7_liga_division_v1";
+  var LIGA_DIVISION_DEFECTO = "1ref";
+  function obtenerDivisionClub(clubId) {
+    try {
+      var v = localStorage.getItem(LIGA_DIVISION_KEY_BASE + "_" + clubId);
+      return v && v.trim() ? v : LIGA_DIVISION_DEFECTO;
+    } catch (err) {
+      return LIGA_DIVISION_DEFECTO;
+    }
+  }
+  function guardarDivisionClub(clubId, ligaId) {
+    if (!clubId || !ligaId) return false;
+    try {
+      localStorage.setItem(LIGA_DIVISION_KEY_BASE + "_" + clubId, ligaId);
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la división del club:", err);
+      return false;
+    }
+  }
+
   // ---------- Calendario de COMPETICIONES (roadmap editable, SIN fecha) ----------
   // No es el calendario de partidos (eso vive en data/partidos.json y ya
   // se ve bien en el calendario de cada club, con fecha real). Esto es
@@ -1218,6 +1250,8 @@
     guardarTemporada: guardarTemporada,
     obtenerNombreLiga: obtenerNombreLiga,
     guardarNombreLiga: guardarNombreLiga,
+    obtenerDivisionClub: obtenerDivisionClub,
+    guardarDivisionClub: guardarDivisionClub,
     obtenerCalendarioTexto: obtenerCalendarioTexto,
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,

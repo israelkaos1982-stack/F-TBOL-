@@ -81,8 +81,13 @@
       window.Renderizadores.renderizarPlantillaClub(clubId);
     } else if (vista === "liga1ref") {
       body.innerHTML = '<div id="liga1ref-content"></div>';
-      _ligaNavActual = "1ref";
-      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, "1ref");
+      // Cada club abre SU división (Estado.obtenerDivisionClub), no
+      // siempre "1ref" — con ascensos/descensos de temporada en
+      // temporada, un club puede acabar jugando en 2ª REF/Hypermotion/
+      // Ea Sports en vez de 1ª REF (ver el botón 📌 dentro de la propia
+      // pantalla para reasignarla).
+      _ligaNavActual = window.Estado.obtenerDivisionClub(clubId);
+      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
@@ -283,6 +288,21 @@
     if (!window.Renderizadores || !ligaId) return;
     _ligaNavActual = ligaId;
     window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
+  }
+
+  // ---------- 📌 Fijar la división de un club (candado 646) ----------
+  // Distinto de irLigaNav (arriba): navegar entre las 4 cajas es libre
+  // para cualquiera (solo mirar), pero CAMBIAR qué división es "la suya"
+  // (la que abrirá su tarjeta de menú a partir de ahora) requiere PIN —
+  // así un ascenso/descenso real no se confunde con "estaba mirando otra
+  // liga".
+  function fijarDivisionClub(clubId, ligaId) {
+    if (!clubId || !ligaId || !window.Estado || !window.Renderizadores) return;
+    pedirPinAdmin(function () {
+      window.Estado.guardarDivisionClub(clubId, ligaId);
+      _ligaNavActual = ligaId;
+      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
+    }, "🔒 Fijar liga del club", "PIN de administrador (646)");
   }
 
   // ---------- ℹ️ Formato/reglas (Liga 1ª REF/2ª REF/Hypermotion/Ea
@@ -833,6 +853,7 @@
         case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
         case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
         case "liga-nav-ir": irLigaNav(d.clubId, d.ligaId); break;
+        case "fijar-division-club": fijarDivisionClub(d.clubId, d.ligaId); break;
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "info-superliga-formato": mostrarInfoSuperliga(); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;

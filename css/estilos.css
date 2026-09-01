@@ -1147,6 +1147,10 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--info);
 }
 
+/* Superliga no tiene ✏️ (nada que pegar, todo se auto-calcula) — el ℹ️
+   va solo, alineado a la derecha, mismo estilo que en Liga 1ª REF. */
+.superliga-info-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+
 /* Leyenda — ahora vive DEBAJO de la tabla, con espacio propio (no
    pegada al final) y texto más legible (antes 9.5px/gris apagado).
    Ea Sports usa la misma rejilla con 6 celdas (3 filas x 2 columnas)
@@ -1830,7 +1834,9 @@ button { font-family: inherit; cursor: pointer; }
    pegadas al nombre; si aun así no cupiera en un móvil muy estrecho,
    .clasificacion-wrap ya tiene overflow-x:auto (scroll horizontal). El
    ID gana por especificidad sin depender del orden en la hoja. */
-#superliga-content .clasificacion-tabla { width: auto; min-width: 0; }
+#superliga-content .clasificacion-tabla { width: auto; min-width: 0; font-size: 12.5px; }
+#superliga-content .clasificacion-tabla th,
+#superliga-content .clasificacion-tabla td { padding: 10px 8px; }
 #superliga-content .clasificacion-equipo { min-width: 0; white-space: nowrap; }
 
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón

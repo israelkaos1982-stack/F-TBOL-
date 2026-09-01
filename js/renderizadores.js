@@ -2059,6 +2059,22 @@
     return out;
   }
 
+  // Texto EXACTO del ℹ️ de Superliga (petición usuario, verbatim) — mismo
+  // overlay propio que el de Liga 1ª REF/2ª REF/Hypermotion/Ea Sports
+  // (ver js/main.js::mostrarInfoSuperliga/_abrirInfoOverlay).
+  var FORMATO_SUPERLIGA_TEXTO = [
+    "📋FORMATO SUPERLIGA:",
+    "6 clubes humanos todos contra todos a 3 vueltas (3 partidos contra cada equipo humano jugando,, total de 15 partidos cada club humano)",
+    "",
+    "🏁RESOLUCION CLASIFICACIÓN:",
+    "🟣1º Es Campeón y busca rival digno para derby decente",
+    "🟢2º Subcampeón",
+    "🔴6º Farolillp rojo y necesita ajustes o un plan mejor."
+  ].join("\n");
+  function obtenerFormatoSuperligaTexto() {
+    return FORMATO_SUPERLIGA_TEXTO;
+  }
+
   function renderizarSuperliga(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -2068,10 +2084,12 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
-      var header = document.createElement("div");
-      header.className = "liga1ref-header";
-      header.innerHTML = '<span class="liga1ref-leyenda-mini">🟪 Campeón 🟨 Subcampeón 🟥 Farolillo</span>';
-      contenedor.appendChild(header);
+      // Sin ✏️ (nada que pegar, todo se auto-calcula) — el ℹ️ va solo,
+      // a la derecha. La leyenda baja debajo de la tabla (mismo criterio
+      // que Liga 1ª REF/2ª REF/Hypermotion/Ea Sports).
+      contenedor.insertAdjacentHTML("beforeend",
+        '<div class="superliga-info-row"><button type="button" class="liga1ref-editar-btn liga1ref-info-btn" ' +
+        'data-accion="info-superliga-formato" aria-label="Formato y reglas">ℹ️</button></div>');
 
       var filas = calcularSuperliga(datos);
       var wrap = document.createElement("div");
@@ -2102,6 +2120,8 @@
       tablaEl.appendChild(tbody);
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
+      contenedor.insertAdjacentHTML("beforeend",
+        '<div class="liga1ref-leyenda-grid"><span>🟪 Campeón</span><span>🟨 Subcampeón</span><span>🟥 Farolillo</span></div>');
 
       // Calendario — SOLO los 15 partidos del club activo (5 rivales x 3),
       // nunca los 45 de toda la Superliga ("para no subir KB", petición
@@ -3876,6 +3896,7 @@
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
     obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
+    obtenerFormatoSuperligaTexto: obtenerFormatoSuperligaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarCopaDelRey: renderizarCopaDelRey,

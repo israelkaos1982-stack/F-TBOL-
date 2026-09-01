@@ -285,13 +285,12 @@
     window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
 
-  // ---------- ℹ️ Formato/reglas de una liga — overlay propio (NO
-  // window.alert nativo): el usuario lo cierra él mismo (✕ o tocando
-  // fuera) y, si el texto no cabe entero, aparece una flecha casi
-  // imperceptible abajo avisando de que hay más para deslizar. ----------
-  function mostrarInfoLigaFormato(ligaId) {
-    if (!window.Renderizadores) return;
-    var texto = window.Renderizadores.obtenerFormatoLigaTexto(ligaId || _ligaNavActual);
+  // ---------- ℹ️ Formato/reglas (Liga 1ª REF/2ª REF/Hypermotion/Ea
+  // Sports Y Superliga) — overlay propio (NO window.alert nativo): el
+  // usuario lo cierra él mismo (✕ o tocando fuera) y, si el texto no
+  // cabe entero, aparece una flecha casi imperceptible abajo avisando
+  // de que hay más para deslizar. ----------
+  function _abrirInfoOverlay(texto) {
     if (!texto) return;
     var ov = document.getElementById("liga-info-overlay");
     var body = document.getElementById("liga-info-body");
@@ -303,6 +302,14 @@
     setTimeout(function () {
       if (hint) hint.hidden = body.scrollHeight <= body.clientHeight + 2;
     }, 0);
+  }
+  function mostrarInfoLigaFormato(ligaId) {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoLigaTexto(ligaId || _ligaNavActual));
+  }
+  function mostrarInfoSuperliga() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSuperligaTexto());
   }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
@@ -823,6 +830,7 @@
         case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
         case "liga-nav-ir": irLigaNav(d.clubId, d.ligaId); break;
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
+        case "info-superliga-formato": mostrarInfoSuperliga(); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;

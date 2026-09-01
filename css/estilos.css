@@ -1173,13 +1173,29 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-division-btn:hover { background: rgba(57, 255, 106, 0.1); }
 
-/* ℹ️ un poco más llamativo que el ✏️ genérico (menos de 1KB extra):
-   mismo tamaño/forma, pero con el tinte azul de "info" en vez de gris
-   plano, para que destaque como el botón de "más información" que es. */
+/* ℹ️ más llamativo (petición usuario: "muy fea y cero llamativa") —
+   NO se mueve de sitio (sigue en su fila propia, nunca junto a la ✕
+   de cerrar arriba a la derecha, eso es harina de otro costal). Más
+   grande, brillo azul con pulso suave (CSS puro, 0 imágenes). */
 .liga1ref-info-btn {
-  background: rgba(59, 167, 255, 0.16);
-  border-color: rgba(59, 167, 255, 0.45);
-  color: var(--info);
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  font-size: 14px;
+  background: radial-gradient(circle at 32% 28%, rgba(150, 210, 255, 0.95), rgba(59, 167, 255, 0.3) 72%);
+  border-color: rgba(150, 210, 255, 0.75);
+  color: #0b1a2b;
+  box-shadow: 0 0 9px rgba(59, 167, 255, 0.55), inset 0 0 3px rgba(255, 255, 255, 0.5);
+  animation: liga1ref-info-pulso 2.2s ease-in-out infinite;
+}
+.liga1ref-info-btn:hover,
+.liga1ref-info-btn:focus-visible {
+  animation-play-state: paused;
+  box-shadow: 0 0 16px rgba(59, 167, 255, 0.9), inset 0 0 3px rgba(255, 255, 255, 0.6);
+}
+@keyframes liga1ref-info-pulso {
+  0%, 100% { box-shadow: 0 0 8px rgba(59, 167, 255, 0.45), inset 0 0 3px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 15px rgba(59, 167, 255, 0.85), inset 0 0 4px rgba(255, 255, 255, 0.6); }
 }
 
 /* Superliga no tiene ✏️ (nada que pegar, todo se auto-calcula) — el ℹ️
@@ -1203,6 +1219,15 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-leyenda-grid span { white-space: nowrap; }
 .liga1ref-leyenda-grid--europa { grid-template-rows: repeat(3, auto); }
+
+/* Superliga — los 3 items (Campeón/Subcampeón/Farolillo) SIEMPRE en
+   una sola fila horizontal, nunca 2+1. Letra más pequeña que la
+   rejilla 2x2 de arriba para que "Subcampeón" quepa sin desbordar. */
+.liga1ref-leyenda-grid--superliga {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 8px;
+  font-size: 9.5px;
+}
 
 /* Clasificación de Liga 1ª REF/2ª REF/Hypermotion/Ea Sports "más
    amplia" (petición usuario) — texto un poco más grande y filas un

@@ -2728,11 +2728,24 @@
   function _claveAliasEquipo(equipo) {
     return _normNombre(equipo && equipo.nombre);
   }
+  // Alias PERMANENTE (dictado por el usuario, ver data/rivales_reales.json
+  // -> campo "alias") para los rivales reales de 1ª RFEF/Hypermotion que sí
+  // se conocen de antemano — se ve en CUALQUIER dispositivo desde el
+  // primer arranque, sin que el admin tenga que teclearlo. El admin sigue
+  // pudiendo pulsar el botón y editarlo (ver el handler de
+  // "alias-efootball" más abajo): esa edición se guarda por dispositivo
+  // (Estado.guardarAliasEfootball) y SIEMPRE gana sobre este valor de
+  // fábrica. `_rivalesRealesMap` está keyed por el mismo `clave`
+  // normalizado que usa este alias.
+  function _aliasEfootballDefault(clave) {
+    var r = clave && _rivalesRealesMap && _rivalesRealesMap[clave];
+    return (r && r.alias) || "";
+  }
   function _previaAliasHTML(equipo, lado) {
     if (!equipo || equipo.crest) return ""; // los 6 humanos siempre existen en el juego
     var clave = _claveAliasEquipo(equipo);
     if (!clave) return "";
-    var actual = window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "";
+    var actual = (window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "") || _aliasEfootballDefault(clave);
     var claveAttr = escapeHTML(clave);
     var nombreAttr = escapeHTML(equipo.nombre || "");
     var atributos =
@@ -3550,7 +3563,11 @@
       var nombreAlias = btnAlias.dataset.aliasNombre || "";
       if (claveAlias && window.Estado && window.Main) {
         window.Main.pedirPinAdmin(function () {
-          var actual = window.Estado.obtenerAliasEfootball(claveAlias);
+          // Prefill con el override de ESTE dispositivo si existe, si no
+          // con el alias de fábrica (data/rivales_reales.json) — así el
+          // admin ve/edita SIEMPRE lo que el botón ya está mostrando,
+          // nunca un prompt vacío para un equipo que ya tiene alias.
+          var actual = window.Estado.obtenerAliasEfootball(claveAlias) || _aliasEfootballDefault(claveAlias);
           var nuevo = window.prompt(
             '"' + nombreAlias + '" no tiene licencia en eFootball — ¿qué equipo REAL debe buscar el jugador ' +
             "en el juego para representarlo? (mismo nivel/escudo/uniforme)\n" +

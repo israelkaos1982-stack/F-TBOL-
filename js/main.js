@@ -245,8 +245,9 @@
   // ---------- Liga 1ª REF / 2ª REF / Hypermotion / Ea Sports — clasificación
   // (edición INLINE, PIN 646) ----------
   // Las 4 divisiones comparten UNA pantalla (el mismo contenedor
-  // "liga1ref-content"): una franja de flechas arriba deja "central" solo
-  // una a la vez (ver js/renderizadores.js::_ligaNavHeaderHTML). Se
+  // "liga1ref-content"): cajas de color con las otras 3 arriba, el
+  // título de la activa centrado debajo (ver
+  // js/renderizadores.js::_ligaTabBoxesHTML/_ligaTituloRowHTML). Se
   // recuerda cuál está activa para que Guardar/Cancelar/Volver de un
   // editor vuelvan a la MISMA liga en la que se entró a editar, nunca a
   // 1ª REF por defecto.
@@ -277,16 +278,35 @@
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
 
-  // ---------- Navegación entre las 4 divisiones (⬅️/➡️) ----------
+  // ---------- Navegación entre las 4 divisiones (cajas de color) ----------
   function irLigaNav(clubId, ligaId) {
     if (!window.Renderizadores || !ligaId) return;
     _ligaNavActual = ligaId;
     window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
+
+  // ---------- ℹ️ Formato/reglas de una liga — overlay propio (NO
+  // window.alert nativo): el usuario lo cierra él mismo (✕ o tocando
+  // fuera) y, si el texto no cabe entero, aparece una flecha casi
+  // imperceptible abajo avisando de que hay más para deslizar. ----------
   function mostrarInfoLigaFormato(ligaId) {
     if (!window.Renderizadores) return;
     var texto = window.Renderizadores.obtenerFormatoLigaTexto(ligaId || _ligaNavActual);
-    if (texto) window.alert(texto);
+    if (!texto) return;
+    var ov = document.getElementById("liga-info-overlay");
+    var body = document.getElementById("liga-info-body");
+    var hint = document.getElementById("liga-info-hint");
+    if (!ov || !body) return;
+    body.textContent = texto;
+    ov.hidden = false;
+    // Se comprueba tras pintar (el navegador ya calculó scrollHeight).
+    setTimeout(function () {
+      if (hint) hint.hidden = body.scrollHeight <= body.clientHeight + 2;
+    }, 0);
+  }
+  function cerrarInfoLigaFormato() {
+    var ov = document.getElementById("liga-info-overlay");
+    if (ov) ov.hidden = true;
   }
 
   // ---------- Liga 1ª REF / extra — Pichichi/MVP/Tarjetas/Zamora (mismo contenedor) ----------
@@ -752,6 +772,15 @@
       });
     }
 
+    var btnInfoClose = document.getElementById("liga-info-close");
+    if (btnInfoClose) btnInfoClose.addEventListener("click", cerrarInfoLigaFormato);
+    var infoOv = document.getElementById("liga-info-overlay");
+    if (infoOv) {
+      infoOv.addEventListener("click", function (ev) {
+        if (ev.target === infoOv) cerrarInfoLigaFormato();
+      });
+    }
+
     document.addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "admin-detalle-close") {
         cerrarVistaAdmin();
@@ -811,6 +840,7 @@
       if (ev.key !== "Escape") return;
       cerrarCandado();
       cerrarModalClub();
+      cerrarInfoLigaFormato();
     });
 
     // js/sync.js avisa con este evento cuando trae datos NUEVOS de otro

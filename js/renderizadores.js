@@ -1202,11 +1202,18 @@
   // ============================================================
   var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports"];
   var LIGA_NAV_META = {
-    "2ref": { etiqueta: "🇪🇸 2ª REF", corta: "2ª REF", color: null, leyenda: "promocion" },
-    "1ref": { etiqueta: "🇪🇸 1ª REF", corta: "1ª REF", color: null, leyenda: "promocion" },
-    hypermotion: { etiqueta: "🇪🇸 Hypermotion", corta: "Hypermotion", color: "#3ba7ff", leyenda: "promocion" },
-    easports: { etiqueta: "🇪🇸 Ea Sports", corta: "Ea Sports", color: "#ff3b5c", leyenda: "europa" }
+    "2ref": { corta: "2ª REF", boxClase: "liga-tab-box--2ref", leyenda: "promocion" },
+    "1ref": { corta: "1ª REF", boxClase: "liga-tab-box--1ref", leyenda: "promocion" },
+    hypermotion: { corta: "Hypermotion", boxClase: "liga-tab-box--hypermotion", leyenda: "promocion" },
+    easports: { corta: "Ea Sports", boxClase: "liga-tab-box--easports", leyenda: "europa" }
   };
+  // Título largo de cada liga — "🇪🇸 Liga <nombre corto>" (petición
+  // usuario: antes decía solo "🇪🇸 1ª REF"), calculado a partir de
+  // `corta` para las 4 sin repetirlo en cada entrada.
+  function _ligaTituloLargo(ligaId) {
+    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+    return "🇪🇸 Liga " + meta.corta;
+  }
 
   // El texto EXACTO del ℹ️ (petición usuario, verbatim) — solo aplica a
   // 1ª REF (las reglas de ascenso/descenso a Hypermotion/2ª RFEF son
@@ -1243,43 +1250,41 @@
     return ligaId === "1ref" ? FORMATO_LIGA_1REF_TEXTO : "";
   }
 
-  // Franja de flechas arriba de la clasificación — solo una liga
-  // "central" a la vez, ⬅️/➡️ saltan a la adyacente en LIGA_NAV_ORDEN.
-  // El texto de la flecha lleva el nombre de la liga DESTINO (no
-  // "Anterior/Siguiente" genérico) para que Hypermotion/Ea Sports
-  // salgan coloreadas de azul/rojo tal como pidió el usuario, sin
-  // duplicar un enlace aparte.
-  function _ligaNavHeaderHTML(ligaId, idClubActivo) {
-    var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
-    if (idx === -1) idx = LIGA_NAV_ORDEN.indexOf("1ref");
-    var prevId = idx > 0 ? LIGA_NAV_ORDEN[idx - 1] : null;
-    var nextId = idx < LIGA_NAV_ORDEN.length - 1 ? LIGA_NAV_ORDEN[idx + 1] : null;
-    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+  // Fila de cajas de color con las OTRAS 3 ligas (nunca la activa) —
+  // petición usuario: sustituye a las flechas ⬅️/➡️. Tocar una caja
+  // abre esa liga "en solitario" (ver _ligaTituloRowHTML) y esta fila
+  // se re-pinta con las 3 que quedan.
+  function _ligaTabBoxesHTML(ligaId, idClubActivo) {
+    var html = '<div class="liga-tab-boxes">';
+    LIGA_NAV_ORDEN.forEach(function (id) {
+      if (id === ligaId) return;
+      var meta = LIGA_NAV_META[id];
+      html += '<button type="button" class="liga-tab-box ' + meta.boxClase +
+        '" data-accion="liga-nav-ir" data-liga-id="' + id + '" data-club-id="' +
+        (idClubActivo || "") + '">' + escapeHTML(meta.corta) + "</button>";
+    });
+    return html + "</div>";
+  }
 
-    var izq = prevId
-      ? '<button type="button" class="liga-nav-flecha liga-nav-flecha--izq" data-accion="liga-nav-ir" data-liga-id="' +
-        prevId + '" data-club-id="' + (idClubActivo || "") + '"' +
-        (LIGA_NAV_META[prevId].color ? ' style="color:' + LIGA_NAV_META[prevId].color + '"' : "") + ">⬅️ " +
-        escapeHTML(LIGA_NAV_META[prevId].corta) + "</button>"
-      : '<span class="liga-nav-flecha liga-nav-flecha--vacia"></span>';
-
-    var der = nextId
-      ? '<button type="button" class="liga-nav-flecha liga-nav-flecha--der" data-accion="liga-nav-ir" data-liga-id="' +
-        nextId + '" data-club-id="' + (idClubActivo || "") + '"' +
-        (LIGA_NAV_META[nextId].color ? ' style="color:' + LIGA_NAV_META[nextId].color + '"' : "") + ">" +
-        escapeHTML(LIGA_NAV_META[nextId].corta) + " ➡️</button>"
-      : '<span class="liga-nav-flecha liga-nav-flecha--vacia"></span>';
-
+  // Fila del título de la liga ACTIVA — ℹ️ (si hay reglas dictadas) a
+  // la izquierda, título centrado ("🇪🇸 Liga <corta>"), ✏️ a la derecha.
+  function _ligaTituloRowHTML(ligaId, idClubActivo) {
+    var izq = obtenerFormatoLigaTexto(ligaId)
+      ? '<button type="button" class="liga1ref-editar-btn liga1ref-info-btn" data-accion="info-liga-formato" data-liga-id="' +
+        ligaId + '" aria-label="Formato y reglas">ℹ️</button>'
+      : '<span class="liga1ref-titulo-spacer"></span>';
+    var der = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
+      ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
     return (
-      '<div class="liga-nav-bar">' + izq +
-      '<span class="liga-nav-actual"' + (meta.color ? ' style="color:' + meta.color + '"' : "") + ">" +
-      escapeHTML(meta.etiqueta) + "</span>" + der + "</div>"
+      '<div class="liga1ref-titulo-row">' + izq +
+      '<span class="liga1ref-titulo-actual">' + escapeHTML(_ligaTituloLargo(ligaId)) + "</span>" +
+      der + "</div>"
     );
   }
 
-  // Leyenda en rejilla 2x2 (petición usuario, sustituye a la línea
-  // horizontal única) — Ea Sports usa 6 zonas de estilo europeo en vez
-  // de ascenso/descenso.
+  // Leyenda en rejilla 2x2 — vive DEBAJO de la tabla (petición usuario),
+  // sin flechas ⬆️/⬇️ (el orden/color de cada zona ya la distingue). Ea
+  // Sports usa 6 zonas de estilo europeo en vez de ascenso/descenso.
   function _ligaLeyendaHTML(ligaId) {
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
     if (meta.leyenda === "europa") {
@@ -1292,8 +1297,8 @@
     }
     return (
       '<div class="liga1ref-leyenda-grid">' +
-      "<span>🟦 Ascenso</span><span>🟫 Promoción ⬇️</span>" +
-      "<span>🟨 Promoción ⬆️</span><span>🟥 Descenso</span></div>"
+      "<span>🟦 Ascenso</span><span>🟫 Promoción</span>" +
+      "<span>🟨 Promoción</span><span>🟥 Descenso</span></div>"
     );
   }
 
@@ -1376,21 +1381,12 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
-      contenedor.insertAdjacentHTML("beforeend", _ligaNavHeaderHTML(ligaId, idClubActivo));
-
-      // Leyenda en rejilla 2x2 (los propios emoji de color hacen de
-      // swatch, sin CSS extra) + ℹ️ (solo 1ª REF, reglas dictadas) + ✏️.
-      var header = document.createElement("div");
-      header.className = "liga1ref-header";
-      var botones = '<div class="liga1ref-header-btns">' +
-        (obtenerFormatoLigaTexto(ligaId)
-          ? '<button type="button" class="liga1ref-editar-btn" data-accion="info-liga-formato" data-liga-id="' +
-            ligaId + '" aria-label="Formato y reglas">ℹ️</button>'
-          : "") +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
-        ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button></div>';
-      header.innerHTML = _ligaLeyendaHTML(ligaId) + botones;
-      contenedor.appendChild(header);
+      // 1) Cajas con las otras 3 ligas. 2) Título de la liga activa
+      // (ℹ️/nombre/✏️). La leyenda YA NO va aquí — baja debajo de la
+      // tabla, para que la clasificación suba y se vean más filas sin
+      // hacer scroll (petición usuario).
+      contenedor.insertAdjacentHTML("beforeend", _ligaTabBoxesHTML(ligaId, idClubActivo));
+      contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
@@ -1409,6 +1405,7 @@
         tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, zonaFn));
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
+        contenedor.insertAdjacentHTML("beforeend", _ligaLeyendaHTML(ligaId));
       }
 
       contenedor.appendChild(nodoSeparador());

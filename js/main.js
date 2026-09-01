@@ -631,15 +631,19 @@
     salirDelClub();
   }
 
-  // ---------- Temporada editable (arriba del Inicio) ----------
+  // ---------- Temporada editable (arriba del Inicio, candado 646) ----------
+  // Ya no hay lápiz aparte: se pulsa "Temporada N" directamente y pide el
+  // PIN antes de abrir el cuadro de edición.
   function editarTemporada() {
     if (!window.Estado) return;
-    var actual = window.Estado.obtenerTemporada();
-    var nueva = window.prompt("Nombre de la temporada:", actual);
-    if (nueva === null) return; // cancelado
-    if (!nueva.trim()) return;
-    window.Estado.guardarTemporada(nueva);
-    if (window.Renderizadores) window.Renderizadores.pintarTemporada();
+    pedirPinAdmin(function () {
+      var actual = window.Estado.obtenerTemporada();
+      var nueva = window.prompt("Nombre de la temporada:", actual);
+      if (nueva === null) return; // cancelado
+      if (!nueva.trim()) return;
+      window.Estado.guardarTemporada(nueva);
+      if (window.Renderizadores) window.Renderizadores.pintarTemporada();
+    }, "🔒 Editar temporada", "PIN de administrador (646)");
   }
 
   // ---------- Nombre de la liga — editable pulsando el propio badge ----------

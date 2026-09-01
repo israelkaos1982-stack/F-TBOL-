@@ -1141,6 +1141,29 @@
   // real, es también la única forma de pasar el progreso de un
   // dispositivo a otro: exportar en uno, mandar el archivo (WhatsApp,
   // email...) e importar en el otro.
+  // Espacio REAL usado por la app en el navegador — suma TODAS las claves
+  // "ef7_*" (resultados, calendario/menú/plantilla/roster/lesionados de
+  // cada club, Liga 1ª REF y extras, balones/estadios editados, alias
+  // eFootball...), no solo STORAGE_KEY. Antes "💾 Espacio del navegador"
+  // solo medía STORAGE_KEY (resultados/partidosGenerados) — un objeto casi
+  // vacío en cuanto no hay muchos partidos jugados, así que SIEMPRE
+  // mostraba algo como "0.05 KB" pese a que el resto de datos de la app
+  // (edición del admin, calendarios, plantillas...) ocupan bastante más.
+  // No era una ilusión — el número era real para esa clave concreta —
+  // pero no representaba el uso total del sitio, que es lo que el admin
+  // quiere ver aquí.
+  function calcularEspacioTotal() {
+    var claves = _clavesDeLaApp();
+    var bytes = 0;
+    claves.forEach(function (k) {
+      try {
+        var v = localStorage.getItem(k) || "";
+        bytes += new Blob([k]).size + new Blob([v]).size;
+      } catch (err) { /* clave ilegible, se ignora */ }
+    });
+    return { bytes: bytes, nClaves: claves.length };
+  }
+
   var FORMATO_BACKUP_COMPLETO = "ef7-backup-v2";
   function exportarEstadoCrudo() {
     var claves = {};
@@ -1190,6 +1213,7 @@
     exportarEstadoCrudo: exportarEstadoCrudo,
     importarEstadoCrudo: importarEstadoCrudo,
     borrarTodo: borrarTodo,
+    calcularEspacioTotal: calcularEspacioTotal,
     obtenerTemporada: obtenerTemporada,
     guardarTemporada: guardarTemporada,
     obtenerNombreLiga: obtenerNombreLiga,

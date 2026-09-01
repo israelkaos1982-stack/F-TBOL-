@@ -810,6 +810,57 @@
     }
   }
 
+  // ---------- Ligas EXTRA (2ª REF / Hypermotion / Ea Sports) — mismo
+  // formato de texto libre que Liga 1ª REF de arriba (clasificación:
+  // "Pos Nombre Pts PJ PE PP G+ G- DG"; estadística: "Nombre - Equipo
+  // Cantidad"), pero SIN "batidora": ningún club humano juega de verdad
+  // estas 3 competiciones dentro de la app (a diferencia de Liga 1ª REF,
+  // que sí fusiona con los partidos reales de cada club vía
+  // js/renderizadores.js::calcularLiga1RefCombinada). Aquí la
+  // clasificación Y las 5 cajas de estadísticas son 100% lo que el admin
+  // pega a mano — petición usuario: "el resto de estadísticas y
+  // clasificación te las doy yo manualmente texto". Una clave de texto
+  // por liga (clasificación) + una por liga+categoría (cada estadística).
+  var LIGA_EXTRA_IDS = ["2ref", "hypermotion", "easports"];
+  function _ligaExtraTextoKey(ligaId) {
+    return "ef7_liga_" + ligaId + "_clasificacion_v1";
+  }
+  function obtenerLigaExtraTexto(ligaId) {
+    try {
+      return localStorage.getItem(_ligaExtraTextoKey(ligaId)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarLigaExtraTexto(ligaId, texto) {
+    try {
+      localStorage.setItem(_ligaExtraTextoKey(ligaId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de " + ligaId + ":", err);
+      return false;
+    }
+  }
+  function _ligaExtraStatKey(ligaId, categoria) {
+    return "ef7_liga_" + ligaId + "_stat_" + categoria + "_v1";
+  }
+  function obtenerLigaExtraStatTexto(ligaId, categoria) {
+    try {
+      return localStorage.getItem(_ligaExtraStatKey(ligaId, categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarLigaExtraStatTexto(ligaId, categoria, texto) {
+    try {
+      localStorage.setItem(_ligaExtraStatKey(ligaId, categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de " + ligaId + ":", err);
+      return false;
+    }
+  }
+
   // ---------- Copa del Rey — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
   // Mismo mecanismo EXACTO que las 5 cajas de Liga 1ª REF de arriba (texto
   // libre pegado para la IA + auto-suma de los 6 humanos), pero con su
@@ -1165,6 +1216,10 @@
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,
     guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
+    obtenerLigaExtraTexto: obtenerLigaExtraTexto,
+    guardarLigaExtraTexto: guardarLigaExtraTexto,
+    obtenerLigaExtraStatTexto: obtenerLigaExtraStatTexto,
+    guardarLigaExtraStatTexto: guardarLigaExtraStatTexto,
     obtenerCopaStatTexto: obtenerCopaStatTexto,
     guardarCopaStatTexto: guardarCopaStatTexto,
     obtenerAliasEfootball: obtenerAliasEfootball,

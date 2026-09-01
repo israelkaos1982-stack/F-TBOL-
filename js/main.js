@@ -81,7 +81,8 @@
       window.Renderizadores.renderizarPlantillaClub(clubId);
     } else if (vista === "liga1ref") {
       body.innerHTML = '<div id="liga1ref-content"></div>';
-      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+      _ligaNavActual = "1ref";
+      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, "1ref");
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
@@ -241,50 +242,81 @@
     cerrarModalClub();
   }
 
-  // ---------- Liga 1ª REF — clasificación única (edición INLINE, PIN 646) ----------
+  // ---------- Liga 1ª REF / 2ª REF / Hypermotion / Ea Sports — clasificación
+  // (edición INLINE, PIN 646) ----------
+  // Las 4 divisiones comparten UNA pantalla (el mismo contenedor
+  // "liga1ref-content"): una franja de flechas arriba deja "central" solo
+  // una a la vez (ver js/renderizadores.js::_ligaNavHeaderHTML). Se
+  // recuerda cuál está activa para que Guardar/Cancelar/Volver de un
+  // editor vuelvan a la MISMA liga en la que se entró a editar, nunca a
+  // 1ª REF por defecto.
+  var _ligaNavActual = "1ref";
+
   // A diferencia del resto de editores del candado 646 (que viven en el
   // "✏️ Editar menú" aparte), este se abre desde un ✏️ pequeño DENTRO de
   // la propia pantalla de clasificación — Guardar/Cancelar vuelven a la
   // tabla en el MISMO contenedor, sin cerrar el modal.
-  function editarLiga1RefInline(clubId) {
+  function editarLiga1RefInline(clubId, ligaId) {
     if (!window.Renderizadores) return;
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
-      if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId);
+      if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId, ligaId);
     }, "🔒 Editar clasificación", "PIN de administrador (646)");
   }
-  function guardarLiga1Ref(clubId) {
+  function guardarLiga1Ref(clubId, ligaId) {
     var ta = document.getElementById("liga1ref-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarLiga1RefTexto(ta.value);
-    window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (ligaId === "1ref") window.Estado.guardarLiga1RefTexto(ta.value);
+    else window.Estado.guardarLigaExtraTexto(ligaId, ta.value);
+    window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
-  function cancelarLiga1Ref(clubId) {
-    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+  function cancelarLiga1Ref(clubId, ligaId) {
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
 
-  // ---------- Liga 1ª REF — Pichichi/MVP/Tarjetas/Zamora (mismo contenedor) ----------
-  function verLiga1RefStat(clubId, categoria) {
-    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  // ---------- Navegación entre las 4 divisiones (⬅️/➡️) ----------
+  function irLigaNav(clubId, ligaId) {
+    if (!window.Renderizadores || !ligaId) return;
+    _ligaNavActual = ligaId;
+    window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
-  function volverLiga1Ref(clubId) {
-    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
-  }
-  function editarLiga1RefStatInline(clubId, categoria) {
+  function mostrarInfoLigaFormato(ligaId) {
     if (!window.Renderizadores) return;
+    var texto = window.Renderizadores.obtenerFormatoLigaTexto(ligaId || _ligaNavActual);
+    if (texto) window.alert(texto);
+  }
+
+  // ---------- Liga 1ª REF / extra — Pichichi/MVP/Tarjetas/Zamora (mismo contenedor) ----------
+  function verLiga1RefStat(clubId, categoria, ligaId) {
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
+  }
+  function volverLiga1Ref(clubId, ligaId) {
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
+  }
+  function editarLiga1RefStatInline(clubId, categoria, ligaId) {
+    if (!window.Renderizadores) return;
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
-      if (cont) window.Renderizadores.pintarEditorLiga1RefStat(cont, clubId, categoria);
+      if (cont) window.Renderizadores.pintarEditorLiga1RefStat(cont, clubId, categoria, ligaId);
     }, "🔒 Editar estadística", "PIN de administrador (646)");
   }
-  function guardarLiga1RefStat(clubId, categoria) {
+  function guardarLiga1RefStat(clubId, categoria, ligaId) {
     var ta = document.getElementById("liga1ref-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarLiga1RefStatTexto(categoria, ta.value);
-    window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (ligaId === "1ref") window.Estado.guardarLiga1RefStatTexto(categoria, ta.value);
+    else window.Estado.guardarLigaExtraStatTexto(ligaId, categoria, ta.value);
+    window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
   }
-  function cancelarLiga1RefStat(clubId, categoria) {
-    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  function cancelarLiga1RefStat(clubId, categoria, ligaId) {
+    ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
   }
 
   // ---------- Copa del Rey — estado del cuadro + Pichichi/MVP/Amarillas/Rojas ----------
@@ -752,14 +784,16 @@
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
-        case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId); break;
-        case "guardar-liga1ref": guardarLiga1Ref(d.clubId); break;
-        case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId); break;
-        case "ver-liga1ref-stat": verLiga1RefStat(d.clubId, d.categoria); break;
-        case "volver-liga1ref": volverLiga1Ref(d.clubId); break;
-        case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria); break;
-        case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria); break;
-        case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria); break;
+        case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId, d.ligaId); break;
+        case "guardar-liga1ref": guardarLiga1Ref(d.clubId, d.ligaId); break;
+        case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId, d.ligaId); break;
+        case "ver-liga1ref-stat": verLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
+        case "volver-liga1ref": volverLiga1Ref(d.clubId, d.ligaId); break;
+        case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria, d.ligaId); break;
+        case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
+        case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
+        case "liga-nav-ir": irLigaNav(d.clubId, d.ligaId); break;
+        case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;

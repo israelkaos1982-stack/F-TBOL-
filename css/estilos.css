@@ -1086,6 +1086,73 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-volver-btn { padding: 5px 10px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
 .liga1ref-tabla { min-width: 380px; }
 
+/* ---------- 6d-bis. NAVEGACIÓN entre divisiones (2ª REF / 1ª REF /
+   Hypermotion / Ea Sports) — franja de flechas arriba de la
+   clasificación (ver js/renderizadores.js::_ligaNavHeaderHTML). Solo
+   dentro de "liga1ref-content": no afecta a Copa/Superliga/Títulos,
+   que reutilizan .liga1ref-header pero nunca esta franja. ---------- */
+.liga-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.liga-nav-flecha {
+  border: none;
+  background: none;
+  padding: 4px 2px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-lo);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.liga-nav-flecha--vacia { flex: 0 0 1px; }
+.liga-nav-actual {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Botones ℹ️/✏️ agrupados a la derecha de la leyenda en rejilla. */
+.liga1ref-header-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* Leyenda en rejilla 2x2 (petición usuario, sustituye a la línea
+   horizontal única) — deja hueco libre a la derecha para ℹ️/✏️. Ea
+   Sports usa la misma rejilla con 6 celdas (3 filas x 2 columnas) para
+   sus zonas de estilo europeo. */
+.liga1ref-leyenda-grid {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-lo);
+  letter-spacing: 0.2px;
+}
+.liga1ref-leyenda-grid span { white-space: nowrap; }
+.liga1ref-leyenda-grid--europa { grid-template-rows: repeat(3, auto); }
+
+/* Clasificación de Liga 1ª REF/2ª REF/Hypermotion/Ea Sports "más
+   amplia" (petición usuario) — texto un poco más grande y filas un
+   poco más altas, solo dentro de este contenedor (no toca Copa/
+   Superliga/Títulos, que reutilizan .clasificacion-tabla con su
+   tamaño de siempre). */
+#liga1ref-content .clasificacion-tabla { min-width: 520px; font-size: 12.5px; }
+#liga1ref-content .clasificacion-tabla th,
+#liga1ref-content .clasificacion-tabla td { padding: 10px 8px; }
+#liga1ref-content .liga1ref-tabla { min-width: 520px; }
+#liga1ref-content .clasificacion-equipo { min-width: 150px; }
+
 /* Las 5 tablas de estadísticas (Pichichi/MVP/Amarillas/Rojas/Zamora) solo
    tienen 4 columnas (#, Jugador, Equipo, valor) — el min-width de 380px
    de la tabla de clasificación (9 columnas) les sobraba y las obligaba a
@@ -1149,6 +1216,27 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-zona-promo-descenso { background: rgba(168, 113, 74, 0.18); }
 .liga1ref-zona-promo-descenso .clasificacion-pos,
 .liga1ref-zona-promo-descenso .clasificacion-pts { color: var(--brown); }
+
+/* ---------- Ea Sports — zonas de estilo europeo (🟦 Champions / 🟪
+   Previa / 🟧 Europa League / 🟩 Conference) — reutiliza descenso/
+   promo-descenso de arriba tal cual, solo estas 4 son nuevas. Mismos
+   colores que ya usa la paleta de competición de las cards de
+   calendario (--info/--morado/--naranja), --neon para Conference. */
+.liga1ref-zona-champions { background: rgba(59, 167, 255, 0.14); }
+.liga1ref-zona-champions .clasificacion-pos,
+.liga1ref-zona-champions .clasificacion-pts { color: var(--info); }
+
+.liga1ref-zona-previa { background: rgba(139, 92, 246, 0.16); }
+.liga1ref-zona-previa .clasificacion-pos,
+.liga1ref-zona-previa .clasificacion-pts { color: var(--morado); }
+
+.liga1ref-zona-eleague { background: rgba(255, 122, 41, 0.16); }
+.liga1ref-zona-eleague .clasificacion-pos,
+.liga1ref-zona-eleague .clasificacion-pts { color: var(--naranja); }
+
+.liga1ref-zona-conference { background: rgba(57, 255, 106, 0.12); }
+.liga1ref-zona-conference .clasificacion-pos,
+.liga1ref-zona-conference .clasificacion-pts { color: var(--neon); }
 
 /* ---------- SUPERLIGA — clasificación (🟪 Campeón / 🟨 Subcampeón /
    🟥 Farolillo, solo los 3 puestos que pidió el usuario) — mismo patrón

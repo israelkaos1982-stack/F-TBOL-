@@ -883,6 +883,43 @@
     }
   }
 
+  // Migración de UN SOLO USO (candado ef7_alias_fabrica_migracion_v1):
+  // estos 16 equipos de data/rivales_reales.json acaban de recibir un
+  // alias PERMANENTE "de fábrica" (ver js/renderizadores.js::_aliasEfootballDefault,
+  // que ahora cae en ese valor cuando este dispositivo no tiene su
+  // propio override). El problema: un override viejo de ESTE dispositivo
+  // (de una prueba/edición anterior a que existiera el valor de fábrica —
+  // a veces con texto de OTRO equipo pegado por error) SIEMPRE gana sobre
+  // el valor de fábrica, así que se quedaría mostrando ese dato viejo
+  // para siempre sin que el admin sepa por qué. Se BORRA (nunca se
+  // reescribe con texto fijo aquí — la fuente sigue siendo SOLO
+  // data/rivales_reales.json) el override de estos 16, UNA vez por
+  // dispositivo, para que el valor de fábrica correcto pueda mostrarse.
+  // Si el admin edita alguno de ellos DESPUÉS de esta migración, su
+  // edición es respetada con normalidad (esto no vuelve a correr).
+  var ALIAS_FABRICA_MIGRACION_KEY = "ef7_alias_fabrica_migracion_v1";
+  var ALIAS_FABRICA_CLAVES_V1 = [
+    "antequera cf", "villarreal b", "ce europa", "fc cartagena",
+    "ponferradina", "ad merida", "algeciras cf", "atletico madrileno",
+    "cd lugo", "rm castilla", "real murcia", "unionistas cf",
+    "pontevedra", "barakaldo", "hercules", "zamora cf"
+  ];
+  function _migrarAliasFabricaV1() {
+    try {
+      if (localStorage.getItem(ALIAS_FABRICA_MIGRACION_KEY)) return;
+      var mapa = _obtenerAliasEfootballMapa();
+      var cambio = false;
+      ALIAS_FABRICA_CLAVES_V1.forEach(function (clave) {
+        if (mapa.hasOwnProperty(clave)) { delete mapa[clave]; cambio = true; }
+      });
+      if (cambio) localStorage.setItem(ALIAS_EFOOTBALL_KEY, JSON.stringify(mapa));
+      localStorage.setItem(ALIAS_FABRICA_MIGRACION_KEY, "1");
+    } catch (err) {
+      console.error("[estado] no se pudo migrar el alias de fábrica:", err);
+    }
+  }
+  _migrarAliasFabricaV1();
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA

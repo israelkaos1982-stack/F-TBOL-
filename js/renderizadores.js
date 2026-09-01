@@ -1214,6 +1214,12 @@
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
     return "🇪🇸 Liga " + meta.corta;
   }
+  // Nombre corto de una división ("1ª REF", "Hypermotion"...) — lo usa
+  // la cabecera del modal del club para el título "ℹ️ <corta>".
+  function obtenerLigaNombreCorta(ligaId) {
+    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+    return meta.corta;
+  }
 
   // El texto EXACTO del ℹ️ (petición usuario, verbatim) — solo aplica a
   // 1ª REF (las reglas de ascenso/descenso a Hypermotion/2ª RFEF son
@@ -1266,39 +1272,29 @@
     return html + "</div>";
   }
 
-  // Fila del título de la liga ACTIVA — ℹ️ (si hay reglas dictadas) a
-  // la izquierda, título centrado ("🇪🇸 Liga <corta>"), ✏️ a la derecha.
+  // Fila del título de la liga ACTIVA — título centrado ("🇪🇸 Liga
+  // <corta>"), y a la derecha 📌 + ✏️ juntos (la ℹ️ vive ahora en la
+  // cabecera del propio modal, ver js/main.js::abrirModalClub). El 📌
+  // indica/fija qué división es "la suya" (Estado.obtenerDivisionClub,
+  // "1ref" por defecto) — la que abrirá su tarjeta de menú "Liga 1ª REF"
+  // a partir de ahora. Navegar con las cajas de color sigue siendo libre
+  // (solo mirar); fijarla exige PIN 646, así un ascenso/descenso real no
+  // se confunde con "estoy mirando otra liga por curiosidad".
   function _ligaTituloRowHTML(ligaId, idClubActivo) {
-    var izq = obtenerFormatoLigaTexto(ligaId)
-      ? '<button type="button" class="liga1ref-editar-btn liga1ref-info-btn" data-accion="info-liga-formato" data-liga-id="' +
-        ligaId + '" aria-label="Formato y reglas">ℹ️</button>'
-      : '<span class="liga1ref-titulo-spacer"></span>';
-    var der = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
+    var pin = "";
+    if (idClubActivo && window.Estado) {
+      var actual = window.Estado.obtenerDivisionClub(idClubActivo);
+      pin = actual === ligaId
+        ? '<span class="liga1ref-editar-btn liga1ref-pin-badge" title="Liga de este club" aria-label="Liga de este club">📌</span>'
+        : '<button type="button" class="liga1ref-editar-btn liga1ref-pin-btn" data-accion="fijar-division-club" data-liga-id="' +
+          ligaId + '" data-club-id="' + idClubActivo + '" title="Fijar como su liga (PIN)" aria-label="Fijar como su liga">📌</button>';
+    }
+    var lapiz = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
       ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
     return (
-      '<div class="liga1ref-titulo-row">' + izq +
+      '<div class="liga1ref-titulo-row"><span class="liga1ref-titulo-spacer"></span>' +
       '<span class="liga1ref-titulo-actual">' + escapeHTML(_ligaTituloLargo(ligaId)) + "</span>" +
-      der + "</div>"
-    );
-  }
-
-  // Aviso/botón 📌 debajo del título — cada club tiene UNA división fija
-  // (Estado.obtenerDivisionClub, "1ref" por defecto) que es la que abre
-  // su tarjeta de menú "Liga 1ª REF". Al navegar aquí con las cajas de
-  // color se puede BROWSEAR cualquiera de las 4 sin cambiar nada — solo
-  // se fija la división del club si el admin pulsa este botón (PIN 646),
-  // así un ascenso/descenso real no se confunde con "estoy mirando otra
-  // liga por curiosidad".
-  function _ligaDivisionSubHTML(ligaId, idClubActivo) {
-    if (!idClubActivo || !window.Estado) return "";
-    var actual = window.Estado.obtenerDivisionClub(idClubActivo);
-    if (actual === ligaId) {
-      return '<div class="liga1ref-division-sub liga1ref-division-sub--ok">📌 Liga de este club</div>';
-    }
-    return (
-      '<div class="liga1ref-division-sub">' +
-      '<button type="button" class="liga1ref-division-btn" data-accion="fijar-division-club" data-liga-id="' +
-      ligaId + '" data-club-id="' + idClubActivo + '">📌 Fijar como su liga (PIN)</button></div>'
+      '<span class="liga1ref-titulo-der">' + pin + lapiz + "</span></div>"
     );
   }
 
@@ -1407,7 +1403,6 @@
       // hacer scroll (petición usuario).
       contenedor.insertAdjacentHTML("beforeend", _ligaTabBoxesHTML(ligaId, idClubActivo));
       contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
-      contenedor.insertAdjacentHTML("beforeend", _ligaDivisionSubHTML(ligaId, idClubActivo));
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
@@ -2105,13 +2100,11 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
-      // Sin ✏️ (nada que pegar, todo se auto-calcula) — el ℹ️ va solo,
-      // a la derecha. La leyenda baja debajo de la tabla (mismo criterio
-      // que Liga 1ª REF/2ª REF/Hypermotion/Ea Sports).
-      contenedor.insertAdjacentHTML("beforeend",
-        '<div class="superliga-info-row"><button type="button" class="liga1ref-editar-btn liga1ref-info-btn" ' +
-        'data-accion="info-superliga-formato" aria-label="Formato y reglas">ℹ️</button></div>');
-
+      // Sin ✏️ (nada que pegar, todo se auto-calcula). La ℹ️ ya no vive
+      // aquí dentro — está en la cabecera del propio modal ("ℹ️
+      // Superliga", ver js/main.js::abrirModalClub). La leyenda baja
+      // debajo de la tabla (mismo criterio que Liga 1ª REF/2ª REF/
+      // Hypermotion/Ea Sports).
       var filas = calcularSuperliga(datos);
       var wrap = document.createElement("div");
       wrap.className = "clasificacion-wrap";
@@ -3921,6 +3914,7 @@
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
     obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
+    obtenerLigaNombreCorta: obtenerLigaNombreCorta,
     obtenerFormatoSuperligaTexto: obtenerFormatoSuperligaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,

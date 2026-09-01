@@ -58,6 +58,33 @@
   // el resto (de fábrica o añadidas por el admin) son subsistemas que este
   // simulador ligero todavía no implementa — se muestra un aviso honesto
   // en vez de inventar datos falsos.
+  // La cabecera del modal ("club-modal-title") normalmente es texto
+  // plano (icono de fábrica/editado + etiqueta). Para Liga 1ª REF y
+  // Superliga se sustituye por un botón "ℹ️ <nombre>" que abre el
+  // formato/reglas — el icono de la tarjeta (👥️/🔹/🇪🇸...) NO cambia en
+  // el menú de la izquierda, solo AQUÍ DENTRO, mientras el modal está
+  // abierto (petición usuario). Si esa división/competición no tiene
+  // texto de reglas todavía, cae al título normal (nada que mostrar).
+  function _pintarTituloModalInfo(tituloEl, nombreCorto, accion, ligaId, texto) {
+    // Sin reglas dictadas para esa división todavía: se deja el título
+    // normal (icono de fábrica/editado + etiqueta) que abrirModalClub
+    // ya puso antes de llamar aquí — nada que abrir, nada que cambiar.
+    if (!texto) return;
+    tituloEl.innerHTML = "";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "club-modal-title-btn";
+    btn.dataset.accion = accion;
+    if (ligaId) btn.dataset.ligaId = ligaId;
+    var icono = document.createElement("span");
+    icono.className = "liga1ref-editar-btn liga1ref-info-btn club-modal-title-icon";
+    icono.setAttribute("aria-hidden", "true");
+    icono.textContent = "ℹ️";
+    btn.appendChild(icono);
+    btn.appendChild(document.createTextNode(" " + nombreCorto));
+    tituloEl.appendChild(btn);
+  }
+
   function abrirModalClub(vista) {
     var clubId = window._idManagerActivo;
     if (!clubId || !window.Estado) return;
@@ -87,12 +114,23 @@
       // Ea Sports en vez de 1ª REF (ver el botón 📌 dentro de la propia
       // pantalla para reasignarla).
       _ligaNavActual = window.Estado.obtenerDivisionClub(clubId);
+      _pintarTituloModalInfo(
+        titulo,
+        window.Renderizadores.obtenerLigaNombreCorta(_ligaNavActual),
+        "info-liga-formato",
+        _ligaNavActual,
+        window.Renderizadores.obtenerFormatoLigaTexto(_ligaNavActual)
+      );
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Superliga", "info-superliga-formato", null,
+        window.Renderizadores.obtenerFormatoSuperligaTexto()
+      );
       window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';

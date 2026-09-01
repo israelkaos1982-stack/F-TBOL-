@@ -1026,10 +1026,10 @@ button { font-family: inherit; cursor: pointer; }
   min-width: 130px;
 }
 .clasificacion-pts { font-weight: 900; color: var(--text-hi); }
-.clasificacion-fila--activo {
-  background: rgba(57, 255, 106, 0.1);
-}
-.clasificacion-fila--activo .clasificacion-equipo,
+/* La fila "TÚ" (petición usuario) NUNCA lleva un fondo propio — el
+   fondo de esa fila es SIEMPRE el de su ZONA por posición (.liga1ref-
+   zona-*/.superliga-zona-*, o ninguno si no está en ninguna zona),
+   igual que cualquier otra fila. Solo el TEXTO se marca en verde. */
 .clasificacion-fila--activo .clasificacion-pts { color: var(--neon); }
 .clasificacion-tag {
   display: inline-block;
@@ -1086,6 +1086,9 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.2px;
 }
 .liga1ref-editar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--line);
   background: var(--bg-3);
   color: var(--text-hi);
@@ -1128,10 +1131,11 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--easports { background: rgba(255, 59, 92, 0.14); border-color: rgba(255, 59, 92, 0.4); color: var(--accent-2); }
 .liga-tab-box--1ref { background: var(--bg-3); border-color: var(--line); color: var(--text-hi); }
 
-/* Fila del título de la liga ACTIVA — ℹ️ (si hay reglas) a la
-   izquierda, título centrado, ✏️ a la derecha. Ya NO lleva la leyenda
-   (bajó debajo de la tabla) — la clasificación sube y se ve alguna
-   fila más sin hacer scroll (petición usuario). */
+/* Fila del título de la liga ACTIVA — título centrado, 📌+✏️ juntos a
+   la derecha (la ℹ️ ya no vive aquí, ver .club-modal-title-btn más
+   abajo). Ya NO lleva la leyenda (bajó debajo de la tabla) — la
+   clasificación sube y se ve alguna fila más sin hacer scroll
+   (petición usuario). */
 .liga1ref-titulo-row {
   display: flex;
   align-items: center;
@@ -1149,39 +1153,37 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.liga1ref-titulo-spacer { width: 24px; flex-shrink: 0; }
+/* Ancho = 📌+✏️ juntos (24px + 4px + 24px), para que el título quede
+   centrado de verdad entre un lado vacío y el otro con los 2 botones. */
+.liga1ref-titulo-spacer { width: 52px; flex-shrink: 0; }
+.liga1ref-titulo-der { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
-/* 📌 debajo del título — "esta ES la liga fijada del club" (texto suelto)
-   o "fijarla" (botón, PIN 646) cuando se está mirando otra división. */
-.liga1ref-division-sub { text-align: center; margin: -6px 0 12px; }
-.liga1ref-division-sub--ok {
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.3px;
-  color: var(--text-lo);
-  opacity: 0.75;
+/* 📌 junto al ✏️ — insignia fija (no clicable) cuando ESTA es la
+   división guardada del club, o botón (PIN 646) para fijarla cuando se
+   está mirando otra por curiosidad (petición usuario: que no ocupe su
+   propia fila aparte, que vaya junto al lápiz). */
+.liga1ref-pin-badge {
+  background: rgba(255, 122, 41, 0.16);
+  border-color: rgba(255, 122, 41, 0.5);
+  cursor: default;
 }
-.liga1ref-division-btn {
-  border: 1px dashed var(--neon-soft);
+.liga1ref-pin-btn {
   background: transparent;
+  border-style: dashed;
+  border-color: var(--neon-soft);
   color: var(--neon-soft);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
 }
-.liga1ref-division-btn:hover { background: rgba(57, 255, 106, 0.1); }
+.liga1ref-pin-btn:hover { background: rgba(57, 255, 106, 0.1); }
 
-/* ℹ️ más llamativo (petición usuario: "muy fea y cero llamativa") —
-   NO se mueve de sitio (sigue en su fila propia, nunca junto a la ✕
-   de cerrar arriba a la derecha, eso es harina de otro costal). Más
-   grande, brillo azul con pulso suave (CSS puro, 0 imágenes). */
+/* ℹ️ llamativa (petición usuario) — más pequeña que la 1ª versión
+   (-15%): brillo azul con pulso suave (CSS puro, 0 imágenes). Ahora
+   vive DENTRO del título del propio modal (.club-modal-title-btn),
+   nunca junto a la ✕ de cerrar. */
 .liga1ref-info-btn {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  font-size: 12px;
   background: radial-gradient(circle at 32% 28%, rgba(150, 210, 255, 0.95), rgba(59, 167, 255, 0.3) 72%);
   border-color: rgba(150, 210, 255, 0.75);
   color: #0b1a2b;
@@ -1198,9 +1200,20 @@ button { font-family: inherit; cursor: pointer; }
   50% { box-shadow: 0 0 15px rgba(59, 167, 255, 0.85), inset 0 0 4px rgba(255, 255, 255, 0.6); }
 }
 
-/* Superliga no tiene ✏️ (nada que pegar, todo se auto-calcula) — el ℹ️
-   va solo, alineado a la derecha, mismo estilo que en Liga 1ª REF. */
-.superliga-info-row { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+/* Título del modal como botón "ℹ️ <nombre>" — Liga 1ª REF/Superliga
+   (js/main.js::_pintarTituloModalInfo). Mismo look que el texto plano
+   de siempre, solo que clicable; el icono ℹ️ es .liga1ref-info-btn. */
+.club-modal-title-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: inherit;
+  font: inherit;
+}
 
 /* Leyenda — ahora vive DEBAJO de la tabla, con espacio propio (no
    pegada al final) y texto más legible (antes 9.5px/gris apagado).
@@ -1221,13 +1234,17 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-leyenda-grid--europa { grid-template-rows: repeat(3, auto); }
 
 /* Superliga — los 3 items (Campeón/Subcampeón/Farolillo) SIEMPRE en
-   una sola fila horizontal, nunca 2+1. Letra más pequeña que la
-   rejilla 2x2 de arriba para que "Subcampeón" quepa sin desbordar. */
+   una sola fila horizontal, nunca 2+1, y centrados (no pegados a la
+   izquierda de su columna). Letra algo más grande que la 1ª versión,
+   sigue por debajo de la rejilla 2x2 de arriba para que "Subcampeón"
+   quepa sin desbordar. */
 .liga1ref-leyenda-grid--superliga {
   grid-template-columns: repeat(3, 1fr);
+  justify-items: center;
   gap: 6px 8px;
-  font-size: 9.5px;
+  font-size: 10.5px;
 }
+.liga1ref-leyenda-grid--superliga span { text-align: center; }
 
 /* Clasificación de Liga 1ª REF/2ª REF/Hypermotion/Ea Sports "más
    amplia" (petición usuario) — texto un poco más grande y filas un

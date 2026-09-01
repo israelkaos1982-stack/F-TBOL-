@@ -640,6 +640,33 @@
     return rango[0] + (span > 0 ? _hashStr(nombre) % (span + 1) : 0);
   }
 
+  // Distancia de edición (Levenshtein) clásica — solo se usa contra los
+  // ~59 nombres de data/rivales_reales.json (nunca contra los catálogos
+  // grandes de equipos IA), así que el coste es insignificante.
+  function _distanciaEdicion(a, b) {
+    var m = a.length, n = b.length;
+    var prev = [];
+    for (var j = 0; j <= n; j++) prev[j] = j;
+    for (var i = 1; i <= m; i++) {
+      var cur = [i];
+      for (var k = 1; k <= n; k++) {
+        var costo = a.charAt(i - 1) === b.charAt(k - 1) ? 0 : 1;
+        cur[k] = Math.min(prev[k] + 1, cur[k - 1] + 1, prev[k - 1] + costo);
+      }
+      prev = cur;
+    }
+    return prev[n];
+  }
+
+  // Un mismo club REAL debe resolver SIEMPRE al mismo escudo/colores/
+  // alias, lo teclee el admin donde lo teclee (Liga, Copa, cualquier
+  // torneo) — aunque se le cuele una errata de 1-2 letras al escribirlo
+  // a mano en el Calendario extra (ej. "Real Zargoza" en vez de "Real
+  // Zaragoza"). Match exacto -> substring (ya existía) -> por último,
+  // erratas de hasta 2 caracteres, SOLO para nombres de 6+ letras y
+  // SOLO si hay un único candidato más cercano (si dos claves distintas
+  // quedan igual de cerca — ej. "villarreal"/"villarreal b" — no se
+  // adivina, se deja sin resolver antes que confundir 2 equipos reales).
   function _buscarRivalReal(norm) {
     if (!_rivalesRealesMap) return null;
     if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
@@ -647,6 +674,17 @@
     for (var i = 0; i < claves.length; i++) {
       var k = claves[i];
       if (norm.length > 2 && (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1)) return _rivalesRealesMap[k];
+    }
+    if (norm.length >= 6) {
+      var mejor = null, mejorDist = 3, empatado = false;
+      for (var j = 0; j < claves.length; j++) {
+        var d = _distanciaEdicion(norm, claves[j]);
+        if (d <= 2) {
+          if (d < mejorDist) { mejorDist = d; mejor = claves[j]; empatado = false; }
+          else if (d === mejorDist) { empatado = true; }
+        }
+      }
+      if (mejor && !empatado) return _rivalesRealesMap[mejor];
     }
     return null;
   }
@@ -728,7 +766,13 @@
       if (real) {
         _sinteticosExtra[id] = {
           id: id,
-          nombre: nombre,
+          // Nombre CANÓNICO del catálogo, no el texto tal cual lo tecleó
+          // el admin — si se coló una errata ("Real Zargoza" en vez de
+          // "Real Zaragoza"), el club real ya se encontró vía
+          // _buscarRivalReal (match exacto/substring/errata); mostrar su
+          // nombre real es lo que garantiza que el MISMO club se vea
+          // igual (nombre/escudo/colores/alias) esté donde esté escrito.
+          nombre: real.nombre,
           siglas: real.siglas,
           colorPrimario: real.colorPrimario,
           colorSecundario: real.colorSecundario,
@@ -2735,10 +2779,11 @@
   // pudiendo pulsar el botón y editarlo (ver el handler de
   // "alias-efootball" más abajo): esa edición se guarda por dispositivo
   // (Estado.guardarAliasEfootball) y SIEMPRE gana sobre este valor de
-  // fábrica. `_rivalesRealesMap` está keyed por el mismo `clave`
-  // normalizado que usa este alias.
+  // fábrica. Pasa por `_buscarRivalReal` (no un lookup exacto directo)
+  // para heredar la MISMA tolerancia a erratas que ya usan escudo/
+  // colores/poder — un club real resuelve igual esté como esté escrito.
   function _aliasEfootballDefault(clave) {
-    var r = clave && _rivalesRealesMap && _rivalesRealesMap[clave];
+    var r = clave && _buscarRivalReal(clave);
     return (r && r.alias) || "";
   }
   function _previaAliasHTML(equipo, lado) {

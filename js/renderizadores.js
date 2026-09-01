@@ -1282,6 +1282,26 @@
     );
   }
 
+  // Aviso/botón 📌 debajo del título — cada club tiene UNA división fija
+  // (Estado.obtenerDivisionClub, "1ref" por defecto) que es la que abre
+  // su tarjeta de menú "Liga 1ª REF". Al navegar aquí con las cajas de
+  // color se puede BROWSEAR cualquiera de las 4 sin cambiar nada — solo
+  // se fija la división del club si el admin pulsa este botón (PIN 646),
+  // así un ascenso/descenso real no se confunde con "estoy mirando otra
+  // liga por curiosidad".
+  function _ligaDivisionSubHTML(ligaId, idClubActivo) {
+    if (!idClubActivo || !window.Estado) return "";
+    var actual = window.Estado.obtenerDivisionClub(idClubActivo);
+    if (actual === ligaId) {
+      return '<div class="liga1ref-division-sub liga1ref-division-sub--ok">📌 Liga de este club</div>';
+    }
+    return (
+      '<div class="liga1ref-division-sub">' +
+      '<button type="button" class="liga1ref-division-btn" data-accion="fijar-division-club" data-liga-id="' +
+      ligaId + '" data-club-id="' + idClubActivo + '">📌 Fijar como su liga (PIN)</button></div>'
+    );
+  }
+
   // Leyenda en rejilla 2x2 — vive DEBAJO de la tabla (petición usuario),
   // sin flechas ⬆️/⬇️ (el orden/color de cada zona ya la distingue). Ea
   // Sports usa 6 zonas de estilo europeo en vez de ascenso/descenso.
@@ -1387,6 +1407,7 @@
       // hacer scroll (petición usuario).
       contenedor.insertAdjacentHTML("beforeend", _ligaTabBoxesHTML(ligaId, idClubActivo));
       contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
+      contenedor.insertAdjacentHTML("beforeend", _ligaDivisionSubHTML(ligaId, idClubActivo));
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];

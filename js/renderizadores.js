@@ -2068,7 +2068,7 @@
     "",
     "🏁RESOLUCION CLASIFICACIÓN:",
     "🟣1º Es Campeón y busca rival digno para derby decente",
-    "🟢2º Subcampeón",
+    "🟨2º Subcampeón",
     "🔴6º Farolillo rojo y necesita ajustes o un plan mejor."
   ].join("\n");
   function obtenerFormatoSuperligaTexto() {

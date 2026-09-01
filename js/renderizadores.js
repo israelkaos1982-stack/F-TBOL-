@@ -1187,7 +1187,188 @@
     return filas.slice(0, 15);
   }
 
-  function renderizarLiga1RefClasificacion(contenedorId, idClubActivo) {
+  // ============================================================
+  // 3c-ter-bis. NAVEGACIÓN entre las 4 divisiones — 2ª REF / 1ª REF /
+  // Hypermotion / Ea Sports. Solo 1ª REF tiene "batidora" (fusiona con
+  // los partidos reales de los clubes humanos, ver
+  // calcularLiga1RefCombinada más arriba) — las otras 3 son 100% texto
+  // libre que pega el admin (petición usuario: "el resto de
+  // estadísticas y clasificación te las doy yo manualmente texto"),
+  // mismo formato EXACTO que 1ª REF (parsearLiga1RefTexto/
+  // parsearLiga1RefStatTexto se reutilizan tal cual).
+  // Orden izquierda->derecha: 2ª REF · 1ª REF (central por defecto,
+  // igual que siempre) · Hypermotion (azul) · Ea Sports (rojo) — los
+  // mismos colores que ya llevan sus bordes de pestaña.
+  // ============================================================
+  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports"];
+  var LIGA_NAV_META = {
+    "2ref": { etiqueta: "🇪🇸 2ª REF", corta: "2ª REF", color: null, leyenda: "promocion" },
+    "1ref": { etiqueta: "🇪🇸 1ª REF", corta: "1ª REF", color: null, leyenda: "promocion" },
+    hypermotion: { etiqueta: "🇪🇸 Hypermotion", corta: "Hypermotion", color: "#3ba7ff", leyenda: "promocion" },
+    easports: { etiqueta: "🇪🇸 Ea Sports", corta: "Ea Sports", color: "#ff3b5c", leyenda: "europa" }
+  };
+
+  // El texto EXACTO del ℹ️ (petición usuario, verbatim) — solo aplica a
+  // 1ª REF (las reglas de ascenso/descenso a Hypermotion/2ª RFEF son
+  // suyas). Las otras 3 ligas no muestran el botón ℹ️ todavía (no hay
+  // texto de reglas dictado para ellas).
+  var FORMATO_LIGA_1REF_TEXTO = [
+    "📋FORMATO LIGA:",
+    "Liga regular corta de 16 equipos a vuelta única (15 jornadas cada club)",
+    "",
+    " * Duración: 15 jornadas por equipo a partido único.",
+    " * Reparto de localía: Cada club juega 7 u 8 partidos como local y 7 u 8 como visitante.",
+    "",
+    "⚖️CRITERIOS DE DESEMPATE:",
+    "(Aplicados en estricto orden de prioridad en caso de igualdad de puntos)",
+    " * Puntos totales.",
+    " * Mayor diferencia de goles general (Goles marcados menos goles encajados).",
+    " * Mayor cantidad de goles marcados.",
+    " * Menor cantidad de goles encajados.",
+    " * Resultado del partido directo entre los equipos involucrados.",
+    "",
+    "🏁RESOLUCIÓN CLASIFICACIÓN:",
+    " 🟦 Puestos 1º al 4º: Ascenso directo a Liga Hypermotion.",
+    "",
+    " 🟨Puesto 5º: Promoción de ascenso en eliminatoria a ida y vuelta contra el 12º clasificado de Liga Hypermotion.",
+    "",
+    " ⬜️Puestos 6º al 11º: Permanencia asegurada en la categoría sin disputar fases adicionales.",
+    "",
+    "🟫 Puesto 12º: Promoción de permanencia en eliminatoria a ida y vuelta contra el 5º clasificado de 2ª RFEF.",
+    "",
+    "🟥 Puestos 13º al 16º: Descenso directo a 2ª RFEF."
+  ].join("\n");
+
+  function obtenerFormatoLigaTexto(ligaId) {
+    return ligaId === "1ref" ? FORMATO_LIGA_1REF_TEXTO : "";
+  }
+
+  // Franja de flechas arriba de la clasificación — solo una liga
+  // "central" a la vez, ⬅️/➡️ saltan a la adyacente en LIGA_NAV_ORDEN.
+  // El texto de la flecha lleva el nombre de la liga DESTINO (no
+  // "Anterior/Siguiente" genérico) para que Hypermotion/Ea Sports
+  // salgan coloreadas de azul/rojo tal como pidió el usuario, sin
+  // duplicar un enlace aparte.
+  function _ligaNavHeaderHTML(ligaId, idClubActivo) {
+    var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
+    if (idx === -1) idx = LIGA_NAV_ORDEN.indexOf("1ref");
+    var prevId = idx > 0 ? LIGA_NAV_ORDEN[idx - 1] : null;
+    var nextId = idx < LIGA_NAV_ORDEN.length - 1 ? LIGA_NAV_ORDEN[idx + 1] : null;
+    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+
+    var izq = prevId
+      ? '<button type="button" class="liga-nav-flecha liga-nav-flecha--izq" data-accion="liga-nav-ir" data-liga-id="' +
+        prevId + '" data-club-id="' + (idClubActivo || "") + '"' +
+        (LIGA_NAV_META[prevId].color ? ' style="color:' + LIGA_NAV_META[prevId].color + '"' : "") + ">⬅️ " +
+        escapeHTML(LIGA_NAV_META[prevId].corta) + "</button>"
+      : '<span class="liga-nav-flecha liga-nav-flecha--vacia"></span>';
+
+    var der = nextId
+      ? '<button type="button" class="liga-nav-flecha liga-nav-flecha--der" data-accion="liga-nav-ir" data-liga-id="' +
+        nextId + '" data-club-id="' + (idClubActivo || "") + '"' +
+        (LIGA_NAV_META[nextId].color ? ' style="color:' + LIGA_NAV_META[nextId].color + '"' : "") + ">" +
+        escapeHTML(LIGA_NAV_META[nextId].corta) + " ➡️</button>"
+      : '<span class="liga-nav-flecha liga-nav-flecha--vacia"></span>';
+
+    return (
+      '<div class="liga-nav-bar">' + izq +
+      '<span class="liga-nav-actual"' + (meta.color ? ' style="color:' + meta.color + '"' : "") + ">" +
+      escapeHTML(meta.etiqueta) + "</span>" + der + "</div>"
+    );
+  }
+
+  // Leyenda en rejilla 2x2 (petición usuario, sustituye a la línea
+  // horizontal única) — Ea Sports usa 6 zonas de estilo europeo en vez
+  // de ascenso/descenso.
+  function _ligaLeyendaHTML(ligaId) {
+    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+    if (meta.leyenda === "europa") {
+      return (
+        '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--europa">' +
+        "<span>🟦 Champions</span><span>🟪 Previa</span>" +
+        "<span>🟧 E.League</span><span>🟩 Conference</span>" +
+        "<span>🟥 Descenso</span><span>🟫 Promoción</span></div>"
+      );
+    }
+    return (
+      '<div class="liga1ref-leyenda-grid">' +
+      "<span>🟦 Ascenso</span><span>🟫 Promoción ⬇️</span>" +
+      "<span>🟨 Promoción ⬆️</span><span>🟥 Descenso</span></div>"
+    );
+  }
+
+  // Zonas de la clasificación de Ea Sports (estilo europeo): 1-4
+  // Champions, 5 Previa, 6-7 Europa League, 8 Conference, promoción de
+  // descenso el 4º empezando por el final, descenso los últimos 3 —
+  // reparto provisional (editable aquí si el usuario da otro reparto
+  // exacto), reutiliza las clases de color ya definidas en CSS.
+  function _ligaEuropaZona(pos, total) {
+    if (pos <= 4) return "champions";
+    if (pos === 5) return "previa";
+    if (pos === 6 || pos === 7) return "eleague";
+    if (pos === 8) return "conference";
+    if (total && pos === total - 3) return "promo-descenso";
+    if (total && pos > total - 3) return "descenso";
+    return "";
+  }
+
+  // Filas de una liga EXTRA (2ª REF / Hypermotion / Ea Sports) — 100%
+  // texto libre pegado por el admin, mismo parser que 1ª REF
+  // (parsearLiga1RefTexto), SIN fusión con partidos de ningún club
+  // humano (esas 3 competiciones no se juegan de verdad dentro de la
+  // app). Mismo criterio de orden que calcularLiga1RefCombinada.
+  function calcularLigaExtraFilas(ligaId) {
+    var texto = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
+    var filas = parsearLiga1RefTexto(texto).map(function (f) {
+      return {
+        nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+      };
+    });
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return filas;
+  }
+
+  // Construye el <tbody> de la tabla de clasificación — compartido por
+  // 1ª REF (filas de la batidora) y las 3 ligas extra (filas del texto
+  // pegado), solo cambia qué `filas`/zonaFn se le pasa.
+  function _construirTbodyClasificacion(filas, idClubActivo, zonaFn) {
+    var tbody = document.createElement("tbody");
+    filas.forEach(function (f, i) {
+      var pos = i + 1;
+      var dg = f.gf - f.gc;
+      // PG (partidos ganados) no se guarda aparte: PJ = PG+PE+PP
+      // siempre (cada partido suma exactamente 1 a PJ y a UNO solo de
+      // PG/PE/PP), así que se deriva aquí sin tocar el cálculo ni el
+      // texto pegado por el admin (que tampoco trae PG).
+      var pg = f.pj - f.pe - f.pp;
+      var zona = zonaFn(pos, filas.length);
+      var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
+      if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
+
+      var tr = document.createElement("tr");
+      tr.className = claseFila;
+      tr.innerHTML =
+        '<td class="clasificacion-pos">' + pos + "</td>" +
+        '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
+        (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+        '<td class="clasificacion-pts">' + f.pts + "</td>" +
+        "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+        "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
+        "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+      tbody.appendChild(tr);
+    });
+    return tbody;
+  }
+
+  function renderizarLiga1RefClasificacion(contenedorId, idClubActivo, ligaId) {
+    ligaId = ligaId || "1ref";
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
     contenedor.innerHTML = "";
@@ -1195,19 +1376,25 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _ligaNavHeaderHTML(ligaId, idClubActivo));
 
-      // Leyenda mini (los propios emoji de color hacen de swatch, sin CSS
-      // extra) a la izquierda del ✏️ — sustituye al título "1ª REF" (ya se
-      // ve arriba del modal) y a la leyenda larga que había abajo.
+      // Leyenda en rejilla 2x2 (los propios emoji de color hacen de
+      // swatch, sin CSS extra) + ℹ️ (solo 1ª REF, reglas dictadas) + ✏️.
       var header = document.createElement("div");
       header.className = "liga1ref-header";
-      header.innerHTML =
-        '<span class="liga1ref-leyenda-mini">🟦Ascenso 🟨Promoción 🟥Descenso 🟫Promoción</span>' +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-club-id="' +
-        (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
+      var botones = '<div class="liga1ref-header-btns">' +
+        (obtenerFormatoLigaTexto(ligaId)
+          ? '<button type="button" class="liga1ref-editar-btn" data-accion="info-liga-formato" data-liga-id="' +
+            ligaId + '" aria-label="Formato y reglas">ℹ️</button>'
+          : "") +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
+        ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button></div>';
+      header.innerHTML = _ligaLeyendaHTML(ligaId) + botones;
       contenedor.appendChild(header);
 
-      var filas = calcularLiga1RefCombinada(datos);
+      var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
+      var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+      var zonaFn = metaZona.leyenda === "europa" ? _ligaEuropaZona : _liga1RefZona;
 
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
@@ -1219,34 +1406,7 @@
         tablaEl.innerHTML =
           "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
           "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
-        var tbody = document.createElement("tbody");
-
-        filas.forEach(function (f, i) {
-          var pos = i + 1;
-          var dg = f.gf - f.gc;
-          // PG (partidos ganados) no se guarda aparte: PJ = PG+PE+PP
-          // siempre (cada partido suma exactamente 1 a PJ y a UNO solo
-          // de PG/PE/PP — ver _liga1RefResultadoLado), así que se
-          // deriva aquí sin tocar el cálculo ni el texto pegado por el
-          // admin (que tampoco trae PG, solo Pts/PJ/PE/PP/G+/G-).
-          var pg = f.pj - f.pe - f.pp;
-          var zona = _liga1RefZona(pos, filas.length);
-          var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
-          if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
-
-          var tr = document.createElement("tr");
-          tr.className = claseFila;
-          tr.innerHTML =
-            '<td class="clasificacion-pos">' + pos + "</td>" +
-            '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
-            (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
-            '<td class="clasificacion-pts">' + f.pts + "</td>" +
-            "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
-            "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
-            "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
-          tbody.appendChild(tr);
-        });
-        tablaEl.appendChild(tbody);
+        tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, zonaFn));
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       }
@@ -1259,9 +1419,10 @@
       var statsGrid = document.createElement("div");
       statsGrid.className = "liga1ref-stats-grid";
       statsGrid.innerHTML = LIGA1REF_STATS.map(function (s) {
-        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-liga1ref-stat" data-club-id="' +
-          (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
-          s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-liga1ref-stat" data-liga-id="' +
+          ligaId + '" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + s.key +
+          '"><span class="liga1ref-stat-box-icono">' + s.icono + '</span><span class="liga1ref-stat-box-label">' +
+          escapeHTML(s.label) + "</span></button>";
       }).join("");
       contenedor.appendChild(statsGrid);
     });
@@ -1270,7 +1431,22 @@
   // Ranking (top 15) de UNA categoría — pinta DENTRO del mismo contenedor
   // que la clasificación, con un botón "← Volver" para regresar sin
   // cerrar el modal (mismo patrón que el editor inline de la tabla).
-  function renderizarLiga1RefStatDetalle(contenedorId, idClubActivo, categoria) {
+  // Ranking de UNA categoría de una liga EXTRA — 100% texto libre (sin
+  // auto-suma humana, mismo motivo que calcularLigaExtraFilas), mismo
+  // orden top-15 y misma excepción de Zamora ascendente que 1ª REF.
+  function calcularLigaExtraStatFilas(ligaId, categoria) {
+    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
+    var texto = window.Estado ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria) : "";
+    var filas = parsearLiga1RefStatTexto(texto);
+    filas.sort(function (a, b) {
+      var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
+      return diff || a.nombre.localeCompare(b.nombre);
+    });
+    return filas.slice(0, 15);
+  }
+
+  function renderizarLiga1RefStatDetalle(contenedorId, idClubActivo, categoria, ligaId) {
+    ligaId = ligaId || "1ref";
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
     var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
@@ -1284,10 +1460,10 @@
       var header = document.createElement("div");
       header.className = "liga1ref-header";
       header.innerHTML =
-        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-liga1ref" data-club-id="' +
-        (idClubActivo || "") + '">← Volver</button>' +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-stat-inline" data-club-id="' +
-        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-liga1ref" data-liga-id="' +
+        ligaId + '" data-club-id="' + (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-stat-inline" data-liga-id="' +
+        ligaId + '" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
       contenedor.appendChild(header);
 
       var titulo = document.createElement("p");
@@ -1295,7 +1471,7 @@
       titulo.textContent = meta.icono + " " + meta.label;
       contenedor.appendChild(titulo);
 
-      var filas = calcularLiga1RefStatsCombinado(datos, categoria);
+      var filas = ligaId === "1ref" ? calcularLiga1RefStatsCombinado(datos, categoria) : calcularLigaExtraStatFilas(ligaId, categoria);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -1334,7 +1510,8 @@
   // Editor inline (PIN 646, ✏️ dentro de la propia pantalla) — pinta
   // DENTRO del mismo contenedor que la tabla, así Guardar/Cancelar pueden
   // volver a la vista de clasificación sin cerrar el modal entero.
-  function pintarEditorLiga1Ref(contenedor, idClubActivo) {
+  function pintarEditorLiga1Ref(contenedor, idClubActivo, ligaId) {
+    ligaId = ligaId || "1ref";
     contenedor.innerHTML = "";
 
     var nota = document.createElement("p");
@@ -1342,8 +1519,8 @@
     nota.textContent =
       "Pega la tabla completa, una línea por equipo: «Pos Nombre Pts PJ PE PP " +
       "G+ G- DG» separado por espacios, tal cual se copia de otro sitio (Pos y " +
-      "DG son opcionales, se recalculan solos). Es una clasificación ÚNICA — " +
-      "la ven las 6 cajas igual.";
+      "DG son opcionales, se recalculan solos). Es una clasificación ÚNICA de " +
+      (LIGA_NAV_META[ligaId] ? LIGA_NAV_META[ligaId].corta : "esta liga") + " — la ven las 6 cajas igual.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -1351,31 +1528,36 @@
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 14;
     textarea.placeholder = "1  Real Zaragoza  9  3  0  0  10  0  10\n2  SD Huesca      6  3  0  1  5   2   3";
-    textarea.value = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
+    textarea.value = window.Estado
+      ? (ligaId === "1ref" ? window.Estado.obtenerLiga1RefTexto() : window.Estado.obtenerLigaExtraTexto(ligaId))
+      : "";
     contenedor.appendChild(textarea);
 
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref" data-liga-id="' + ligaId + '" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref" data-liga-id="' + ligaId + '" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
   // Editor inline de UNA categoría de estadística (PIN 646) — mismo
   // patrón exacto que pintarEditorLiga1Ref, pinta dentro del contenedor
   // del ranking para poder Guardar/Cancelar sin cerrar el modal.
-  function pintarEditorLiga1RefStat(contenedor, idClubActivo, categoria) {
+  function pintarEditorLiga1RefStat(contenedor, idClubActivo, categoria, ligaId) {
+    ligaId = ligaId || "1ref";
     var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
     if (!meta) return;
     contenedor.innerHTML = "";
 
     var nota = document.createElement("p");
     nota.className = "admin-nota";
-    nota.textContent =
-      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
-      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
-      "humanas se suman SOLOS al añadir eventos en un partido — no hace falta escribirlos aquí.";
+    nota.textContent = ligaId === "1ref"
+      ? ("Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+        "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+        "humanas se suman SOLOS al añadir eventos en un partido — no hace falta escribirlos aquí.")
+      : ("Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+        "» (el Nº inicial es opcional, se recalcula solo). 100% texto libre.");
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -1383,14 +1565,16 @@
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 14;
     textarea.placeholder = meta.placeholder || "1º Carlos Fernández - CD Mirandés  7\n2º Ander Herrera - Real Zaragoza  6";
-    textarea.value = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
+    textarea.value = window.Estado
+      ? (ligaId === "1ref" ? window.Estado.obtenerLiga1RefStatTexto(categoria) : window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria))
+      : "";
     contenedor.appendChild(textarea);
 
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref-stat" data-liga-id="' + ligaId + '" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref-stat" data-liga-id="' + ligaId + '" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -3694,6 +3878,7 @@
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
+    obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarCopaDelRey: renderizarCopaDelRey,

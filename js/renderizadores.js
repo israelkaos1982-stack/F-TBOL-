@@ -2142,7 +2142,7 @@
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
       contenedor.insertAdjacentHTML("beforeend",
-        '<div class="liga1ref-leyenda-grid"><span>🟪 Campeón</span><span>🟨 Subcampeón</span><span>🟥 Farolillo</span></div>');
+        '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--superliga"><span>🟪 Campeón</span><span>🟨 Subcampeón</span><span>🟥 Farolillo</span></div>');
 
       // Calendario — SOLO los 15 partidos del club activo (5 rivales x 3),
       // nunca los 45 de toda la Superliga ("para no subir KB", petición

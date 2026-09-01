@@ -1740,6 +1740,31 @@
     );
   }
 
+  // Texto EXACTO del ℹ️ de Copa del Rey (petición usuario, verbatim) —
+  // mismo overlay propio que Liga 1ª REF/Superliga (ver
+  // js/main.js::mostrarInfoCopa/_abrirInfoOverlay).
+  var FORMATO_COPA_TEXTO = [
+    "📋FORMATO COPA:",
+    "64 Clubes participan en 7 eliminatorias desde 1/64 de final hasta la final.",
+    "",
+    "👥️FORMATO ELIMINATORIAS:",
+    "1/64  partido único con prórroga y penaltis .",
+    "Dieciseisavos partido único con prórroga y penaltis.",
+    "Octavos partido único con prórroga y penaltis .",
+    "Cuartos partido único con prórroga y penaltis .",
+    "Semis partidos a ida y vuelta con gol doble fuera de casa, en caso de empate se reinicia el tercer partido con gol de oro.",
+    "Final partido único con prórroga y penaltis ",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan cono Local",
+    "",
+    "🏁RESOLUCIÓN  COPA:",
+    " 🥈 EL Campeón y Subcampeon juegan la Recopa de Europa la próxima temporada."
+  ].join("\n");
+  function obtenerFormatoCopaTexto() {
+    return FORMATO_COPA_TEXTO;
+  }
+
   function renderizarCopaDelRey(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -1749,9 +1774,12 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
+      // Antes "🏆 Estado de cada club en el cuadro" (texto plano, letra
+      // diminuta). Ahora reusa LA MISMA rejilla/fuente de la leyenda de
+      // Liga/Superliga (petición usuario), con 2 items horizontales.
       var header = document.createElement("div");
-      header.className = "liga1ref-header";
-      header.innerHTML = '<span class="liga1ref-leyenda-mini">🏆 Estado de cada club en el cuadro</span>';
+      header.className = "liga1ref-leyenda-grid liga1ref-leyenda-grid--copa";
+      header.innerHTML = "<span>🏆 Eliminatorias Copa</span><span>🥈 Recopa Finalistas</span>";
       contenedor.appendChild(header);
 
       // El club activo va primero (es el que se acaba de abrir); el resto,
@@ -3916,6 +3944,7 @@
     obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
     obtenerLigaNombreCorta: obtenerLigaNombreCorta,
     obtenerFormatoSuperligaTexto: obtenerFormatoSuperligaTexto,
+    obtenerFormatoCopaTexto: obtenerFormatoCopaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarCopaDelRey: renderizarCopaDelRey,

@@ -2069,7 +2069,7 @@
     "🏁RESOLUCION CLASIFICACIÓN:",
     "🟣1º Es Campeón y busca rival digno para derby decente",
     "🟢2º Subcampeón",
-    "🔴6º Farolillp rojo y necesita ajustes o un plan mejor."
+    "🔴6º Farolillo rojo y necesita ajustes o un plan mejor."
   ].join("\n");
   function obtenerFormatoSuperligaTexto() {
     return FORMATO_SUPERLIGA_TEXTO;
@@ -3704,17 +3704,21 @@
     if (!contenedor) return;
     contenedor.innerHTML = "";
 
-    var raw = "";
-    try { raw = localStorage.getItem("ef7_estado_liga_v1") || ""; } catch (err) { /* localStorage no disponible */ }
-    var bytes = new Blob([raw]).size;
-    var kb = (bytes / 1024).toFixed(2);
+    // Espacio REAL usado por la app: suma TODAS las claves "ef7_*" (no
+    // solo resultados/partidosGenerados) — ver Estado.calcularEspacioTotal.
+    // Antes esto medía solo esa clave sola, así que casi siempre salía un
+    // valor mínimo tipo "0.05 KB" aunque hubiera bastante más guardado
+    // (calendarios, plantillas, edición del admin...): el número era real,
+    // pero no representaba el total.
+    var espacio = window.Estado ? window.Estado.calcularEspacioTotal() : { bytes: 0, nClaves: 0 };
+    var kb = (espacio.bytes / 1024).toFixed(2);
 
     var estado = window.Estado ? window.Estado.cargarEstado() : { resultados: {}, partidosGenerados: {} };
     var nPartidos = Object.keys(estado.resultados || {}).length;
     var nGenerados = Object.keys(estado.partidosGenerados || {}).length;
 
     var filas = [
-      { titulo: "Progreso guardado", sub: "clave ef7_estado_liga_v1", valor: kb + " KB" },
+      { titulo: "Espacio usado en total", sub: espacio.nClaves + " clave(s) guardadas (ef7_*)", valor: kb + " KB" },
       { titulo: "Partidos confirmados", sub: "resultados guardados", valor: String(nPartidos) },
       { titulo: "Partidos de desempate generados", sub: "terceros partidos de eliminatoria", valor: String(nGenerados) }
     ];

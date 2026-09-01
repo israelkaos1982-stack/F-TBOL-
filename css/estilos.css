@@ -1122,14 +1122,19 @@ button { font-family: inherit; cursor: pointer; }
    descenso — así que con 16 equipos: 13-16 descenso, 12 promo-descenso.
    Va DESPUÉS de .clasificacion-fila--activo a propósito — si el club activo
    cae en una zona de color, la zona manda (es la info más relevante). */
+/* El NOMBRE del equipo (.clasificacion-equipo) se queda SIEMPRE en
+   blanco (var(--text-hi), su color base — ver la regla de arriba) en
+   CUALQUIER zona: solo el fondo de la fila lleva el color de la zona,
+   el texto no. Petición usuario: "el texto de los equipos todos en
+   blanco". # y Pts SÍ siguen tintados por zona (no se tocan) — toda
+   tabla de clasificación NUEVA con zonas de color hereda este mismo
+   criterio (fondo tintado, nombre siempre blanco). */
 .liga1ref-zona-ascenso { background: rgba(59, 167, 255, 0.14); }
 .liga1ref-zona-ascenso .clasificacion-pos,
-.liga1ref-zona-ascenso .clasificacion-equipo,
 .liga1ref-zona-ascenso .clasificacion-pts { color: var(--info); }
 
 .liga1ref-zona-promo-ascenso { background: rgba(241, 196, 15, 0.12); }
 .liga1ref-zona-promo-ascenso .clasificacion-pos,
-.liga1ref-zona-promo-ascenso .clasificacion-equipo,
 .liga1ref-zona-promo-ascenso .clasificacion-pts { color: var(--gold); }
 
 /* Descenso — reusa el rojo "peligro" ya definido en :root (--accent-2,
@@ -1139,32 +1144,37 @@ button { font-family: inherit; cursor: pointer; }
    un significado distinto que no debe cambiar con este ajuste. */
 .liga1ref-zona-descenso { background: rgba(255, 59, 92, 0.14); }
 .liga1ref-zona-descenso .clasificacion-pos,
-.liga1ref-zona-descenso .clasificacion-equipo,
 .liga1ref-zona-descenso .clasificacion-pts { color: var(--accent-2); }
 
 .liga1ref-zona-promo-descenso { background: rgba(168, 113, 74, 0.18); }
 .liga1ref-zona-promo-descenso .clasificacion-pos,
-.liga1ref-zona-promo-descenso .clasificacion-equipo,
 .liga1ref-zona-promo-descenso .clasificacion-pts { color: var(--brown); }
 
 /* ---------- SUPERLIGA — clasificación (🟪 Campeón / 🟨 Subcampeón /
    🟥 Farolillo, solo los 3 puestos que pidió el usuario) — mismo patrón
    que .liga1ref-zona-*, va DESPUÉS de .clasificacion-fila--activo por el
-   mismo motivo (la zona manda si el club activo cae en ella). */
+   mismo motivo (la zona manda si el club activo cae en ella). Mismo
+   criterio de arriba: el nombre del equipo se queda blanco siempre,
+   solo # y Pts se tiñen. */
 .superliga-zona-campeon { background: rgba(139, 92, 246, 0.16); }
 .superliga-zona-campeon .clasificacion-pos,
-.superliga-zona-campeon .clasificacion-equipo,
 .superliga-zona-campeon .clasificacion-pts { color: var(--morado); }
 
 .superliga-zona-subcampeon { background: rgba(241, 196, 15, 0.12); }
 .superliga-zona-subcampeon .clasificacion-pos,
-.superliga-zona-subcampeon .clasificacion-equipo,
 .superliga-zona-subcampeon .clasificacion-pts { color: var(--gold); }
 
 .superliga-zona-farolillo { background: rgba(255, 59, 92, 0.14); }
 .superliga-zona-farolillo .clasificacion-pos,
-.superliga-zona-farolillo .clasificacion-equipo,
 .superliga-zona-farolillo .clasificacion-pts { color: var(--accent-2); }
+
+/* La fila del propio humano ("TÚ") sigue siempre en verde-blanco pálido,
+   NUNCA en blanco liso como el resto — aunque le toque caer en una zona
+   de color (Descenso, Promoción...). Va DESPUÉS de TODAS las reglas de
+   zona de arriba (misma especificidad, gana por orden) para que la zona
+   nunca pueda apagar este resalte — es la única fila que SIEMPRE debe
+   distinguirse a simple vista. */
+.clasificacion-fila--activo .clasificacion-equipo { color: #cdffdb; }
 
 /* Calendario del club activo dentro de la pantalla Superliga — mismo
    layout flex-column que #calendar-content (id reservado para el

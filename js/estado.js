@@ -548,17 +548,21 @@
   ];
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
+  function _menuClubDefault() {
+    return { orden: _menuClubIdsBuiltin(), personalizadas: {}, overridesFabrica: {}, ocultas: {} };
+  }
   function _cargarMenuClub(clubId) {
     try {
       var raw = localStorage.getItem(_menuClubKey(clubId));
       var ov = raw ? JSON.parse(raw) : null;
-      if (!ov) return { orden: _menuClubIdsBuiltin(), personalizadas: {}, overridesFabrica: {} };
+      if (!ov) return _menuClubDefault();
       if (!ov.orden) ov.orden = _menuClubIdsBuiltin();
       if (!ov.personalizadas) ov.personalizadas = {};
       if (!ov.overridesFabrica) ov.overridesFabrica = {};
+      if (!ov.ocultas) ov.ocultas = {}; // visibilidad por tarjeta (👁/🙈), independiente de icono/etiqueta
       return ov;
     } catch (err) {
-      return { orden: _menuClubIdsBuiltin(), personalizadas: {}, overridesFabrica: {} };
+      return _menuClubDefault();
     }
   }
   function _guardarMenuClub(clubId, ov) {
@@ -588,15 +592,24 @@
       if (builtinPorId[id]) {
         var override = ov.overridesFabrica[id];
         return Object.assign(
-          { esCustom: false, esFabricaEditada: !!override },
+          { esCustom: false, esFabricaEditada: !!override, oculta: !!ov.ocultas[id] },
           builtinPorId[id],
           override || {}
         );
       }
       var custom = ov.personalizadas[id];
       if (!custom) return null;
-      return Object.assign({ esCustom: true, id: id }, custom);
+      return Object.assign({ esCustom: true, id: id, oculta: !!ov.ocultas[id] }, custom);
     }).filter(Boolean);
+  }
+  // 👁/🙈 — oculta o muestra una tarjeta del menú SIN borrarla (de fábrica
+  // o añadida por el admin). Independiente de icono/etiqueta/orden: ni
+  // editarTarjetaMenuClub ni moverTarjetaMenuClub la tocan nunca.
+  function toggleVisibilidadTarjetaMenuClub(clubId, id) {
+    var ov = _cargarMenuClub(clubId);
+    if (ov.ocultas[id]) delete ov.ocultas[id];
+    else ov.ocultas[id] = true;
+    return _guardarMenuClub(clubId, ov);
   }
   function anadirTarjetaMenuClub(clubId, icono, etiqueta) {
     if (!etiqueta || !etiqueta.trim()) return null;
@@ -608,9 +621,8 @@
   }
   // Renombra/re-icona CUALQUIER tarjeta del menú, de fábrica o añadida por
   // el admin. Las de fábrica se guardan como override (nunca se toca
-  // MENU_CLUB_BUILTIN — el nombre/icono "de verdad" sigue disponible para
-  // restablecerTarjetaMenuClub); las custom se editan directamente porque
-  // su único origen de datos YA es `personalizadas`.
+  // MENU_CLUB_BUILTIN); las custom se editan directamente porque su único
+  // origen de datos YA es `personalizadas`.
   function editarTarjetaMenuClub(clubId, id, icono, etiqueta) {
     if (!etiqueta || !etiqueta.trim()) return false;
     var ov = _cargarMenuClub(clubId);
@@ -622,14 +634,6 @@
     } else {
       return false;
     }
-    return _guardarMenuClub(clubId, ov);
-  }
-  // Solo aplica a tarjetas de fábrica editadas — vuelve a su nombre/icono
-  // original sin afectar a su posición en el orden.
-  function restablecerTarjetaMenuClub(clubId, id) {
-    var ov = _cargarMenuClub(clubId);
-    if (!ov.overridesFabrica[id]) return false;
-    delete ov.overridesFabrica[id];
     return _guardarMenuClub(clubId, ov);
   }
   function moverTarjetaMenuClub(clubId, id, direccion) {
@@ -649,6 +653,7 @@
     var ov = _cargarMenuClub(clubId);
     ov.orden = ov.orden.filter(function (x) { return x !== id; });
     delete ov.personalizadas[id];
+    delete ov.ocultas[id];
     return _guardarMenuClub(clubId, ov);
   }
 
@@ -1666,9 +1671,9 @@
     obtenerMenuClub: obtenerMenuClub,
     anadirTarjetaMenuClub: anadirTarjetaMenuClub,
     editarTarjetaMenuClub: editarTarjetaMenuClub,
-    restablecerTarjetaMenuClub: restablecerTarjetaMenuClub,
     moverTarjetaMenuClub: moverTarjetaMenuClub,
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
+    toggleVisibilidadTarjetaMenuClub: toggleVisibilidadTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
     reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,

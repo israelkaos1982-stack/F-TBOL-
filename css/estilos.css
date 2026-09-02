@@ -860,15 +860,15 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
 }
 
-/* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar
-   menú, no aquí) + el ✏️ que edita el menú del club, agrupados a la
-   derecha de la cabecera. Solo el grupo entero lleva margin-left:auto
-   (empuja TODO el bloque a la derecha); el botón de dentro anula ese
-   auto-margin para no partir el hueco en dos. */
-.club-header-extras { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-.club-header-extras .club-header-editar { margin-left: 0; }
+/* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar menú,
+   no aquí). Ocupa TODO el hueco libre entre el nombre/mister (ancho
+   natural, a la izquierda) y el botón ✏️ (ancho natural, empujado al
+   borde derecho por su propio margin-left:auto) — al centrar su texto
+   dentro de ese hueco, el badge queda en el punto medio entre ambos en
+   vez de pegado al botón (petición usuario). */
 .club-valoracion-badge {
-  display: inline-flex;
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
   height: 30px;

@@ -557,10 +557,12 @@
     window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
   }
 
-  // ---------- 💼 Valoración del club (cabecera) ----------
+  // ---------- 💼 Valoración del club ----------
   // 2 números sueltos que el mánager teclea a mano (la suma real de
-  // objetivos la lleva él, "yo hago la suma manual") — sin PIN, es su
-  // propio progreso, igual que el nombre de la liga.
+  // objetivos la lleva él, "yo hago la suma manual"). El badge de la
+  // cabecera es solo lectura; se edita desde el ✏️ dentro de "Editar
+  // menú" (pintarEditorMenuClub) — sin PIN aparte, ya está detrás del
+  // candado que abre ese modal.
   function _fmtNumValoracion(n) {
     n = Number(n) || 0;
     return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
@@ -571,8 +573,7 @@
     var v = window.Estado.obtenerValoracionClub(clubId);
     badge.textContent = "💼 " + _fmtNumValoracion(v.logrado) + "/" + _fmtNumValoracion(v.objetivo);
   }
-  function editarValoracionClub() {
-    var clubId = window._idManagerActivo;
+  function editarValoracionClub(clubId) {
     if (!clubId || !window.Estado) return;
     var actual = window.Estado.obtenerValoracionClub(clubId);
     var logradoStr = window.prompt("💼 Puntos conseguidos:", _fmtNumValoracion(actual.logrado));
@@ -583,6 +584,21 @@
     var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
     window.Estado.guardarValoracionClub(clubId, isNaN(logrado) ? 0 : logrado, isNaN(objetivo) ? 0 : objetivo);
     _pintarValoracionClub(clubId);
+    repintarMenuClub(clubId);
+  }
+
+  // ---------- 🎯 Icono de una caja de Objetivos ----------
+  // Solo el icono es editable (candado 646) — el nombre de las 4 cajas
+  // (Liga/Copa/Superliga/Globales) es fijo.
+  function editarObjetivosIcono(clubId, seccion) {
+    if (!clubId || !seccion || !window.Estado || !window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var actuales = window.Estado.obtenerObjetivosIconos(clubId);
+      var nuevo = window.prompt("Icono/emoji para esta caja:", actuales[seccion] || "");
+      if (nuevo === null || !nuevo.trim()) return;
+      window.Estado.guardarObjetivosIconoSeccion(clubId, seccion, nuevo.trim());
+      window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+    }, "🔒 Editar icono", "PIN de administrador (646)");
   }
 
   function salirDelClub() {
@@ -883,9 +899,6 @@
     var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
-    var btnValoracion = document.getElementById("btn-editar-valoracion");
-    if (btnValoracion) btnValoracion.addEventListener("click", editarValoracionClub);
-
     var btnResetPartidos = document.getElementById("calendar-reset-btn");
     if (btnResetPartidos) btnResetPartidos.addEventListener("click", reiniciarTodosPartidosClub);
 
@@ -1039,6 +1052,8 @@
         case "guardar-objetivos": guardarObjetivos(d.clubId); break;
         case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;
         case "toggle-objetivo": toggleObjetivo(d.clubId, d.clave); break;
+        case "editar-objetivos-icono": editarObjetivosIcono(d.clubId, d.seccion); break;
+        case "editar-valoracion-club": editarValoracionClub(d.clubId); break;
       }
     });
 

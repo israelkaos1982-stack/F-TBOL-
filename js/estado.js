@@ -965,6 +965,38 @@
     }
   }
 
+  // ---------- Iconos de las 4 cajas de Objetivos (candado 646) ----------
+  // Las 4 cajas (LIGA/COPA/SUPERLIGA/GLOBALES) son fijas — solo su
+  // ICONO es editable, no su nombre. Por defecto los puestos al crear
+  // la pantalla; el admin los cambia por caja, uno a uno.
+  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", SUPERLIGA: "🌟", GLOBALES: "🌍" };
+  function _objetivosIconosKey(clubId) { return "ef7_objetivos_iconos_v1_" + clubId; }
+  function obtenerObjetivosIconos(clubId) {
+    var out = {};
+    var guardados = null;
+    try {
+      var raw = localStorage.getItem(_objetivosIconosKey(clubId));
+      guardados = raw ? JSON.parse(raw) : null;
+    } catch (err) {
+      guardados = null;
+    }
+    Object.keys(OBJETIVOS_ICONOS_DEFAULT).forEach(function (s) {
+      out[s] = (guardados && guardados[s]) ? guardados[s] : OBJETIVOS_ICONOS_DEFAULT[s];
+    });
+    return out;
+  }
+  function guardarObjetivosIconoSeccion(clubId, seccion, icono) {
+    var actuales = obtenerObjetivosIconos(clubId);
+    actuales[seccion] = (icono && String(icono).trim()) || OBJETIVOS_ICONOS_DEFAULT[seccion];
+    try {
+      localStorage.setItem(_objetivosIconosKey(clubId), JSON.stringify(actuales));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el icono del objetivo:", err);
+      return false;
+    }
+  }
+
   // ---------- Plantilla (roster real) por club ----------
   // Texto libre, una línea por jugador — mismo patrón que el calendario
   // extra o los títulos: cada mánager pega su plantilla real completa
@@ -1532,6 +1564,8 @@
     toggleObjetivoLogrado: toggleObjetivoLogrado,
     obtenerValoracionClub: obtenerValoracionClub,
     guardarValoracionClub: guardarValoracionClub,
+    obtenerObjetivosIconos: obtenerObjetivosIconos,
+    guardarObjetivosIconoSeccion: guardarObjetivosIconoSeccion,
     obtenerRosterTexto: obtenerRosterTexto,
     guardarRosterTexto: guardarRosterTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,

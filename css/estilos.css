@@ -860,11 +860,11 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
 }
 
-/* 💼 Valoración del club + su ✏️ — agrupados a la derecha de la
-   cabecera, junto (a la izquierda) del ✏️ que edita el menú del club.
-   Solo el grupo entero lleva margin-left:auto (empuja TODO el bloque
-   a la derecha); los 2 botones de dentro anulan ese auto-margin para
-   no partir el hueco en dos. */
+/* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar
+   menú, no aquí) + el ✏️ que edita el menú del club, agrupados a la
+   derecha de la cabecera. Solo el grupo entero lleva margin-left:auto
+   (empuja TODO el bloque a la derecha); el botón de dentro anula ese
+   auto-margin para no partir el hueco en dos. */
 .club-header-extras { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .club-header-extras .club-header-editar { margin-left: 0; }
 .club-valoracion-badge {
@@ -1330,11 +1330,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-leyenda-details[open] .liga1ref-leyenda-summary::before { transform: rotate(90deg); }
 
-/* Copa del Rey — "🏆 Eliminatorias Copa" / "🥈 Recopa Campeón y
-   Subcampeón", centrados. Va DEBAJO de todos los cuadros de club,
-   dentro del mismo desplegable "LEYENDA" colapsable que el resto de
-   pantallas (petición usuario) — antes vivía fijo arriba del todo. */
-.liga1ref-leyenda-grid--copa { justify-items: center; }
+/* Copa del Rey — "🥈 Recopa Campeón y Subcampeón", pegado a la
+   izquierda (petición usuario). Va DEBAJO de todos los cuadros de
+   club, dentro del mismo desplegable "LEYENDA" colapsable que el
+   resto de pantallas — antes vivía fijo arriba del todo. Sin
+   modificador propio: reutiliza `.liga1ref-leyenda-grid` a secas
+   (alineación por defecto, sin centrar). */
 
 /* Superliga — los 3 items (Campeón/Subcampeón/Farolillo) SIEMPRE en
    una sola fila horizontal, nunca 2+1, y centrados (no pegados a la
@@ -1782,9 +1783,10 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* ---------- 6f. OBJETIVOS DEL CLUB — 4 cajas fijas (Liga/Copa/
-   Superliga/Globales) plegables, cada objetivo tocable para marcarlo
-   logrado. Mismo lenguaje visual que el resto de la web (nada de
-   imágenes, solo emoji + color CSS). ---------- */
+   Superliga/Globales), SIEMPRE abiertas (petición usuario — nada de
+   desplegables), cada objetivo tocable para marcarlo logrado. Mismo
+   lenguaje visual que el resto de la web (nada de imágenes, solo
+   emoji + color CSS). ---------- */
 .objetivos-resumen {
   display: flex;
   justify-content: center;
@@ -1795,38 +1797,37 @@ button { font-family: inherit; cursor: pointer; }
 .objetivos-resumen-item { font-size: 11px; font-weight: 700; color: var(--text-lo); white-space: nowrap; }
 .objetivos-resumen-item b { font-size: 17px; font-weight: 900; color: var(--neon); margin-right: 2px; }
 
-.objetivos-seccion-details { margin-bottom: 10px; }
-.objetivos-seccion-details:last-of-type { margin-bottom: 0; }
-.objetivos-seccion-summary {
-  cursor: pointer;
-  list-style: none;
+.objetivos-seccion-caja { margin-bottom: 10px; }
+.objetivos-seccion-caja:last-of-type { margin-bottom: 0; }
+.objetivos-seccion-cabecera {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-s);
   background: var(--bg-3);
-  user-select: none;
 }
-.objetivos-seccion-summary::-webkit-details-marker { display: none; }
+/* El icono es el ÚNICO campo editable de la cabecera (candado 646) —
+   el nombre de las 4 cajas es fijo. Mismo tamaño de tap-target que el
+   resto de ✏️ circulares del proyecto, sin parecer un botón genérico. */
+.objetivos-seccion-icono {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px;
+}
 .objetivos-seccion-nombre {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  flex: 1;
+  min-width: 0;
   font-size: 12.5px;
   font-weight: 800;
   color: var(--text-hi);
 }
-.objetivos-seccion-nombre::before {
-  content: "▸";
-  font-size: 10px;
-  color: var(--text-lo);
-  transition: transform 0.15s ease;
-}
-.objetivos-seccion-details[open] .objetivos-seccion-nombre::before { transform: rotate(90deg); }
 .objetivos-seccion-pts {
+  flex-shrink: 0;
   font-size: 11.5px;
   font-weight: 900;
   color: var(--neon);

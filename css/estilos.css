@@ -1786,16 +1786,12 @@ button { font-family: inherit; cursor: pointer; }
    Superliga/Globales), SIEMPRE abiertas (petición usuario — nada de
    desplegables), cada objetivo tocable para marcarlo logrado. Mismo
    lenguaje visual que el resto de la web (nada de imágenes, solo
-   emoji + color CSS). ---------- */
-.objetivos-resumen {
-  display: flex;
-  justify-content: center;
-  margin: 2px 0 14px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--line);
-}
-.objetivos-resumen-item { font-size: 11px; font-weight: 700; color: var(--text-lo); white-space: nowrap; }
-.objetivos-resumen-item b { font-size: 17px; font-weight: 900; color: var(--neon); margin-right: 2px; }
+   emoji + color CSS). El resumen "N / M puntos conseguidos" ya NO es
+   su propio bloque debajo del header — vive DENTRO de
+   .liga1ref-header/.liga1ref-leyenda-mini (misma fila que el ✏️,
+   petición usuario "subirlo a la altura del ✏️"), así que solo hace
+   falta resaltar el número logrado con este selector genérico. */
+.liga1ref-leyenda-mini b { color: var(--neon); font-weight: 900; }
 
 .objetivos-seccion-caja { margin-bottom: 10px; }
 .objetivos-seccion-caja:last-of-type { margin-bottom: 0; }
@@ -1871,12 +1867,17 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- 6g. DERBYS — Humano vs Humano (GLOBAL + 5 rivales) ----------
    Reutiliza .clasificacion-tabla/.clasificacion-wrap/.clasificacion-equipo
    tal cual (mismas columnas PJ/PG/PE/PP/G+/G-/DG que el resto de tablas
-   de clasificación) — solo se ajusta el ancho mínimo (menos columnas que
-   la tabla de liga) y se añaden la fila GLOBAL destacada + el resumen de
-   rival más temido/cómodo debajo. */
-#derbys-content .clasificacion-tabla { min-width: 420px; font-size: 12px; }
+   de clasificación) — pero los nombres de rival son cortos ("Álvaro",
+   "GLOBAL"...), a diferencia de un nombre de equipo de liga, así que
+   aquí SÍ le quitamos el min-width fijo de .clasificacion-equipo (igual
+   que ya hace #superliga-content) para que las 8 columnas numéricas
+   quepan en pantalla sin scroll horizontal (petición usuario, "mucho
+   espacio libre a la izquierda... que entren todos los datos"). */
+#derbys-content .clasificacion-tabla { min-width: 0; width: 100%; font-size: 11.5px; }
 #derbys-content .clasificacion-tabla th,
-#derbys-content .clasificacion-tabla td { padding: 9px 7px; }
+#derbys-content .clasificacion-tabla td { padding: 8px 4px; }
+#derbys-content .clasificacion-tabla th:first-child { text-align: left; }
+#derbys-content .clasificacion-equipo { min-width: 0; white-space: nowrap; }
 .derbys-fila--global .clasificacion-equipo,
 .derbys-fila--global td { color: var(--neon); font-weight: 900; }
 .derbys-fila--global { background: rgba(57, 255, 106, 0.07); }

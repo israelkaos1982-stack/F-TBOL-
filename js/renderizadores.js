@@ -2921,15 +2921,41 @@
     return { secciones: secciones, etiquetas: etiquetas };
   }
 
+  // Puntos LOGRADOS / TOTALES de los objetivos de un club — extraído de
+  // renderizarObjetivos para poder reutilizarlo desde fuera (js/main.js
+  // sincroniza el 💼 de la cabecera con este mismo cálculo cada vez que
+  // se marca/desmarca un objetivo, para que nunca puedan desincronizarse).
+  function calcularObjetivosPuntos(idClubActivo) {
+    var texto = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
+    var secciones = parsearObjetivosTexto(texto).secciones;
+    var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
+    var logradosSet = {};
+    logrados.forEach(function (c) { logradosSet[c] = true; });
+    var totalPts = 0, ptsLogrados = 0;
+    OBJETIVOS_SECCION_ORDEN.forEach(function (s) {
+      (secciones[s] || []).forEach(function (o) {
+        totalPts += o.puntos;
+        if (logradosSet[o.clave]) ptsLogrados += o.puntos;
+      });
+    });
+    return { totalPts: totalPts, ptsLogrados: ptsLogrados };
+  }
+
   function renderizarObjetivos(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
     contenedor.innerHTML = "";
 
+    var puntos = calcularObjetivosPuntos(idClubActivo);
+
+    // El resumen "N / M puntos conseguidos" va en la MISMA fila que el
+    // ✏️ (petición usuario: "subirlo a la altura del ✏️") — así todas las
+    // cajas de sección quedan una fila más arriba, sin scroll de más.
     var header = document.createElement("div");
     header.className = "liga1ref-header";
     header.innerHTML =
-      '<span class="liga1ref-leyenda-mini"></span>' +
+      '<span class="liga1ref-leyenda-mini"><b>' + puntos.ptsLogrados + "</b> / " + puntos.totalPts +
+      " puntos conseguidos</span>" +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
     contenedor.appendChild(header);
@@ -2941,20 +2967,6 @@
     var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
     var logradosSet = {};
     logrados.forEach(function (c) { logradosSet[c] = true; });
-
-    var totalPts = 0, ptsLogrados = 0;
-    OBJETIVOS_SECCION_ORDEN.forEach(function (s) {
-      secciones[s].forEach(function (o) {
-        totalPts += o.puntos;
-        if (logradosSet[o.clave]) ptsLogrados += o.puntos;
-      });
-    });
-
-    var resumen = document.createElement("div");
-    resumen.className = "objetivos-resumen";
-    resumen.innerHTML =
-      '<span class="objetivos-resumen-item"><b>' + ptsLogrados + "</b> / " + totalPts + " puntos conseguidos</span>";
-    contenedor.appendChild(resumen);
 
     var iconos = window.Estado ? window.Estado.obtenerObjetivosIconos(idClubActivo) : OBJETIVOS_ICONOS_DEFAULT;
 
@@ -4826,6 +4838,7 @@
     renderizarObjetivos: renderizarObjetivos,
     pintarEditorObjetivos: pintarEditorObjetivos,
     parsearObjetivosTexto: parsearObjetivosTexto,
+    calcularObjetivosPuntos: calcularObjetivosPuntos,
     renderizarDerbys: renderizarDerbys,
     pintarEditorDerbys: pintarEditorDerbys,
     parsearDerbysTexto: parsearDerbysTexto,

@@ -263,10 +263,11 @@
     window.Estado.editarTarjetaMenuClub(clubId, id, icono, etiqueta);
     repintarMenuClub(clubId);
   }
-  function restablecerTarjetaMenuClubPrompt(clubId, id, nombre) {
+  // 👁/🙈 — oculta o muestra una tarjeta del menú sin borrarla ni tocar su
+  // nombre/icono. Sin confirmación (reversible con el mismo botón).
+  function toggleVisibilidadTarjetaMenuClub(clubId, id) {
     if (!window.Estado) return;
-    if (!window.confirm('¿Restablecer "' + nombre + '" a su nombre e icono de fábrica?')) return;
-    window.Estado.restablecerTarjetaMenuClub(clubId, id);
+    window.Estado.toggleVisibilidadTarjetaMenuClub(clubId, id);
     repintarMenuClub(clubId);
   }
   function borrarTarjetaMenuClubPrompt(clubId, id, nombre) {
@@ -1072,7 +1073,7 @@
         case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
         case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
         case "editar-tarjeta-menu-club": editarTarjetaMenuClubPrompt(d.clubId, d.id, d.icono, d.etiqueta); break;
-        case "restablecer-tarjeta-menu-club": restablecerTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
+        case "toggle-visibilidad-tarjeta-menu-club": toggleVisibilidadTarjetaMenuClub(d.clubId, d.id); break;
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;

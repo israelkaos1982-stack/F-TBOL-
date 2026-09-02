@@ -159,6 +159,19 @@
     if (ov) ov.hidden = true;
   }
 
+  // Nombres largos que se acortan SOLO en la cabecera de la caja del
+  // club (data/equipos.json sigue guardando el nombre real, así que
+  // clasificaciones/calendario/etc. lo siguen mostrando entero) — con
+  // el 💼 ahora de ancho FIJO (petición usuario, ver .club-valoracion-badge
+  // en css/estilos.css), "Atlético Madrid" es el único nombre de los 6
+  // clubes que no cabe sin recortarse por elipsis en un móvil normal.
+  // El resto (Liverpool/Arsenal/Real Madrid/FC Barcelona/PSG) ya caben
+  // enteros — no hace falta acortarlos.
+  var NOMBRES_CORTOS_CABECERA = { "Atlético Madrid": "Atl. Madrid" };
+  function _nombreCabeceraClub(nombre) {
+    return NOMBRES_CORTOS_CABECERA[nombre] || nombre;
+  }
+
   function abrirClub(teamId, box) {
     window._idManagerActivo = teamId;
     activarCaja(box);
@@ -172,7 +185,13 @@
         var nombreEl = document.getElementById("club-nombre");
         var misterEl = document.getElementById("club-mister");
         if (escudoSlot) escudoSlot.innerHTML = window.Renderizadores.crearEscudoHTML(equipo, "escudo--sm");
-        if (nombreEl) nombreEl.textContent = equipo.nombre || "—";
+        if (nombreEl) {
+          nombreEl.textContent = _nombreCabeceraClub(equipo.nombre) || "—";
+          // El nombre completo siempre queda disponible al pasar el
+          // cursor/mantener pulsado, aunque en pantalla se vea acortado
+          // o recortado por elipsis.
+          nombreEl.title = equipo.nombre || "";
+        }
         if (misterEl) misterEl.textContent = equipo.mister || "—";
 
         // Tema de color del club — cada caja se ve con SUS colores (menú +

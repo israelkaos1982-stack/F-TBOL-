@@ -765,7 +765,11 @@ button { font-family: inherit; cursor: pointer; }
 /* ---------- 6. CLUB ACTIVO — cabecera + tabs Plantilla/Calendario ---------- */
 .club-header-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .club-escudo-slot { display: flex; }
-.club-header-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* flex:1 — absorbe TODO el hueco libre de la fila (el 💼 ya no lo hace,
+   ver su regla más abajo), así el bloque nombre/mister es el único que
+   crece/encoge según el club; con min-width:0 el nombre puede recortarse
+   con elipsis (.club-header-nombre) sin empujar al 💼/✏️ fuera de sitio. */
+.club-header-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .club-header-nombre {
   font-size: 14px;
   font-weight: 900;
@@ -874,11 +878,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar menú,
-   no aquí). Ocupa TODO el hueco libre entre el nombre/mister (ancho
-   natural, a la izquierda) y el botón ✏️ (ancho natural, empujado al
-   borde derecho por su propio margin-left:auto) — al centrar su texto
-   dentro de ese hueco, el badge queda en el punto medio entre ambos en
-   vez de pegado al botón (petición usuario).
+   no aquí). Ancho FIJO (petición usuario: "quiero la caja 💼 sea del
+   mismo tamaño para cada equipo") — antes era flex:1 y su ancho variaba
+   según cuánto nombre/mister sobraba de hueco en cada caja (una tira
+   angosta en "Real Madrid"/"Atlético Madrid", muy ancha en "PSG"). Ahora
+   es SIEMPRE el mismo tamaño en las 6 cajas; quien absorbe el hueco
+   libre/sobrante es .club-header-meta (nombre+mister, flex:1 arriba),
+   recortándose con elipsis si el nombre del club no cabe.
    Estilo "HUD de videojuego" ATENUADO (petición usuario: la 1ª versión
    pintaba el degradado del escudo A TODA POTENCIA + un halo de brillo
    muy vivo, "desentona" con el resto de la web — mucho más oscura y
@@ -888,14 +894,15 @@ button { font-family: inherit; cursor: pointer; }
    encima — sigue habiendo identidad de club, pero sin saturar. Sin halo
    exterior (box-shadow solo interior, apenas visible). */
 .club-valoracion-badge {
-  flex: 1;
+  flex: none;
+  width: 88px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
   height: 30px;
   min-width: 30px;
-  padding: 0 10px;
+  padding: 0 6px;
   border-radius: 15px;
   border: 1px solid rgba(var(--club-primary-rgb, 57, 130, 255), 0.3);
   background:
@@ -1921,6 +1928,12 @@ button { font-family: inherit; cursor: pointer; }
    que ya hace #superliga-content) para que las 8 columnas numéricas
    quepan en pantalla sin scroll horizontal (petición usuario, "mucho
    espacio libre a la izquierda... que entren todos los datos"). */
+/* Título "<Mister> vs el Mundo" — solo este, no toda la clase compartida
+   (petición usuario: "el texto un 15% mas grande". 9.5px * 1.15 = 10.925px,
+   redondeado a 10.9px). El nombre del mister va en su propio span para
+   pintarlo en rosa + MAYÚSCULAS sin tocar " vs el Mundo". */
+.liga1ref-leyenda-mini--derbys { font-size: 10.9px; }
+.derbys-titulo-mister { color: var(--rosa); text-transform: uppercase; font-weight: 900; }
 #derbys-content .clasificacion-tabla { min-width: 0; width: 100%; font-size: 11.5px; }
 /* Altura de fila +8% (petición usuario, "mejor visualización") — solo se
    toca el padding VERTICAL (el que separa un jugador/rival del siguiente),

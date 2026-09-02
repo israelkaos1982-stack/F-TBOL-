@@ -601,11 +601,20 @@
     n = Number(n) || 0;
     return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
   }
+  // Estilo "HUD de videojuego" (petición usuario): 4 spans separados en
+  // vez de un textContent plano, para poder resaltar el nº logrado más
+  // que el objetivo — el degradado de fondo con los colores del escudo
+  // (--club-primary/--club-secondary) ya los fija abrirClub() sobre
+  // #screen-club, este badge solo los CONSUME vía CSS (var(...)).
   function _pintarValoracionClub(clubId) {
     var badge = document.getElementById("club-valoracion");
     if (!badge || !window.Estado || !clubId) return;
     var v = window.Estado.obtenerValoracionClub(clubId);
-    badge.textContent = "💼 " + _fmtNumValoracion(v.logrado) + "/" + _fmtNumValoracion(v.objetivo);
+    badge.innerHTML =
+      '<span class="club-valoracion-icono">💼</span>' +
+      '<span class="club-valoracion-num">' + _fmtNumValoracion(v.logrado) + "</span>" +
+      '<span class="club-valoracion-sep">/</span>' +
+      '<span class="club-valoracion-obj">' + _fmtNumValoracion(v.objetivo) + "</span>";
   }
   // Puntos LOGRADOS = SIEMPRE los mismos que muestra la pantalla
   // Objetivos (window.Renderizadores.calcularObjetivosPuntos) — nunca

@@ -865,22 +865,37 @@ button { font-family: inherit; cursor: pointer; }
    natural, a la izquierda) y el botón ✏️ (ancho natural, empujado al
    borde derecho por su propio margin-left:auto) — al centrar su texto
    dentro de ese hueco, el badge queda en el punto medio entre ambos en
-   vez de pegado al botón (petición usuario). */
+   vez de pegado al botón (petición usuario).
+   Estilo "HUD de videojuego" (petición usuario, símil de una placa de
+   estadísticas de un juego): degradado diagonal + textura de rayas finas
+   + brillo, con los colores del PROPIO escudo del club
+   (--club-primary/--club-secondary/--club-primary-rgb, ya los fija
+   abrirClub() sobre #screen-club — este badge solo los hereda). El
+   fallback (si esas vars aún no se han fijado) es un azul neutro. */
 .club-valoracion-badge {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   height: 30px;
   min-width: 30px;
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: 15px;
-  background: var(--bg-3);
-  color: var(--text-hi);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0 2px, transparent 2px 9px),
+    linear-gradient(135deg, var(--club-primary, #1b3a6b) 0%, var(--club-secondary, #0c1120) 100%);
+  box-shadow: 0 0 10px rgba(var(--club-primary-rgb, 57, 130, 255), 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
   font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
 }
+.club-valoracion-icono { font-size: 13px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+.club-valoracion-num { font-size: 14.5px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.club-valoracion-sep { color: rgba(255, 255, 255, 0.5); font-weight: 700; }
+.club-valoracion-obj { color: rgba(255, 255, 255, 0.8); font-weight: 700; }
 
 /* Editor del menú (candado 646) — dos pestañas dentro del modal genérico */
 .editor-club-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -1145,7 +1160,21 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 11px;
   flex-shrink: 0;
 }
-.liga1ref-volver-btn { padding: 5px 10px; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+/* Más llamativo que un .btn-ghost normal + texto ~5% más grande
+   (petición usuario: "siempre por error le doy a X y me salgo al menú
+   principal" — confundía este ← Volver, que solo retrocede un paso
+   dentro del modal, con el ✕ gris de la cabecera, que cierra el modal
+   entero). Azul sólido (--info) bien diferenciado del gris del ✕. */
+.liga1ref-volver-btn {
+  padding: 5px 10px;
+  font-size: 11.6px;
+  font-weight: 800;
+  flex-shrink: 0;
+  background: var(--info);
+  border-color: var(--info);
+  color: #fff;
+}
+.liga1ref-volver-btn:hover { background: var(--info); border-color: var(--info); color: #fff; }
 .liga1ref-tabla { min-width: 380px; }
 
 /* ---------- 6d-bis. NAVEGACIÓN entre divisiones (2ª REF / 1ª REF /

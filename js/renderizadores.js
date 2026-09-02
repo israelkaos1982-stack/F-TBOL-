@@ -2749,9 +2749,31 @@
       if (!veces || veces < 1) return;
       var trofeo = _resolverTitulo(nombreCrudo, indice);
       if (!trofeo) return;
-      items.push({ id: trofeo.id, nombre: trofeo.nombre, icono: trofeo.icono, color: trofeo.color, categoria: trofeo.categoria, veces: veces });
+      items.push({
+        id: trofeo.id, nombre: trofeo.nombre, icono: trofeo.icono, forma: trofeo.forma,
+        color: trofeo.color, categoria: trofeo.categoria, veces: veces
+      });
     });
     return items;
+  }
+
+  // Formas de trofeo dibujadas en CSS puro (0 KB de imagen/emoji extra —
+  // mismo principio que .escudo--*): "copa" (asas normales), "alta"
+  // (copa estrecha sin asas), "orejas" (2 asas redondas grandes, estilo
+  // Champions), "globo" (esfera sobre pedestal, estilo Mundial/
+  // Intercontinental) y "plato" (disco plano, estilo Superliga). Solo
+  // club/selección llevan "forma" en el catálogo — individual conserva
+  // su emoji (⚽/⭐/👟), ya suficientemente distintivo por sí solo.
+  var TROFEO_FORMAS_VALIDAS = { copa: 1, alta: 1, orejas: 1, globo: 1, plato: 1 };
+  function _trofeoIconoHtml(t) {
+    if (t.forma && TROFEO_FORMAS_VALIDAS[t.forma]) {
+      return (
+        '<span class="trofeo-cup trofeo-cup--' + t.forma + '">' +
+        '<i class="tc-a"></i><i class="tc-b"></i><i class="tc-c"></i>' +
+        "</span>"
+      );
+    }
+    return '<span class="trofeo-icono">' + t.icono + "</span>";
   }
 
   function _trofeoCardHtml(t) {
@@ -2759,7 +2781,7 @@
       '<div class="trofeo-card" style="--trofeo-color:' + _colorInlineSeguro(t.color) + ';">' +
       '<span class="trofeo-icono-wrap">' +
       '<span class="trofeo-veces">' + t.veces + "</span>" +
-      '<span class="trofeo-icono">' + t.icono + "</span>" +
+      _trofeoIconoHtml(t) +
       "</span>" +
       '<span class="trofeo-nombre">' + escapeHTML(t.nombre) + "</span>" +
       "</div>"

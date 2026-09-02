@@ -28,6 +28,26 @@
            NUNCA una que siga pendiente de subir (evita que un pull
            tardío pise una edición local que aún no se ha
            confirmado en el servidor).
+
+   FIX 2026 — el "último valor reconciliado" (_snapshot) DEBE
+   sobrevivir a un recargo de página. Si arranca vacío (como estaba
+   antes), el paso "a" de arriba marca TODAS las claves que ya
+   tengan algún valor local como "pendientes" — incluso las que
+   nunca se han tocado en esta sesión — porque cualquier valor
+   difiere de `undefined`. Eso hace que el paso "c" del PRIMER ciclo
+   (el que debía dejar mandar al servidor) se salte esas claves por
+   estar "pendientes", y el dispositivo acaba EMPUJANDO su copia
+   local — aunque sea más vieja/pobre que la del servidor — y la
+   PISA para siempre. Fue así como se borraron títulos ya guardados
+   de un club: un móvil con una copia más antigua de esa clave la
+   sobrescribió sin darse cuenta en su primer ciclo de sync.
+   Solución: `_snapshot` se persiste (como hash corto por clave, no
+   el valor completo — no duplicar el peso de cada clave) en
+   localStorage bajo SNAPSHOT_KEY, y se recarga al arrancar. Además,
+   si el PRIMER pull de la sesión falla (red/cold-start del
+   servidor), ese ciclo no empuja nada — se reintenta el pull en el
+   siguiente, nunca se empuja a ciegas sin haber confirmado antes
+   contra el servidor.
    ============================================================ */
 (function () {
   "use strict";
@@ -37,12 +57,41 @@
   var ENDPOINT = "/api/ef7/state";
   var INTERVALO_MS = 10000;
   var PREFIJO = "ef7_";
+  // Fuera del prefijo "ef7_" a propósito: así _clavesDeLaApp()/
+  // exportarEstadoCrudo() (js/estado.js) nunca la confunde con datos
+  // de la app — no viaja al servidor ni se mete en el export/backup.
+  var SNAPSHOT_KEY = "efsync_snapshot_v1";
+
+  // Hash corto (no criptográfico) — solo para saber "¿este valor es el
+  // mismo que reconciliamos la última vez?" sin tener que persistir el
+  // contenido COMPLETO de cada clave por duplicado (que puede pesar
+  // bastante con calendarios/plantillas de 6 clubes).
+  function _hash(s) {
+    s = String(s == null ? "" : s);
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return s.length + ":" + h.toString(36);
+  }
+
+  function _cargarSnapshotPersistido() {
+    try {
+      var raw = localStorage.getItem(SNAPSHOT_KEY);
+      var obj = raw ? JSON.parse(raw) : null;
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function _guardarSnapshotPersistido() {
+    try {
+      localStorage.setItem(SNAPSHOT_KEY, JSON.stringify(_snapshot));
+    } catch (err) { /* no crítico — peor caso, se re-detecta como pendiente en el próximo arranque */ }
+  }
 
   // "Último valor reconciliado" por clave (local == servidor la última
-  // vez que los comparamos). Vive en memoria — no hace falta persistirlo,
-  // el primer ciclo de cada carga de página siempre reconstruye el
-  // estado real comparando contra el servidor.
-  var _snapshot = {};
+  // vez que los comparamos), como hash — persistido para sobrevivir a
+  // un recargo de página (ver nota FIX 2026 de la cabecera).
+  var _snapshot = _cargarSnapshotPersistido();
   var _pendientes = {}; // clave -> true mientras haya un cambio local sin confirmar en el servidor
   var _enVuelo = false;
   var _primerCicloHecho = false;
@@ -62,7 +111,7 @@
   // el push con éxito limpia una clave pendiente.
   function _detectarCambiosLocales(actuales) {
     Object.keys(actuales).forEach(function (k) {
-      if (actuales[k] !== _snapshot[k]) _pendientes[k] = true;
+      if (_hash(actuales[k]) !== _snapshot[k]) _pendientes[k] = true;
     });
   }
 
@@ -82,52 +131,66 @@
       .then(function (resp) {
         if (!resp || !resp.ok) return;
         var actualesTrasEnviar = _clavesLocales();
+        var huboConfirmadas = false;
         (resp.guardadas || []).forEach(function (k) {
           // Solo se da por reconciliada si el valor no volvió a cambiar
           // MIENTRAS la petición estaba en vuelo — si cambió, se deja
           // pendiente para reintentar con el valor más reciente.
           if (actualesTrasEnviar[k] === cuerpo[k]) {
-            _snapshot[k] = cuerpo[k];
+            _snapshot[k] = _hash(cuerpo[k]);
             delete _pendientes[k];
+            huboConfirmadas = true;
           }
         });
+        if (huboConfirmadas) _guardarSnapshotPersistido();
       })
       .catch(function (err) {
         console.warn("[sync] push falló (sin conexión / servidor no disponible):", err);
       });
   }
 
+  // Devuelve `true` si el pull llegó a completarse con éxito (haya
+  // habido o no cambios que adoptar) y `false` si falló — el caller de
+  // arranque (_ciclo, primer ciclo) lo usa para NO empujar nada a
+  // ciegas si todavía no se ha podido confirmar nada contra el
+  // servidor (ver nota FIX 2026 de la cabecera).
   function _traerDelServidor() {
     return fetch(ENDPOINT)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (resp) {
-        if (!resp || !resp.ok || !resp.claves) return;
+        if (!resp || !resp.ok || !resp.claves) return false;
         var actuales = _clavesLocales();
         var huboCambio = false;
+        var huboSnapshotNuevo = false;
         Object.keys(resp.claves).forEach(function (k) {
           if (k.indexOf(PREFIJO) !== 0) return;
           if (_pendientes[k]) return; // hay un cambio local sin confirmar: el servidor NO lo pisa
           var valorServidor = resp.claves[k];
           if (typeof valorServidor !== "string") return; // esta app solo guarda strings (igual que localStorage)
           if (valorServidor === actuales[k]) {
-            _snapshot[k] = valorServidor;
+            _snapshot[k] = _hash(valorServidor);
+            huboSnapshotNuevo = true;
             return;
           }
           try {
             localStorage.setItem(k, valorServidor);
-            _snapshot[k] = valorServidor;
+            _snapshot[k] = _hash(valorServidor);
             huboCambio = true;
+            huboSnapshotNuevo = true;
           } catch (err) {
             console.error("[sync] no se pudo escribir la clave recibida del servidor:", k, err);
           }
         });
+        if (huboSnapshotNuevo) _guardarSnapshotPersistido();
         if (huboCambio) {
           if (window.Estado.invalidarCache) window.Estado.invalidarCache();
           _marcarUiActualizada();
         }
+        return true;
       })
       .catch(function (err) {
         console.warn("[sync] pull falló (sin conexión / servidor no disponible):", err);
+        return false;
       });
   }
 
@@ -135,6 +198,15 @@
     if (_enVuelo) return;
     _enVuelo = true;
 
+    // `_snapshot` ya viene persistido (ver arriba) — con eso,
+    // `_detectarCambiosLocales` puede volver a llamarse aquí SIEMPRE,
+    // incluso en el primer ciclo de la sesión: una clave que no ha
+    // cambiado desde la última vez que se confirmó con el servidor
+    // (hash igual al persistido) no se marca pendiente, así que el
+    // pull de abajo puede adoptar sin problema el valor del servidor
+    // si es más rico. Una clave con una edición local genuina desde
+    // el último cierre de la app SÍ se marca pendiente y queda
+    // protegida frente al pull, en cualquier ciclo.
     var actuales = _clavesLocales();
     _detectarCambiosLocales(actuales);
 
@@ -142,10 +214,13 @@
     if (!_primerCicloHecho) {
       // Primer ciclo de la sesión: el servidor manda primero (si otro
       // dispositivo ya tiene datos aquí, se adoptan) ANTES de empezar a
-      // empujar lo local — evita que un móvil que arranca con datos
-      // locales viejos/placeholder machaque lo que ya había en el
-      // servidor desde otro dispositivo.
-      cadena = _traerDelServidor().then(function () {
+      // empujar lo local. Si el pull falla (red/cold-start del
+      // servidor), este ciclo no empuja nada — se reintenta el pull en
+      // el siguiente (defensa extra para un dispositivo SIN snapshot
+      // persistido todavía, p. ej. la primera vez que abre la app; ver
+      // nota FIX 2026 de la cabecera).
+      cadena = _traerDelServidor().then(function (pullOk) {
+        if (!pullOk) return;
         _primerCicloHecho = true;
         return _empujarPendientes(_clavesLocales());
       });

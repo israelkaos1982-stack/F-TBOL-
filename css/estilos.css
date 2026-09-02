@@ -1869,6 +1869,24 @@ button { font-family: inherit; cursor: pointer; }
   line-height: 1;
   filter: drop-shadow(0 0 6px var(--trofeo-color, rgba(255, 255, 255, 0.25)));
 }
+/* Trofeo en CSS puro (club/selección), 0 KB de imagen: <span
+   class="trofeo-cup trofeo-cup--FORMA"> con 3 <i> (tc-a=topper,
+   tc-b=cuerpo, tc-c=base), recoloreado con --trofeo-color. 5 formas
+   (data/titulos.json.forma): copa / alta (sin asas) / orejas (estilo
+   Champions) / globo (estilo Mundial) / plato (estilo Superliga). */
+.trofeo-cup { position: relative; display: inline-block; width: 24px; height: 26px; filter: drop-shadow(0 0 6px var(--trofeo-color, rgba(255, 255, 255, 0.25))); }
+.trofeo-cup i { position: absolute; left: 50%; display: block; background: var(--trofeo-color, currentColor); }
+.trofeo-cup .tc-a { display: none; }
+.trofeo-cup .tc-b { top: 3px; width: 15px; height: 12px; margin-left: -7.5px; border-radius: 2px 2px 9px 9px / 2px 2px 11px 11px; }
+.trofeo-cup .tc-c { bottom: 0; width: 11px; height: 8px; margin-left: -5.5px; clip-path: polygon(36% 0, 64% 0, 76% 55%, 100% 100%, 0 100%, 24% 55%); }
+.trofeo-cup--alta .tc-b { top: 1px; width: 13px; height: 10px; margin-left: -6.5px; border-radius: 7px 7px 4px 4px; }
+.trofeo-cup--alta .tc-a { display: block; top: 10px; width: 3px; height: 9px; margin-left: -1.5px; }
+.trofeo-cup--orejas .tc-a { display: block; top: 7px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: transparent; box-shadow: -11px 0 0 0 var(--trofeo-color, currentColor), 11px 0 0 0 var(--trofeo-color, currentColor); }
+.trofeo-cup--globo .tc-b { width: 10px; height: 12px; margin-left: -5px; }
+.trofeo-cup--globo .tc-a { display: block; top: -5px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; }
+.trofeo-cup--plato .tc-b { top: 2px; width: 20px; height: 7px; margin-left: -10px; border-radius: 50%; }
+.trofeo-cup--plato .tc-a { display: block; top: 8px; width: 3px; height: 8px; margin-left: -1.5px; }
+.trofeo-cup--plato .tc-c { width: 13px; height: 6px; margin-left: -6.5px; }
 .trofeo-nombre {
   font-size: 10px;
   font-weight: 800;

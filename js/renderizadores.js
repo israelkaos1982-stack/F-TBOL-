@@ -3143,10 +3143,18 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
+      // "<Mister> vs el Mundo" (petición usuario) en vez del genérico
+      // "Histórico Humano vs Humano" — el mister sale del propio club
+      // activo (data/equipos.json), así que cada caja lo muestra solo.
+      var clubActivo = buscarEquipoPorId(idClubActivo, datos);
+      var tituloDerbys = clubActivo && clubActivo.mister
+        ? escapeHTML(clubActivo.mister) + " vs el Mundo"
+        : "Histórico Humano vs Humano";
+
       var header = document.createElement("div");
       header.className = "liga1ref-header";
       header.innerHTML =
-        '<span class="liga1ref-leyenda-mini">Histórico Humano vs Humano</span>' +
+        '<span class="liga1ref-leyenda-mini">' + tituloDerbys + "</span>" +
         '<button type="button" class="liga1ref-editar-btn" data-accion="editar-derbys-inline" data-club-id="' +
         (idClubActivo || "") + '" aria-label="Editar derbys">✏️</button>';
       contenedor.appendChild(header);

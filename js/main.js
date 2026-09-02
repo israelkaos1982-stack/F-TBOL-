@@ -376,13 +376,6 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto());
   }
-  // El 📌 ya fijado (petición usuario: "ese botón no funciona" — antes
-  // era un <span> sin ninguna acción, indistinguible a la vista de un
-  // botón real). No hace falta PIN — es solo informativo, no cambia
-  // nada.
-  function mostrarInfoDivisionPin() {
-    window.alert("📌 Esta ya es la liga fijada de este club.");
-  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     if (ov) ov.hidden = true;
@@ -909,7 +902,6 @@
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "info-superliga-formato": mostrarInfoSuperliga(); break;
         case "info-copa-formato": mostrarInfoCopa(); break;
-        case "info-division-pin": mostrarInfoDivisionPin(); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;

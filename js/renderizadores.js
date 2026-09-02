@@ -613,7 +613,7 @@
   // Superliga. Reutilizado por Superliga/Liga 1ª REF/Copa del Rey.
   function nodoTituloEstadisticas() {
     var p = document.createElement("p");
-    p.className = "liga1ref-stat-titulo titulo-cursiva";
+    p.className = "liga1ref-stat-titulo liga1ref-stat-titulo--bonito";
     p.textContent = "📊 Estadísticas";
     return p;
   }
@@ -1376,39 +1376,32 @@
   // abre esa liga "en solitario" (ver _ligaTituloRowHTML) y esta fila
   // se re-pinta con las 3 que quedan.
   function _ligaTabBoxesHTML(ligaId, idClubActivo) {
+    // Las 4 divisiones SIEMPRE en fila (petición usuario: "que entren
+    // las 4 en horizontal") — incluida la activa, marcada con
+    // --activa para distinguirla a simple vista sin tener que leer el
+    // título centrado de arriba.
     var html = '<div class="liga-tab-boxes">';
     LIGA_NAV_ORDEN.forEach(function (id) {
-      if (id === ligaId) return;
       var meta = LIGA_NAV_META[id];
+      var activa = id === ligaId;
       html += '<button type="button" class="liga-tab-box ' + meta.boxClase +
+        (activa ? " liga-tab-box--activa" : "") +
         '" data-accion="liga-nav-ir" data-liga-id="' + id + '" data-club-id="' +
         (idClubActivo || "") + '">' + escapeHTML(meta.corta) + "</button>";
     });
     return html + "</div>";
   }
 
-  // Fila del título de la liga ACTIVA — 📌 a la izquierda del todo,
-  // título centrado ("🇪🇸 Liga <corta>"), ✏️ a la derecha (la ℹ️ vive en
-  // la cabecera del propio modal, ver js/main.js::abrirModalClub /
-  // _actualizarTituloModalLiga más abajo). El 📌 indica/fija qué
-  // división es "la suya" (Estado.obtenerDivisionClub, "1ref" por
-  // defecto) — la que abrirá su tarjeta de menú "Liga 1ª REF" a partir
-  // de ahora. AMBOS estados son botones reales (petición usuario: el
-  // 📌 "no funcionaba" — el estado "ya fijada" era un simple <span>
-  // sin acción, indistinguible a la vista de uno clicable de verdad):
-  // ya fijada → confirma con un aviso (sin PIN, es solo informativo);
-  // sin fijar → la fija (PIN 646). Navegar con las cajas de color sigue
-  // siendo libre (solo mirar); fijar exige PIN, así un ascenso/descenso
-  // real no se confunde con "estoy mirando otra liga por curiosidad".
+  // Fila del título de la liga ACTIVA — título centrado ("🇪🇸 Liga
+  // <corta>"), ✏️ a la derecha (la ℹ️ vive en la cabecera del propio
+  // modal, ver js/main.js::abrirModalClub / _actualizarTituloModalLiga
+  // más abajo). El 📌 (fijar/ver qué división es "la suya") ya NO vive
+  // aquí — se molestaba con el resto de la fila (petición usuario) —
+  // ahora está DENTRO del editor de clasificación (✏️ → PIN 646, ver
+  // pintarEditorLiga1Ref más abajo), junto al resto de acciones de
+  // admin sobre esa liga.
   function _ligaTituloRowHTML(ligaId, idClubActivo) {
     var izq = '<span class="liga1ref-titulo-spacer"></span>';
-    if (idClubActivo && window.Estado) {
-      var actual = window.Estado.obtenerDivisionClub(idClubActivo);
-      izq = actual === ligaId
-        ? '<button type="button" class="liga1ref-editar-btn liga1ref-pin-badge" data-accion="info-division-pin" aria-label="Liga de este club">📌</button>'
-        : '<button type="button" class="liga1ref-editar-btn liga1ref-pin-btn" data-accion="fijar-division-club" data-liga-id="' +
-          ligaId + '" data-club-id="' + idClubActivo + '" aria-label="Fijar como su liga">📌</button>';
-    }
     var der = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
       ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
     return (
@@ -1445,18 +1438,33 @@
   // Sports usa 6 zonas de estilo europeo en vez de ascenso/descenso.
   function _ligaLeyendaHTML(ligaId) {
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+    var grid;
     if (meta.leyenda === "europa") {
-      return (
+      grid =
         '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--europa">' +
         "<span>🟦 Champions</span><span>🟪 Previa</span>" +
         "<span>🟧 E.League</span><span>🟩 Conference</span>" +
-        "<span>🟥 Descenso</span><span>🟫 Promoción</span></div>"
-      );
+        "<span>🟥 Descenso</span><span>🟫 Promoción</span></div>";
+    } else {
+      grid =
+        '<div class="liga1ref-leyenda-grid">' +
+        "<span>🟦 Ascenso</span><span>🟫 Promoción</span>" +
+        "<span>🟨 Promoción</span><span>🟥 Descenso</span></div>";
     }
+    return _leyendaDetailsHTML(grid);
+  }
+
+  // Envuelve una leyenda de colores en un <details> nativo (0 JS, CSS
+  // mínimo) para que quede plegada por defecto — mismo patrón para
+  // TODAS las ligas (2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga).
+  // Copa del Rey NO usa esto: su "leyenda-grid--copa" es un separador
+  // de sección ("🏆 Eliminatorias Copa"), no una leyenda de colores.
+  function _leyendaDetailsHTML(gridHTML) {
     return (
-      '<div class="liga1ref-leyenda-grid">' +
-      "<span>🟦 Ascenso</span><span>🟫 Promoción</span>" +
-      "<span>🟨 Promoción</span><span>🟥 Descenso</span></div>"
+      '<details class="liga1ref-leyenda-details">' +
+      '<summary class="liga1ref-leyenda-summary">Leyenda</summary>' +
+      gridHTML +
+      "</details>"
     );
   }
 
@@ -1678,6 +1686,25 @@
       "DG son opcionales, se recalculan solos). Es una clasificación ÚNICA de " +
       (LIGA_NAV_META[ligaId] ? LIGA_NAV_META[ligaId].corta : "esta liga") + " — la ven las 6 cajas igual.";
     contenedor.appendChild(nota);
+
+    // 📌 Fijar/ver qué división es "la suya" (Estado.obtenerDivisionClub,
+    // "1ref" por defecto) — la que abrirá su tarjeta de menú a partir de
+    // ahora. Vivía junto al título de la liga (molestaba ahí, petición
+    // usuario) — ahora vive AQUÍ, dentro del editor ✏️ (PIN 646), junto
+    // al resto de acciones de admin. Ya fijada → solo informa (sin
+    // acción, no hace falta PIN de nuevo para algo que ya está hecho);
+    // sin fijar → botón real que la fija (mismo candado 646 de
+    // fijar-division-club de siempre).
+    if (idClubActivo && window.Estado) {
+      var actualDiv = window.Estado.obtenerDivisionClub(idClubActivo);
+      var fijarWrap = document.createElement("div");
+      fijarWrap.className = "liga1ref-fijar-wrap";
+      fijarWrap.innerHTML = actualDiv === ligaId
+        ? '<span class="liga1ref-fijar-info">📌 Esta ya es la liga fijada de este club.</span>'
+        : '<button type="button" class="liga1ref-fijar-btn" data-accion="fijar-division-club" data-liga-id="' +
+          ligaId + '" data-club-id="' + idClubActivo + '">📌 Fijar esta liga a este club</button>';
+      contenedor.appendChild(fijarWrap);
+    }
 
     var textarea = document.createElement("textarea");
     textarea.id = "liga1ref-textarea";
@@ -2322,7 +2349,7 @@
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
       contenedor.insertAdjacentHTML("beforeend",
-        '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--superliga"><span>🟪 Campeón</span><span>🟨 Subcampeón</span><span>🟥 Farolillo</span></div>');
+        _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--superliga"><span>🟪 Campeón</span><span>🟨 Subcampeón</span><span>🟥 Farolillo</span></div>'));
 
       // Calendario — SOLO los 15 partidos del club activo (5 rivales x 3),
       // nunca los 45 de toda la Superliga ("para no subir KB", petición

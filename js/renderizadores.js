@@ -137,25 +137,34 @@
   // ============================================================
   // 2. MOTOR CLIMATOLÓGICO ESTACIONAL
   // ============================================================
-  function calcularClimaDinamicoPartido(jornadaActual, totalJornadasLiga) {
+  // 2 estaciones (30% del año Verano -> 40% Invierno -> 30% Verano, según
+  // el progreso 0..1 dentro de la competición) · 3 climas (Sol/Lluvia/
+  // Nieve, nunca nieve en Verano) — porcentajes y reparto pedidos por el
+  // usuario 2026 (esta app, root). El roll usa un seed DETERMINISTA
+  // (hash del id del partido, ver _hashStr) en vez de Math.random(): el
+  // mismo partido muestra SIEMPRE el mismo clima en cada apertura de la
+  // previa, sin persistir nada (0 KB — se recalcula del id, que ya
+  // existe). Sin seed (llamada legacy) cae a Math.random().
+  function _rollDeterminista(seedStr) {
+    return (_hashStr(String(seedStr)) % 100000) / 100000;
+  }
+
+  function calcularClimaDinamicoPartido(jornadaActual, totalJornadasLiga, seedStr) {
     var total = Number(totalJornadasLiga) || 1;
     var jornada = Number(jornadaActual) || 0;
     var progreso = jornada / total; // 0..1
 
     var estacion, clima;
-    var roll = Math.random();
+    var roll = (seedStr !== undefined && seedStr !== null) ? _rollDeterminista(seedStr) : Math.random();
 
-    if (progreso <= 0.33) {
+    if (progreso <= 0.30 || progreso > 0.70) {
       estacion = "VERANO";
-      clima = roll < 0.85 ? "sol" : "lluvia"; // nieve prohibida
-    } else if (progreso <= 0.75) {
-      estacion = "INVIERNO";
-      if (roll < 0.40) clima = "nieve";
-      else if (roll < 0.80) clima = "lluvia";
-      else clima = "sol";
+      clima = roll < 0.75 ? "sol" : "lluvia"; // nieve prohibida en verano
     } else {
-      estacion = "VERANO";
-      clima = roll < 0.90 ? "sol" : "lluvia";
+      estacion = "INVIERNO";
+      if (roll < 0.50) clima = "sol";
+      else if (roll < 0.90) clima = "lluvia";
+      else clima = "nieve";
     }
 
     return {
@@ -168,20 +177,42 @@
 
   // Envoltorio: resuelve jornadaActual/totalJornadasLiga a partir de un
   // partido real (liga -> su propia jornada; torneos KO sin jornada ->
-  // posición proporcional dentro de la temporada por fecha).
-  function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs) {
+  // posición proporcional dentro de la temporada por fecha) y aplica las
+  // 2 excepciones "siempre sol" pedidas por el usuario, ANTES de entrar
+  // al motor estacional:
+  //  1) Cualquier partido con un lado HUMANO (local o visitante) —
+  //     nunca juega bajo lluvia/nieve.
+  //  2) Cualquier ronda a PARTIDO ÚNICO fuera de Liga (Copa/competición
+  //     europea sin ida-vuelta: final, ronda eliminatoria a partido
+  //     único…) — sea IA o humano. Solo las eliminatorias a DOBLE
+  //     partido (ida-vuelta) entre 2 equipos IA entran en el motor
+  //     estacional con lluvia/nieve, igual que la Liga sin humano.
+  // `local`/`visitante` son los equipos ya resueltos por el caller (para
+  // no volver a buscarlos aquí) — opcionales, sin ellos se asume "sin
+  // humano" (el único caller real, abrirPreviaPartido, siempre los pasa).
+  function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs, local, visitante) {
     // Superliga: condición FIJA de la competición (petición usuario) —
     // siempre ☀️ Soleado, nunca entra en el motor estacional aleatorio.
     if (partido.competicion === "superliga") {
       return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
     }
+
+    var esHumano = !!((local && local.mister) || (visitante && visitante.mister));
+    var modo = detectarModoPartido(partido);
+    if (esHumano || modo === "eliminatoria-unica") {
+      return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
+    }
+
+    var seed = "clima|" + (partido.id != null ? partido.id
+      : (partido.local + "|" + partido.visitante + "|" + partido.jornada + "|" + partido.ronda));
+
     if (partido.competicion === "liga" && typeof partido.jornada === "number") {
-      return calcularClimaDinamicoPartido(partido.jornada, totalJornadasLiga);
+      return calcularClimaDinamicoPartido(partido.jornada, totalJornadasLiga, seed);
     }
     var fechaMs = new Date(partido.fecha).getTime();
     var rango = Math.max(1, fechaFinMs - fechaInicioMs);
     var ratio = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
-    return calcularClimaDinamicoPartido(Math.round(ratio * 1000), 1000);
+    return calcularClimaDinamicoPartido(Math.round(ratio * 1000), 1000, seed);
   }
 
   // Regla especial de balones: nieve -> fuerza el balón de alta visibilidad,
@@ -3860,7 +3891,7 @@
     var inicioMs = meta.inicio ? new Date(meta.inicio).getTime() : new Date(partido.fecha).getTime();
     var finMs = meta.finLiga ? new Date(meta.finLiga).getTime() : inicioMs + 1;
 
-    var clima = calcularClimaParaPartido(partido, totalJornadas, inicioMs, finMs);
+    var clima = calcularClimaParaPartido(partido, totalJornadas, inicioMs, finMs, local, visitante);
     var balon = resolverBalonPartido(partido.competicion, clima, datos.balones);
     var estadio = obtenerEstadioDelEquipo(local);
 

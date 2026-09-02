@@ -3747,8 +3747,15 @@
     if (s.partidosDobleAmarilla > 0 && flagsJ.doble !== s.partidosDobleAmarilla) {
       return { tipo: "doble", valor: s.partidosDobleAmarilla, titulo: "🟨🟨 2 amarillas en el mismo partido — se pierde el siguiente. Pulsa para quitar el bloqueo (PIN admin)." };
     }
-    if (s.amarillas > 0 && s.amarillas % 3 === 0 && flagsJ.ciclo !== s.amarillas) {
-      return { tipo: "ciclo", valor: s.amarillas, titulo: s.amarillas + " amarillas acumuladas (ciclo de 3 en 3). Pulsa para quitar el bloqueo (PIN admin)." };
+    // Umbral = el múltiplo de 3 más alto YA ALCANZADO (3 con 3-5
+    // amarillas, 6 con 6-8, 9 con 9-11…) — el color se queda encendido
+    // en TODO ese tramo, no solo en el instante exacto del múltiplo
+    // (petición usuario: "hasta que el admin no quite el bloqueo, ese
+    // jugador seguirá saliendo en amarillo" — antes se apagaba solo en
+    // la siguiente amarilla que no fuera múltiplo exacto de 3).
+    var umbralCiclo = Math.floor(s.amarillas / 3) * 3;
+    if (umbralCiclo > 0 && flagsJ.ciclo !== umbralCiclo) {
+      return { tipo: "ciclo", valor: umbralCiclo, titulo: umbralCiclo + " amarillas acumuladas (ciclo de 3 en 3). Pulsa para quitar el bloqueo (PIN admin)." };
     }
     return null;
   }
@@ -3775,6 +3782,16 @@
           return stats[j.id] || { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0, partidosDobleAmarilla: 0, partidosRojaDirecta: 0 };
         }
         var flags = window.Estado ? window.Estado.obtenerTarjetaFlags(idEquipoHumanoActivo) : {};
+        // Lesionado ACTUAL (entrada todavía sin cerrar, hasta === null) —
+        // por nombre, igual que la lista de la previa. Prioridad MÁXIMA
+        // sobre el color de tarjetas (roja/naranja/amarillo): un jugador
+        // lesionado no se puede convocar pase lo que pase con sus
+        // tarjetas. Se marca en rojo pero, a diferencia del bloqueo de
+        // tarjetas, NO es clicable aquí — se quita desde LESIONADOS en la
+        // previa de un partido (con PIN), donde sí se sabe desde/hasta
+        // qué partido aplica el alta.
+        var lesionadoSet = {};
+        (window.Estado ? window.Estado.obtenerNombresListaActiva(idEquipoHumanoActivo, "lesionados") : []).forEach(function (n) { lesionadoSet[n] = true; });
 
         var frag = document.createDocumentFragment();
         ORDEN_POSICIONES.forEach(function (pos) {
@@ -3795,15 +3812,18 @@
           deEstaPos.forEach(function (j) {
             var s = statsDe(j);
             var principal = pos === "POR" ? s.porteriaImbatida : s.goles;
-            var tarjeta = _tarjetaActivaPara(s, flags[j.id] || {});
+            var esLesionado = !!lesionadoSet[j.nombre];
+            var tarjeta = esLesionado ? null : _tarjetaActivaPara(s, flags[j.id] || {});
             var fila = document.createElement("div");
-            fila.className = "plantilla-jugador" + (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : "");
-            var nombreTag = tarjeta
-              ? '<span class="plantilla-nombre plantilla-nombre--flag" data-accion="quitar-flag-tarjeta"' +
-                ' data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" data-jugador-id="' + escapeHTML(j.id) + '"' +
-                ' data-tipo-flag="' + tarjeta.tipo + '" data-flag-valor="' + tarjeta.valor + '"' +
-                ' title="' + escapeHTML(tarjeta.titulo) + '">' + escapeHTML(j.nombre) + "</span>"
-              : '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>";
+            fila.className = "plantilla-jugador" + (esLesionado ? " plantilla-jugador--lesion" : (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : ""));
+            var nombreTag = esLesionado
+              ? '<span class="plantilla-nombre" title="🚑 Lesionado — se quita desde LESIONADOS en la previa de un partido (PIN admin).">' + escapeHTML(j.nombre) + "</span>"
+              : (tarjeta
+                ? '<span class="plantilla-nombre plantilla-nombre--flag" data-accion="quitar-flag-tarjeta"' +
+                  ' data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" data-jugador-id="' + escapeHTML(j.id) + '"' +
+                  ' data-tipo-flag="' + tarjeta.tipo + '" data-flag-valor="' + tarjeta.valor + '"' +
+                  ' title="' + escapeHTML(tarjeta.titulo) + '">' + escapeHTML(j.nombre) + "</span>"
+                : '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>");
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
               nombreTag +

@@ -124,6 +124,10 @@
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Copa del Rey", "info-copa-formato", null,
+        window.Renderizadores.obtenerFormatoCopaTexto()
+      );
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
@@ -368,6 +372,10 @@
   function mostrarInfoSuperliga() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSuperligaTexto());
+  }
+  function mostrarInfoCopa() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto());
   }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
@@ -894,6 +902,7 @@
         case "fijar-division-club": fijarDivisionClub(d.clubId, d.ligaId); break;
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "info-superliga-formato": mostrarInfoSuperliga(); break;
+        case "info-copa-formato": mostrarInfoCopa(); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;

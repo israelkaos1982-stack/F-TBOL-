@@ -1393,6 +1393,20 @@ button { font-family: inherit; cursor: pointer; }
   text-align: left;
 }
 .liga1ref-stat-equipo { text-align: left; color: var(--text-lo); }
+/* Las tablas de estadísticas de 1ª REF/2ª REF/Hypermotion/Ea Sports se
+   pintan DENTRO de #liga1ref-content, y ese contenedor tiene sus propias
+   reglas "más amplia" (línea ~1319, con selector #liga1ref-content
+   .clasificacion-tabla) para la tabla de CLASIFICACIÓN — misma
+   especificidad que .liga1ref-stat-tabla (una clase) pero con un ID
+   delante, así que ganaban siempre y volvían a estirar min-width a
+   520px + padding a 10px/8px, anulando el ajuste de arriba. Repetimos
+   aquí las mismas reglas con el prefijo #liga1ref-content para igualar
+   la especificidad (band, gana el orden — este bloque va después) sin
+   tocar la tabla de clasificación real. */
+#liga1ref-content .liga1ref-stat-tabla { min-width: 0; font-size: 10.5px; }
+#liga1ref-content .liga1ref-stat-tabla th,
+#liga1ref-content .liga1ref-stat-tabla td { padding: 6px 4px; font-size: 10.5px; }
+#liga1ref-content .liga1ref-stat-tabla .clasificacion-equipo { min-width: 0; }
 
 /* Zonas por posición ABSOLUTA, relativas al Nº TOTAL de equipos de la
    tabla (11 IA reales + 5 humanos = 16 con la liga completa): 1-4

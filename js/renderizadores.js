@@ -1513,12 +1513,12 @@
   // Sports usa 6 zonas de estilo europeo en vez de ascenso/descenso.
   //
   // Recorre TODAS las posiciones 1..total con la MISMA `zonaFn` que
-  // pinta la tabla (_liga1RefZona/_ligaEuropaZona) — así la leyenda
-  // JAMÁS puede nombrar una zona/posición que la tabla real no
-  // muestre (con totales pequeños, el orden de ese if-chain hace que
-  // "promoción descenso"/"descenso" ni siquiera existan como fila
-  // propia — copiar la lista de posiciones en vez de recalcularla a
-  // mano evita ese desajuste).
+  // pinta la tabla (_liga1RefZona/_ligaEuropaZona) — solo para saber SI
+  // esa zona existe (con totales pequeños, el orden de ese if-chain
+  // hace que "promoción descenso"/"descenso" ni siquiera existan como
+  // fila propia); la leyenda ya NO nombra la posición exacta (petición
+  // usuario, quitó el "(el Nº clasificado)" entre paréntesis), pero
+  // sigue sin poder mostrar una fila que la tabla real no tenga.
   function _ligaZonaPosiciones(zonaFn, total) {
     var byZone = {};
     for (var pos = 1; pos <= total; pos++) {
@@ -1528,18 +1528,6 @@
     }
     return byZone;
   }
-  // "(los 4 primeros clasificados)" si empieza en el 1º, "(el Nº
-  // clasificado)" si es uno solo, "(6º y 7º clasificados)" si son 2, o
-  // "(los N-N-N clasificados)" para cualquier otro tramo — petición
-  // usuario: nombrar la posición real, no un rango genérico "del X al Y".
-  function _ligaPosTexto(arr) {
-    if (!arr || !arr.length) return "";
-    if (arr[0] === 1 && arr.length > 1) return " (los " + arr.length + " primeros clasificados)";
-    if (arr.length === 1) return " (el " + arr[0] + "º clasificado)";
-    if (arr.length === 2) return " (" + arr[0] + "º y " + arr[1] + "º clasificados)";
-    return " (los " + arr.join("-") + " clasificados)";
-  }
-
   function _ligaLeyendaHTML(ligaId, total) {
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
     var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
@@ -1552,24 +1540,25 @@
     if (meta.leyenda === "europa") {
       // Zonas 1-4/5/6-7/8 (_ligaEuropaZona) — Promoción/Descenso
       // apuntan SIEMPRE a Hypermotion (la liga de abajo de Ea Sports en
-      // la pirámide, ver LIGA_NAV_ORDEN).
+      // la pirámide, ver LIGA_NAV_ORDEN). Solo color + destino, SIN la
+      // posición exacta entre paréntesis (petición usuario: la quita).
       var zE = _ligaZonaPosiciones(_ligaEuropaZona, total);
-      if (zE.champions) items.push({ e: "🟦", t: "Champions" + _ligaPosTexto(zE.champions) });
-      if (zE.previa) items.push({ e: "🟪", t: "Previa Champions" + _ligaPosTexto(zE.previa) });
-      if (zE.eleague) items.push({ e: "🟧", t: "Europa League" + _ligaPosTexto(zE.eleague) });
-      if (zE.conference) items.push({ e: "🟩", t: "Conference League" + _ligaPosTexto(zE.conference) });
-      if (abajo && zE["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt + _ligaPosTexto(zE["promo-descenso"]) });
-      if (abajo && zE.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt + _ligaPosTexto(zE.descenso) });
+      if (zE.champions) items.push({ e: "🟦", t: "Champions" });
+      if (zE.previa) items.push({ e: "🟪", t: "Previa Champions" });
+      if (zE.eleague) items.push({ e: "🟧", t: "Europa League" });
+      if (zE.conference) items.push({ e: "🟩", t: "Conference League" });
+      if (abajo && zE["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt });
+      if (abajo && zE.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt });
     } else {
       // Zonas 1-4/5 (_liga1RefZona) — Ascenso/Promoción ascenso apuntan
       // a la liga de ARRIBA en la pirámide; Promoción descenso/Descenso
       // a la de ABAJO. 2ª REF (la más baja) no tiene liga debajo, así
       // que sus 2 filas de descenso no se pintan (abajo === "").
       var zP = _ligaZonaPosiciones(_liga1RefZona, total);
-      if (arriba && zP.ascenso) items.push({ e: "🟦", t: "Ascenso" + subeTxt + _ligaPosTexto(zP.ascenso) });
-      if (arriba && zP["promo-ascenso"]) items.push({ e: "🟨", t: "Promoción ascenso" + subeTxt + _ligaPosTexto(zP["promo-ascenso"]) });
-      if (abajo && zP["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt + _ligaPosTexto(zP["promo-descenso"]) });
-      if (abajo && zP.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt + _ligaPosTexto(zP.descenso) });
+      if (arriba && zP.ascenso) items.push({ e: "🟦", t: "Ascenso" + subeTxt });
+      if (arriba && zP["promo-ascenso"]) items.push({ e: "🟨", t: "Promoción ascenso" + subeTxt });
+      if (abajo && zP["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt });
+      if (abajo && zP.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt });
     }
     var claseExtra = meta.leyenda === "europa" ? " liga1ref-leyenda-grid--europa" : "";
     var grid = '<div class="liga1ref-leyenda-grid' + claseExtra + '">' +

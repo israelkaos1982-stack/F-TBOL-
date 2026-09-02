@@ -3986,6 +3986,14 @@
     btnAdd.textContent = "➕ Añadir competición";
     contenedor.appendChild(btnAdd);
 
+    // Aclara que un solo "➕ Añadir" ya reparte la tarjeta en los 6 clubes
+    // (petición usuario: "que no tenga que hacerla 6 veces") — cada uno
+    // la recibe como copia independiente, editable/ocultable por separado.
+    var notaAdd = document.createElement("p");
+    notaAdd.className = "admin-nota";
+    notaAdd.textContent = "Se añade a la vez a los 6 clubes — no hace falta repetirlo en cada uno.";
+    contenedor.appendChild(notaAdd);
+
     var tarjetas = window.Estado ? window.Estado.obtenerMenuClub(clubId) : [];
     var frag = document.createDocumentFragment();
     tarjetas.forEach(function (t, i) {

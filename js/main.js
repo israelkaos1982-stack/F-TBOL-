@@ -645,11 +645,16 @@
     var badge = document.getElementById("club-valoracion");
     if (!badge || !window.Estado || !clubId) return;
     var v = window.Estado.obtenerValoracionClub(clubId);
+    // Logrado/objetivo en VERTICAL, tipo fracción (petición usuario:
+    // los nombres largos se recortaban con el 💼 en horizontal). El
+    // "/" pasa a ser una raya horizontal (.club-valoracion-sep, ver CSS).
     badge.innerHTML =
       '<span class="club-valoracion-icono">💼</span>' +
+      '<span class="club-valoracion-fraccion">' +
       '<span class="club-valoracion-num">' + _fmtNumValoracion(v.logrado) + "</span>" +
-      '<span class="club-valoracion-sep">/</span>' +
-      '<span class="club-valoracion-obj">' + _fmtObjetivoValoracion(v.objetivo) + "</span>";
+      '<span class="club-valoracion-sep"></span>' +
+      '<span class="club-valoracion-obj">' + _fmtObjetivoValoracion(v.objetivo) + "</span>" +
+      "</span>";
   }
   // Puntos LOGRADOS = SIEMPRE los mismos que muestra la pantalla
   // Objetivos (window.Renderizadores.calcularObjetivosPuntos) — nunca

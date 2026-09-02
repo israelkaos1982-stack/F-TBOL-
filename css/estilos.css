@@ -899,13 +899,15 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar menú,
-   no aquí). Ancho FIJO (petición usuario: "quiero la caja 💼 sea del
-   mismo tamaño para cada equipo") — antes era flex:1 y su ancho variaba
-   según cuánto nombre/mister sobraba de hueco en cada caja (una tira
-   angosta en "Real Madrid"/"Atlético Madrid", muy ancha en "PSG"). Ahora
-   es SIEMPRE el mismo tamaño en las 6 cajas; quien absorbe el hueco
-   libre/sobrante es .club-header-meta (nombre+mister, flex:1 arriba),
-   recortándose con elipsis si el nombre del club no cabe.
+   no aquí). Ancho FIJO — SIEMPRE el mismo tamaño en las 6 cajas; quien
+   absorbe el hueco libre/sobrante es .club-header-meta (nombre+mister,
+   flex:1 arriba), recortándose con elipsis si el nombre del club no
+   cabe. Números en VERTICAL, tipo fracción — icono a la izquierda,
+   logrado arriba / raya / objetivo abajo (petición usuario, fotos
+   "Atl. Madr…"/"FC Barce…" recortados: con los 2 números en horizontal
+   el ancho fijo no dejaba sitio de sobra para el nombre). Apilarlos
+   reduce el ancho mínimo del propio 💼 (88px -> 64px), liberando ese
+   hueco para el nombre completo.
    Estilo "HUD de videojuego" ATENUADO (petición usuario: la 1ª versión
    pintaba el degradado del escudo A TODA POTENCIA + un halo de brillo
    muy vivo, "desentona" con el resto de la web — mucho más oscura y
@@ -916,29 +918,30 @@ button { font-family: inherit; cursor: pointer; }
    exterior (box-shadow solo interior, apenas visible). */
 .club-valoracion-badge {
   flex: none;
-  width: 88px;
+  width: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  height: 30px;
+  min-height: 32px;
   min-width: 30px;
-  padding: 0 6px;
-  border-radius: 15px;
+  padding: 3px 5px;
+  border-radius: 14px;
   border: 1px solid rgba(var(--club-primary-rgb, 57, 130, 255), 0.3);
   background:
     repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 9px),
     linear-gradient(135deg, rgba(var(--club-primary-rgb, 57, 130, 255), 0.22) 0%, var(--bg-2) 65%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: #fff;
-  font-size: 11.5px;
   font-weight: 800;
   white-space: nowrap;
 }
-.club-valoracion-icono { font-size: 13px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
-.club-valoracion-num { font-size: 14.5px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
-.club-valoracion-sep { color: rgba(255, 255, 255, 0.45); font-weight: 700; }
-.club-valoracion-obj { color: rgba(255, 255, 255, 0.7); font-weight: 700; }
+.club-valoracion-icono { font-size: 12px; flex-shrink: 0; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
+/* Columna "fracción": logrado / raya / objetivo, centrados */
+.club-valoracion-fraccion { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+.club-valoracion-num { font-size: 11.5px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.club-valoracion-sep { width: 100%; height: 1px; margin: 1.5px 0; background: rgba(255, 255, 255, 0.45); }
+.club-valoracion-obj { font-size: 10px; color: rgba(255, 255, 255, 0.7); font-weight: 700; }
 
 /* Editor del menú (candado 646) — dos pestañas dentro del modal genérico */
 .editor-club-tabs { display: flex; gap: 8px; margin-bottom: 12px; }

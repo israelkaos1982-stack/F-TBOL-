@@ -1111,33 +1111,44 @@ button { font-family: inherit; cursor: pointer; }
 .liga1ref-tabla { min-width: 380px; }
 
 /* ---------- 6d-bis. NAVEGACIÓN entre divisiones (2ª REF / 1ª REF /
-   Hypermotion / Ea Sports) — una fila de cajas de color con las OTRAS
-   3 ligas (nunca la activa) arriba del todo; al pulsar una, esa liga
+   Hypermotion / Ea Sports) — LAS 4 en una sola fila horizontal,
+   incluida la activa (marcada con --activa); al pulsar una, esa liga
    pasa a título único centrado en la fila de abajo (ver
-   js/renderizadores.js::_ligaTabBoxesHTML/_ligaTituloRowHTML). Solo
-   dentro de "liga1ref-content": no afecta a Copa/Superliga/Títulos,
-   que reutilizan .liga1ref-header pero nunca estas 2 filas. ---------- */
+   js/renderizadores.js::_ligaTabBoxesHTML/_ligaTituloRowHTML). Ancho
+   reducido al máximo (nowrap, sin min-width) para que las 4 quepan
+   siempre en una fila, incluso en móviles estrechos. Solo dentro de
+   "liga1ref-content": no afecta a Copa/Superliga/Títulos, que
+   reutilizan .liga1ref-header pero nunca estas 2 filas. ---------- */
 .liga-tab-boxes {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 4px;
   margin-bottom: 10px;
 }
 .liga-tab-box {
-  flex: 1 1 auto;
-  min-width: 74px;
+  flex: 1 1 0;
+  min-width: 0;
   border: 1px solid;
   border-radius: var(--radius-s);
-  padding: 7px 4px;
+  padding: 6px 2px;
   text-align: center;
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 800;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .liga-tab-box--2ref { background: rgba(168, 113, 74, 0.16); border-color: rgba(168, 113, 74, 0.4); color: var(--brown); }
 .liga-tab-box--hypermotion { background: rgba(59, 167, 255, 0.14); border-color: rgba(59, 167, 255, 0.4); color: var(--info); }
 .liga-tab-box--easports { background: rgba(255, 59, 92, 0.14); border-color: rgba(255, 59, 92, 0.4); color: var(--accent-2); }
 .liga-tab-box--1ref { background: var(--bg-3); border-color: var(--line); color: var(--text-hi); }
+/* La caja de la liga que se está viendo ahora mismo — mismo color de
+   fondo/borde que su variante, solo se le añade un anillo interior
+   bien visible (petición usuario: distinguirla de un vistazo). */
+.liga-tab-box--activa {
+  box-shadow: inset 0 0 0 2px currentColor;
+  font-weight: 900;
+}
 
 /* Fila del título de la liga ACTIVA — título centrado, 📌+✏️ juntos a
    la derecha (la ℹ️ ya no vive aquí, ver .club-modal-title-btn más
@@ -1161,27 +1172,34 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Espacio vacío del mismo ancho que ✏️ (24px), cuando no hay 📌 que
-   pintar (sin idClubActivo) — para que el título quede centrado. */
+/* Espacio vacío del mismo ancho que ✏️ (24px) al otro lado del título
+   — para que quede centrado (el 📌 ya no vive en esta fila). */
 .liga1ref-titulo-spacer { width: 24px; flex-shrink: 0; }
 
-/* 📌 a la izquierda del todo (petición usuario), SIEMPRE un botón real
-   en los 2 estados — antes "ya fijada" era un <span> sin ninguna
-   acción, indistinguible a la vista de uno clicable ("ese botón no
-   funciona"). Ya fijada → confirma con aviso (sin PIN). Sin fijar →
-   la fija (PIN 646). */
-.liga1ref-pin-badge {
-  background: rgba(255, 122, 41, 0.16);
-  border-color: rgba(255, 122, 41, 0.5);
+/* 📌 dentro del editor de clasificación (PIN 646) — ver
+   js/renderizadores.js::pintarEditorLiga1Ref. Ya no vive junto al
+   título de la liga (petición usuario: "es que donde está ahora es
+   molesto"). */
+.liga1ref-fijar-wrap { margin: 2px 0 12px; }
+.liga1ref-fijar-info {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-lo);
 }
-.liga1ref-pin-badge:hover { background: rgba(255, 122, 41, 0.28); }
-.liga1ref-pin-btn {
+.liga1ref-fijar-btn {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--radius-s);
+  border: 1px dashed var(--neon-soft);
   background: transparent;
-  border-style: dashed;
-  border-color: var(--neon-soft);
   color: var(--neon-soft);
+  font-size: 11.5px;
+  font-weight: 800;
+  text-align: center;
 }
-.liga1ref-pin-btn:hover { background: rgba(57, 255, 106, 0.1); }
+.liga1ref-fijar-btn:hover { background: rgba(57, 255, 106, 0.1); }
 
 /* ℹ️ llamativa (petición usuario) — más pequeña que la 1ª versión
    (-15%): brillo azul con pulso suave (CSS puro, 0 imágenes). Ahora
@@ -1240,6 +1258,32 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-leyenda-grid span { white-space: nowrap; }
 .liga1ref-leyenda-grid--europa { grid-template-rows: repeat(3, auto); }
+
+/* Leyenda plegable (nativo <details>, 0 JS) — 2ª REF/1ª REF/
+   Hypermotion/Ea Sports/Superliga. La grid de arriba mantiene su
+   margin-top de siempre; aquí solo el <summary> clicable con flecha. */
+.liga1ref-leyenda-details { margin-top: 4px; }
+.liga1ref-leyenda-details .liga1ref-leyenda-grid { margin-top: 10px; }
+.liga1ref-leyenda-summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-lo);
+  letter-spacing: 0.2px;
+  user-select: none;
+}
+.liga1ref-leyenda-summary::-webkit-details-marker { display: none; }
+.liga1ref-leyenda-summary::before {
+  content: "▸";
+  font-size: 10px;
+  color: var(--text-lo);
+  transition: transform 0.15s ease;
+}
+.liga1ref-leyenda-details[open] .liga1ref-leyenda-summary::before { transform: rotate(90deg); }
 
 /* Copa del Rey — "🏆 Eliminatorias Copa" / "🥈 Recopa Finalistas", los 2
    centrados y bien visibles (petición usuario). Va PRIMERO en la
@@ -1454,6 +1498,17 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 900;
   color: var(--text-hi);
   margin: 0 0 10px;
+}
+.liga1ref-stat-titulo--bonito {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-style: normal;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding-left: 10px;
+  border-left: 3px solid var(--neon);
 }
 
 /* ---------- 6a-bis. COPA DEL REY — bloque de estado por club (ronda + rivales) ----------

@@ -300,6 +300,19 @@
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
 
+    // Rival TODAVÍA no sorteado (el admin tecleó "?" en vez de un nombre,
+    // p.ej. el visitante de una semifinal de Copa que depende de OTRA
+    // eliminatoria sin jugar) — ver resolverRivalPorNombre. Nada de rombo
+    // ni color hash aleatorio: un cuadro negro liso con ❓️, 0 KB nuevos
+    // (mismo <div>.escudo de siempre, solo cambia el contenido/clase).
+    if (equipo.desconocido) {
+      return (
+        '<div class="escudo escudo--desconocido ' + claseTamano + '">' +
+        '<span class="escudo-siglas">❓️</span>' +
+        "</div>"
+      );
+    }
+
     if (equipo.crest) {
       return (
         '<div class="escudo escudo--real ' + claseTamano + '">' +
@@ -835,7 +848,13 @@
           colorSecundario: "#101114",
           escudoFormato: "rombo",
           valoracionPoder: _poderSinteticoPorLiga(nombre, ligaContexto),
-          mostrarSiglas: true
+          mostrarSiglas: true,
+          // Rival aún SIN sortear (el admin tecleó "?" como marcador de
+          // "todavía no se sabe" — típico de una semifinal de Copa cuyo
+          // rival depende de otra eliminatoria sin jugar). Ver
+          // crearEscudoHTML: en vez del rombo de color hash de un rival
+          // genérico de verdad, pinta un cuadro negro liso con ❓️.
+          desconocido: /^[?¿]+$/.test(String(nombre || "").trim())
         };
       }
     }

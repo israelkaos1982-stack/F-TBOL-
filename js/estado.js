@@ -544,7 +544,8 @@
     { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
     { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
-    { id: "supercopaespana", icono: "🏅", etiqueta: "Supercopa España" }
+    { id: "supercopaespana", icono: "🏅", etiqueta: "Supercopa España" },
+    { id: "champions", icono: "🇪🇺", etiqueta: "Champions" }
   ];
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
@@ -1350,6 +1351,88 @@
     }
   }
 
+  // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
+  // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
+  // equipos IA + auto-suma de los partidos que los clubes humanos ya
+  // tengan jugados de competicion==="champions" (Calendario extra →
+  // Competición "Champions") — ver
+  // js/renderizadores.js::calcularChampionsCombinada. Es UNA clasificación
+  // GLOBAL de 40 equipos, no por club — las 6 cajas ven la misma tabla.
+  // Sin sembrar de fábrica (a diferencia de Liga 1ª REF, no hay una
+  // clasificación real de referencia que dar por defecto): arranca vacía,
+  // el admin pega los 40 equipos la primera vez.
+  var CHAMPIONS_TEXTO_KEY = "ef7_champions_clasificacion_v1";
+  function obtenerChampionsTexto() {
+    try {
+      return localStorage.getItem(CHAMPIONS_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarChampionsTexto(texto) {
+    try {
+      localStorage.setItem(CHAMPIONS_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Champions:", err);
+      return false;
+    }
+  }
+
+  // ---------- Champions — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que Copa del Rey (texto libre + auto-suma), con
+  // su PROPIA clave. Sin Zamora (mismo motivo que Copa — un club puede
+  // quedar eliminado tras muy pocos partidos). Las 4 cajas SUMAN Fase de
+  // Grupos + Playoffs juntos (petición usuario: "se van sumando") — no hay
+  // clave separada por fase, un solo contador para toda la competición.
+  function _championsStatKey(categoria) {
+    return "ef7_champions_stat_" + categoria + "_v1";
+  }
+  function obtenerChampionsStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_championsStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarChampionsStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_championsStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Champions:", err);
+      return false;
+    }
+  }
+
+  // ---------- Champions — Playoffs, texto libre por ronda (candado 646) ----------
+  // Dieciseisavos/Octavos/Cuartos/Semis/Final: el admin pega el resultado
+  // AGREGADO (ida+vuelta ya sumada) de cada eliminatoria, una línea por
+  // cruce: "Equipo A 3-1 Equipo B". Si uno de los 2 equipos de una línea es
+  // un club humano con sus propios partidos de "champions" ya jugados en
+  // esa ronda (Calendario extra, ida y vuelta como cualquier otra
+  // competición), esa línea se IGNORA — el resultado real del club manda
+  // siempre, ver js/renderizadores.js::calcularChampionsPlayoffRonda.
+  function _championsPlayoffKey(ronda) {
+    return "ef7_champions_playoff_" + ronda + "_v1";
+  }
+  function obtenerChampionsPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_championsPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarChampionsPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_championsPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Champions:", err);
+      return false;
+    }
+  }
+
   // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
   // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
   // app simula — el admin ha comparado, equipo a equipo, nivel/escudo/
@@ -1725,6 +1808,12 @@
     guardarLigaExtraStatTexto: guardarLigaExtraStatTexto,
     obtenerCopaStatTexto: obtenerCopaStatTexto,
     guardarCopaStatTexto: guardarCopaStatTexto,
+    obtenerChampionsTexto: obtenerChampionsTexto,
+    guardarChampionsTexto: guardarChampionsTexto,
+    obtenerChampionsStatTexto: obtenerChampionsStatTexto,
+    guardarChampionsStatTexto: guardarChampionsStatTexto,
+    obtenerChampionsPlayoffTexto: obtenerChampionsPlayoffTexto,
+    guardarChampionsPlayoffTexto: guardarChampionsPlayoffTexto,
     obtenerAliasEfootball: obtenerAliasEfootball,
     guardarAliasEfootball: guardarAliasEfootball,
     fusionarBalones: fusionarBalones,

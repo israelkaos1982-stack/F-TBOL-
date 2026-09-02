@@ -1785,6 +1785,101 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: none !important;
 }
 
+/* ---------- 6a-ter. CHAMPIONS — Fase de Grupos (40 equipos, reutiliza
+   .liga1ref-tabla/.clasificacion-*/.liga1ref-stats-grid tal cual, 0 CSS
+   nuevo para esa parte) + Playoffs (escudos clasificados + cruces ida y
+   vuelta). Zonas de la clasificación: 🟦 Octavos directo (1º-8º) / 🟨
+   Dieciseisavos playoff (9º-24º) — mismos colores que .liga1ref-zona-
+   champions/.liga1ref-zona-promo-ascenso, con nombre propio para que el
+   significado (Champions, no ascenso/descenso de liga doméstica) quede
+   claro en el propio nombre de la clase. ---------- */
+.liga1ref-zona-octavos { background: rgba(59, 167, 255, 0.14); }
+.liga1ref-zona-octavos .clasificacion-pos,
+.liga1ref-zona-octavos .clasificacion-pts { color: var(--info); }
+
+.liga1ref-zona-dieciseisavos { background: rgba(241, 196, 15, 0.12); }
+.liga1ref-zona-dieciseisavos .clasificacion-pos,
+.liga1ref-zona-dieciseisavos .clasificacion-pts { color: var(--gold); }
+
+/* Pestañas "🔵 Fase Grupos / 🟣 Playoffs" — reutiliza .liga-tab-boxes/
+   .liga-tab-box/.liga-tab-box--activa tal cual (mismo estilo que la
+   navegación de las 4 divisiones de Liga), solo 2 colores nuevos. */
+.liga-tab-box--champions-grupos { background: rgba(59, 167, 255, 0.14); border-color: rgba(59, 167, 255, 0.4); color: var(--info); }
+.liga-tab-box--champions-playoffs { background: rgba(139, 92, 246, 0.16); border-color: rgba(139, 92, 246, 0.4); color: var(--morado); }
+.champions-tabs { margin-bottom: 14px; }
+
+/* Rejilla de escudos clasificados (arriba de la pestaña Playoffs) —
+   compacta, solo escudo + posición + nombre, sin caber en tabla. */
+.champions-qualy-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.champions-qualy-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 4px 8px 4px 4px;
+  max-width: 100%;
+}
+.champions-qualy-pos {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--text-lo);
+}
+.champions-qualy-nombre {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* Cruces de una ronda de Playoffs — reutiliza .copa-club-block/
+   .copa-club-header/.copa-club-nombre como contenedor de cada ronda (0
+   CSS nuevo para eso), solo la fila del cruce en sí (2 escudos + marcador
+   agregado) es nueva. */
+.champions-playoff-ties { display: flex; flex-direction: column; }
+.champions-tie-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px;
+  border-top: 1px solid var(--line);
+}
+.champions-tie-lado {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.champions-tie-row .escudo--sm { width: 22px; height: 22px; min-width: 22px; border-radius: 5px; }
+.champions-tie-nombre {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.champions-tie-lado--gano .champions-tie-nombre { color: var(--neon); }
+.champions-tie-lado--perdio .champions-tie-nombre { color: var(--text-lo); }
+.champions-tie-marcador {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--text-hi);
+  white-space: nowrap;
+}
+.champions-stats-nota { margin: 6px 0 10px; }
+
 /* ---------- 6b. SALA DE TÍTULOS — sin imágenes, icono + color CSS ----------
    Cada trofeo cuesta 0 KB (emoji + --trofeo-color puesto inline por
    _trofeoCardHtml, mismo truco que --team-color en match-card-team) —

@@ -141,6 +141,10 @@
     } else if (vista === "objetivos") {
       body.innerHTML = '<div id="objetivos-content"></div>';
       window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+      // Pone al día el 💼 con lo YA marcado (no solo lo que se marque de
+      // ahora en adelante) — por si había objetivos logrados antes de
+      // que esta sincronización existiera.
+      _sincronizarValoracionConObjetivos(clubId);
     } else if (vista === "derbys") {
       body.innerHTML = '<div id="derbys-content"></div>';
       window.Renderizadores.renderizarDerbys("derbys-content", clubId);
@@ -548,27 +552,34 @@
     if (!ta || !window.Estado || !window.Renderizadores) return;
     window.Estado.guardarObjetivosTexto(clubId, ta.value);
     window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+    _sincronizarValoracionConObjetivos(clubId);
   }
   function cancelarObjetivos(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
   }
   // Marcar/desmarcar un objetivo como logrado — SIN PIN, es el propio
   // progreso del mánager tocando su fila, no la estructura de cajas.
+  // Los puntos logrados se SUMAN AL INSTANTE al 💼 de la cabecera
+  // (petición usuario) — ver _sincronizarValoracionConObjetivos.
   function toggleObjetivo(clubId, clave) {
     if (!clubId || !clave || !window.Estado || !window.Renderizadores) return;
     window.Estado.toggleObjetivoLogrado(clubId, clave);
     window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+    _sincronizarValoracionConObjetivos(clubId);
   }
 
   // ---------- Derbys (Humano vs Humano) ----------
-  // Sin PIN (mismo criterio que Títulos): el catálogo de rivales es
-  // CERRADO (los otros 5 mánagers) y el editor viene pre-relleno con
-  // sus números ya guardados — el admin no puede inventar un rival ni
-  // dejar una línea a medias sin que se ignore en silencio.
+  // Con PIN (petición usuario): a diferencia de Títulos, aquí los
+  // números son histórico REAL de partidos ya jugados entre mánagers —
+  // el catálogo de rivales sigue siendo cerrado (no se puede inventar
+  // uno nuevo), pero el riesgo de estropear un dato real por accidente
+  // pesa más que en un simple contador de trofeos.
   function editarDerbysInline(clubId) {
     if (!window.Renderizadores) return;
-    var cont = document.getElementById("derbys-content");
-    if (cont) window.Renderizadores.pintarEditorDerbys(cont, clubId);
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("derbys-content");
+      if (cont) window.Renderizadores.pintarEditorDerbys(cont, clubId);
+    }, "🔒 Editar derbys", "PIN de administrador (646)");
   }
   function guardarDerbys(clubId) {
     var ta = document.getElementById("derbys-textarea");
@@ -581,11 +592,11 @@
   }
 
   // ---------- 💼 Valoración del club ----------
-  // 2 números sueltos que el mánager teclea a mano (la suma real de
-  // objetivos la lleva él, "yo hago la suma manual"). El badge de la
-  // cabecera es solo lectura; se edita desde el ✏️ dentro de "Editar
-  // menú" (pintarEditorMenuClub) — sin PIN aparte, ya está detrás del
-  // candado que abre ese modal.
+  // "Logrado" YA NO se teclea a mano: se SUMA SOLO desde los puntos
+  // marcados en 🎯 Objetivos (petición usuario) — ver
+  // _sincronizarValoracionConObjetivos, llamada tras cada toggle/guardado
+  // de Objetivos. Solo "objetivo" (la meta para seguir la temporada que
+  // viene) lo teclea el mánager, no hay forma de derivarlo de nada.
   function _fmtNumValoracion(n) {
     n = Number(n) || 0;
     return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
@@ -596,16 +607,23 @@
     var v = window.Estado.obtenerValoracionClub(clubId);
     badge.textContent = "💼 " + _fmtNumValoracion(v.logrado) + "/" + _fmtNumValoracion(v.objetivo);
   }
+  // Puntos LOGRADOS = SIEMPRE los mismos que muestra la pantalla
+  // Objetivos (window.Renderizadores.calcularObjetivosPuntos) — nunca
+  // pueden desincronizarse, porque no hay otra vía de ponerlos.
+  function _sincronizarValoracionConObjetivos(clubId) {
+    if (!clubId || !window.Estado || !window.Renderizadores || !window.Renderizadores.calcularObjetivosPuntos) return;
+    var puntos = window.Renderizadores.calcularObjetivosPuntos(clubId);
+    var actual = window.Estado.obtenerValoracionClub(clubId);
+    window.Estado.guardarValoracionClub(clubId, puntos.ptsLogrados, actual.objetivo);
+    _pintarValoracionClub(clubId);
+  }
   function editarValoracionClub(clubId) {
     if (!clubId || !window.Estado) return;
     var actual = window.Estado.obtenerValoracionClub(clubId);
-    var logradoStr = window.prompt("💼 Puntos conseguidos:", _fmtNumValoracion(actual.logrado));
-    if (logradoStr === null) return; // cancelado
     var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtNumValoracion(actual.objetivo));
     if (objetivoStr === null) return; // cancelado
-    var logrado = parseFloat(String(logradoStr).replace(",", "."));
     var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
-    window.Estado.guardarValoracionClub(clubId, isNaN(logrado) ? 0 : logrado, isNaN(objetivo) ? 0 : objetivo);
+    window.Estado.guardarValoracionClub(clubId, actual.logrado, isNaN(objetivo) ? 0 : objetivo);
     _pintarValoracionClub(clubId);
     repintarMenuClub(clubId);
   }

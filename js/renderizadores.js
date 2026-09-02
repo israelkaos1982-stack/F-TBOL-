@@ -1272,29 +1272,56 @@
     return html + "</div>";
   }
 
-  // Fila del título de la liga ACTIVA — título centrado ("🇪🇸 Liga
-  // <corta>"), y a la derecha 📌 + ✏️ juntos (la ℹ️ vive ahora en la
-  // cabecera del propio modal, ver js/main.js::abrirModalClub). El 📌
-  // indica/fija qué división es "la suya" (Estado.obtenerDivisionClub,
-  // "1ref" por defecto) — la que abrirá su tarjeta de menú "Liga 1ª REF"
-  // a partir de ahora. Navegar con las cajas de color sigue siendo libre
-  // (solo mirar); fijarla exige PIN 646, así un ascenso/descenso real no
-  // se confunde con "estoy mirando otra liga por curiosidad".
+  // Fila del título de la liga ACTIVA — 📌 a la izquierda del todo,
+  // título centrado ("🇪🇸 Liga <corta>"), ✏️ a la derecha (la ℹ️ vive en
+  // la cabecera del propio modal, ver js/main.js::abrirModalClub /
+  // _actualizarTituloModalLiga más abajo). El 📌 indica/fija qué
+  // división es "la suya" (Estado.obtenerDivisionClub, "1ref" por
+  // defecto) — la que abrirá su tarjeta de menú "Liga 1ª REF" a partir
+  // de ahora. AMBOS estados son botones reales (petición usuario: el
+  // 📌 "no funcionaba" — el estado "ya fijada" era un simple <span>
+  // sin acción, indistinguible a la vista de uno clicable de verdad):
+  // ya fijada → confirma con un aviso (sin PIN, es solo informativo);
+  // sin fijar → la fija (PIN 646). Navegar con las cajas de color sigue
+  // siendo libre (solo mirar); fijar exige PIN, así un ascenso/descenso
+  // real no se confunde con "estoy mirando otra liga por curiosidad".
   function _ligaTituloRowHTML(ligaId, idClubActivo) {
-    var pin = "";
+    var izq = '<span class="liga1ref-titulo-spacer"></span>';
     if (idClubActivo && window.Estado) {
       var actual = window.Estado.obtenerDivisionClub(idClubActivo);
-      pin = actual === ligaId
-        ? '<span class="liga1ref-editar-btn liga1ref-pin-badge" title="Liga de este club" aria-label="Liga de este club">📌</span>'
+      izq = actual === ligaId
+        ? '<button type="button" class="liga1ref-editar-btn liga1ref-pin-badge" data-accion="info-division-pin" aria-label="Liga de este club">📌</button>'
         : '<button type="button" class="liga1ref-editar-btn liga1ref-pin-btn" data-accion="fijar-division-club" data-liga-id="' +
-          ligaId + '" data-club-id="' + idClubActivo + '" title="Fijar como su liga (PIN)" aria-label="Fijar como su liga">📌</button>';
+          ligaId + '" data-club-id="' + idClubActivo + '" aria-label="Fijar como su liga">📌</button>';
     }
-    var lapiz = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
+    var der = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-liga-id="' +
       ligaId + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
     return (
-      '<div class="liga1ref-titulo-row"><span class="liga1ref-titulo-spacer"></span>' +
+      '<div class="liga1ref-titulo-row">' + izq +
       '<span class="liga1ref-titulo-actual">' + escapeHTML(_ligaTituloLargo(ligaId)) + "</span>" +
-      '<span class="liga1ref-titulo-der">' + pin + lapiz + "</span></div>"
+      der + "</div>"
+    );
+  }
+
+  // La cabecera del propio modal ("ℹ️ 1ª REF"/etc.) reflejaba SIEMPRE el
+  // formato de "1ref" — con 4 divisiones posibles, eso era un error en
+  // cuanto se navegaba/fijaba una liga distinta (petición usuario: "hay
+  // 4 ligas en total y la ℹ️ de arriba solo lee el formato de 1ref").
+  // Se resincroniza AQUÍ, en el único punto por el que pasa CUALQUIER
+  // cambio de división visible (abrir, navegar con las cajas, fijar,
+  // guardar/cancelar edición…), delegando en el mismo pintor que usa
+  // js/main.js::abrirModalClub la primera vez (window.Main, el único
+  // puente entre los 2 módulos). Si esa división no tiene reglas
+  // dictadas todavía, cae al título largo normal (sin ℹ️) — en cuanto
+  // se dicten para 2ª REF/Hypermotion/Ea Sports, funcionará solo, sin
+  // tocar nada más.
+  function _actualizarTituloModalLiga(ligaId) {
+    if (!window.Main || typeof window.Main.pintarTituloModalInfo !== "function") return;
+    var tituloEl = document.getElementById("club-modal-title");
+    if (!tituloEl) return;
+    window.Main.pintarTituloModalInfo(
+      tituloEl, obtenerLigaNombreCorta(ligaId), "info-liga-formato", ligaId,
+      obtenerFormatoLigaTexto(ligaId), _ligaTituloLargo(ligaId)
     );
   }
 
@@ -1403,6 +1430,7 @@
       // hacer scroll (petición usuario).
       contenedor.insertAdjacentHTML("beforeend", _ligaTabBoxesHTML(ligaId, idClubActivo));
       contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
+      _actualizarTituloModalLiga(ligaId);
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];

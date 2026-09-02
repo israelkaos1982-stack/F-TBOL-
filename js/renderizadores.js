@@ -2871,8 +2871,21 @@
   // aunque el TEXTO de dentro sea libre). `clave` identifica el
   // objetivo para el progreso marcado — por sección+texto, así cambiar
   // solo el nº de puntos de una línea no borra el progreso ya tocado.
+  //
+  // La cabecera admite texto EXTRA tras la palabra clave (p.ej.
+  // "# LIGA 1ª REF" o "# COPA DEL REY") — se sigue mapeando a esa caja
+  // (por prefijo, con límite de palabra) y el texto completo se guarda
+  // como TÍTULO visible de la caja (bug 2026: escribir "# LIGA 1ª REF"
+  // hacía que todos los objetivos de Liga desaparecieran porque solo
+  // se reconocía la palabra exacta "LIGA").
+  //
+  // La línea de objetivo tolera espacios irregulares alrededor del
+  // guion y que falte el número de puntos: se busca el ÚLTIMO "-" de la
+  // línea; si no hay número válido detrás (vacío, sin espacio, mal
+  // escrito…) el objetivo se guarda igual con 1 punto por defecto, en
+  // vez de descartarse en silencio como antes.
   function parsearObjetivosTexto(texto) {
-    var secciones = {};
+    var secciones = {}, etiquetas = {};
     OBJETIVOS_SECCION_ORDEN.forEach(function (s) { secciones[s] = []; });
     var actual = null;
     (texto || "").split("\n").forEach(function (linea) {
@@ -2880,20 +2893,32 @@
       if (!l) return;
       var mHeader = l.match(/^#\s*(.+)$/);
       if (mHeader) {
-        var clave = mHeader[1].trim().toUpperCase();
-        actual = OBJETIVOS_SECCION_ORDEN.indexOf(clave) !== -1 ? clave : null;
+        var etiqueta = mHeader[1].trim();
+        var norm = etiqueta.toUpperCase();
+        var clave = null;
+        for (var i = 0; i < OBJETIVOS_SECCION_ORDEN.length; i++) {
+          var k = OBJETIVOS_SECCION_ORDEN[i];
+          if (new RegExp("^" + k + "\\b").test(norm)) { clave = k; break; }
+        }
+        actual = clave;
+        if (clave && norm !== clave) etiquetas[clave] = etiqueta;
         return;
       }
       if (!actual) return;
-      var partes = l.split(/\s+-\s+/);
-      if (partes.length < 2) return;
-      var objTexto = partes[0].trim();
+      var idx = l.lastIndexOf("-");
+      var objTexto, puntos;
+      if (idx === -1) {
+        objTexto = l;
+        puntos = 1;
+      } else {
+        objTexto = l.slice(0, idx).trim();
+        var ptsNum = parseInt(l.slice(idx + 1).trim(), 10);
+        puntos = (ptsNum === 1 || ptsNum === 2) ? ptsNum : 1;
+      }
       if (!objTexto) return;
-      var puntos = parseInt(partes[1].trim(), 10);
-      if (puntos !== 1 && puntos !== 2) puntos = 1;
       secciones[actual].push({ texto: objTexto, puntos: puntos, clave: actual + "::" + objTexto });
     });
-    return secciones;
+    return { secciones: secciones, etiquetas: etiquetas };
   }
 
   function renderizarObjetivos(contenedorId, idClubActivo) {
@@ -2910,7 +2935,9 @@
     contenedor.appendChild(header);
 
     var texto = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
-    var secciones = parsearObjetivosTexto(texto);
+    var parseo = parsearObjetivosTexto(texto);
+    var secciones = parseo.secciones;
+    var etiquetas = parseo.etiquetas;
     var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
     var logradosSet = {};
     logrados.forEach(function (c) { logradosSet[c] = true; });
@@ -2947,7 +2974,7 @@
         '<button type="button" class="objetivos-seccion-icono" data-accion="editar-objetivos-icono" data-club-id="' +
         (idClubActivo || "") + '" data-seccion="' + s + '" aria-label="Editar icono">' +
         (iconos[s] || OBJETIVOS_ICONOS_DEFAULT[s]) + "</button>" +
-        '<span class="objetivos-seccion-nombre">' + OBJETIVOS_SECCION_NOMBRE[s] + "</span>" +
+        '<span class="objetivos-seccion-nombre">' + escapeHTML(etiquetas[s] || OBJETIVOS_SECCION_NOMBRE[s]) + "</span>" +
         '<span class="objetivos-seccion-pts">' + sub + "/" + subTotal + "</span>";
       caja.appendChild(cab);
 
@@ -2989,9 +3016,11 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      'Una línea "# LIGA" / "# COPA" / "# SUPERLIGA" / "# GLOBALES" abre cada caja; debajo, un ' +
-      'objetivo por línea con "- 1" o "- 2" al final (los puntos que vale). Añade, edita o borra ' +
-      "líneas libremente.";
+      'Una línea "# LIGA" / "# COPA" / "# SUPERLIGA" / "# GLOBALES" abre cada caja — puedes añadir ' +
+      'texto detrás (p.ej. "# LIGA 1ª REF") y se usará como título de la caja, sigue siendo la ' +
+      "misma caja. Debajo, un objetivo por línea con \"- 1\" o \"- 2\" al final (los puntos que vale); " +
+      "si te dejas el número o el guion mal puesto, el objetivo se guarda igual con 1 punto, nunca " +
+      "desaparece. Añade, edita o borra líneas libremente.";
     contenedor.appendChild(nota);
 
     var textoGuardado = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";

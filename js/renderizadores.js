@@ -4320,6 +4320,41 @@
           frag.appendChild(grupo);
         });
 
+        // Fila TOTALES al final de la plantilla (petición usuario) — suma
+        // de los 4 GOLES/MVP/AMARILLAS/ROJAS de TODOS los jugadores, de
+        // cualquier posición. Usa siempre `goles` real (nunca
+        // `porteriaImbatida`, que solo sustituye a goles en la 1ª columna
+        // de los porteros dentro de su propio grupo) para que el total de
+        // ⚽ sea "goles marcados por la plantilla", no una mezcla de 2
+        // magnitudes distintas.
+        var totales = { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
+        jugadores.forEach(function (j) {
+          var s = statsDe(j);
+          totales.goles += s.goles;
+          totales.mvp += s.mvp;
+          totales.amarillas += s.amarillas;
+          totales.rojas += s.rojas;
+        });
+        var grupoTotal = document.createElement("div");
+        grupoTotal.className = "plantilla-grupo plantilla-grupo--total";
+        var tituloTotal = document.createElement("div");
+        tituloTotal.className = "plantilla-grupo-titulo";
+        tituloTotal.innerHTML =
+          '<span class="plantilla-grupo-nombre">Totales de la plantilla</span>' +
+          '<span class="plantilla-grupo-iconos"><span>⚽</span><span>⭐</span><span>🟨</span><span>🟥</span></span>';
+        grupoTotal.appendChild(tituloTotal);
+        var filaTotal = document.createElement("div");
+        filaTotal.className = "plantilla-jugador plantilla-jugador--total";
+        filaTotal.innerHTML =
+          '<span class="plantilla-dorsal"></span>' +
+          '<span class="plantilla-nombre">TOTAL</span>' +
+          '<span class="plantilla-stat">' + totales.goles + "</span>" +
+          '<span class="plantilla-stat">' + totales.mvp + "</span>" +
+          '<span class="plantilla-stat">' + totales.amarillas + "</span>" +
+          '<span class="plantilla-stat">' + totales.rojas + "</span>";
+        grupoTotal.appendChild(filaTotal);
+        frag.appendChild(grupoTotal);
+
         contenedor.appendChild(frag);
       })
       .catch(function (err) {

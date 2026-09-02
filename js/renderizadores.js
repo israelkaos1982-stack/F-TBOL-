@@ -1784,7 +1784,7 @@
     "Final partido único con prórroga y penaltis ",
     "",
     " * Reparto de localía: ",
-    "Los equipos mas débiles siempre juegan cono Local",
+    "Los equipos mas débiles siempre juegan como Local",
     "",
     "🏁RESOLUCIÓN  COPA:",
     " 🥈 EL Campeón y Subcampeon juegan la Recopa de Europa la próxima temporada."

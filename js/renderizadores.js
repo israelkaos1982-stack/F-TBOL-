@@ -2954,7 +2954,7 @@
     var header = document.createElement("div");
     header.className = "liga1ref-header";
     header.innerHTML =
-      '<span class="liga1ref-leyenda-mini"><b>' + puntos.ptsLogrados + "</b> / " + puntos.totalPts +
+      '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos"><b>' + puntos.ptsLogrados + "</b> / " + puntos.totalPts +
       " puntos conseguidos</span>" +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
@@ -3950,7 +3950,7 @@
     filaValoracion.className = "admin-list-item";
     filaValoracion.innerHTML =
       '<div class="admin-list-item-main">' +
-      '<span class="admin-list-item-title">💼 Valoración: ' + escapeHTML(String(v.logrado)) + "/" + escapeHTML(String(v.objetivo)) + "</span>" +
+      '<span class="admin-list-item-title">💼 Valoración: ' + escapeHTML(String(v.logrado)) + "/" + escapeHTML((Number(v.objetivo) || 0).toFixed(2)) + "</span>" +
       '<span class="admin-list-item-sub">Suma manual — para seguir en el club la próxima temporada</span>' +
       "</div>" +
       '<div class="admin-list-item-actions">' +

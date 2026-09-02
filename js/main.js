@@ -601,6 +601,12 @@
     n = Number(n) || 0;
     return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
   }
+  // El OBJETIVO (la meta a conseguir) va SIEMPRE con 2 decimales, aunque
+  // sea un número redondo (9 -> "9.00") — petición usuario. Distinto de
+  // _fmtNumValoracion (usado para "logrado", que sí colapsa los .00).
+  function _fmtObjetivoValoracion(n) {
+    return (Number(n) || 0).toFixed(2);
+  }
   // Estilo "HUD de videojuego" (petición usuario): 4 spans separados en
   // vez de un textContent plano, para poder resaltar el nº logrado más
   // que el objetivo — el degradado de fondo con los colores del escudo
@@ -614,7 +620,7 @@
       '<span class="club-valoracion-icono">💼</span>' +
       '<span class="club-valoracion-num">' + _fmtNumValoracion(v.logrado) + "</span>" +
       '<span class="club-valoracion-sep">/</span>' +
-      '<span class="club-valoracion-obj">' + _fmtNumValoracion(v.objetivo) + "</span>";
+      '<span class="club-valoracion-obj">' + _fmtObjetivoValoracion(v.objetivo) + "</span>";
   }
   // Puntos LOGRADOS = SIEMPRE los mismos que muestra la pantalla
   // Objetivos (window.Renderizadores.calcularObjetivosPuntos) — nunca
@@ -629,7 +635,7 @@
   function editarValoracionClub(clubId) {
     if (!clubId || !window.Estado) return;
     var actual = window.Estado.obtenerValoracionClub(clubId);
-    var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtNumValoracion(actual.objetivo));
+    var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtObjetivoValoracion(actual.objetivo));
     if (objetivoStr === null) return; // cancelado
     var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
     window.Estado.guardarValoracionClub(clubId, actual.logrado, isNaN(objetivo) ? 0 : objetivo);

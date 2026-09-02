@@ -322,12 +322,18 @@
     // Sin `crest` (equipo IA todavía sin SVG real en el repo): blasón
     // dibujado en CSS puro — 0 KB de imagen, ni siquiera medio KB, se
     // pinta al vuelo con los colores REALES del club (petición usuario:
-    // "lo más fiel posible... en redondo con sus colores") + sus siglas
+    // "solo los colores que son lo más fiel a cada escudo") + sus siglas
     // centradas, igual que un equipo humano. `escudo--ia` (además del
     // círculo/brillo que ya aplica el CSS) es lo único que distingue su
-    // marcado del de un humano.
+    // marcado del de un humano. 4 patrones disponibles según
+    // `escudoFormato` — el que mejor se acerque a la camiseta/escudo
+    // real de cada club (rayas para equipos a bandas tipo Inter/Juve,
+    // rombo para el rombo bávaro del Bayern, sólido para un color
+    // dominante tipo Chelsea/Nápoli, mitad para camisetas partidas
+    // arriba/abajo tipo Villa/Dortmund).
+    var FORMATOS_ESCUDO = { rombo: "escudo--rombo", solido: "escudo--solido", mitad: "escudo--mitad" };
     var esHumano = !!equipo.mister || !!equipo.mostrarSiglas;
-    var formato = equipo.escudoFormato === "rombo" ? "escudo--rombo" : "escudo--rayas";
+    var formato = FORMATOS_ESCUDO[equipo.escudoFormato] || "escudo--rayas";
     var style = "--primary:" + (equipo.colorPrimario || "#39ff6a") + "; --secondary:" + (equipo.colorSecundario || "#101114") + ";";
     var claseIA = esHumano ? "" : "escudo--ia ";
 

@@ -2116,8 +2116,8 @@
         // colapsable que 2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga)
         // — antes vivía fija arriba del todo, antes de cualquier club.
         contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-          '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--copa">' +
-          "<span>🏆 Eliminatorias Copa</span><span>🥈 Recopa Campeón y Subcampeón</span></div>"
+          '<div class="liga1ref-leyenda-grid">' +
+          "<span>🥈 Recopa Campeón y Subcampeón</span></div>"
         ));
       }
 
@@ -2841,9 +2841,11 @@
   // son solo un contador de referencia, no se suman solos al 💼.
   // ============================================================
   var OBJETIVOS_SECCION_ORDEN = ["LIGA", "COPA", "SUPERLIGA", "GLOBALES"];
-  var OBJETIVOS_SECCION_LABEL = {
-    LIGA: "🏆 Liga", COPA: "🎖️ Copa", SUPERLIGA: "🌟 Superliga", GLOBALES: "🌍 Globales"
-  };
+  var OBJETIVOS_SECCION_NOMBRE = { LIGA: "Liga", COPA: "Copa", SUPERLIGA: "Superliga", GLOBALES: "Globales" };
+  // Iconos por defecto — SOLO se usan si Estado no está disponible; la
+  // fuente real (editable por el admin, candado 646) es
+  // Estado.obtenerObjetivosIconos/guardarObjetivosIconoSeccion.
+  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", SUPERLIGA: "🌟", GLOBALES: "🌍" };
 
   // "# SECCIÓN" (LIGA/COPA/SUPERLIGA/GLOBALES) abre caja; toda línea
   // siguiente "Texto - N" (N=1 o 2, cualquier otro valor cae a 1) es un
@@ -2885,7 +2887,7 @@
     var header = document.createElement("div");
     header.className = "liga1ref-header";
     header.innerHTML =
-      '<span class="liga1ref-leyenda-mini">Toca un objetivo para marcarlo logrado</span>' +
+      '<span class="liga1ref-leyenda-mini"></span>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
     contenedor.appendChild(header);
@@ -2910,21 +2912,27 @@
       '<span class="objetivos-resumen-item"><b>' + ptsLogrados + "</b> / " + totalPts + " puntos conseguidos</span>";
     contenedor.appendChild(resumen);
 
-    OBJETIVOS_SECCION_ORDEN.forEach(function (s, i) {
+    var iconos = window.Estado ? window.Estado.obtenerObjetivosIconos(idClubActivo) : OBJETIVOS_ICONOS_DEFAULT;
+
+    OBJETIVOS_SECCION_ORDEN.forEach(function (s) {
       var lista = secciones[s];
       var sub = 0, subTotal = 0;
       lista.forEach(function (o) { subTotal += o.puntos; if (logradosSet[o.clave]) sub += o.puntos; });
 
-      var details = document.createElement("details");
-      details.className = "objetivos-seccion-details";
-      if (i === 0) details.open = true;
+      // Caja SIEMPRE abierta (petición usuario) — ya no es un <details>
+      // plegable, es un bloque fijo con cabecera + lista debajo.
+      var caja = document.createElement("div");
+      caja.className = "objetivos-seccion-caja";
 
-      var summary = document.createElement("summary");
-      summary.className = "objetivos-seccion-summary";
-      summary.innerHTML =
-        '<span class="objetivos-seccion-nombre">' + OBJETIVOS_SECCION_LABEL[s] + "</span>" +
+      var cab = document.createElement("div");
+      cab.className = "objetivos-seccion-cabecera";
+      cab.innerHTML =
+        '<button type="button" class="objetivos-seccion-icono" data-accion="editar-objetivos-icono" data-club-id="' +
+        (idClubActivo || "") + '" data-seccion="' + s + '" aria-label="Editar icono">' +
+        (iconos[s] || OBJETIVOS_ICONOS_DEFAULT[s]) + "</button>" +
+        '<span class="objetivos-seccion-nombre">' + OBJETIVOS_SECCION_NOMBRE[s] + "</span>" +
         '<span class="objetivos-seccion-pts">' + sub + "/" + subTotal + "</span>";
-      details.appendChild(summary);
+      caja.appendChild(cab);
 
       var body = document.createElement("div");
       body.className = "objetivos-seccion-lista";
@@ -2949,8 +2957,8 @@
           body.appendChild(fila);
         });
       }
-      details.appendChild(body);
-      contenedor.appendChild(details);
+      caja.appendChild(body);
+      contenedor.appendChild(caja);
     });
   }
 
@@ -3666,6 +3674,22 @@
   // markup .admin-list-item que Stadium Hub/Ball Storage.
   function pintarEditorMenuClub(clubId, contenedor) {
     contenedor.innerHTML = "";
+
+    // 💼 Valoración — 2 números sueltos que el mánager teclea a mano (la
+    // suma real de Objetivos la lleva él aparte). Vive aquí, dentro del
+    // editor ya protegido por PIN, en vez de un ✏️ suelto en la cabecera.
+    var v = window.Estado ? window.Estado.obtenerValoracionClub(clubId) : { logrado: 0, objetivo: 0 };
+    var filaValoracion = document.createElement("div");
+    filaValoracion.className = "admin-list-item";
+    filaValoracion.innerHTML =
+      '<div class="admin-list-item-main">' +
+      '<span class="admin-list-item-title">💼 Valoración: ' + escapeHTML(String(v.logrado)) + "/" + escapeHTML(String(v.objetivo)) + "</span>" +
+      '<span class="admin-list-item-sub">Suma manual — para seguir en el club la próxima temporada</span>' +
+      "</div>" +
+      '<div class="admin-list-item-actions">' +
+      '<button type="button" class="admin-list-item-btn" data-accion="editar-valoracion-club" data-club-id="' + clubId + '" aria-label="Editar valoración">✏️</button>' +
+      "</div>";
+    contenedor.appendChild(filaValoracion);
 
     var nota = document.createElement("p");
     nota.className = "admin-nota";

@@ -420,18 +420,18 @@ button { font-family: inherit; cursor: pointer; }
 /* Escudos IA SIN imagen real todavía (equipo sin `crest`) — insignia
    circular dibujada en CSS puro (petición usuario: "lo más fiel
    posible... en redondo con sus colores", 0 KB, no medio KB): patrón
-   rayas/rombo con los colores REALES del club + sus siglas centradas
-   (ver crearEscudoHTML), acabado premium con brillo neón exterior, un
-   sutil degradado radial de cristal encima, y un anillo blanco tipo
-   medalla (box-shadow inset) para que se lean como una insignia real,
-   no como un parche plano. */
+   rayas/rombo/sólido/mitad con los colores REALES del club (ver
+   crearEscudoHTML), acabado tipo "pin/botón" plano — sombra suave +
+   un sutil degradado radial de cristal + un anillo blanco tenue, SIN
+   halo de color alrededor (petición usuario: "se ven horribles" — el
+   brillo neón exterior no aparece en ningún escudo de fútbol real ni
+   en la referencia que dio; se quita por completo). */
 .escudo--ia {
   border-radius: 50%;
-  filter: drop-shadow(0 0 5px var(--primary)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4));
   box-shadow:
-    0 3px 10px rgba(0, 0, 0, 0.55),
+    0 3px 8px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    inset 0 0 0 3px rgba(255, 255, 255, 0.28);
+    inset 0 0 0 2px rgba(255, 255, 255, 0.2);
 }
 .escudo--ia::after {
   content: "";

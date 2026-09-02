@@ -404,13 +404,21 @@ button { font-family: inherit; cursor: pointer; }
   z-index: 1;
 }
 
-/* Escudos IA (300+) — SIN texto interno, solo la forma geométrica limpia
-   con acabado premium: insignia circular, brillo neón exterior y un
-   sutil degradado radial de cristal por encima del patrón (rayas/rombo)
-   para que se lean como logotipos modernos, no como parches planos. */
+/* Escudos IA SIN imagen real todavía (equipo sin `crest`) — insignia
+   circular dibujada en CSS puro (petición usuario: "lo más fiel
+   posible... en redondo con sus colores", 0 KB, no medio KB): patrón
+   rayas/rombo con los colores REALES del club + sus siglas centradas
+   (ver crearEscudoHTML), acabado premium con brillo neón exterior, un
+   sutil degradado radial de cristal encima, y un anillo blanco tipo
+   medalla (box-shadow inset) para que se lean como una insignia real,
+   no como un parche plano. */
 .escudo--ia {
   border-radius: 50%;
   filter: drop-shadow(0 0 5px var(--primary)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4));
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 0 3px rgba(255, 255, 255, 0.28);
 }
 .escudo--ia::after {
   content: "";

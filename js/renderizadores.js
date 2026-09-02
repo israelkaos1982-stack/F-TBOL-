@@ -290,13 +290,11 @@
   }
 
   // Escudo de CUALQUIER equipo (humano o IA), listo para Inicio/calendario/
-  // previa/acta en vivo. Si el equipo trae `crest` (URL real — los 6
-  // humanos: 5 reusan los SVG que ya sirve la app Flask hermana en
-  // /static/img/escudos-*/, el del PSG es un vector propio en el mismo
-  // sitio; cero KB nuevos en ningún caso), se pinta la imagen real sobre
-  // un fondo claro para que se lea con contraste. Sin `crest` (los 300+
-  // equipos IA) cae al blasón CSS de siempre — nunca se rompe nada para
-  // un equipo sin imagen todavía.
+  // previa/acta en vivo. Si el equipo trae `crest` (URL real, ya sirve
+  // static/img/escudos-*/ — los 6 humanos y unos pocos IA lo tienen) se
+  // pinta esa imagen real, transparente sobre el fondo oscuro de la app.
+  // Sin `crest` cae al blasón dibujado en CSS puro (0 KB, ni imagen ni
+  // red) — nunca se rompe nada para un equipo sin imagen todavía.
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
 
@@ -321,22 +319,23 @@
       );
     }
 
-    // mostrarSiglas: exclusivo de los rivales SINTÉTICOS del calendario
-    // extra en texto (ver resolverRivalPorNombre) — nunca lo llevan los
-    // equipos IA reales del catálogo, así que su blasón sigue igual.
+    // Sin `crest` (equipo IA todavía sin SVG real en el repo): blasón
+    // dibujado en CSS puro — 0 KB de imagen, ni siquiera medio KB, se
+    // pinta al vuelo con los colores REALES del club (petición usuario:
+    // "lo más fiel posible... en redondo con sus colores") + sus siglas
+    // centradas, igual que un equipo humano. `escudo--ia` (además del
+    // círculo/brillo que ya aplica el CSS) es lo único que distingue su
+    // marcado del de un humano.
     var esHumano = !!equipo.mister || !!equipo.mostrarSiglas;
     var formato = equipo.escudoFormato === "rombo" ? "escudo--rombo" : "escudo--rayas";
     var style = "--primary:" + (equipo.colorPrimario || "#39ff6a") + "; --secondary:" + (equipo.colorSecundario || "#101114") + ";";
+    var claseIA = esHumano ? "" : "escudo--ia ";
 
-    if (esHumano) {
-      return (
-        '<div class="escudo ' + formato + " " + claseTamano + '" style="' + style + '">' +
-        '<span class="escudo-siglas">' + (equipo.siglas || "") + "</span>" +
-        "</div>"
-      );
-    }
-
-    return '<div class="escudo escudo--ia ' + formato + " " + claseTamano + '" style="' + style + '"></div>';
+    return (
+      '<div class="escudo ' + claseIA + formato + " " + claseTamano + '" style="' + style + '">' +
+      '<span class="escudo-siglas">' + (equipo.siglas || "") + "</span>" +
+      "</div>"
+    );
   }
 
   // ============================================================

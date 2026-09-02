@@ -1153,20 +1153,20 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Ancho = 📌+✏️ juntos (24px + 4px + 24px), para que el título quede
-   centrado de verdad entre un lado vacío y el otro con los 2 botones. */
-.liga1ref-titulo-spacer { width: 52px; flex-shrink: 0; }
-.liga1ref-titulo-der { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+/* Espacio vacío del mismo ancho que ✏️ (24px), cuando no hay 📌 que
+   pintar (sin idClubActivo) — para que el título quede centrado. */
+.liga1ref-titulo-spacer { width: 24px; flex-shrink: 0; }
 
-/* 📌 junto al ✏️ — insignia fija (no clicable) cuando ESTA es la
-   división guardada del club, o botón (PIN 646) para fijarla cuando se
-   está mirando otra por curiosidad (petición usuario: que no ocupe su
-   propia fila aparte, que vaya junto al lápiz). */
+/* 📌 a la izquierda del todo (petición usuario), SIEMPRE un botón real
+   en los 2 estados — antes "ya fijada" era un <span> sin ninguna
+   acción, indistinguible a la vista de uno clicable ("ese botón no
+   funciona"). Ya fijada → confirma con aviso (sin PIN). Sin fijar →
+   la fija (PIN 646). */
 .liga1ref-pin-badge {
   background: rgba(255, 122, 41, 0.16);
   border-color: rgba(255, 122, 41, 0.5);
-  cursor: default;
 }
+.liga1ref-pin-badge:hover { background: rgba(255, 122, 41, 0.28); }
 .liga1ref-pin-btn {
   background: transparent;
   border-style: dashed;

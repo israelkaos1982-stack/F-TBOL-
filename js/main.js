@@ -64,12 +64,16 @@
   // formato/reglas — el icono de la tarjeta (👥️/🔹/🇪🇸...) NO cambia en
   // el menú de la izquierda, solo AQUÍ DENTRO, mientras el modal está
   // abierto (petición usuario). Si esa división/competición no tiene
-  // texto de reglas todavía, cae al título normal (nada que mostrar).
-  function _pintarTituloModalInfo(tituloEl, nombreCorto, accion, ligaId, texto) {
-    // Sin reglas dictadas para esa división todavía: se deja el título
-    // normal (icono de fábrica/editado + etiqueta) que abrirModalClub
-    // ya puso antes de llamar aquí — nada que abrir, nada que cambiar.
-    if (!texto) return;
+  // texto de reglas todavía, cae a `textoFallback` (sin ℹ️, texto
+  // plano) — con 4 divisiones posibles y solo 1ª REF con reglas
+  // dictadas por ahora, esto SE REPITE cada vez que se navega/fija una
+  // división distinta (ver js/renderizadores.js::_actualizarTituloModalLiga,
+  // el único otro caller), nunca se queda "pegado" al formato de otra.
+  function _pintarTituloModalInfo(tituloEl, nombreCorto, accion, ligaId, texto, textoFallback) {
+    if (!texto) {
+      tituloEl.textContent = textoFallback != null ? textoFallback : nombreCorto;
+      return;
+    }
     tituloEl.innerHTML = "";
     var btn = document.createElement("button");
     btn.type = "button";
@@ -112,28 +116,23 @@
       // siempre "1ref" — con ascensos/descensos de temporada en
       // temporada, un club puede acabar jugando en 2ª REF/Hypermotion/
       // Ea Sports en vez de 1ª REF (ver el botón 📌 dentro de la propia
-      // pantalla para reasignarla).
+      // pantalla para reasignarla). La cabecera ℹ️ la resincroniza el
+      // propio render (renderizarLiga1RefClasificacion →
+      // _actualizarTituloModalLiga), no hace falta pintarla aquí.
       _ligaNavActual = window.Estado.obtenerDivisionClub(clubId);
-      _pintarTituloModalInfo(
-        titulo,
-        window.Renderizadores.obtenerLigaNombreCorta(_ligaNavActual),
-        "info-liga-formato",
-        _ligaNavActual,
-        window.Renderizadores.obtenerFormatoLigaTexto(_ligaNavActual)
-      );
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
       _pintarTituloModalInfo(
         titulo, "Copa del Rey", "info-copa-formato", null,
-        window.Renderizadores.obtenerFormatoCopaTexto()
+        window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
       );
       window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
       _pintarTituloModalInfo(
         titulo, "Superliga", "info-superliga-formato", null,
-        window.Renderizadores.obtenerFormatoSuperligaTexto()
+        window.Renderizadores.obtenerFormatoSuperligaTexto(), etiqueta
       );
       window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
     } else if (vista === "titulos") {
@@ -377,6 +376,13 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto());
   }
+  // El 📌 ya fijado (petición usuario: "ese botón no funciona" — antes
+  // era un <span> sin ninguna acción, indistinguible a la vista de un
+  // botón real). No hace falta PIN — es solo informativo, no cambia
+  // nada.
+  function mostrarInfoDivisionPin() {
+    window.alert("📌 Esta ya es la liga fijada de este club.");
+  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     if (ov) ov.hidden = true;
@@ -548,7 +554,7 @@
       titulo || "🔒 Acción de administrador",
       subtitulo || "Introduce la contraseña de administrador para continuar.");
   }
-  window.Main = { pedirPinAdmin: pedirPinAdmin };
+  window.Main = { pedirPinAdmin: pedirPinAdmin, pintarTituloModalInfo: _pintarTituloModalInfo };
 
   // ---------- Pantalla 2: Panel Admin ----------
   var ADMIN_VISTAS = {
@@ -903,6 +909,7 @@
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "info-superliga-formato": mostrarInfoSuperliga(); break;
         case "info-copa-formato": mostrarInfoCopa(); break;
+        case "info-division-pin": mostrarInfoDivisionPin(); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;

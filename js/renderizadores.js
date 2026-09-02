@@ -483,38 +483,84 @@
   // fase de grupos): perder aquí saca del cuadro entero, y una ronda NUNCA
   // se puede jugar sin haber ganado antes la anterior (petición usuario:
   // "hasta que el Atlético Madrid no elimine en 1/64 al AD Mérida no puede
-  // jugar los Dieciseisavos"). Un futuro playoff que cumpla lo mismo se
-  // añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder un
-  // partido no elimina, y las jornadas no dependen de ganar la anterior).
-  var COMPS_ELIMINACION_DIRECTA = { copa: true };
+  // jugar los Dieciseisavos" — y lo mismo en Supercopa de España y en la
+  // Promoción de ascenso/descenso). Un futuro playoff que cumpla lo mismo
+  // se añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder
+  // un partido no elimina, y las jornadas no dependen de ganar la anterior).
+  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true };
+
+  // ¿Esta "ronda" es UNA de las 2 legs de una eliminatoria ida+vuelta
+  // ("Ida", "Vuelta", "Ida Semifinal", "Promoción · Vuelta"...)? Y su base
+  // (el texto sin la palabra ida/vuelta) para poder emparejar la ida con
+  // su vuelta exacta, sea cual sea el resto del texto que haya alrededor.
+  function _rondaEsIdaOVuelta(ronda) {
+    var n = _normNombre(ronda || "");
+    return /\bida\b/.test(n) || /\bvuelta\b/.test(n);
+  }
+  function _rondaBaseSinLeg(ronda) {
+    return _normNombre(ronda || "").replace(/\bida\b/g, "").replace(/\bvuelta\b/g, "").replace(/\s+/g, " ").trim();
+  }
 
   // Dado el listado de partidos de UNA sola competición de eliminación
   // directa para UN club, YA ordenado cronológicamente (mismo criterio que
   // el resto de la app: fecha real, o el fallback _fechaFallbackMs/orden
   // del texto), calcula qué rondas quedan:
-  //  - eliminadas: el club ya cayó en una ronda anterior — no hay nada
-  //    real que jugar (se pinta apagada, "Eliminado").
+  //  - eliminadas: el club ya cayó en una ronda/eliminatoria anterior — no
+  //    hay nada real que jugar (se pinta apagada, "Eliminado").
   //  - bloqueadas: el club SIGUE vivo pero la ronda anterior aún no está
   //    jugada/ganada — no se puede adelantar (se pinta con 🔒).
   // La PRIMERA ronda sin jugar de la lista es siempre la única jugable
   // (nunca se bloquea a sí misma); cualquier ronda posterior sí, hasta que
-  // esa se resuelva. 0 KB nuevos en localStorage — se recalcula en cada
-  // render a partir de los mismos partidos que ya se estaban pintando.
+  // esa se resuelva. Una ida+vuelta (2 líneas consecutivas con la MISMA
+  // ronda salvo "ida"/"vuelta") se trata como UNA sola eliminatoria: solo
+  // el marcador AGREGADO de las 2 legs decide si el club sigue vivo —
+  // perder la ida sola NUNCA elimina (regla de la propia Copa: gol doble
+  // fuera de casa / desempate), y la vuelta se desbloquea en cuanto la ida
+  // esté jugada, gane o pierda. 0 KB nuevos en localStorage — se recalcula
+  // en cada render a partir de los mismos partidos que ya se pintaban.
   function _estadoRondasEliminacion(partidos, clubId) {
     var eliminado = false, pendiente = false;
     var eliminadoIds = {}, bloqueadoIds = {};
-    partidos.forEach(function (p) {
-      if (eliminado) { eliminadoIds[p.id] = true; return; }
-      if (p.jugado && p.resultado) {
-        var esLocal = p.local === clubId;
-        var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
-        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
-        if (golesClub < golesRival) eliminado = true;
-        return;
+    var i = 0;
+    while (i < partidos.length) {
+      var p = partidos[i];
+      if (eliminado) { eliminadoIds[p.id] = true; i++; continue; }
+
+      // El emparejamiento ida+vuelta funciona igual con o sin texto extra
+      // en la ronda ("Ida Semifinal"/"Vuelta Semifinal" en Copa, o el "IDA"/
+      // "VUELTA" a secas de Promoción — ambos reducen a la misma base tras
+      // quitar la palabra ida/vuelta, incluida una base vacía).
+      var unidad = [p];
+      var pSig = partidos[i + 1];
+      if (pSig && _rondaEsIdaOVuelta(p.ronda) && _rondaEsIdaOVuelta(pSig.ronda) && _rondaBaseSinLeg(p.ronda) === _rondaBaseSinLeg(pSig.ronda)) {
+        unidad.push(pSig);
       }
-      if (pendiente) bloqueadoIds[p.id] = true;
-      else pendiente = true;
-    });
+
+      var jugados = unidad.filter(function (m) { return m.jugado && m.resultado; });
+      if (jugados.length === unidad.length) {
+        // Unidad COMPLETA: decide el marcador AGREGADO (1 leg = su propio
+        // resultado; 2 legs = la suma de ambas). Un empate en el agregado
+        // no elimina — lo resuelve el propio marcador que teclee el admin
+        // (gol de oro/penaltis), no este cálculo.
+        var golesClubTot = 0, golesRivalTot = 0;
+        unidad.forEach(function (m) {
+          var esLocal = m.local === clubId;
+          golesClubTot += esLocal ? m.resultado.golesLocal : m.resultado.golesVisitante;
+          golesRivalTot += esLocal ? m.resultado.golesVisitante : m.resultado.golesLocal;
+        });
+        if (golesClubTot < golesRivalTot) eliminado = true;
+      } else {
+        // Unidad incompleta: cada leg SIN jugar bloquea igual que una
+        // ronda suelta — la 1ª pendiente de toda la comp queda libre, el
+        // resto no (una leg YA jugada no cuenta ni desbloquea ni bloquea).
+        unidad.forEach(function (m) {
+          if (m.jugado && m.resultado) return;
+          if (pendiente) bloqueadoIds[m.id] = true;
+          else pendiente = true;
+        });
+      }
+      i += unidad.length;
+    }
     return { eliminadoIds: eliminadoIds, bloqueadoIds: bloqueadoIds };
   }
 

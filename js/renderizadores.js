@@ -2828,6 +2828,163 @@
     });
   }
 
+  // ============================================================
+  // OBJETIVOS DEL CLUB — 4 cajas FIJAS (Liga/Copa/Superliga/Globales),
+  // iguales para los 6 humanos pero cada uno con su propio texto/número
+  // (candado 646, texto libre — a diferencia de Títulos, aquí el admin
+  // SÍ puede añadir/quitar objetivos enteros, no solo tocar un número de
+  // un catálogo cerrado). Cada objetivo vale 1 o 2 puntos; tocar la fila
+  // la marca LOGRADA (sin PIN — es el progreso del propio mánager). La
+  // suma real para "seguir en el club la temporada que viene" la lleva
+  // el usuario a mano en el 💼 de la cabecera (ver
+  // Estado.obtenerValoracionClub/guardarValoracionClub) — estos puntos
+  // son solo un contador de referencia, no se suman solos al 💼.
+  // ============================================================
+  var OBJETIVOS_SECCION_ORDEN = ["LIGA", "COPA", "SUPERLIGA", "GLOBALES"];
+  var OBJETIVOS_SECCION_LABEL = {
+    LIGA: "🏆 Liga", COPA: "🎖️ Copa", SUPERLIGA: "🌟 Superliga", GLOBALES: "🌍 Globales"
+  };
+
+  // "# SECCIÓN" (LIGA/COPA/SUPERLIGA/GLOBALES) abre caja; toda línea
+  // siguiente "Texto - N" (N=1 o 2, cualquier otro valor cae a 1) es un
+  // objetivo de esa caja. Una cabecera desconocida se ignora junto con
+  // sus líneas (catálogo de cajas CERRADO a las 4 de la pantalla,
+  // aunque el TEXTO de dentro sea libre). `clave` identifica el
+  // objetivo para el progreso marcado — por sección+texto, así cambiar
+  // solo el nº de puntos de una línea no borra el progreso ya tocado.
+  function parsearObjetivosTexto(texto) {
+    var secciones = {};
+    OBJETIVOS_SECCION_ORDEN.forEach(function (s) { secciones[s] = []; });
+    var actual = null;
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var mHeader = l.match(/^#\s*(.+)$/);
+      if (mHeader) {
+        var clave = mHeader[1].trim().toUpperCase();
+        actual = OBJETIVOS_SECCION_ORDEN.indexOf(clave) !== -1 ? clave : null;
+        return;
+      }
+      if (!actual) return;
+      var partes = l.split(/\s+-\s+/);
+      if (partes.length < 2) return;
+      var objTexto = partes[0].trim();
+      if (!objTexto) return;
+      var puntos = parseInt(partes[1].trim(), 10);
+      if (puntos !== 1 && puntos !== 2) puntos = 1;
+      secciones[actual].push({ texto: objTexto, puntos: puntos, clave: actual + "::" + objTexto });
+    });
+    return secciones;
+  }
+
+  function renderizarObjetivos(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    var header = document.createElement("div");
+    header.className = "liga1ref-header";
+    header.innerHTML =
+      '<span class="liga1ref-leyenda-mini">Toca un objetivo para marcarlo logrado</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
+    contenedor.appendChild(header);
+
+    var texto = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
+    var secciones = parsearObjetivosTexto(texto);
+    var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
+    var logradosSet = {};
+    logrados.forEach(function (c) { logradosSet[c] = true; });
+
+    var totalPts = 0, ptsLogrados = 0;
+    OBJETIVOS_SECCION_ORDEN.forEach(function (s) {
+      secciones[s].forEach(function (o) {
+        totalPts += o.puntos;
+        if (logradosSet[o.clave]) ptsLogrados += o.puntos;
+      });
+    });
+
+    var resumen = document.createElement("div");
+    resumen.className = "objetivos-resumen";
+    resumen.innerHTML =
+      '<span class="objetivos-resumen-item"><b>' + ptsLogrados + "</b> / " + totalPts + " puntos conseguidos</span>";
+    contenedor.appendChild(resumen);
+
+    OBJETIVOS_SECCION_ORDEN.forEach(function (s, i) {
+      var lista = secciones[s];
+      var sub = 0, subTotal = 0;
+      lista.forEach(function (o) { subTotal += o.puntos; if (logradosSet[o.clave]) sub += o.puntos; });
+
+      var details = document.createElement("details");
+      details.className = "objetivos-seccion-details";
+      if (i === 0) details.open = true;
+
+      var summary = document.createElement("summary");
+      summary.className = "objetivos-seccion-summary";
+      summary.innerHTML =
+        '<span class="objetivos-seccion-nombre">' + OBJETIVOS_SECCION_LABEL[s] + "</span>" +
+        '<span class="objetivos-seccion-pts">' + sub + "/" + subTotal + "</span>";
+      details.appendChild(summary);
+
+      var body = document.createElement("div");
+      body.className = "objetivos-seccion-lista";
+      if (!lista.length) {
+        var vacio = document.createElement("p");
+        vacio.className = "objetivos-vacio";
+        vacio.textContent = "Sin objetivos todavía. Pulsa ✏️ para añadir alguno.";
+        body.appendChild(vacio);
+      } else {
+        lista.forEach(function (o) {
+          var logrado = !!logradosSet[o.clave];
+          var fila = document.createElement("button");
+          fila.type = "button";
+          fila.className = "objetivos-fila" + (logrado ? " objetivos-fila--logrado" : "");
+          fila.dataset.accion = "toggle-objetivo";
+          fila.dataset.clubId = idClubActivo || "";
+          fila.dataset.clave = o.clave;
+          fila.innerHTML =
+            '<span class="objetivos-fila-check">' + (logrado ? "✅" : "⬜") + "</span>" +
+            '<span class="objetivos-fila-texto">' + escapeHTML(o.texto) + "</span>" +
+            '<span class="objetivos-fila-pts">' + o.puntos + (o.puntos === 1 ? " pt" : " pts") + "</span>";
+          body.appendChild(fila);
+        });
+      }
+      details.appendChild(body);
+      contenedor.appendChild(details);
+    });
+  }
+
+  // Editor de texto libre por caja (candado 646) — a diferencia de
+  // Títulos (catálogo cerrado, solo números), aquí el admin puede
+  // añadir/quitar objetivos enteros, así que sí necesita la misma
+  // protección que Calendario extra/Roster.
+  function pintarEditorObjetivos(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      'Una línea "# LIGA" / "# COPA" / "# SUPERLIGA" / "# GLOBALES" abre cada caja; debajo, un ' +
+      'objetivo por línea con "- 1" o "- 2" al final (los puntos que vale). Añade, edita o borra ' +
+      "líneas libremente.";
+    contenedor.appendChild(nota);
+
+    var textoGuardado = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
+    var textarea = document.createElement("textarea");
+    textarea.id = "objetivos-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 26;
+    textarea.value = textoGuardado;
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-objetivos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-objetivos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
   // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el
   // ancho de la tarjeta, se acorta con sentido común: abrevia la PRIMERA
   // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
@@ -4396,6 +4553,9 @@
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,
     parsearTitulosTexto: parsearTitulosTexto,
+    renderizarObjetivos: renderizarObjetivos,
+    pintarEditorObjetivos: pintarEditorObjetivos,
+    parsearObjetivosTexto: parsearObjetivosTexto,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,

@@ -3669,7 +3669,18 @@
   function calcularStatsRosterClub(clubId, datos) {
     var stats = {};
     function fila(id) {
-      if (!stats[id]) stats[id] = { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0 };
+      if (!stats[id]) {
+        stats[id] = {
+          goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0,
+          // Contadores POR PARTIDO (no total de tarjetas) — alimentan el
+          // bloqueo de color de la Plantilla: cuántos partidos distintos
+          // tuvo 2+ amarillas en el mismo encuentro (doble amarilla,
+          // pierde el siguiente) y cuántos tuvo alguna roja directa
+          // (pierde 2). Ver _tarjetaActivaPara.
+          partidosDobleAmarilla: 0,
+          partidosRojaDirecta: 0
+        };
+      }
       return stats[id];
     }
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
@@ -3683,13 +3694,26 @@
     });
 
     partidos.forEach(function (p) {
+      var amarillasEnEstePartido = {}; // jugador_id -> nº de AMARILLA en ESTE partido
+      var hayRojaEnEstePartido = {}; // jugador_id -> true si tuvo alguna ROJA en ESTE partido
       (p.eventos || []).forEach(function (ev) {
         if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== clubId) return;
         var f = fila(ev.jugador_id);
         if (ES_GOL[ev.tipo]) f.goles++;
         else if (ev.tipo === "MVP") f.mvp++;
-        else if (ev.tipo === "AMARILLA") f.amarillas++;
-        else if (ev.tipo === "ROJA") f.rojas++;
+        else if (ev.tipo === "AMARILLA") {
+          f.amarillas++;
+          amarillasEnEstePartido[ev.jugador_id] = (amarillasEnEstePartido[ev.jugador_id] || 0) + 1;
+        } else if (ev.tipo === "ROJA") {
+          f.rojas++;
+          hayRojaEnEstePartido[ev.jugador_id] = true;
+        }
+      });
+      Object.keys(amarillasEnEstePartido).forEach(function (jid) {
+        if (amarillasEnEstePartido[jid] >= 2) fila(jid).partidosDobleAmarilla++;
+      });
+      Object.keys(hayRojaEnEstePartido).forEach(function (jid) {
+        fila(jid).partidosRojaDirecta++;
       });
     });
 
@@ -3705,6 +3729,28 @@
     }
 
     return stats;
+  }
+
+  // Bloqueo de color del nombre en la Plantilla — 3 niveles, prioridad
+  // roja > naranja > amarillo (si coincidieran varias a la vez se
+  // resuelven de una en una: al quitar la más grave con el nombre,
+  // la siguiente pasa a mostrarse sola en el siguiente render).
+  // `flagsJ` es la entrada guardada de ESTE jugador en
+  // window.Estado.obtenerTarjetaFlags(clubId) — {ciclo,doble,roja}, cada
+  // campo el "valor" que tenía cuando el admin quitó ESE bloqueo por
+  // última vez (o undefined si nunca se ha quitado). Devuelve null si no
+  // hay ningún bloqueo activo ahora mismo.
+  function _tarjetaActivaPara(s, flagsJ) {
+    if (s.partidosRojaDirecta > 0 && flagsJ.roja !== s.partidosRojaDirecta) {
+      return { tipo: "roja", valor: s.partidosRojaDirecta, titulo: "🟥 Roja directa — se pierde 2 partidos. Pulsa para quitar el bloqueo (PIN admin)." };
+    }
+    if (s.partidosDobleAmarilla > 0 && flagsJ.doble !== s.partidosDobleAmarilla) {
+      return { tipo: "doble", valor: s.partidosDobleAmarilla, titulo: "🟨🟨 2 amarillas en el mismo partido — se pierde el siguiente. Pulsa para quitar el bloqueo (PIN admin)." };
+    }
+    if (s.amarillas > 0 && s.amarillas % 3 === 0 && flagsJ.ciclo !== s.amarillas) {
+      return { tipo: "ciclo", valor: s.amarillas, titulo: s.amarillas + " amarillas acumuladas (ciclo de 3 en 3). Pulsa para quitar el bloqueo (PIN admin)." };
+    }
+    return null;
   }
 
   function renderizarPlantillaClub(idEquipoHumanoActivo) {
@@ -3726,8 +3772,9 @@
 
         var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
         function statsDe(j) {
-          return stats[j.id] || { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0 };
+          return stats[j.id] || { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0, partidosDobleAmarilla: 0, partidosRojaDirecta: 0 };
         }
+        var flags = window.Estado ? window.Estado.obtenerTarjetaFlags(idEquipoHumanoActivo) : {};
 
         var frag = document.createDocumentFragment();
         ORDEN_POSICIONES.forEach(function (pos) {
@@ -3748,11 +3795,18 @@
           deEstaPos.forEach(function (j) {
             var s = statsDe(j);
             var principal = pos === "POR" ? s.porteriaImbatida : s.goles;
+            var tarjeta = _tarjetaActivaPara(s, flags[j.id] || {});
             var fila = document.createElement("div");
-            fila.className = "plantilla-jugador";
+            fila.className = "plantilla-jugador" + (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : "");
+            var nombreTag = tarjeta
+              ? '<span class="plantilla-nombre plantilla-nombre--flag" data-accion="quitar-flag-tarjeta"' +
+                ' data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" data-jugador-id="' + escapeHTML(j.id) + '"' +
+                ' data-tipo-flag="' + tarjeta.tipo + '" data-flag-valor="' + tarjeta.valor + '"' +
+                ' title="' + escapeHTML(tarjeta.titulo) + '">' + escapeHTML(j.nombre) + "</span>"
+              : '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>";
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
-              '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>" +
+              nombreTag +
               '<span class="plantilla-stat">' + principal + "</span>" +
               '<span class="plantilla-stat">' + s.mvp + "</span>" +
               '<span class="plantilla-stat">' + s.amarillas + "</span>" +
@@ -4255,6 +4309,23 @@
           window.Estado.quitarJugadorDeLista(window._idManagerActivo, tipoDel, entradaIdDel, ordenBaja);
           renderListasJugadores();
         }, "🔒 Quitar de la lista", "Solo el administrador puede quitar lesionados/sancionados.");
+      }
+      return;
+    }
+
+    // Quitar el bloqueo de color (amarillo/naranja/rojo) del nombre de un
+    // jugador en la Plantilla — SIEMPRE requiere PIN admin. Vuelve a
+    // encenderse solo si el jugador suma otra tarjeta que haga crecer el
+    // contador correspondiente (ver _tarjetaActivaPara/limpiarTarjetaFlag).
+    var btnFlag = ev.target.closest && ev.target.closest('[data-accion="quitar-flag-tarjeta"]');
+    if (btnFlag) {
+      var clubIdFlag = btnFlag.dataset.clubId, jugadorIdFlag = btnFlag.dataset.jugadorId,
+        tipoFlag = btnFlag.dataset.tipoFlag, valorFlag = Number(btnFlag.dataset.flagValor);
+      if (clubIdFlag && jugadorIdFlag && tipoFlag && window.Estado && window.Main) {
+        window.Main.pedirPinAdmin(function () {
+          window.Estado.limpiarTarjetaFlag(clubIdFlag, jugadorIdFlag, tipoFlag, valorFlag);
+          renderizarPlantillaClub(clubIdFlag);
+        }, "🔒 Quitar bloqueo", "Solo el administrador puede quitar el bloqueo de tarjetas de un jugador.");
       }
       return;
     }

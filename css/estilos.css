@@ -1003,6 +1003,16 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--text-hi);
   text-align: center;
 }
+/* Bloqueo de tarjetas (0 KB extra de markup, solo color + puntero — ver
+   js/renderizadores.js::_tarjetaActivaPara): el propio nombre, coloreado,
+   ES el botón para quitar el bloqueo (PIN admin) — sin añadir ningún
+   icono/botón nuevo que descuadre la fila. amarillo = ciclo de 3
+   amarillas · naranja = 2 amarillas en el mismo partido · rojo = roja
+   directa. Prioridad rojo > naranja > amarillo si coincidieran. */
+.plantilla-nombre--flag { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
+.plantilla-jugador--ciclo .plantilla-nombre--flag { color: var(--gold); }
+.plantilla-jugador--doble .plantilla-nombre--flag { color: var(--naranja); }
+.plantilla-jugador--roja .plantilla-nombre--flag { color: var(--accent-2); }
 
 /* ---------- 6c. CLASIFICACIÓN — tabla compartida (usada por Liga 1ª REF) ---------- */
 .clasificacion-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }

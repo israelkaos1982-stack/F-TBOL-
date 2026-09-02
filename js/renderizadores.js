@@ -3723,19 +3723,27 @@
     _renderListaJugadores("sancionados", "previa-sancionados-lista", "Sin sancionados registrados.");
   }
 
-  // Casilla "Activar Prórroga y Penaltis": eliminatoria a partido único
-  // (Copa, tercer partido de desempate...) o VUELTA de una eliminatoria a
-  // doble partido (Semis de Copa, Playoffs europeos...) — es el único
-  // partido que puede decidir la eliminatoria, así que es el único que
-  // puede necesitar prórroga. La IDA nunca la muestra (solo el aviso
-  // informativo del gol de visitante). Liga no muestra ninguna caja.
+  // Casilla "Activar Prórroga y Penaltis": SOLO en modo "eliminatoria-
+  // unica" (Copa a partido único, etc.) — ahí sí es opcional, el admin
+  // decide de antemano si ESE partido concreto puede necesitar prórroga.
+  // La VUELTA de una eliminatoria a doble partido (Semis de Copa,
+  // Playoffs de Champions/Europa League/Conference League, Previa de
+  // Champions...) NUNCA la muestra como casilla: es el ÚNICO partido que
+  // puede decidir el global (empate + gol de visitante también empatado
+  // -> se resuelve en SU PROPIA prórroga, gol de oro, ver
+  // js/sistema-temporadas.js), así que la prórroga y los penaltis están
+  // SIEMPRE disponibles ahí — sin que el admin tenga que acordarse de
+  // activar nada (js/acta.js::iniciarPartidoEnVivo la fuerza a `true`
+  // para este caso). La IDA nunca la necesita (solo el aviso informativo
+  // del gol de visitante). Liga no muestra ninguna caja.
   // Vive AQUÍ (la PREVIA, antes de empezar) y no en la pantalla en vivo —
-  // el checkbox se decide de antemano; js/acta.js solo lee su `.checked`
-  // al arrancar el partido (mismo id `live-prorroga-toggle`, el DOM
-  // sobrevive porque la previa se OCULTA, no se destruye, al pulsar
-  // "▶ Empezar partido"). Sin texto largo debajo — solo la etiqueta, en
-  // azul clarito (petición usuario: el aviso tapaba la ✕ y el botón de
-  // Empezar, sin scroll para llegar a ellos).
+  // el checkbox (cuando existe) se decide de antemano; js/acta.js solo
+  // lee su `.checked` al arrancar el partido (mismo id
+  // `live-prorroga-toggle`, el DOM sobrevive porque la previa se OCULTA,
+  // no se destruye, al pulsar "▶ Empezar partido"). Sin texto largo
+  // debajo — solo la etiqueta, en azul clarito (petición usuario: el
+  // aviso tapaba la ✕ y el botón de Empezar, sin scroll para llegar a
+  // ellos).
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
@@ -3747,10 +3755,12 @@
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =
       '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ El gol marcado fuera cuenta doble en caso de empate global.</p>';
+    var avisoProrrogaSiempre =
+      '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta.</p>';
     if (modo === "eliminatoria-unica") {
       box.innerHTML = checkboxHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
-      box.innerHTML = avisoGolVisitante + checkboxHtml;
+      box.innerHTML = avisoGolVisitante + avisoProrrogaSiempre;
     } else if (modo === "ida-vuelta") {
       box.innerHTML = avisoGolVisitante;
     } else {
@@ -4853,6 +4863,7 @@
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
     detectarModoPartido: detectarModoPartido,
+    faseIdaVuelta: _faseIdaVuelta,
     cargarTodo: cargarTodo,
     buscarEquipoPorId: buscarEquipoPorId,
     crearEscudoHTML: crearEscudoHTML,

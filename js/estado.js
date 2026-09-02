@@ -124,14 +124,16 @@
       R.parsearPartidosExtraTexto(texto, club.nombre).forEach(function (ex, i) {
         var rival = R.resolverRivalPorNombre(ex.rivalNombre, datos, club.ligaActual);
         var compKey = resolverCompKey(ex.competicion);
+        var localId = ex.esVisitante ? rival.id : club.id;
+        var visitanteId = ex.esVisitante ? club.id : rival.id;
         out.push({
           id: ex.id,
           competicion: compKey,
           liga: compKey === "liga" ? club.ligaActual : null,
           ronda: ex.ronda,
           jornada: null,
-          local: ex.esVisitante ? rival.id : club.id,
-          visitante: ex.esVisitante ? club.id : rival.id,
+          local: localId,
+          visitante: visitanteId,
           fecha: null,
           _fechaTexto: ex.fecha,
           // Mismo fallback que usaba generarCalendarioLateralDerecho antes de
@@ -146,7 +148,12 @@
           resultado: ex.jugado ? {
             golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
             golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
-          } : null
+          } : null,
+          // null en cualquier partido normal — solo se rellena cuando la
+          // ronda es "... IDA"/"... VUELTA" (ver _detectarEliminatoria):
+          // es lo que permite a js/sistema-temporadas.js encontrar la ida
+          // y la vuelta de la MISMA eliminatoria y decidir el ganador.
+          eliminatoria: _detectarEliminatoria(compKey, ex.ronda, localId, visitanteId)
         });
       });
     });
@@ -155,6 +162,43 @@
 
   function _normTxtExtra(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  // Hash determinista simple (mismo texto -> mismo numero, siempre) - solo
+  // para construir el `grupoId` estable de una eliminatoria a doble
+  // partido, ver _detectarEliminatoria mas abajo. Copia local de
+  // js/renderizadores.js::_hashStr (no exportada, ambos archivos son
+  // scripts sueltos sin modulos que compartir).
+  function _hashStrExtra(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h.toString(36);
+  }
+
+  // Eliminatoria a doble partido (Copa Semis, Playoffs de Champions/
+  // Europa League/Conference League, Previa de Champions, promociones a
+  // ida y vuelta...): si la RONDA nombra "ida" o "vuelta" como palabra
+  // suelta, este partido de "Calendario extra" pertenece a una
+  // eliminatoria - le asignamos un `grupoId` ESTABLE (competicion +
+  // ronda SIN el "ida"/"vuelta" + el PAR de equipos, sin importar quien
+  // es local) para que js/sistema-temporadas.js pueda encontrar la ida
+  // y la vuelta juntas y aplicar el global + el gol de visitante doble.
+  // El par de equipos (ordenado) es la MISMA base que ya usa
+  // _deduplicarExtraHumanoVsHumano para su propia clave - asi el
+  // grupoId no depende de que club escribio la linea (A vs B o B vs A
+  // dan el mismo grupoId), imprescindible para un cruce humano-vs-humano
+  // donde CADA club pudo pegar su propio texto.
+  function _detectarEliminatoria(competicion, ronda, localId, visitanteId) {
+    var rondaNorm = _normTxtExtra(ronda);
+    var esIda = /\bida\b/.test(rondaNorm);
+    var esVuelta = /\bvuelta\b/.test(rondaNorm);
+    if (!esIda && !esVuelta) return null;
+    var rondaBase = rondaNorm.replace(/\bida\b/g, "").replace(/\bvuelta\b/g, "").replace(/\s+/g, " ").trim();
+    var par = [localId, visitanteId].slice().sort().join("|");
+    return {
+      grupoId: "grp-" + _hashStrExtra(_normTxtExtra(competicion) + "|" + rondaBase + "|" + par),
+      fase: esVuelta ? "vuelta" : "ida"
+    };
   }
 
   // BUG REAL (2026, fotos de calendarios humanos con partidos duplicados):

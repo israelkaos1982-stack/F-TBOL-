@@ -2287,6 +2287,611 @@
   }
 
   // ============================================================
+  // 3c-sexies. CHAMPIONS — Fase de Grupos (40 equipos, "la batidora") +
+  // Playoffs (Dieciseisavos → Octavos → Cuartos → Semis → Final)
+  // ============================================================
+  // Fase de Grupos: EXACTAMENTE el mismo mecanismo que Liga 1ª REF — texto
+  // libre pegado para los equipos IA (misma línea "Pos Nombre Pts PJ PE PP
+  // G+ G- DG", ver parsearLiga1RefTexto, reutilizado tal cual) + los 6
+  // clubes humanos SIEMPRE aparecen con sus propios partidos de
+  // competicion==="champions" ya jugados dentro de la app (Calendario
+  // extra → Competición "Champions") — ver calcularChampionsCombinada. A
+  // diferencia de Liga 1ª REF, NINGÚN club humano queda excluido (los 6
+  // pueden jugar la Champions, incluido PSG) y no hay "liga del club": se
+  // filtra únicamente por competicion==="champions".
+  //
+  // LEYENDA (petición usuario): 1º-8º clasifican DIRECTOS a Octavos de
+  // Final; 9º-24º disputan el Playoff de Dieciseisavos de Final; del 25º
+  // en adelante, eliminados de Europa. Las 4 cajas de estadísticas
+  // (Pichichi/MVP/T.Amarillas/T.Rojas) SUMAN Fase de Grupos + Playoffs
+  // juntos, sin distinguir fase — mismo criterio que Copa del Rey
+  // (calcularCopaStatsHumanos), solo que aquí el filtro cubre TODAS las
+  // rondas de "champions" (grupos Y eliminatorias) a la vez.
+  var CHAMPIONS_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 5 rondas de Playoffs, en orden — ida y vuelta las 5 (petición
+  // usuario, la Final también se guarda como marcador agregado; si se
+  // juega a partido único basta con dejar golA/golB del único partido).
+  var CHAMPIONS_PLAYOFF_RONDAS = [
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  function _championsEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Zona por posición — 🟦 1º-8º Octavos directo · 🟨 9º-24º Dieciseisavos
+  // (playoff) · sin zona del 25º en adelante (eliminado de Europa). El
+  // nombre de zona alimenta directamente la clase CSS ".liga1ref-zona-<z>"
+  // que ya pinta _construirTbodyClasificacion — ver
+  // .liga1ref-zona-octavos/.liga1ref-zona-dieciseisavos en css/estilos.css.
+  function _championsZona(pos) {
+    if (pos <= 8) return "octavos";
+    if (pos <= 24) return "dieciseisavos";
+    return "";
+  }
+
+  // La fusión: texto pegado (solo IA) + los 6 clubes humanos con sus
+  // propios partidos de competicion==="champions" ya jugados — mismo
+  // criterio EXACTO que calcularLiga1RefCombinada (ver su comentario para
+  // el razonamiento completo), sin el filtro de "liga" (la Champions no
+  // está atada a ninguna liga doméstica) ni ninguna lista de excluidos.
+  function calcularChampionsCombinada(datos) {
+    var equiposHumanos = _championsEquiposHumanos(datos);
+    var idsHumanos = {};
+    equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerChampionsTexto() : "";
+    parsearLiga1RefTexto(texto).forEach(function (f) {
+      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo
+      filas.push({
+        nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+      });
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+
+    equiposHumanos.forEach(function (e) {
+      var partidos = todosPartidos.filter(function (p) {
+        return p.jugado && p.resultado && p.competicion === "champions" &&
+          (p.local === e.id || p.visitante === e.id);
+      });
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+
+      partidos.forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+
+        if (idsHumanos[oponenteId]) return; // HvH: la fila del rival humano la aporta SU PROPIA iteración
+
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = filas.find(function (fl) {
+          return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival);
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return filas;
+  }
+
+  // Recorre, para cada club humano, TODOS sus partidos ya jugados de
+  // competicion==="champions" (fase de grupos Y playoffs, sin distinguir
+  // — "se van sumando") y suma goles/MVP/amarillas/rojas por jugador — de
+  // ESTE club (es_humano:true) Y del RIVAL IA de cada partido
+  // (es_humano:false) — mismo criterio EXACTO que calcularCopaStatsHumanos.
+  function calcularChampionsStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[jugadorId].cantidad++;
+    }
+    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
+      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    }
+
+    _championsEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "champions" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.eventos || []).forEach(function (ev) {
+            if (!ev.jugador_id) return;
+            if (ev.equipo_id === e.id) {
+              if (!ev.es_humano) return;
+              var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+              if (!nombreJ) return;
+              sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
+            } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
+              if (!ev.jugador_nombre) return;
+              sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularCopaStatsCombinado.
+  function calcularChampionsStatsCombinado(datos, categoria) {
+    var equiposHumanos = _championsEquiposHumanos(datos);
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerChampionsStatTexto(categoria) : "";
+    parsearLiga1RefStatTexto(texto).forEach(function (it) {
+      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return;
+      filas.push(it);
+    });
+
+    (calcularChampionsStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Los 24 clasificados (top 24 de la Fase de Grupos), cada uno con su
+  // zona (🟦 directo a Octavos / 🟨 juega Dieciseisavos) y el objeto de
+  // equipo ya resuelto para pintar su escudo (humano real, o
+  // resolverRivalPorNombre — real de data/rivales_reales.json si existe,
+  // o sintético con color hash — para los equipos IA de la clasificación).
+  function _championsClasificados(datos) {
+    return calcularChampionsCombinada(datos).slice(0, 24).map(function (f, i) {
+      var equipoObj = f.equipoId ? buscarEquipoPorId(f.equipoId, datos) : resolverRivalPorNombre(f.nombre, datos, null);
+      return { fila: f, pos: i + 1, zona: _championsZona(i + 1), equipoObj: equipoObj };
+    });
+  }
+
+  // Parser de una línea de eliminatoria: "Equipo A 3-1 Equipo B" — marcador
+  // AGREGADO (ida+vuelta ya sumada por el admin). El orden de los 2
+  // nombres no implica localía (una eliminatoria a doble partido no tiene
+  // un "local" único).
+  function parsearChampionsPlayoffTexto(texto) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*\S)\s+(\d+)\s*-\s*(\d+)\s+(\S.*)$/);
+      if (!m) return;
+      var equipoA = m[1].trim(), equipoB = m[4].trim();
+      if (!equipoA || !equipoB) return;
+      items.push({ equipoA: equipoA, golA: Number(m[2]), golB: Number(m[3]), equipoB: equipoB });
+    });
+    return items;
+  }
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta: agrega
+  // (ida+vuelta) todos sus partidos ya jugados de competicion==="champions"
+  // cuya `ronda` (texto libre del Calendario extra) CONTENGA el nombre de
+  // esta ronda — tolerante a cómo lo escriba el admin ("Dieciseisavos" /
+  // "Dieciseisavos Ida" / "Dieciseisavos · Vuelta"...). Sin partidos
+  // todavía en esta ronda → null (nada que auto-computar; la línea de
+  // texto libre, si existe, sigue mandando).
+  function _championsPlayoffHumano(datos, club, rondaLabel) {
+    var base = _normNombre(rondaLabel);
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      return p.jugado && p.resultado && p.competicion === "champions" &&
+        (p.local === club.id || p.visitante === club.id) &&
+        _normNombre(p.ronda || "").indexOf(base) !== -1;
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Fusiona, para UNA ronda de Playoffs: los cruces auto-computados de los
+  // clubes humanos (arriba) + el texto libre pegado por el admin (cruces
+  // 100% IA) — mismo principio que la batidora de la clasificación: si una
+  // línea de texto nombra a un club humano que YA tiene su cruce
+  // auto-computado en esta ronda, esa línea se descarta.
+  function calcularChampionsPlayoffRonda(datos, rondaKey) {
+    var meta = CHAMPIONS_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return [];
+    var equiposHumanos = _championsEquiposHumanos(datos);
+    var ties = [];
+    var humanosConCruce = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _championsPlayoffHumano(datos, e, meta.label);
+      if (!t) return;
+      humanosConCruce[e.id] = true;
+      ties.push(t);
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerChampionsPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      if (objA && objA.mister && humanosConCruce[objA.id]) return;
+      if (objB && objB.mister && humanosConCruce[objB.id]) return;
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA,
+        golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB
+      });
+    });
+
+    return ties;
+  }
+
+  var _championsTabActual = "grupos"; // "grupos" | "playoffs" — no se persiste, siempre reabre en Fase Grupos
+
+  function _championsTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes champions-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--champions-grupos' +
+      (_championsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="champions-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Fase Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--champions-playoffs' +
+      (_championsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="champions-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟣 Playoffs</button>' +
+      "</div>"
+    );
+  }
+
+  function _championsCrestGridHTML(clasificados, zonaFiltro) {
+    var subset = clasificados.filter(function (c) { return c.zona === zonaFiltro; });
+    if (!subset.length) return '<p class="admin-nota">Todavía no hay 24 equipos clasificados en la Fase de Grupos.</p>';
+    return '<div class="champions-qualy-grid">' + subset.map(function (c) {
+      return (
+        '<div class="champions-qualy-item">' +
+        crearEscudoHTML(c.equipoObj, "escudo--sm") +
+        '<span class="champions-qualy-pos">' + c.pos + "</span>" +
+        '<span class="champions-qualy-nombre">' + escapeHTML(c.fila.nombreMostrado) + "</span>" +
+        "</div>"
+      );
+    }).join("") + "</div>";
+  }
+
+  function _championsTieRowHTML(tie, idClubActivo) {
+    var esGanadorA = tie.golA > tie.golB;
+    var esGanadorB = tie.golB > tie.golA;
+    var claseA = esGanadorA ? " champions-tie-lado--gano" : (esGanadorB ? " champions-tie-lado--perdio" : "");
+    var claseB = esGanadorB ? " champions-tie-lado--gano" : (esGanadorA ? " champions-tie-lado--perdio" : "");
+    var esTuyoA = !!(tie.equipoAObj && tie.equipoAObj.id === idClubActivo);
+    var esTuyoB = !!(tie.equipoBObj && tie.equipoBObj.id === idClubActivo);
+    return (
+      '<div class="champions-tie-row">' +
+      '<div class="champions-tie-lado' + claseA + '">' + crearEscudoHTML(tie.equipoAObj, "escudo--sm") +
+      '<span class="champions-tie-nombre">' + escapeHTML(tie.equipoA) +
+      (esTuyoA ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span></div>" +
+      '<span class="champions-tie-marcador">' + tie.golA + " - " + tie.golB + "</span>" +
+      '<div class="champions-tie-lado' + claseB + '">' + crearEscudoHTML(tie.equipoBObj, "escudo--sm") +
+      '<span class="champions-tie-nombre">' + escapeHTML(tie.equipoB) +
+      (esTuyoB ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span></div>" +
+      "</div>"
+    );
+  }
+
+  function _renderizarChampionsGrupos(contenedor, datos, idClubActivo) {
+    var filas = calcularChampionsCombinada(datos);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🇪🇺 Champions · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-champions-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!filas.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadir los 40 equipos."));
+    } else {
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+      tablaEl.innerHTML =
+        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+      tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, _championsZona));
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 Octavos de Final (1º-8º)</span><span>🟨 Dieciseisavos de Final (9º-24º)</span></div>'
+      ));
+    }
+
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+    contenedor.insertAdjacentHTML("beforeend", '<p class="admin-nota champions-stats-nota">Suman Fase de Grupos + Playoffs juntos.</p>');
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = CHAMPIONS_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-champions-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarChampionsPlayoffs(contenedor, datos, idClubActivo) {
+    var clasificados = _championsClasificados(datos);
+
+    var titulo1 = document.createElement("p");
+    titulo1.className = "liga1ref-stat-titulo titulo-cursiva";
+    titulo1.textContent = "🟦 Directos a Octavos (1º-8º)";
+    contenedor.appendChild(titulo1);
+    contenedor.insertAdjacentHTML("beforeend", _championsCrestGridHTML(clasificados, "octavos"));
+
+    var titulo2 = document.createElement("p");
+    titulo2.className = "liga1ref-stat-titulo titulo-cursiva";
+    titulo2.textContent = "🟨 Playoff Dieciseisavos (9º-24º)";
+    contenedor.appendChild(titulo2);
+    contenedor.insertAdjacentHTML("beforeend", _championsCrestGridHTML(clasificados, "dieciseisavos"));
+
+    contenedor.appendChild(nodoSeparador());
+
+    CHAMPIONS_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = calcularChampionsPlayoffRonda(datos, meta.key);
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-champions-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo = ties.length
+        ? '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>"
+        : '<p class="admin-nota">Sin cruces todavía. Pulsa ✏️ (PIN 646) para añadirlos, o se auto-computan solos si un club humano juega esta ronda.</p>';
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Los cruces de un club humano se auto-computan solos</span></div>'
+    ));
+  }
+
+  function renderizarChampions(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _championsTabsHTML(idClubActivo));
+
+      if (_championsTabActual === "playoffs") _renderizarChampionsPlayoffs(contenedor, datos, idClubActivo);
+      else _renderizarChampionsGrupos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (Fase Grupos ⇄ Playoffs) y re-pinta — único punto
+  // que toca `_championsTabActual`, así siempre queda sincronizado con lo
+  // que se ve en pantalla.
+  function irChampionsTab(idClubActivo, tab) {
+    _championsTabActual = tab === "playoffs" ? "playoffs" : "grupos";
+    renderizarChampions("champions-content", idClubActivo);
+  }
+
+  function renderizarChampionsStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = CHAMPIONS_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-champions" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-champions-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularChampionsStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorChampions(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega la tabla completa, una línea por equipo: «Pos Nombre Pts PJ PE PP G+ G- DG» " +
+      "separado por espacios, tal cual se copia de otro sitio (Pos y DG son opcionales, se " +
+      "recalculan solos). Es una clasificación ÚNICA de 40 equipos — la ven las 6 cajas igual.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "champions-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 16;
+    textarea.placeholder = "1  Real Madrid    18  6  0  0  20  2   18\n2  Bayern Munich  15  6  1  1  18  8   10";
+    textarea.value = window.Estado ? window.Estado.obtenerChampionsTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-champions" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-champions" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorChampionsStat(contenedor, idClubActivo, categoria) {
+    var meta = CHAMPIONS_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Champions.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "champions-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Kylian Mbappé - Real Madrid  9\n2º Harry Kane - Bayern Munich  7";
+    textarea.value = window.Estado ? window.Estado.obtenerChampionsStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-champions-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-champions-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorChampionsPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = CHAMPIONS_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria: " +
+      "«Equipo A 3-1 Equipo B». Si un club humano ya tiene sus propios partidos de Champions jugados " +
+      "en esta ronda (Calendario extra), su cruce se calcula solo y esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "champions-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Bayern Munich 4-2 Milan\nManchester City 3-3 Juventus";
+    textarea.value = window.Estado ? window.Estado.obtenerChampionsPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-champions-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-champions-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Champions — mismo overlay propio que
+  // Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoChampions).
+  var FORMATO_CHAMPIONS_TEXTO = [
+    "📋FORMATO CHAMPIONS:",
+    "Fase de Grupos de 40 equipos (liguilla única, todos contra todos por jornadas).",
+    "",
+    "🏁RESOLUCIÓN FASE DE GRUPOS:",
+    " 🟦 Puestos 1º al 8º: Clasificación DIRECTA a Octavos de Final.",
+    "",
+    " 🟨 Puestos 9º al 24º: Juegan el Playoff de Dieciseisavos de Final (ida y vuelta) por un hueco en Octavos.",
+    "",
+    " ⬛️ Puestos 25º al 40º: Eliminados de Europa.",
+    "",
+    "👥️PLAYOFFS:",
+    "Dieciseisavos → Octavos → Cuartos → Semifinales → Final, todo a ida y vuelta (la Final a partido único en campo neutral).",
+    "",
+    "📊ESTADÍSTICAS:",
+    "Pichichi/MVP/T.Amarillas/T.Rojas suman Fase de Grupos + Playoffs juntos, sin distinguir fase."
+  ].join("\n");
+  function obtenerFormatoChampionsTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("champions") : "";
+    return override || FORMATO_CHAMPIONS_TEXTO;
+  }
+
+  // ============================================================
   // SUPERLIGA — los 6 clubes humanos, todos contra todos (calendario
   // generado por Estado.listarPartidosResueltos, ver js/estado.js). A
   // diferencia de Liga 1ª REF y Copa del Rey, NO hay texto libre que
@@ -4965,6 +5570,14 @@
     renderizarCopaDelRey: renderizarCopaDelRey,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
+    renderizarChampions: renderizarChampions,
+    irChampionsTab: irChampionsTab,
+    renderizarChampionsStatDetalle: renderizarChampionsStatDetalle,
+    pintarEditorChampions: pintarEditorChampions,
+    pintarEditorChampionsStat: pintarEditorChampionsStat,
+    pintarEditorChampionsPlayoff: pintarEditorChampionsPlayoff,
+    obtenerFormatoChampionsTexto: obtenerFormatoChampionsTexto,
+    calcularChampionsCombinada: calcularChampionsCombinada,
     renderizarSuperliga: renderizarSuperliga,
     renderizarSuperligaStatDetalle: renderizarSuperligaStatDetalle,
     calcularSuperliga: calcularSuperliga,

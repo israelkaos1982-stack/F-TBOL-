@@ -135,6 +135,13 @@
         window.Renderizadores.obtenerFormatoSuperligaTexto(), etiqueta
       );
       window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
+    } else if (vista === "champions") {
+      body.innerHTML = '<div id="champions-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Champions", "info-champions-formato", null,
+        window.Renderizadores.obtenerFormatoChampionsTexto(), etiqueta
+      );
+      window.Renderizadores.irChampionsTab(clubId, "grupos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -532,6 +539,72 @@
   }
   function cancelarCopaStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
+  }
+
+  // ---------- Champions — Fase de Grupos (40 equipos, "batidora") +
+  // Playoffs (Dieciseisavos → Final), mismo contenedor "champions-content".
+  // La clasificación SÍ tiene editor (como Liga 1ª REF, es texto pegado
+  // para la IA); cada ronda de Playoffs también, con su propio ✏️.
+  function irChampionsTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irChampionsTab(clubId, tab);
+  }
+  function editarChampionsInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("champions-content");
+      if (cont) window.Renderizadores.pintarEditorChampions(cont, clubId);
+    }, "🔒 Editar clasificación", "PIN de administrador (646)");
+  }
+  function guardarChampions(clubId) {
+    var ta = document.getElementById("champions-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarChampionsTexto(ta.value);
+    window.Renderizadores.renderizarChampions("champions-content", clubId);
+  }
+  function cancelarChampions(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarChampions("champions-content", clubId);
+  }
+  function verChampionsStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria);
+  }
+  function volverChampions(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarChampions("champions-content", clubId);
+  }
+  function editarChampionsStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("champions-content");
+      if (cont) window.Renderizadores.pintarEditorChampionsStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "PIN de administrador (646)");
+  }
+  function guardarChampionsStat(clubId, categoria) {
+    var ta = document.getElementById("champions-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarChampionsStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria);
+  }
+  function cancelarChampionsStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria);
+  }
+  function editarChampionsPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("champions-content");
+      if (cont) window.Renderizadores.pintarEditorChampionsPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "PIN de administrador (646)");
+  }
+  function guardarChampionsPlayoff(clubId, ronda) {
+    var ta = document.getElementById("champions-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarChampionsPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarChampions("champions-content", clubId);
+  }
+  function cancelarChampionsPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarChampions("champions-content", clubId);
+  }
+  function mostrarInfoChampions() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoChampionsTexto(), "champions", mostrarInfoChampions);
   }
 
   // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
@@ -1133,6 +1206,19 @@
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;
         case "guardar-copa-stat": guardarCopaStat(d.clubId, d.categoria); break;
         case "cancelar-copa-stat": cancelarCopaStat(d.clubId, d.categoria); break;
+        case "champions-tab-ir": irChampionsTab(d.clubId, d.tab); break;
+        case "editar-champions-inline": editarChampionsInline(d.clubId); break;
+        case "guardar-champions": guardarChampions(d.clubId); break;
+        case "cancelar-champions": cancelarChampions(d.clubId); break;
+        case "ver-champions-stat": verChampionsStat(d.clubId, d.categoria); break;
+        case "volver-champions": volverChampions(d.clubId); break;
+        case "editar-champions-stat-inline": editarChampionsStatInline(d.clubId, d.categoria); break;
+        case "guardar-champions-stat": guardarChampionsStat(d.clubId, d.categoria); break;
+        case "cancelar-champions-stat": cancelarChampionsStat(d.clubId, d.categoria); break;
+        case "editar-champions-playoff-inline": editarChampionsPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-champions-playoff": guardarChampionsPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-champions-playoff": cancelarChampionsPlayoff(d.clubId); break;
+        case "info-champions-formato": mostrarInfoChampions(); break;
         case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
         case "volver-superliga": volverSuperliga(d.clubId); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;

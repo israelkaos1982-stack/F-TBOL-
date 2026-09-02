@@ -3418,9 +3418,9 @@
     var forma = _FORMA_POR_CLUB[par.managed.id];
     var formaIconoRival = esSuperliga ? "🎲" : (forma ? forma.icono : "➡️");
     return {
-      tiempo: "⏱️" + (rivalEsHumano ? "10 min" : "8 min"),
-      nivel: "🤖" + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
-      forma: "🔋Tu🎲-" + formaIconoRival + "Rival"
+      tiempo: "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
+      nivel: "🤖 " + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
+      forma: "🔋 Tu🎲-" + formaIconoRival + "Rival"
     };
   }
 
@@ -3504,15 +3504,16 @@
     var checkboxHtml =
       '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
+    // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
+    // antes tenían textos distintos y más largos por fase).
+    var avisoGolVisitante =
+      '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ El gol marcado fuera cuenta doble en caso de empate global.</p>';
     if (modo === "eliminatoria-unica") {
       box.innerHTML = checkboxHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
-      box.innerHTML =
-        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Vuelta — el gol marcado fuera cuenta doble en caso de empate global.</p>' +
-        checkboxHtml;
+      box.innerHTML = avisoGolVisitante + checkboxHtml;
     } else if (modo === "ida-vuelta") {
-      box.innerHTML =
-        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Ida — el gol marcado fuera cuenta doble en caso de empate global en la vuelta. (Solo informativo, no afecta a este marcador.)</p>';
+      box.innerHTML = avisoGolVisitante;
     } else {
       box.innerHTML = "";
     }

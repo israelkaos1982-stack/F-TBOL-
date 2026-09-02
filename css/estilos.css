@@ -2320,18 +2320,20 @@ button { font-family: inherit; cursor: pointer; }
 }
 .previa-alias-row:empty { display: none; margin: 0; }
 /* Es un <button> (no un <span>): PIN-gated, abre un prompt() para
-   añadir/editar el texto. white-space normal (a diferencia de
-   .previa-team-nombre) porque el texto puede ser largo
-   ("Continente - División - País - Equipo") y hay que poder leerlo entero
-   para ir a buscarlo en el juego, nunca truncado con "...". */
+   añadir/editar el texto. Intentamos que quepa en UNA sola línea
+   (petición usuario) — max-width amplio + letra algo más pequeña que
+   antes. white-space normal se conserva como red de seguridad: un
+   texto tan largo que ni así quepa se parte en 2 líneas en vez de
+   truncarse con "..." (hay que poder leerlo entero para ir a buscarlo
+   en el juego). */
 .previa-team-alias {
-  max-width: 70%;
+  max-width: 94%;
   padding: 3px 10px;
   border-radius: 999px;
   border: 1px solid rgba(127, 211, 255, 0.35);
   background: rgba(127, 211, 255, 0.08);
   color: #7fd3ff;
-  font-size: 10.5px;
+  font-size: 9.5px;
   font-weight: 700;
   line-height: 1.3;
   text-align: center;
@@ -2373,14 +2375,16 @@ button { font-family: inherit; cursor: pointer; }
 }
 /* Tiempo · Nivel · Forma — una sola fila horizontal, sin etiqueta de
    texto (solo emoji + valor corto, ya lo trae el propio nodo desde JS,
-   ver _calcularMetaPartido en js/renderizadores.js). Los 3 grupos van
-   centrados, con más separación entre ellos y en gris (petición
-   usuario) en vez de blanco — para que no compitan visualmente con el
+   ver _calcularMetaPartido en js/renderizadores.js — cada valor lleva
+   su espacio tras el emoji, ej. "⏱️ 8 min"). Los 3 grupos van pegados
+   a la izquierda (petición usuario: alinear en vertical con "Activar
+   Prórroga y Penaltis", que empieza en el mismo borde) y en gris en
+   vez de blanco — para que no compitan visualmente con el
    marcador/nombres de equipo. */
 .previa-meta-row {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 16px;
   margin: 10px 0 0;
@@ -2395,6 +2399,10 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 700;
   color: var(--text-lo);
 }
+/* Separación con lo de arriba (Tiempo/Nivel/Forma) — antes el aviso
+   "⚠️ El gol marcado fuera..." / la casilla "Activar Prórroga y
+   Penaltis" quedaban pegados a esa fila (petición usuario). */
+#previa-formato-box { margin-top: 14px; }
 .previa-balon-forzado {
   display: inline-block;
   margin-left: 4px;

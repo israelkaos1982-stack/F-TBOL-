@@ -138,6 +138,9 @@
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
+    } else if (vista === "objetivos") {
+      body.innerHTML = '<div id="objetivos-content"></div>';
+      window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -152,6 +155,7 @@
   function abrirClub(teamId, box) {
     window._idManagerActivo = teamId;
     activarCaja(box);
+    _pintarValoracionClub(teamId);
 
     if (window.Renderizadores && typeof window.Renderizadores.cargarTodo === "function") {
       window.Renderizadores.cargarTodo().then(function (datos) {
@@ -524,6 +528,63 @@
     if (window.Renderizadores) window.Renderizadores.renderizarTitulos("titulos-content", clubId);
   }
 
+  // ---------- Objetivos del Club ----------
+  // Con PIN: a diferencia de Títulos (catálogo cerrado, solo se cambia
+  // un número), aquí el admin teclea texto libre — puede añadir/quitar
+  // objetivos enteros — así que hereda la misma protección que
+  // Calendario extra/Roster.
+  function editarObjetivosInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("objetivos-content");
+      if (cont) window.Renderizadores.pintarEditorObjetivos(cont, clubId);
+    }, "🔒 Editar objetivos", "PIN de administrador (646)");
+  }
+  function guardarObjetivos(clubId) {
+    var ta = document.getElementById("objetivos-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarObjetivosTexto(clubId, ta.value);
+    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+  function cancelarObjetivos(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+  // Marcar/desmarcar un objetivo como logrado — SIN PIN, es el propio
+  // progreso del mánager tocando su fila, no la estructura de cajas.
+  function toggleObjetivo(clubId, clave) {
+    if (!clubId || !clave || !window.Estado || !window.Renderizadores) return;
+    window.Estado.toggleObjetivoLogrado(clubId, clave);
+    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+
+  // ---------- 💼 Valoración del club (cabecera) ----------
+  // 2 números sueltos que el mánager teclea a mano (la suma real de
+  // objetivos la lleva él, "yo hago la suma manual") — sin PIN, es su
+  // propio progreso, igual que el nombre de la liga.
+  function _fmtNumValoracion(n) {
+    n = Number(n) || 0;
+    return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
+  }
+  function _pintarValoracionClub(clubId) {
+    var badge = document.getElementById("club-valoracion");
+    if (!badge || !window.Estado || !clubId) return;
+    var v = window.Estado.obtenerValoracionClub(clubId);
+    badge.textContent = "💼 " + _fmtNumValoracion(v.logrado) + "/" + _fmtNumValoracion(v.objetivo);
+  }
+  function editarValoracionClub() {
+    var clubId = window._idManagerActivo;
+    if (!clubId || !window.Estado) return;
+    var actual = window.Estado.obtenerValoracionClub(clubId);
+    var logradoStr = window.prompt("💼 Puntos conseguidos:", _fmtNumValoracion(actual.logrado));
+    if (logradoStr === null) return; // cancelado
+    var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtNumValoracion(actual.objetivo));
+    if (objetivoStr === null) return; // cancelado
+    var logrado = parseFloat(String(logradoStr).replace(",", "."));
+    var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
+    window.Estado.guardarValoracionClub(clubId, isNaN(logrado) ? 0 : logrado, isNaN(objetivo) ? 0 : objetivo);
+    _pintarValoracionClub(clubId);
+  }
+
   function salirDelClub() {
     window._idManagerActivo = null;
     document.querySelectorAll(".team-box").forEach(function (b) {
@@ -822,6 +883,9 @@
     var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
+    var btnValoracion = document.getElementById("btn-editar-valoracion");
+    if (btnValoracion) btnValoracion.addEventListener("click", editarValoracionClub);
+
     var btnResetPartidos = document.getElementById("calendar-reset-btn");
     if (btnResetPartidos) btnResetPartidos.addEventListener("click", reiniciarTodosPartidosClub);
 
@@ -971,6 +1035,10 @@
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;
+        case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;
+        case "guardar-objetivos": guardarObjetivos(d.clubId); break;
+        case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;
+        case "toggle-objetivo": toggleObjetivo(d.clubId, d.clave); break;
       }
     });
 

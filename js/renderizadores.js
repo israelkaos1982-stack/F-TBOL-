@@ -180,13 +180,16 @@
   // posición proporcional dentro de la temporada por fecha) y aplica las
   // 2 excepciones "siempre sol" pedidas por el usuario, ANTES de entrar
   // al motor estacional:
-  //  1) Cualquier partido con un lado HUMANO (local o visitante) —
-  //     nunca juega bajo lluvia/nieve.
+  //  1) Partido HUMANO vs HUMANO (local Y visitante, los 2 lados
+  //     controlados por un mister) — nunca juega bajo lluvia/nieve.
+  //     Humano vs IA / IA vs Humano NO entra aquí — sigue el motor
+  //     estacional normal (30/40/30 estaciones, 75/25 y 50/40/10 clima),
+  //     exactamente igual que un partido IA vs IA.
   //  2) Cualquier ronda a PARTIDO ÚNICO fuera de Liga (Copa/competición
   //     europea sin ida-vuelta: final, ronda eliminatoria a partido
   //     único…) — sea IA o humano. Solo las eliminatorias a DOBLE
-  //     partido (ida-vuelta) entre 2 equipos IA entran en el motor
-  //     estacional con lluvia/nieve, igual que la Liga sin humano.
+  //     partido (ida-vuelta) sin que sea Humano vs Humano entran en el
+  //     motor estacional con lluvia/nieve, igual que la Liga.
   // `local`/`visitante` son los equipos ya resueltos por el caller (para
   // no volver a buscarlos aquí) — opcionales, sin ellos se asume "sin
   // humano" (el único caller real, abrirPreviaPartido, siempre los pasa).
@@ -197,9 +200,9 @@
       return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
     }
 
-    var esHumano = !!((local && local.mister) || (visitante && visitante.mister));
+    var esHumanoVsHumano = !!(local && local.mister) && !!(visitante && visitante.mister);
     var modo = detectarModoPartido(partido);
-    if (esHumano || modo === "eliminatoria-unica") {
+    if (esHumanoVsHumano || modo === "eliminatoria-unica") {
       return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
     }
 

@@ -233,11 +233,14 @@
     return (datos.equipos.equipos || []).some(function (e) { return e.id === equipoId; });
   }
 
-  // Minuto: 5' a 95' SIEMPRE (los 90-95 representan el descuento). Solo
-  // en modo "eliminatoria-unica" con la casilla "Activar Prórroga y
-  // Penaltis" marcada se añaden 100'-120' + la opción de Tanda — Liga e
-  // Ida y Vuelta nunca la muestran (esas eliminatorias se deciden por
-  // el global de ida+vuelta, no en este partido suelto).
+  // Minuto: 5' a 95' SIEMPRE (los 90-95 representan el descuento). Si
+  // `_partidoActivo.prorroga` está activa se añaden 100'-120' + la
+  // opción de Tanda — en modo "eliminatoria-unica" depende de la
+  // casilla que el admin marcó en la previa; en la VUELTA de una
+  // eliminatoria a doble partido `prorroga` llega SIEMPRE en true
+  // (forzado en iniciarPartidoEnVivo — es el único partido que puede
+  // decidir el global, ver js/sistema-temporadas.js). La IDA nunca
+  // llega aquí con prorroga:true (su previa no pinta la casilla).
   function poblarSelectMinuto() {
     var sel = document.getElementById("live-minuto");
     if (!sel || !_partidoActivo) return;
@@ -250,7 +253,7 @@
       sel.appendChild(op);
     }
 
-    var permiteProrroga = _partidoActivo.modo === "eliminatoria-unica" && _partidoActivo.prorroga;
+    var permiteProrroga = !!_partidoActivo.prorroga;
     if (permiteProrroga) {
       for (var e = 100; e <= 120; e += 5) {
         var opE = document.createElement("option");
@@ -445,8 +448,20 @@
     // (ver js/renderizadores.js::abrirPreviaPartido), ANTES de llegar
     // aquí — su checkbox sigue existiendo en el DOM (la previa solo se
     // OCULTA, no se destruye), así que basta con leer su estado actual.
+    // La VUELTA de una eliminatoria a doble partido es la ÚNICA que
+    // puede decidir el global (empate + gol de visitante también
+    // empatado -> prórroga de ESTE MISMO partido, ver
+    // js/sistema-temporadas.js) — por eso la previa NO le pinta una
+    // casilla opcional, la prórroga+penaltis está SIEMPRE disponible ahí,
+    // sin que el admin tenga que acordarse de marcarla. Misma detección
+    // de fase (`faseIdaVuelta`) que usa la previa para decidir si pinta
+    // el aviso — así nunca pueden discrepar.
+    var esVueltaDecisiva = modo === "ida-vuelta" && R.faseIdaVuelta && R.faseIdaVuelta(partido) === "vuelta";
     var prorrogaChk = document.getElementById("live-prorroga-toggle");
-    _partidoActivo = { partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo, prorroga: !!(prorrogaChk && prorrogaChk.checked) };
+    _partidoActivo = {
+      partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo,
+      prorroga: esVueltaDecisiva ? true : !!(prorrogaChk && prorrogaChk.checked)
+    };
 
     document.getElementById("live-comp").textContent =
       (R.COMP_LABEL[partido.competicion] || partido.competicion) +
@@ -496,11 +511,11 @@
   function textoEliminatoria(res, datos) {
     if (!res) return "";
     if (res.pendiente) {
-      if (res.motivo === "tercer-partido-generado") {
-        return '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ Empate total — se ha generado un <strong>TERCER PARTIDO DE DESEMPATE</strong>, ya añadido al calendario de ambos equipos.</p>';
+      if (res.motivo === "empate-sin-prorroga") {
+        return '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ Empate total (marcador global y gol de visitante) — hacía falta la <strong>prórroga de este partido de vuelta</strong>. Reinícialo y repítelo con "Activar Prórroga y Penaltis" activa.</p>';
       }
       if (res.motivo === "penaltis-sin-resolver") {
-        return '<p class="live-eliminatoria live-eliminatoria--pendiente">🎯 0-0 tras el tercer partido — decide la tanda de penaltis (regístralos con 🟢/🔴 en la próxima confirmación).</p>';
+        return '<p class="live-eliminatoria live-eliminatoria--pendiente">🎯 Sigue empate tras la prórroga — decide la tanda de penaltis (regístralos con 🟢/🔴 antes de confirmar).</p>';
       }
       return "";
     }
@@ -509,8 +524,7 @@
     var motivos = {
       "global": "por marcador global",
       "gol-visitante-doble": "por la regla del gol de visitante (doble)",
-      "desempate-90min": "en el tercer partido de desempate",
-      "gol-visitante-partido-unico": "por gol de visitante en el tercer partido",
+      "gol-de-oro": "por gol de oro en la prórroga",
       "penaltis": "en la tanda de penaltis (" + res.penL + "-" + res.penV + ")"
     };
     return '<p class="live-eliminatoria live-eliminatoria--decidida">🏆 <strong>' + nombre + '</strong> avanza de ronda ' + (motivos[res.motivo] || "") + ".</p>";

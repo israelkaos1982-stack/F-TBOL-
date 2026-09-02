@@ -1132,6 +1132,23 @@
     return "";
   }
 
+  // Envuelve `_liga1RefZona` para que las filas de la TABLA nunca se
+  // coloreen de promo-descenso/descenso en una división que no tiene
+  // liga debajo a la que descender (hoy, 2ª REF — la más baja de la
+  // pirámide, ver LIGA_NAV_ORDEN). La leyenda (`_ligaLeyendaHTML`) YA
+  // ocultaba esas 2 líneas ahí con el mismo criterio (`abajo === ""`);
+  // esto lleva la MISMA regla a las filas reales para que nunca
+  // vuelvan a divergir (bug 2ª REF: 6º en marrón, 7º-10º en rojo, sin
+  // ninguna zona de descenso real a la que apuntar).
+  function _liga1RefZonaFn(ligaId) {
+    var tieneAbajo = LIGA_NAV_ORDEN.indexOf(ligaId) > 0;
+    return function (pos, total) {
+      var z = _liga1RefZona(pos, total);
+      if (!tieneAbajo && (z === "promo-descenso" || z === "descenso")) return "";
+      return z;
+    };
+  }
+
   // ============================================================
   // 3c-quater. LIGA 1ª REF — Pichichi/MVP/Tarjetas/Zamora
   // ============================================================
@@ -1150,8 +1167,8 @@
   var LIGA1REF_STATS = [
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
-    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
     {
       key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true,
       placeholder: "1 Sem Westerveld - Real Zaragoza  0.90\n2 Ramón Vila - Eldense  0.90"
@@ -1671,7 +1688,7 @@
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
-      var zonaFn = metaZona.leyenda === "europa" ? _ligaEuropaZona : _liga1RefZona;
+      var zonaFn = metaZona.leyenda === "europa" ? _ligaEuropaZona : _liga1RefZonaFn(ligaId);
 
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
@@ -1893,8 +1910,8 @@
   var COPA_STATS = [
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
-    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" }
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
   ];
 
   // Los 6 clubes humanos pueden jugar Copa del Rey (a diferencia de Liga
@@ -2236,8 +2253,8 @@
   var SUPERLIGA_STATS = [
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
-    { key: "amarillas", icono: "🟨", label: "TARJETAS AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "TARJETAS ROJAS", columna: "Rojas" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
     { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 

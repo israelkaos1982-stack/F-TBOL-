@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=77">
+<link rel="stylesheet" href="css/estilos.css?v=78">
 </head>
 <body>
 
@@ -151,14 +151,26 @@
 </div>
 
 <!-- Overlay del ℹ️ (formato/reglas de cada liga, Liga 1ª REF/2ª REF/
-     Hypermotion/Ea Sports) — cerrable por el propio usuario (✕ o tocar
-     fuera), con una flecha casi imperceptible abajo cuando el texto no
-     cabe entero y hace falta deslizar. Ver js/main.js::mostrarInfoLigaFormato. -->
+     Hypermotion/Ea Sports, Copa del Rey y Superliga) — cerrable por el
+     propio usuario (✕ o tocar fuera), con una flecha casi imperceptible
+     abajo cuando el texto no cabe entero y hace falta deslizar. El 📌
+     (PIN 646) abre un editor DENTRO del mismo overlay para sustituir
+     el texto de fábrica por el del admin. Ver
+     js/main.js::mostrarInfoLigaFormato/_infoOverlayAbrirEditor. -->
 <div id="liga-info-overlay" class="previa-overlay" hidden>
   <div class="previa-card liga-info-card">
+    <button type="button" class="liga-info-pin-btn" data-accion="editar-formato-info" aria-label="Editar texto (PIN 646)">📌</button>
     <button type="button" class="previa-close" id="liga-info-close" aria-label="Cerrar">✕</button>
     <div class="liga-info-body" id="liga-info-body"></div>
     <span class="liga-info-hint" id="liga-info-hint" hidden>⌄</span>
+    <div class="liga-info-editor" id="liga-info-editor" hidden>
+      <textarea class="admin-roadmap-textarea liga-info-textarea" id="liga-info-textarea" rows="12"></textarea>
+      <p class="admin-nota">Deja el campo vacío y guarda para volver al texto de fábrica.</p>
+      <div class="admin-roadmap-editor-acciones">
+        <button type="button" class="btn-ghost" data-accion="cancelar-formato-info">✕ Cancelar</button>
+        <button type="button" class="admin-list-add-btn" data-accion="guardar-formato-info">💾 Guardar</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -335,17 +347,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=77" defer></script>
-<script src="js/sync.js?v=77" defer></script>
-<script src="js/renderizadores.js?v=77" defer></script>
-<script src="js/sistema-temporadas.js?v=77" defer></script>
-<script src="js/acta.js?v=77" defer></script>
-<script src="js/estadios.js?v=77" defer></script>
-<script src="js/balones.js?v=77" defer></script>
-<script src="js/escudos.js?v=77" defer></script>
-<script src="js/calendario.js?v=77" defer></script>
-<script src="js/persistencia.js?v=77" defer></script>
-<script src="js/main.js?v=77" defer></script>
+<script src="js/estado.js?v=78" defer></script>
+<script src="js/sync.js?v=78" defer></script>
+<script src="js/renderizadores.js?v=78" defer></script>
+<script src="js/sistema-temporadas.js?v=78" defer></script>
+<script src="js/acta.js?v=78" defer></script>
+<script src="js/estadios.js?v=78" defer></script>
+<script src="js/balones.js?v=78" defer></script>
+<script src="js/escudos.js?v=78" defer></script>
+<script src="js/calendario.js?v=78" defer></script>
+<script src="js/persistencia.js?v=78" defer></script>
+<script src="js/main.js?v=78" defer></script>
 
 </body>
 </html>

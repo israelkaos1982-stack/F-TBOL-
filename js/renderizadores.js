@@ -1336,10 +1336,9 @@
     return meta.corta;
   }
 
-  // El texto EXACTO del ℹ️ (petición usuario, verbatim) — solo aplica a
-  // 1ª REF (las reglas de ascenso/descenso a Hypermotion/2ª RFEF son
-  // suyas). Las otras 3 ligas no muestran el botón ℹ️ todavía (no hay
-  // texto de reglas dictado para ellas).
+  // El texto EXACTO del ℹ️ de 1ª REF (petición usuario, verbatim). Las
+  // otras 3 (2ª REF/Hypermotion/Ea Sports) tienen el suyo propio más
+  // abajo (FORMATO_LIGA_EXTRA_TEXTO).
   var FORMATO_LIGA_1REF_TEXTO = [
     "📋FORMATO LIGA:",
     "Liga regular corta de 16 equipos a vuelta única (15 jornadas cada club)",
@@ -1367,8 +1366,84 @@
     "🟥 Puestos 13º al 16º: Descenso directo a 2ª RFEF."
   ].join("\n");
 
+  // Bloque de desempate compartido por 2ª REF/Hypermotion/Ea Sports
+  // (mismo criterio que ya llevaba 1ª REF) — sin duplicarlo 3 veces.
+  var FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO = [
+    "⚖️CRITERIOS DE DESEMPATE:",
+    "(Aplicados en estricto orden de prioridad en caso de igualdad de puntos)",
+    " * Puntos totales.",
+    " * Mayor diferencia de goles general (Goles marcados menos goles encajados).",
+    " * Mayor cantidad de goles marcados.",
+    " * Menor cantidad de goles encajados.",
+    " * Resultado del partido directo entre los equipos involucrados."
+  ].join("\n");
+
+  // 2ª REF/Hypermotion/Ea Sports — clasificación de texto libre pegada
+  // por el admin (petición usuario: dictar también sus reglas de
+  // ascenso/descenso, antes solo 1ª REF tenía ℹ️). Mismas 4 zonas que
+  // ya pinta la leyenda plegable de la clasificación (_ligaLeyendaHTML)
+  // — sin fijar un total de equipos concreto (cada liga puede tener
+  // uno distinto según lo que pegue el admin).
+  var FORMATO_LIGA_EXTRA_TEXTO = {
+    "2ref": [
+      "📋FORMATO LIGA 2ª REF:",
+      "Clasificación de texto libre pegada por el admin.",
+      "",
+      FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
+      "",
+      "🏁RESOLUCIÓN CLASIFICACIÓN:",
+      " 🟦 Puestos 1º al 4º: Ascenso directo a Liga 1ª REF.",
+      "",
+      " 🟨 Puesto 5º: Promoción de ascenso en eliminatoria contra Liga 1ª REF.",
+      "",
+      " ⬜️ Resto de puestos: Permanencia asegurada en la categoría."
+    ].join("\n"),
+    hypermotion: [
+      "📋FORMATO LIGA HYPERMOTION:",
+      "Clasificación de texto libre pegada por el admin.",
+      "",
+      FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
+      "",
+      "🏁RESOLUCIÓN CLASIFICACIÓN:",
+      " 🟦 Puestos 1º al 4º: Ascenso directo a Liga Ea Sports.",
+      "",
+      " 🟨 Puesto 5º: Promoción de ascenso en eliminatoria contra Liga Ea Sports.",
+      "",
+      " ⬜️ Puestos intermedios: Permanencia asegurada en la categoría.",
+      "",
+      " 🟫 Penúltimo grupo de descenso: Promoción de permanencia en eliminatoria contra Liga 1ª REF.",
+      "",
+      " 🟥 Últimos clasificados: Descenso directo a Liga 1ª REF."
+    ].join("\n"),
+    easports: [
+      "📋FORMATO LIGA EA SPORTS:",
+      "Clasificación de texto libre pegada por el admin.",
+      "",
+      FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
+      "",
+      "🏁RESOLUCIÓN CLASIFICACIÓN:",
+      " 🟦 Puestos 1º al 4º: Champions League.",
+      "",
+      " 🟪 Puesto 5º: Previa Champions League.",
+      "",
+      " 🟧 Puestos 6º y 7º: Europa League.",
+      "",
+      " 🟩 Puesto 8º: Conference League.",
+      "",
+      " 🟫 Penúltimo grupo de descenso: Promoción de permanencia en eliminatoria contra Liga Hypermotion.",
+      "",
+      " 🟥 Últimos clasificados: Descenso directo a Liga Hypermotion."
+    ].join("\n")
+  };
+
+  // El admin puede sustituir CUALQUIERA de estos 4 textos por el suyo
+  // (📌 dentro del propio overlay ℹ️, PIN 646 — ver
+  // js/main.js::_infoOverlayGuardar). Override vacío = sigue el de
+  // fábrica de arriba.
   function obtenerFormatoLigaTexto(ligaId) {
-    return ligaId === "1ref" ? FORMATO_LIGA_1REF_TEXTO : "";
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("liga_" + ligaId) : "";
+    if (override) return override;
+    return ligaId === "1ref" ? FORMATO_LIGA_1REF_TEXTO : (FORMATO_LIGA_EXTRA_TEXTO[ligaId] || "");
   }
 
   // Fila de cajas de color con las OTRAS 3 ligas (nunca la activa) —
@@ -1419,10 +1494,10 @@
   // cambio de división visible (abrir, navegar con las cajas, fijar,
   // guardar/cancelar edición…), delegando en el mismo pintor que usa
   // js/main.js::abrirModalClub la primera vez (window.Main, el único
-  // puente entre los 2 módulos). Si esa división no tiene reglas
-  // dictadas todavía, cae al título largo normal (sin ℹ️) — en cuanto
-  // se dicten para 2ª REF/Hypermotion/Ea Sports, funcionará solo, sin
-  // tocar nada más.
+  // puente entre los 2 módulos). Las 4 divisiones ya tienen reglas
+  // dictadas (obtenerFormatoLigaTexto) así que el botón ℹ️ sale
+  // siempre — este fallback al título largo normal solo cubriría un
+  // ligaId desconocido.
   function _actualizarTituloModalLiga(ligaId) {
     if (!window.Main || typeof window.Main.pintarTituloModalInfo !== "function") return;
     var tituloEl = document.getElementById("club-modal-title");
@@ -1436,42 +1511,78 @@
   // Leyenda en rejilla 2x2 — vive DEBAJO de la tabla (petición usuario),
   // sin flechas ⬆️/⬇️ (el orden/color de cada zona ya la distingue). Ea
   // Sports usa 6 zonas de estilo europeo en vez de ascenso/descenso.
-  function _ligaLeyendaHTML(ligaId) {
-    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
-    var grid;
-    if (meta.leyenda === "europa") {
-      grid =
-        '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--europa">' +
-        "<span>🟦 Champions</span><span>🟪 Previa</span>" +
-        "<span>🟧 E.League</span><span>🟩 Conference</span>" +
-        "<span>🟥 Descenso</span><span>🟫 Promoción</span></div>";
-    } else {
-      // Ascenso/Promoción apuntan a la liga de ARRIBA en la pirámide
-      // (LIGA_NAV_ORDEN); Promoción-descenso/Descenso a la de ABAJO —
-      // petición usuario: nombrar la liga destino explícitamente, no
-      // solo el color. 2ª REF (la más baja) no tiene liga por debajo,
-      // así que sus 2 filas de descenso se quedan sin destino.
-      var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
-      var arriba = idx >= 0 && idx < LIGA_NAV_ORDEN.length - 1
-        ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx + 1]].corta : "";
-      var abajo = idx > 0 ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx - 1]].corta : "";
-      var subeTxt = arriba ? " a Liga " + arriba : "";
-      var bajaTxt = abajo ? " a Liga " + abajo : "";
-      grid =
-        '<div class="liga1ref-leyenda-grid">' +
-        "<span>🟦 Ascenso" + escapeHTML(subeTxt) + "</span>" +
-        "<span>🟫 Promoción ascenso" + escapeHTML(subeTxt) + "</span>" +
-        "<span>🟨 Promoción descenso" + escapeHTML(bajaTxt) + "</span>" +
-        "<span>🟥 Descenso" + escapeHTML(bajaTxt) + "</span></div>";
+  //
+  // Recorre TODAS las posiciones 1..total con la MISMA `zonaFn` que
+  // pinta la tabla (_liga1RefZona/_ligaEuropaZona) — así la leyenda
+  // JAMÁS puede nombrar una zona/posición que la tabla real no
+  // muestre (con totales pequeños, el orden de ese if-chain hace que
+  // "promoción descenso"/"descenso" ni siquiera existan como fila
+  // propia — copiar la lista de posiciones en vez de recalcularla a
+  // mano evita ese desajuste).
+  function _ligaZonaPosiciones(zonaFn, total) {
+    var byZone = {};
+    for (var pos = 1; pos <= total; pos++) {
+      var z = zonaFn(pos, total);
+      if (!z) continue;
+      (byZone[z] || (byZone[z] = [])).push(pos);
     }
+    return byZone;
+  }
+  // "(los 4 primeros clasificados)" si empieza en el 1º, "(el Nº
+  // clasificado)" si es uno solo, "(6º y 7º clasificados)" si son 2, o
+  // "(los N-N-N clasificados)" para cualquier otro tramo — petición
+  // usuario: nombrar la posición real, no un rango genérico "del X al Y".
+  function _ligaPosTexto(arr) {
+    if (!arr || !arr.length) return "";
+    if (arr[0] === 1 && arr.length > 1) return " (los " + arr.length + " primeros clasificados)";
+    if (arr.length === 1) return " (el " + arr[0] + "º clasificado)";
+    if (arr.length === 2) return " (" + arr[0] + "º y " + arr[1] + "º clasificados)";
+    return " (los " + arr.join("-") + " clasificados)";
+  }
+
+  function _ligaLeyendaHTML(ligaId, total) {
+    var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
+    var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
+    var arriba = idx >= 0 && idx < LIGA_NAV_ORDEN.length - 1
+      ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx + 1]].corta : "";
+    var abajo = idx > 0 ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx - 1]].corta : "";
+    var subeTxt = arriba ? " a Liga " + arriba : "";
+    var bajaTxt = abajo ? " a Liga " + abajo : "";
+    var items = [];
+    if (meta.leyenda === "europa") {
+      // Zonas 1-4/5/6-7/8 (_ligaEuropaZona) — Promoción/Descenso
+      // apuntan SIEMPRE a Hypermotion (la liga de abajo de Ea Sports en
+      // la pirámide, ver LIGA_NAV_ORDEN).
+      var zE = _ligaZonaPosiciones(_ligaEuropaZona, total);
+      if (zE.champions) items.push({ e: "🟦", t: "Champions" + _ligaPosTexto(zE.champions) });
+      if (zE.previa) items.push({ e: "🟪", t: "Previa Champions" + _ligaPosTexto(zE.previa) });
+      if (zE.eleague) items.push({ e: "🟧", t: "Europa League" + _ligaPosTexto(zE.eleague) });
+      if (zE.conference) items.push({ e: "🟩", t: "Conference League" + _ligaPosTexto(zE.conference) });
+      if (abajo && zE["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt + _ligaPosTexto(zE["promo-descenso"]) });
+      if (abajo && zE.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt + _ligaPosTexto(zE.descenso) });
+    } else {
+      // Zonas 1-4/5 (_liga1RefZona) — Ascenso/Promoción ascenso apuntan
+      // a la liga de ARRIBA en la pirámide; Promoción descenso/Descenso
+      // a la de ABAJO. 2ª REF (la más baja) no tiene liga debajo, así
+      // que sus 2 filas de descenso no se pintan (abajo === "").
+      var zP = _ligaZonaPosiciones(_liga1RefZona, total);
+      if (arriba && zP.ascenso) items.push({ e: "🟦", t: "Ascenso" + subeTxt + _ligaPosTexto(zP.ascenso) });
+      if (arriba && zP["promo-ascenso"]) items.push({ e: "🟨", t: "Promoción ascenso" + subeTxt + _ligaPosTexto(zP["promo-ascenso"]) });
+      if (abajo && zP["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt + _ligaPosTexto(zP["promo-descenso"]) });
+      if (abajo && zP.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt + _ligaPosTexto(zP.descenso) });
+    }
+    var claseExtra = meta.leyenda === "europa" ? " liga1ref-leyenda-grid--europa" : "";
+    var grid = '<div class="liga1ref-leyenda-grid' + claseExtra + '">' +
+      items.map(function (it) { return "<span>" + it.e + " " + escapeHTML(it.t) + "</span>"; }).join("") +
+      "</div>";
     return _leyendaDetailsHTML(grid);
   }
 
-  // Envuelve una leyenda de colores en un <details> nativo (0 JS, CSS
-  // mínimo) para que quede plegada por defecto — mismo patrón para
-  // TODAS las ligas (2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga).
-  // Copa del Rey NO usa esto: su "leyenda-grid--copa" es un separador
-  // de sección ("🏆 Eliminatorias Copa"), no una leyenda de colores.
+  // Envuelve una leyenda/nota en un <details> nativo (0 JS, CSS mínimo)
+  // para que quede plegada por defecto — mismo patrón para TODAS las
+  // pantallas (2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga/Copa del
+  // Rey), reutilizado con cualquier `gridHTML` que ya lleve su propia
+  // clase de rejilla.
   function _leyendaDetailsHTML(gridHTML) {
     return (
       '<details class="liga1ref-leyenda-details">' +
@@ -1585,7 +1696,7 @@
         tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, zonaFn));
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
-        contenedor.insertAdjacentHTML("beforeend", _ligaLeyendaHTML(ligaId));
+        contenedor.insertAdjacentHTML("beforeend", _ligaLeyendaHTML(ligaId, filas.length));
       }
 
       contenedor.appendChild(nodoSeparador());
@@ -1961,7 +2072,8 @@
     " 🥈 EL Campeón y Subcampeon juegan la Recopa de Europa la próxima temporada."
   ].join("\n");
   function obtenerFormatoCopaTexto() {
-    return FORMATO_COPA_TEXTO;
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("copa") : "";
+    return override || FORMATO_COPA_TEXTO;
   }
 
   function renderizarCopaDelRey(contenedorId, idClubActivo) {
@@ -1972,14 +2084,6 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
-
-      // Antes "🏆 Estado de cada club en el cuadro" (texto plano, letra
-      // diminuta). Ahora reusa LA MISMA rejilla/fuente de la leyenda de
-      // Liga/Superliga (petición usuario), con 2 items horizontales.
-      var header = document.createElement("div");
-      header.className = "liga1ref-leyenda-grid liga1ref-leyenda-grid--copa";
-      header.innerHTML = "<span>🏆 Eliminatorias Copa</span><span>🥈 Recopa Finalistas</span>";
-      contenedor.appendChild(header);
 
       // El club activo va primero (es el que se acaba de abrir); el resto,
       // alfabético — nunca por "quién va más lejos" (no hay clasificación
@@ -2018,6 +2122,13 @@
             "</div>";
           contenedor.appendChild(bloque);
         });
+        // Leyenda plegable, debajo de TODOS los cuadros (mismo patrón
+        // colapsable que 2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga)
+        // — antes vivía fija arriba del todo, antes de cualquier club.
+        contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+          '<div class="liga1ref-leyenda-grid liga1ref-leyenda-grid--copa">' +
+          "<span>🏆 Eliminatorias Copa</span><span>🥈 Recopa Campeón y Subcampeón</span></div>"
+        ));
       }
 
       contenedor.appendChild(nodoSeparador());
@@ -2315,7 +2426,8 @@
     "🔴6º Farolillo rojo y necesita ajustes o un plan mejor."
   ].join("\n");
   function obtenerFormatoSuperligaTexto() {
-    return FORMATO_SUPERLIGA_TEXTO;
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("superliga") : "";
+    return override || FORMATO_SUPERLIGA_TEXTO;
   }
 
   function renderizarSuperliga(contenedorId, idClubActivo) {

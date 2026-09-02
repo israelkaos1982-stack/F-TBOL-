@@ -873,6 +873,31 @@
       return false;
     }
   }
+  // ---------- 📌 Override del texto de ℹ️ FORMATO/reglas (candado 646)
+  // — cada pantalla con ℹ️ (2ª REF/1ª REF/Hypermotion/Ea Sports/Copa
+  // del Rey/Superliga) tiene un texto de fábrica
+  // (js/renderizadores.js::FORMATO_*_TEXTO); el admin puede sustituirlo
+  // por el suyo desde el propio overlay ℹ️ (📌 arriba a la derecha).
+  // Vacío = "sigue el de fábrica" (no hay override guardado todavía).
+  function _formatoOverrideKey(clave) {
+    return "ef7_formato_override_" + clave + "_v1";
+  }
+  function obtenerFormatoOverride(clave) {
+    try {
+      return localStorage.getItem(_formatoOverrideKey(clave)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarFormatoOverride(clave, texto) {
+    try {
+      localStorage.setItem(_formatoOverrideKey(clave), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el formato de " + clave + ":", err);
+      return false;
+    }
+  }
   function _ligaExtraStatKey(ligaId, categoria) {
     return "ef7_liga_" + ligaId + "_stat_" + categoria + "_v1";
   }
@@ -1276,6 +1301,8 @@
     guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
     obtenerLigaExtraTexto: obtenerLigaExtraTexto,
     guardarLigaExtraTexto: guardarLigaExtraTexto,
+    obtenerFormatoOverride: obtenerFormatoOverride,
+    guardarFormatoOverride: guardarFormatoOverride,
     obtenerLigaExtraStatTexto: obtenerLigaExtraStatTexto,
     guardarLigaExtraStatTexto: guardarLigaExtraStatTexto,
     obtenerCopaStatTexto: obtenerCopaStatTexto,

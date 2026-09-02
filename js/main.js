@@ -347,16 +347,25 @@
   }
 
   // ---------- ℹ️ Formato/reglas (Liga 1ª REF/2ª REF/Hypermotion/Ea
-  // Sports Y Superliga) — overlay propio (NO window.alert nativo): el
-  // usuario lo cierra él mismo (✕ o tocando fuera) y, si el texto no
-  // cabe entero, aparece una flecha casi imperceptible abajo avisando
-  // de que hay más para deslizar. ----------
-  function _abrirInfoOverlay(texto) {
+  // Sports, Copa del Rey Y Superliga) — overlay propio (NO
+  // window.alert nativo): el usuario lo cierra él mismo (✕ o tocando
+  // fuera) y, si el texto no cabe entero, aparece una flecha casi
+  // imperceptible abajo avisando de que hay más para deslizar. El 📌
+  // arriba a la derecha (PIN 646) deja sustituir el texto de fábrica
+  // por el que escriba el admin — ver el bloque de abajo. ----------
+  var _infoOverlayClave = null; // clave de guardado del texto actual (Estado.obtenerFormatoOverride)
+  var _infoOverlayReabrir = null; // función que re-resuelve+repinta el texto tras guardar
+  function _abrirInfoOverlay(texto, clave, reabrirFn) {
     if (!texto) return;
     var ov = document.getElementById("liga-info-overlay");
     var body = document.getElementById("liga-info-body");
     var hint = document.getElementById("liga-info-hint");
+    var editor = document.getElementById("liga-info-editor");
     if (!ov || !body) return;
+    _infoOverlayClave = clave || null;
+    _infoOverlayReabrir = reabrirFn || null;
+    if (editor) editor.hidden = true;
+    body.hidden = false;
     body.textContent = texto;
     ov.hidden = false;
     // Se comprueba tras pintar (el navegador ya calculó scrollHeight).
@@ -366,19 +375,66 @@
   }
   function mostrarInfoLigaFormato(ligaId) {
     if (!window.Renderizadores) return;
-    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoLigaTexto(ligaId || _ligaNavActual));
+    var id = ligaId || _ligaNavActual;
+    _abrirInfoOverlay(
+      window.Renderizadores.obtenerFormatoLigaTexto(id), "liga_" + id,
+      function () { mostrarInfoLigaFormato(id); }
+    );
   }
   function mostrarInfoSuperliga() {
     if (!window.Renderizadores) return;
-    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSuperligaTexto());
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSuperligaTexto(), "superliga", mostrarInfoSuperliga);
   }
   function mostrarInfoCopa() {
     if (!window.Renderizadores) return;
-    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto());
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto(), "copa", mostrarInfoCopa);
   }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
+    var editor = document.getElementById("liga-info-editor");
+    var body = document.getElementById("liga-info-body");
+    if (editor) editor.hidden = true;
+    if (body) body.hidden = false;
     if (ov) ov.hidden = true;
+  }
+
+  // ---------- 📌 Editar el texto del ℹ️ (candado 646) ----------
+  // Sustituye body/hint por un textarea+Guardar/Cancelar DENTRO del
+  // mismo overlay — mismo espíritu que el resto de editores inline del
+  // proyecto (Liga 1ª REF, Calendario extra…). Vacío + Guardar = vuelve
+  // al texto de fábrica (Estado.obtenerFormatoOverride ya trata "" como
+  // "sin override").
+  function _infoOverlayAbrirEditor() {
+    if (!_infoOverlayClave) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var body = document.getElementById("liga-info-body");
+      var editor = document.getElementById("liga-info-editor");
+      var hint = document.getElementById("liga-info-hint");
+      var ta = document.getElementById("liga-info-textarea");
+      if (!body || !editor || !ta) return;
+      ta.value = body.textContent || "";
+      body.hidden = true;
+      if (hint) hint.hidden = true;
+      editor.hidden = false;
+    }, "🔒 Editar texto", "PIN de administrador (646)");
+  }
+  function _infoOverlayGuardar() {
+    var ta = document.getElementById("liga-info-textarea");
+    if (!ta || !_infoOverlayClave || !window.Estado) return;
+    window.Estado.guardarFormatoOverride(_infoOverlayClave, ta.value);
+    if (_infoOverlayReabrir) _infoOverlayReabrir();
+    else cerrarInfoLigaFormato();
+  }
+  function _infoOverlayCancelarEdicion() {
+    var body = document.getElementById("liga-info-body");
+    var editor = document.getElementById("liga-info-editor");
+    var hint = document.getElementById("liga-info-hint");
+    if (editor) editor.hidden = true;
+    if (!body) return;
+    body.hidden = false;
+    setTimeout(function () {
+      if (hint) hint.hidden = body.scrollHeight <= body.clientHeight + 2;
+    }, 0);
   }
 
   // ---------- Liga 1ª REF / extra — Pichichi/MVP/Tarjetas/Zamora (mismo contenedor) ----------
@@ -889,6 +945,9 @@
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
+        case "editar-formato-info": _infoOverlayAbrirEditor(); break;
+        case "guardar-formato-info": _infoOverlayGuardar(); break;
+        case "cancelar-formato-info": _infoOverlayCancelarEdicion(); break;
         case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId, d.ligaId); break;
         case "guardar-liga1ref": guardarLiga1Ref(d.clubId, d.ligaId); break;
         case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId, d.ligaId); break;

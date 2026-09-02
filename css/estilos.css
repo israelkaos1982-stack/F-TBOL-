@@ -1258,16 +1258,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-leyenda-grid span {
   display: flex;
-  align-items: center;
-  white-space: nowrap;
+  align-items: flex-start;
+  gap: 4px;
+  line-height: 1.35;
 }
-/* Europa (Ea Sports) sigue en su rejilla 2 columnas x 3 filas de
-   siempre — no pedido cambiarla, solo la de 2ª REF/1ª REF/Hypermotion. */
-.liga1ref-leyenda-grid--europa {
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(3, auto);
-  gap: 12px 24px;
-}
+/* Ea Sports (europa) usa la MISMA rejilla de 1 columna — sus textos ya
+   llevan la posición exacta ("el 8º clasificado") y son demasiado
+   largos para 2 columnas sin desbordar. */
 
 /* Leyenda plegable (nativo <details>, 0 JS) — 2ª REF/1ª REF/
    Hypermotion/Ea Sports/Superliga. La grid de arriba mantiene su
@@ -1295,16 +1292,11 @@ button { font-family: inherit; cursor: pointer; }
 }
 .liga1ref-leyenda-details[open] .liga1ref-leyenda-summary::before { transform: rotate(90deg); }
 
-/* Copa del Rey — "🏆 Eliminatorias Copa" / "🥈 Recopa Finalistas", los 2
-   centrados y bien visibles (petición usuario). Va PRIMERO en la
-   pantalla (nada de tabla encima todavía), así que sin el margin-top
-   de la leyenda normal — en su lugar un margin-bottom antes del primer
-   bloque de club. */
-.liga1ref-leyenda-grid--copa {
-  justify-items: center;
-  margin-top: 0;
-  margin-bottom: 14px;
-}
+/* Copa del Rey — "🏆 Eliminatorias Copa" / "🥈 Recopa Campeón y
+   Subcampeón", centrados. Va DEBAJO de todos los cuadros de club,
+   dentro del mismo desplegable "LEYENDA" colapsable que el resto de
+   pantallas (petición usuario) — antes vivía fijo arriba del todo. */
+.liga1ref-leyenda-grid--copa { justify-items: center; }
 
 /* Superliga — los 3 items (Campeón/Subcampeón/Farolillo) SIEMPRE en
    una sola fila horizontal, nunca 2+1, y centrados (no pegados a la
@@ -1353,6 +1345,25 @@ button { font-family: inherit; cursor: pointer; }
   pointer-events: none;
 }
 .liga-info-hint[hidden] { display: none; }
+
+/* 📌 arriba a la derecha (junto a ✕) — abre el editor de texto del
+   propio ℹ️ (PIN 646, ver js/main.js::_infoOverlayAbrirEditor). Mismo
+   tamaño/forma que .previa-close, a su izquierda. */
+.liga-info-pin-btn {
+  position: absolute;
+  top: 12px;
+  right: 50px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px dashed var(--neon-soft);
+  background: transparent;
+  color: var(--neon-soft);
+  font-size: 14px;
+}
+.liga-info-pin-btn:hover { background: rgba(57, 255, 106, 0.1); }
+.liga-info-editor { margin-top: 4px; }
+.liga-info-textarea { min-height: 220px; }
 
 /* Las 5 tablas de estadísticas (Pichichi/MVP/Amarillas/Rojas/Zamora) solo
    tienen 4 columnas (#, Jugador, Equipo, valor) — el min-width de 380px

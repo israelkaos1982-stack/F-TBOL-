@@ -997,6 +997,85 @@
     }
   }
 
+  // ---------- Derbys (Humano vs Humano) — candado 646 ----------
+  // Catálogo CERRADO (mismo patrón que Títulos): cada club humano tiene
+  // UNA línea por cada uno de los OTROS 5 mánagers, con PJ/PG/PE/PP/G+/G-
+  // — el admin solo cambia esos 6 números, el DG y el % de victorias se
+  // calculan solos (ver js/renderizadores.js::parsearDerbysTexto). La
+  // caja GLOBAL de cada club tampoco se guarda aparte: es la SUMA de las
+  // 5 líneas, siempre recalculada, para que nunca pueda desincronizarse
+  // del desglose por rival.
+  //
+  // A diferencia de Objetivos/Títulos (arrancan vacíos o en 0), aquí el
+  // texto por defecto es el HISTÓRICO REAL de la temporada anterior que
+  // dio el usuario — no hay ningún otro sitio de la app donde ese dato
+  // viva, así que "vacío" sería borrarlo. Cada mánager lleva su PROPIA
+  // cuenta de forma independiente (petición usuario) — el desglose de
+  // Isra contra Álvaro no tiene por qué coincidir número a número con el
+  // de Álvaro contra Isra, son 2 registros separados a propósito.
+  var DERBYS_DEFAULT_TEXTO = {
+    "atletico-madrid": [ // ISRA ✏️
+      "Álvaro 🐭: PJ 9 PG 6 PE 1 PP 2 G+ 26 G- 19",
+      "Acsa 🔨: PJ 7 PG 6 PE 0 PP 1 G+ 37 G- 8",
+      "Toñín 💡: PJ 12 PG 9 PE 1 PP 2 G+ 52 G- 21",
+      "Ángel 😈: PJ 10 PG 8 PE 0 PP 2 G+ 40 G- 16",
+      "Izan 🦆: PJ 3 PG 2 PE 0 PP 1 G+ 8 G- 4"
+    ].join("\n"),
+    arsenal: [ // ÁLVARO 🐭
+      "Acsa 🔨: PJ 8 PG 2 PE 0 PP 6 G+ 15 G- 27",
+      "Toñín 💡: PJ 11 PG 9 PE 1 PP 1 G+ 27 G- 8",
+      "Ángel 😈: PJ 10 PG 4 PE 2 PP 4 G+ 31 G- 24",
+      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Isra ✏️: PJ 10 PG 2 PE 1 PP 7 G+ 21 G- 30"
+    ].join("\n"),
+    "real-madrid": [ // ACSA 🔨
+      "Álvaro 🐭: PJ 8 PG 6 PE 0 PP 2 G+ 27 G- 15",
+      "Toñín 💡: PJ 10 PG 5 PE 1 PP 4 G+ 15 G- 17",
+      "Ángel 😈: PJ 8 PG 2 PE 1 PP 5 G+ 19 G- 25",
+      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Isra ✏️: PJ 8 PG 1 PE 0 PP 7 G+ 9 G- 37"
+    ].join("\n"),
+    "fc-barcelona": [ // ÁNGEL 😈
+      "Álvaro 🐭: PJ 10 PG 4 PE 2 PP 4 G+ 24 G- 31",
+      "Acsa 🔨: PJ 8 PG 5 PE 1 PP 2 G+ 25 G- 19",
+      "Toñín 💡: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
+      "Izan 🦆: PJ 4 PG 3 PE 1 PP 0 G+ 9 G- 4",
+      "Isra ✏️: PJ 10 PG 1 PE 0 PP 9 G+ 15 G- 41"
+    ].join("\n"),
+    psg: [ // IZAN 🦆
+      "Álvaro 🐭: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Acsa 🔨: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Toñín 💡: PJ 3 PG 2 PE 0 PP 1 G+ 6 G- 3",
+      "Ángel 😈: PJ 4 PG 0 PE 1 PP 3 G+ 4 G- 9",
+      "Isra ✏️: PJ 3 PG 1 PE 0 PP 2 G+ 4 G- 8"
+    ].join("\n"),
+    liverpool: [ // TOÑÍN 💡
+      "Álvaro 🐭: PJ 11 PG 1 PE 1 PP 9 G+ 8 G- 27",
+      "Acsa 🔨: PJ 10 PG 3 PE 1 PP 6 G+ 15 G- 17",
+      "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
+      "Izan 🦆: PJ 3 PG 1 PE 0 PP 2 G+ 3 G- 6",
+      "Isra ✏️: PJ 11 PG 2 PE 1 PP 8 G+ 17 G- 47"
+    ].join("\n")
+  };
+  function _derbysKey(clubId) { return "ef7_derbys_v1_" + clubId; }
+  function obtenerDerbysTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_derbysKey(clubId));
+      return v !== null ? v : (DERBYS_DEFAULT_TEXTO[clubId] || "");
+    } catch (err) {
+      return DERBYS_DEFAULT_TEXTO[clubId] || "";
+    }
+  }
+  function guardarDerbysTexto(clubId, texto) {
+    try {
+      localStorage.setItem(_derbysKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar los derbys del club:", err);
+      return false;
+    }
+  }
+
   // ---------- Plantilla (roster real) por club ----------
   // Texto libre, una línea por jugador — mismo patrón que el calendario
   // extra o los títulos: cada mánager pega su plantilla real completa
@@ -1566,6 +1645,8 @@
     guardarValoracionClub: guardarValoracionClub,
     obtenerObjetivosIconos: obtenerObjetivosIconos,
     guardarObjetivosIconoSeccion: guardarObjetivosIconoSeccion,
+    obtenerDerbysTexto: obtenerDerbysTexto,
+    guardarDerbysTexto: guardarDerbysTexto,
     obtenerRosterTexto: obtenerRosterTexto,
     guardarRosterTexto: guardarRosterTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,

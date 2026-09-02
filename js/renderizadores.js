@@ -3039,6 +3039,204 @@
     contenedor.appendChild(acciones);
   }
 
+  // ============================================================
+  // DERBYS — Humano vs Humano. Catálogo CERRADO (los otros 5 mánagers,
+  // sale de data/equipos.json — nunca hardcodeado aquí, así que si el
+  // día de mañana cambia algún mister/emoji en ese JSON, esta pantalla
+  // lo hereda sola). Cada club tiene una caja GLOBAL (SUMA de las 5,
+  // nunca guardada aparte — igual que Objetivos con sus puntos: si se
+  // guardara aparte podría desincronizarse del desglose) + una caja
+  // "Contra <mister>" por rival, con PJ/PG/PE/PP/G+/G- editables (candado
+  // 646, catálogo cerrado — mismo criterio de riesgo que Títulos: el
+  // admin solo puede tocar números de una lista fija, no puede inventar
+  // un rival que no exista, así que no hace falta el PIN de Objetivos).
+  // ============================================================
+
+  // "<Mister>: PJ N PG N PE N PP N G+ N G- N" — tolerante a que falte
+  // algún campo (cuenta 0), a que no lleve ":" y al orden de los campos.
+  // Una línea que no case con NINGUNO de los rivales del catálogo cerrado
+  // se ignora en silencio (mismo criterio que parsearTitulosTexto).
+  var DERBY_CAMPO_REGEX = {
+    pj: /\bPJ\s*:?\s*(\d+)/i,
+    pg: /\bPG\s*:?\s*(\d+)/i,
+    pe: /\bPE\s*:?\s*(\d+)/i,
+    pp: /\bPP\s*:?\s*(\d+)/i,
+    gf: /\b(?:GF|G\s*\+)\s*:?\s*(\d+)/i,
+    gc: /\b(?:GC|G\s*-)\s*:?\s*(\d+)/i
+  };
+  function _derbyResolverRival(nombreCrudo, rivales) {
+    var norm = _normNombre(nombreCrudo);
+    if (!norm) return null;
+    for (var i = 0; i < rivales.length; i++) {
+      var rn = _normNombre(rivales[i].mister);
+      if (rn && norm.indexOf(rn) !== -1) return rivales[i];
+    }
+    return null;
+  }
+  function parsearDerbysTexto(texto, rivales) {
+    var porRival = {};
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var idxColon = l.indexOf(":");
+      var etiqueta = idxColon !== -1 ? l.slice(0, idxColon) : l;
+      var rival = _derbyResolverRival(etiqueta, rivales);
+      if (!rival) return;
+      var datos = {};
+      Object.keys(DERBY_CAMPO_REGEX).forEach(function (campo) {
+        var m = l.match(DERBY_CAMPO_REGEX[campo]);
+        datos[campo] = m ? (parseInt(m[1], 10) || 0) : 0;
+      });
+      porRival[rival.id] = datos;
+    });
+    return porRival;
+  }
+
+  // DG y % de victorias SIEMPRE derivados, nunca guardados — mismo
+  // principio que "PG no se guarda aparte" de _construirTbodyClasificacion.
+  function _derbyCalcFila(s) {
+    var pj = s.pj || 0, pg = s.pg || 0, pe = s.pe || 0, pp = s.pp || 0, gf = s.gf || 0, gc = s.gc || 0;
+    return { pj: pj, pg: pg, pe: pe, pp: pp, gf: gf, gc: gc, dg: gf - gc, pct: pj > 0 ? Math.round((pg / pj) * 100) : 0 };
+  }
+
+  // Los otros 5 mánagers humanos (nunca el propio club activo) — mismo
+  // orden en que aparecen en data/equipos.json. Si algún día hay más o
+  // menos de 6 clubes humanos, esta lista se ajusta sola (no hay "5"
+  // hardcodeado en ningún sitio del cálculo).
+  function _derbyRivales(datos, idClubActivo) {
+    return ((datos.equipos && datos.equipos.equipos) || [])
+      .filter(function (e) { return e.id !== idClubActivo && e.mister; })
+      .map(function (e) { return { id: e.id, mister: e.mister, misterEmoji: e.misterEmoji || "" }; });
+  }
+  function _derbyEtiquetaRival(rival) {
+    return (rival.misterEmoji ? rival.misterEmoji + " " : "") + escapeHTML(rival.mister);
+  }
+  function _derbyFilaHtml(etiquetaHtml, c, claseExtra) {
+    return (
+      '<tr class="derbys-fila' + (claseExtra ? " " + claseExtra : "") + '">' +
+      '<td class="clasificacion-equipo">' + etiquetaHtml + "</td>" +
+      "<td>" + c.pj + "</td><td>" + c.pg + "</td><td>" + c.pe + "</td><td>" + c.pp + "</td>" +
+      "<td>" + c.gf + "</td><td>" + c.gc + "</td>" +
+      "<td>" + (c.dg > 0 ? "+" + c.dg : c.dg) + "</td>" +
+      "<td>" + c.pct + "%</td></tr>"
+    );
+  }
+
+  function renderizarDerbys(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<span class="liga1ref-leyenda-mini">Histórico Humano vs Humano</span>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-derbys-inline" data-club-id="' +
+        (idClubActivo || "") + '" aria-label="Editar derbys">✏️</button>';
+      contenedor.appendChild(header);
+
+      var rivales = _derbyRivales(datos, idClubActivo);
+      if (!rivales.length) {
+        contenedor.appendChild(nodoEstado("⚔️", "No hay otros clubes humanos todavía."));
+        return;
+      }
+
+      var texto = window.Estado ? window.Estado.obtenerDerbysTexto(idClubActivo) : "";
+      var porRival = parsearDerbysTexto(texto, rivales);
+      var filas = rivales.map(function (r) {
+        var c = _derbyCalcFila(porRival[r.id] || {});
+        c.rival = r;
+        return c;
+      });
+
+      var global = filas.reduce(function (acc, f) {
+        acc.pj += f.pj; acc.pg += f.pg; acc.pe += f.pe; acc.pp += f.pp; acc.gf += f.gf; acc.gc += f.gc;
+        return acc;
+      }, { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      global = _derbyCalcFila(global);
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaHtml =
+        '<table class="clasificacion-tabla derbys-tabla">' +
+        "<thead><tr><th>Rival</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead><tbody>" +
+        _derbyFilaHtml("🌐 GLOBAL", global, "derbys-fila--global") +
+        filas.map(function (f) { return _derbyFilaHtml(_derbyEtiquetaRival(f.rival), f); }).join("") +
+        "</tbody></table>";
+      wrap.innerHTML = tablaHtml;
+      contenedor.appendChild(wrap);
+
+      // Rival más temido/cómodo — solo entre rivales con partidos jugados;
+      // con todos a 0 (club recién estrenado) no se muestra nada.
+      var conPartidos = filas.filter(function (f) { return f.pj > 0; });
+      if (conPartidos.length) {
+        var temido = conPartidos.reduce(function (a, b) { return b.pct < a.pct ? b : a; });
+        var comodo = conPartidos.reduce(function (a, b) { return b.pct > a.pct ? b : a; });
+        var resumen = document.createElement("div");
+        resumen.className = "derbys-resumen";
+        resumen.innerHTML =
+          '<p class="derbys-resumen-linea">🔥 <b>Rival más temido:</b> ' + _derbyEtiquetaRival(temido.rival) +
+          " (" + temido.pct + "% victorias)</p>" +
+          '<p class="derbys-resumen-linea">😌 <b>Rival más cómodo:</b> ' + _derbyEtiquetaRival(comodo.rival) +
+          " (" + comodo.pct + "% victorias)</p>";
+        contenedor.appendChild(resumen);
+      }
+    });
+  }
+
+  // Pre-relleno del editor: una línea por rival con los números YA
+  // guardados (0 si nunca se ha tocado ninguno) — el admin solo cambia
+  // dígitos, igual que en Títulos.
+  function _construirTextoEdicionDerbys(rivales, textoGuardado) {
+    var porRival = parsearDerbysTexto(textoGuardado, rivales);
+    return rivales.map(function (r) {
+      var s = porRival[r.id] || {};
+      return (r.misterEmoji ? r.misterEmoji + " " : "") + r.mister + ": PJ " + (s.pj || 0) + " PG " + (s.pg || 0) +
+        " PE " + (s.pe || 0) + " PP " + (s.pp || 0) + " G+ " + (s.gf || 0) + " G- " + (s.gc || 0);
+    }).join("\n");
+  }
+
+  function pintarEditorDerbys(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var rivales = _derbyRivales(datos, idClubActivo);
+      if (!rivales.length) {
+        contenedor.appendChild(nodoEstado("⚔️", "No hay otros clubes humanos todavía."));
+        return;
+      }
+
+      var nota = document.createElement("p");
+      nota.className = "admin-nota";
+      nota.textContent =
+        "Una línea por rival, con PJ/PG/PE/PP/G+ (goles a favor)/G- (goles en contra). Solo cambia " +
+        "los números — el DG y el % de victorias de cada uno, y la caja GLOBAL, se calculan solos.";
+      contenedor.appendChild(nota);
+
+      var textoGuardado = window.Estado ? window.Estado.obtenerDerbysTexto(idClubActivo) : "";
+      var textarea = document.createElement("textarea");
+      textarea.id = "derbys-textarea";
+      textarea.className = "admin-roadmap-textarea";
+      textarea.rows = 14;
+      textarea.value = _construirTextoEdicionDerbys(rivales, textoGuardado);
+      contenedor.appendChild(textarea);
+
+      var acciones = document.createElement("div");
+      acciones.className = "admin-roadmap-editor-acciones";
+      acciones.innerHTML =
+        '<button type="button" class="btn-ghost" data-accion="cancelar-derbys" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+        '<button type="button" class="admin-list-add-btn" data-accion="guardar-derbys" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+      contenedor.appendChild(acciones);
+    });
+  }
+
   // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el
   // ancho de la tarjeta, se acorta con sentido común: abrevia la PRIMERA
   // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
@@ -4149,11 +4347,12 @@
       "</div>";
   }
 
-  // Placeholder plano para los botones del menú del club que todavía no
-  // existen como subsistema real en este simulador ligero (Derbys,
-  // Objetivos... pertenecen a OTRA app mucho más grande — no se inventan
-  // datos falsos aquí). Plantilla / Liga 1ª REF / Copa del Rey / Superliga
-  // / Títulos ya SÍ son reales (ver sus renderizar* respectivos).
+  // Placeholder plano para cualquier tarjeta del menú del club que el
+  // admin añada a mano (data-accion="anadir-tarjeta-menu-club") y que no
+  // tenga un subsistema real detrás — este simulador ligero no inventa
+  // datos falsos para una competición nueva. Plantilla / Liga 1ª REF /
+  // Copa del Rey / Superliga / Títulos / Objetivos / Derbys ya SÍ son
+  // reales (ver sus renderizar* respectivos).
   function renderizarProximamente(contenedorId, etiqueta) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -4627,6 +4826,9 @@
     renderizarObjetivos: renderizarObjetivos,
     pintarEditorObjetivos: pintarEditorObjetivos,
     parsearObjetivosTexto: parsearObjetivosTexto,
+    renderizarDerbys: renderizarDerbys,
+    pintarEditorDerbys: pintarEditorDerbys,
+    parsearDerbysTexto: parsearDerbysTexto,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,

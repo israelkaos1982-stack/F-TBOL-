@@ -141,6 +141,9 @@
     } else if (vista === "objetivos") {
       body.innerHTML = '<div id="objetivos-content"></div>';
       window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+    } else if (vista === "derbys") {
+      body.innerHTML = '<div id="derbys-content"></div>';
+      window.Renderizadores.renderizarDerbys("derbys-content", clubId);
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -555,6 +558,26 @@
     if (!clubId || !clave || !window.Estado || !window.Renderizadores) return;
     window.Estado.toggleObjetivoLogrado(clubId, clave);
     window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+
+  // ---------- Derbys (Humano vs Humano) ----------
+  // Sin PIN (mismo criterio que Títulos): el catálogo de rivales es
+  // CERRADO (los otros 5 mánagers) y el editor viene pre-relleno con
+  // sus números ya guardados — el admin no puede inventar un rival ni
+  // dejar una línea a medias sin que se ignore en silencio.
+  function editarDerbysInline(clubId) {
+    if (!window.Renderizadores) return;
+    var cont = document.getElementById("derbys-content");
+    if (cont) window.Renderizadores.pintarEditorDerbys(cont, clubId);
+  }
+  function guardarDerbys(clubId) {
+    var ta = document.getElementById("derbys-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarDerbysTexto(clubId, ta.value);
+    window.Renderizadores.renderizarDerbys("derbys-content", clubId);
+  }
+  function cancelarDerbys(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarDerbys("derbys-content", clubId);
   }
 
   // ---------- 💼 Valoración del club ----------
@@ -1052,6 +1075,9 @@
         case "guardar-objetivos": guardarObjetivos(d.clubId); break;
         case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;
         case "toggle-objetivo": toggleObjetivo(d.clubId, d.clave); break;
+        case "editar-derbys-inline": editarDerbysInline(d.clubId); break;
+        case "guardar-derbys": guardarDerbys(d.clubId); break;
+        case "cancelar-derbys": cancelarDerbys(d.clubId); break;
         case "editar-objetivos-icono": editarObjetivosIcono(d.clubId, d.seccion); break;
         case "editar-valoracion-club": editarValoracionClub(d.clubId); break;
       }

@@ -1868,6 +1868,31 @@ button { font-family: inherit; cursor: pointer; }
 .objetivos-fila--logrado .objetivos-fila-texto { color: var(--neon); }
 .objetivos-fila--logrado .objetivos-fila-pts { background: rgba(57, 255, 106, 0.18); color: var(--neon); }
 
+/* ---------- 6g. DERBYS — Humano vs Humano (GLOBAL + 5 rivales) ----------
+   Reutiliza .clasificacion-tabla/.clasificacion-wrap/.clasificacion-equipo
+   tal cual (mismas columnas PJ/PG/PE/PP/G+/G-/DG que el resto de tablas
+   de clasificación) — solo se ajusta el ancho mínimo (menos columnas que
+   la tabla de liga) y se añaden la fila GLOBAL destacada + el resumen de
+   rival más temido/cómodo debajo. */
+#derbys-content .clasificacion-tabla { min-width: 420px; font-size: 12px; }
+#derbys-content .clasificacion-tabla th,
+#derbys-content .clasificacion-tabla td { padding: 9px 7px; }
+.derbys-fila--global .clasificacion-equipo,
+.derbys-fila--global td { color: var(--neon); font-weight: 900; }
+.derbys-fila--global { background: rgba(57, 255, 106, 0.07); }
+.derbys-resumen {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+}
+.derbys-resumen-linea { font-size: 11.5px; color: var(--text-hi); }
+.derbys-resumen-linea b { color: var(--text-lo); font-weight: 800; }
+
 /* ---------- 7. CALENDARIO — jornadas del club activo ---------- */
 .calendar-header {
   display: flex;

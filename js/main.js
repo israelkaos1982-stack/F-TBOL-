@@ -260,13 +260,22 @@
   }
 
   function anadirTarjetaMenuClubPrompt(clubId) {
-    if (!window.Estado) return;
+    if (!window.Estado || !window.Renderizadores) return;
     var etiqueta = window.prompt("Nombre de la nueva competición:");
     if (etiqueta === null || !etiqueta.trim()) return;
     var icono = window.prompt("Icono/emoji (opcional):", "⭐");
     if (icono === null) icono = "⭐";
-    window.Estado.anadirTarjetaMenuClub(clubId, icono, etiqueta);
-    repintarMenuClub(clubId);
+    // Se añade a los 6 clubes de golpe (petición usuario: "que esas
+    // cajas se dupliquen en otros humanos para que no tenga que hacerla
+    // 6 veces") — cada uno recibe su PROPIA copia independiente, así
+    // que a partir de ahí se puede ocultar/reordenar/editar/borrar en
+    // cada club por separado sin afectar a los demás.
+    window.Renderizadores.cargarTodo().then(function (datos) {
+      var ids = ((datos.equipos && datos.equipos.equipos) || []).map(function (e) { return e.id; });
+      if (ids.indexOf(clubId) === -1) ids.push(clubId);
+      window.Estado.anadirTarjetaMenuClubTodos(ids, icono, etiqueta);
+      repintarMenuClub(clubId);
+    });
   }
   function moverTarjetaMenuClub(clubId, id, direccion) {
     if (!window.Estado) return;

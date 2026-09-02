@@ -619,6 +619,20 @@
     ov.orden.push(id);
     return _guardarMenuClub(clubId, ov) ? id : null;
   }
+  // Añade la MISMA tarjeta personalizada (icono+etiqueta) a VARIOS clubes
+  // de golpe — petición usuario: "que esas cajas se dupliquen en otros
+  // humanos para que no tenga que hacerla 6 veces". Cada club recibe su
+  // PROPIA copia independiente (su propio id, vía anadirTarjetaMenuClub) —
+  // a partir de ahí cada uno se puede ocultar/reordenar/editar/borrar por
+  // separado sin afectar a los demás, igual que cualquier otra tarjeta.
+  function anadirTarjetaMenuClubTodos(clubIds, icono, etiqueta) {
+    if (!etiqueta || !etiqueta.trim()) return false;
+    var ok = false;
+    (clubIds || []).forEach(function (clubId) {
+      if (anadirTarjetaMenuClub(clubId, icono, etiqueta)) ok = true;
+    });
+    return ok;
+  }
   // Renombra/re-icona CUALQUIER tarjeta del menú, de fábrica o añadida por
   // el admin. Las de fábrica se guardan como override (nunca se toca
   // MENU_CLUB_BUILTIN); las custom se editan directamente porque su único
@@ -1670,6 +1684,7 @@
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,
     anadirTarjetaMenuClub: anadirTarjetaMenuClub,
+    anadirTarjetaMenuClubTodos: anadirTarjetaMenuClubTodos,
     editarTarjetaMenuClub: editarTarjetaMenuClub,
     moverTarjetaMenuClub: moverTarjetaMenuClub,
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,

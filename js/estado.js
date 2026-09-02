@@ -808,6 +808,45 @@
     return lista;
   }
 
+  // ---------- Bloqueo de tarjetas por ciclo/partido (Plantilla) ----------
+  // Independiente de Lesionados/Sancionados de arriba — esto es el color
+  // AUTOMÁTICO del nombre en la pantalla "Plantilla" (js/renderizadores.js
+  // ::renderizarPlantillaClub) según las tarjetas ya acumuladas en el
+  // acta de los partidos jugados, no una lista que el admin rellena a
+  // mano. 1 sola clave por club, minúscula (solo guarda un número por
+  // jugador con AL MENOS un bloqueo ya quitado alguna vez — la inmensa
+  // mayoría de la plantilla nunca tiene entrada):
+  //   { "<jugadorId>": { ciclo: N, doble: N, roja: N } }
+  // El número guardado es el "valor" (amarillas totales / partidos con
+  // doble amarilla / partidos con roja directa) que tenía el jugador la
+  // ÚLTIMA vez que el admin quitó ESE bloqueo — mientras el valor actual
+  // siga siendo ESE MISMO número, el bloqueo sigue quitado; en cuanto el
+  // jugador suma una tarjeta más que hace CRECER ese número (otro ciclo
+  // de 3, otro partido con doble amarilla, otra roja), el bloqueo se
+  // vuelve a encender solo, sin que nadie tenga que "reactivarlo".
+  function _tarjetaFlagsKey(clubId) { return "ef7_tarjeta_flags_v1_" + clubId; }
+  function obtenerTarjetaFlags(clubId) {
+    try {
+      var raw = localStorage.getItem(_tarjetaFlagsKey(clubId));
+      var obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function limpiarTarjetaFlag(clubId, jugadorId, tipo, valorActual) {
+    if (!jugadorId || !tipo) return obtenerTarjetaFlags(clubId);
+    var flags = obtenerTarjetaFlags(clubId);
+    if (!flags[jugadorId]) flags[jugadorId] = {};
+    flags[jugadorId][tipo] = typeof valorActual === "number" ? valorActual : 0;
+    try {
+      localStorage.setItem(_tarjetaFlagsKey(clubId), JSON.stringify(flags));
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el bloqueo de tarjetas:", err);
+    }
+    return flags;
+  }
+
   // ---------- Plantilla (roster real) por club ----------
   // Texto libre, una línea por jugador — mismo patrón que el calendario
   // extra o los títulos: cada mánager pega su plantilla real completa
@@ -1366,6 +1405,8 @@
     obtenerListaJugadoresActivosPara: obtenerListaJugadoresActivosPara,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
+    obtenerTarjetaFlags: obtenerTarjetaFlags,
+    limpiarTarjetaFlag: limpiarTarjetaFlag,
     obtenerRosterTexto: obtenerRosterTexto,
     guardarRosterTexto: guardarRosterTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,

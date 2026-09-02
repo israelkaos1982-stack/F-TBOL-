@@ -1446,10 +1446,23 @@
         "<span>🟧 E.League</span><span>🟩 Conference</span>" +
         "<span>🟥 Descenso</span><span>🟫 Promoción</span></div>";
     } else {
+      // Ascenso/Promoción apuntan a la liga de ARRIBA en la pirámide
+      // (LIGA_NAV_ORDEN); Promoción-descenso/Descenso a la de ABAJO —
+      // petición usuario: nombrar la liga destino explícitamente, no
+      // solo el color. 2ª REF (la más baja) no tiene liga por debajo,
+      // así que sus 2 filas de descenso se quedan sin destino.
+      var idx = LIGA_NAV_ORDEN.indexOf(ligaId);
+      var arriba = idx >= 0 && idx < LIGA_NAV_ORDEN.length - 1
+        ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx + 1]].corta : "";
+      var abajo = idx > 0 ? LIGA_NAV_META[LIGA_NAV_ORDEN[idx - 1]].corta : "";
+      var subeTxt = arriba ? " a Liga " + arriba : "";
+      var bajaTxt = abajo ? " a Liga " + abajo : "";
       grid =
         '<div class="liga1ref-leyenda-grid">' +
-        "<span>🟦 Ascenso</span><span>🟫 Promoción</span>" +
-        "<span>🟨 Promoción</span><span>🟥 Descenso</span></div>";
+        "<span>🟦 Ascenso" + escapeHTML(subeTxt) + "</span>" +
+        "<span>🟫 Promoción ascenso" + escapeHTML(subeTxt) + "</span>" +
+        "<span>🟨 Promoción descenso" + escapeHTML(bajaTxt) + "</span>" +
+        "<span>🟥 Descenso" + escapeHTML(bajaTxt) + "</span></div>";
     }
     return _leyendaDetailsHTML(grid);
   }
@@ -1462,7 +1475,7 @@
   function _leyendaDetailsHTML(gridHTML) {
     return (
       '<details class="liga1ref-leyenda-details">' +
-      '<summary class="liga1ref-leyenda-summary">Leyenda</summary>' +
+      '<summary class="liga1ref-leyenda-summary">LEYENDA</summary>' +
       gridHTML +
       "</details>"
     );

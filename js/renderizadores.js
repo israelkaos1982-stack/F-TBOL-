@@ -501,6 +501,17 @@
     return _normNombre(ronda || "").replace(/\bida\b/g, "").replace(/\bvuelta\b/g, "").replace(/\s+/g, " ").trim();
   }
 
+  // ¿El rival de este partido (visto desde `clubId`) es "?" — todavía sin
+  // determinar (ver crearEscudoHTML/resolverRivalPorNombre)? Señal SIEMPRE
+  // válida de "no hay PREVIA real que abrir", en CUALQUIER competición —
+  // no depende de COMPS_ELIMINACION_DIRECTA ni de ningún cálculo por orden
+  // de ronda.
+  function _rivalDesconocido(p, clubId, datos) {
+    var esLocalP = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocalP ? p.visitante : p.local, datos);
+    return !!(rival && rival.desconocido);
+  }
+
   // Dado el listado de partidos de UNA sola competición de eliminación
   // directa para UN club, YA ordenado cronológicamente (mismo criterio que
   // el resto de la app: fecha real, o el fallback _fechaFallbackMs/orden
@@ -1857,6 +1868,9 @@
   function _copaPartidoRowHTML(p, clubId, datos, esEliminado, esBloqueado) {
     var esLocal = p.local === clubId;
     var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    // Mismo criterio que construirTarjetaPartido: rival "?" bloquea aunque
+    // el cálculo por orden de ronda no lo haya marcado.
+    esBloqueado = esBloqueado || !!(rival && rival.desconocido);
     var claseEstado = "";
     var resultadoHTML;
     if (p.jugado && p.resultado) {
@@ -2757,6 +2771,15 @@
     var rival = buscarEquipoPorId(rivalId, datos);
     var activo = buscarEquipoPorId(idActivo, datos);
 
+    // Rival AÚN sin determinar ("?" en el calendario, ver crearEscudoHTML /
+    // resolverRivalPorNombre) — bloquea la card aunque el cálculo por orden
+    // de ronda (esBloqueado, ver generarCalendarioLateralDerecho) no lo
+    // haya detectado por su cuenta (p.ej. si ya se ganó la ronda anterior
+    // pero el admin todavía no escribió el nombre real del rival). No hay
+    // PREVIA real que abrir sin rival — señal SIEMPRE válida, en CUALQUIER
+    // competición, no solo en COMPS_ELIMINACION_DIRECTA.
+    esBloqueado = esBloqueado || !!(rival && rival.desconocido);
+
     var local = esLocal ? activo : rival;
     var visitante = esLocal ? rival : activo;
 
@@ -2940,11 +2963,13 @@
         // El primer partido sin jugar de la lista (ya ordenada por fecha)
         // es "el próximo" — se resalta con su propia clase para que
         // destaque de un vistazo cuál toca jugar ahora. Una ronda ya
-        // eliminada, o aún bloqueada por no haber ganado la anterior,
-        // nunca puede ser "el próximo partido".
+        // eliminada, aún bloqueada por no haber ganado la anterior, o con
+        // rival todavía sin determinar ("?"), nunca puede ser "el próximo
+        // partido" — no hay PREVIA real que abrir.
         var idSiguiente = null;
         for (var i = 0; i < partidosDelClub.length; i++) {
-          if (!partidosDelClub[i].jugado && !idsEliminados[partidosDelClub[i].id] && !idsBloqueados[partidosDelClub[i].id]) { idSiguiente = partidosDelClub[i].id; break; }
+          var pp = partidosDelClub[i];
+          if (!pp.jugado && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && !_rivalDesconocido(pp, idEquipoHumanoActivo, datos)) { idSiguiente = pp.id; break; }
         }
 
         var frag = document.createDocumentFragment();

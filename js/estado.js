@@ -783,6 +783,17 @@
       return e.desde <= orden && (e.hasta === null || orden < e.hasta);
     });
   }
+  // Nombres con una entrada AÚN ABIERTA (hasta === null) — "sigue
+  // lesionado/sancionado ahora mismo, todavía no se ha cerrado en NINGÚN
+  // partido". Lo usa la Plantilla (fuera de cualquier previa concreta,
+  // sin un "orden" de partido al que atarse) para colorear el nombre.
+  function obtenerNombresListaActiva(clubId, tipo) {
+    var vistos = {};
+    obtenerListaJugadores(clubId, tipo).forEach(function (e) {
+      if (e.hasta === null) vistos[e.nombre] = true;
+    });
+    return Object.keys(vistos);
+  }
   function agregarJugadorALista(clubId, tipo, nombre, orden) {
     nombre = String(nombre || "").trim();
     var lista = obtenerListaJugadores(clubId, tipo);
@@ -1403,6 +1414,7 @@
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerListaJugadores: obtenerListaJugadores,
     obtenerListaJugadoresActivosPara: obtenerListaJugadoresActivosPara,
+    obtenerNombresListaActiva: obtenerNombresListaActiva,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
     obtenerTarjetaFlags: obtenerTarjetaFlags,

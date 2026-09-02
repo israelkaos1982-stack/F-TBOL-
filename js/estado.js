@@ -696,17 +696,69 @@
   }
 
   // ---------- Lesionados / sancionados por club (Fase 4) ----------
-  // Igual que el calendario extra: una lista de texto libre POR CLUB
-  // (el mánager de cada caja lleva la suya, independiente de con quién
-  // juegue cada partido), persistida en su propia clave localStorage.
-  // "tipo" es "lesionados" o "sancionados" — mismas 3 funciones sirven
-  // para ambas listas, sin duplicar código.
+  // Igual que el calendario extra: una lista POR CLUB (el mánager de
+  // cada caja lleva la suya, independiente de con quién juegue cada
+  // partido), persistida en su propia clave localStorage. "tipo" es
+  // "lesionados" o "sancionados" — mismas funciones sirven para ambas
+  // listas, sin duplicar código.
+  //
+  // Cada entrada NO es solo un nombre — lleva un RANGO de vigencia
+  // sobre el orden cronológico de los partidos del club ("orden" =
+  // posición del partido dentro de TODOS los partidos ordenados por
+  // fecha de esa caja, ver renderizadores.js::generarCalendarioLateralDerecho,
+  // partido._ordenClub):
+  //   { id, nombre, desde, hasta }
+  //   - desde: orden del partido en cuya previa se marcó al jugador.
+  //     Aparece lesionado/sancionado en ESE partido y en todos los
+  //     posteriores, hasta que se cierre.
+  //   - hasta: orden del partido en cuya previa el admin lo QUITÓ de la
+  //     lista, o null si sigue activo (todavía no se ha quitado). Un
+  //     partido con orden >= hasta ya NO lo muestra — pero cualquier
+  //     partido con orden < hasta (incluidos los que ya se jugaron
+  //     antes de quitarlo) SIGUE mostrándolo. Petición explícita del
+  //     usuario: "un jugador está lesionado hasta que lo elimine; una
+  //     vez lo elimine no aparecerá en ESE partido ni en los siguientes,
+  //     pero los partidos previos sí lo tendrán lesionado" — sin este
+  //     rango, quitarlo desde CUALQUIER previa lo sanaba también en las
+  //     previas de partidos anteriores todavía no jugados (lista plana,
+  //     sin historial).
+  var _entradaListaSeq = 0;
+  function _nuevoIdEntradaLista() { return "el" + Date.now() + "_" + (_entradaListaSeq++); }
+  function _normalizarEntradaLista(e) {
+    if (typeof e === "string") {
+      // Formato legacy (solo el nombre, sin rango): se trata como
+      // "lesionado/sancionado desde siempre" para no perder el dato ya
+      // guardado — aplica a cualquier partido hasta que se cierre.
+      var nombreLegacy = e.trim();
+      if (!nombreLegacy) return null;
+      return { id: _nuevoIdEntradaLista(), nombre: nombreLegacy, desde: 0, hasta: null };
+    }
+    if (e && typeof e === "object" && typeof e.nombre === "string" && e.nombre.trim()) {
+      return {
+        id: e.id || _nuevoIdEntradaLista(),
+        nombre: e.nombre,
+        desde: typeof e.desde === "number" ? e.desde : 0,
+        hasta: typeof e.hasta === "number" ? e.hasta : null
+      };
+    }
+    return null;
+  }
   function _listaJugadoresKey(clubId, tipo) { return "ef7_club_" + tipo + "_v1_" + clubId; }
   function obtenerListaJugadores(clubId, tipo) {
     try {
       var raw = localStorage.getItem(_listaJugadoresKey(clubId, tipo));
       var lista = raw ? JSON.parse(raw) : [];
-      return Array.isArray(lista) ? lista : [];
+      if (!Array.isArray(lista)) return [];
+      var huboLegacy = false;
+      var normalizada = lista.map(function (e) {
+        if (typeof e === "string") huboLegacy = true;
+        return _normalizarEntradaLista(e);
+      }).filter(Boolean);
+      // Migra el formato legacy a objetos con rango en el primer read,
+      // así el id queda estable en las siguientes lecturas (lo usan los
+      // botones ✕ de la previa para identificar la entrada exacta).
+      if (huboLegacy) _guardarListaJugadores(clubId, tipo, normalizada);
+      return normalizada;
     } catch (err) {
       return [];
     }
@@ -720,18 +772,38 @@
       return false;
     }
   }
-  function agregarJugadorALista(clubId, tipo, nombre) {
+  // Entradas vigentes para el partido de orden `orden` — las que ya
+  // empezaron (desde <= orden) y todavía no se han cerrado antes de él
+  // (hasta === null || orden < hasta). Es lo que debe pintar la previa
+  // de CUALQUIER partido (jugado o por jugar): cada uno ve el estado
+  // real que tenía en su propio momento, no el estado "actual" global.
+  function obtenerListaJugadoresActivosPara(clubId, tipo, orden) {
+    orden = typeof orden === "number" ? orden : 0;
+    return obtenerListaJugadores(clubId, tipo).filter(function (e) {
+      return e.desde <= orden && (e.hasta === null || orden < e.hasta);
+    });
+  }
+  function agregarJugadorALista(clubId, tipo, nombre, orden) {
     nombre = String(nombre || "").trim();
     var lista = obtenerListaJugadores(clubId, tipo);
     if (!nombre) return lista;
-    lista.push(nombre);
+    lista.push({ id: _nuevoIdEntradaLista(), nombre: nombre, desde: typeof orden === "number" ? orden : 0, hasta: null });
     _guardarListaJugadores(clubId, tipo, lista);
     return lista;
   }
-  function quitarJugadorDeLista(clubId, tipo, indice) {
+  // "Quita" a un jugador de la lista CERRANDO su vigencia en `orden` (el
+  // partido cuya previa tenía abierta el admin al pulsar ✕) — nunca
+  // borra la entrada: los partidos anteriores a `orden` que ya lo
+  // mostraban lesionado/sancionado lo siguen mostrando (ver comentario
+  // de la cabecera de esta sección).
+  function quitarJugadorDeLista(clubId, tipo, entradaId, orden) {
     var lista = obtenerListaJugadores(clubId, tipo);
-    if (indice < 0 || indice >= lista.length) return lista;
-    lista.splice(indice, 1);
+    var entrada = null;
+    for (var i = 0; i < lista.length; i++) {
+      if (lista[i].id === entradaId) { entrada = lista[i]; break; }
+    }
+    if (!entrada) return lista;
+    entrada.hasta = typeof orden === "number" ? orden : 0;
     _guardarListaJugadores(clubId, tipo, lista);
     return lista;
   }
@@ -1291,6 +1363,7 @@
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerListaJugadores: obtenerListaJugadores,
+    obtenerListaJugadoresActivosPara: obtenerListaJugadoresActivosPara,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
     obtenerRosterTexto: obtenerRosterTexto,

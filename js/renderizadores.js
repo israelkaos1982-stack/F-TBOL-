@@ -579,6 +579,7 @@
   // 3. CALENDARIO LATERAL DERECHO
   // ============================================================
   var _ultimoContexto = null; // { datos, equipo, totalJornadas, partidosPorId }
+  var _previaPartidoActual = null; // partido cuya previa está abierta ahora mismo (para Lesionados/Sancionados con rango, ver abrirPreviaPartido)
 
   // Escapa texto ESCRITO POR EL ADMIN (nombre de estadio/balón/jugador vía
   // prompt()) antes de interpolarlo en innerHTML — evita que un nombre con
@@ -3069,6 +3070,13 @@
           return ta - tb;
         });
 
+        // Orden cronológico de ESTE club (0, 1, 2…), estable mientras no
+        // cambien los partidos/el Calendario extra — es la "línea de
+        // tiempo" que usan los Lesionados/Sancionados con rango (ver
+        // estado.js) para saber qué partidos ya habían pasado cuando se
+        // marcó/quitó a un jugador de la lista.
+        partidosDelClub.forEach(function (p, i) { p._ordenClub = i; });
+
         var partidosPorId = {};
         partidosDelClub.forEach(function (p) { partidosPorId[p.id] = p; });
 
@@ -3270,18 +3278,23 @@
   // recargar y a cambiar de rival). Viven en la PREVIA (pantalla
   // informativa), no en la pantalla en vivo — se consultan ANTES de
   // empezar el partido.
-  function _filaJugadorLista(nombre, tipo, indice) {
+  function _filaJugadorLista(entrada, tipo) {
     return (
-      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(nombre) + "</span>" +
-      '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-indice="' + indice + '" aria-label="Quitar">✕</button></div>'
+      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) + "</span>" +
+      '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-entrada-id="' + escapeHTML(entrada.id) + '" aria-label="Quitar">✕</button></div>'
     );
   }
   function _renderListaJugadores(tipo, contId, vacioTxt) {
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !window.Estado) return;
-    var lista = window.Estado.obtenerListaJugadores(window._idManagerActivo, tipo);
+    // Solo las entradas VIGENTES para el partido cuya previa está
+    // abierta (rango desde/hasta, ver estado.js) — no la lista entera
+    // del club, que puede incluir lesiones/sanciones ya cerradas antes
+    // de este partido o que todavía no empezaban en su momento.
+    var orden = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+    var lista = window.Estado.obtenerListaJugadoresActivosPara(window._idManagerActivo, tipo, orden);
     cont.innerHTML = lista.length
-      ? lista.map(function (nombre, i) { return _filaJugadorLista(nombre, tipo, i); }).join("")
+      ? lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("")
       : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
   }
   function renderListasJugadores() {
@@ -3379,6 +3392,7 @@
     if (!_ultimoContexto) return;
     var partido = _ultimoContexto.partidosPorId[partidoId];
     if (!partido) return;
+    _previaPartidoActual = partido;
 
     var datos = _ultimoContexto.datos;
     var local = buscarEquipoPorId(partido.local, datos);
@@ -3809,12 +3823,21 @@
       return;
     }
 
-    var opciones = jugadores
-      .map(function (j) {
-        var etiqueta = j.dorsal + " · " + j.nombre;
-        return '<option value="' + escapeHTML(j.nombre) + '">' + escapeHTML(etiqueta) + "</option>";
-      })
-      .join("");
+    // Agrupados por posición (Porteros/Defensas/Centrocampistas/
+    // Delanteros), mismo orden/etiquetas que el selector de jugador del
+    // acta en vivo (js/acta.js::poblarSelectJugador) — petición usuario:
+    // con plantillas largas, una lista plana por dorsal era lenta de
+    // recorrer a mano.
+    var opciones = ORDEN_POSICIONES.map(function (pos) {
+      var deEstaPos = jugadores.filter(function (j) { return j.posicion === pos; });
+      if (!deEstaPos.length) return "";
+      return '<optgroup label="' + escapeHTML(LABEL_POSICION[pos]) + '">' +
+        deEstaPos.map(function (j) {
+          var etiqueta = "#" + j.dorsal + " " + j.nombre;
+          return '<option value="' + escapeHTML(j.nombre) + '">' + escapeHTML(etiqueta) + "</option>";
+        }).join("") +
+        "</optgroup>";
+    }).join("");
 
     cont.innerHTML =
       '<div class="live-lista-picker">' +
@@ -4207,7 +4230,10 @@
         var selJugador = document.getElementById("lista-picker-select");
         var nombreElegido = selJugador ? selJugador.value : "";
         if (nombreElegido && window._idManagerActivo && window.Estado) {
-          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoPicker, nombreElegido);
+          // Queda vigente desde EL PARTIDO cuya previa está abierta ahora
+          // (inclusive) — ver estado.js::agregarJugadorALista.
+          var ordenAlta = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoPicker, nombreElegido, ordenAlta);
         }
       }
       renderListasJugadores();
@@ -4219,10 +4245,14 @@
     // des-sancionar a su propio jugador por su cuenta.
     var delBtnLista = ev.target.closest && ev.target.closest(".live-acta-del[data-tipo-lista]");
     if (delBtnLista && window._idManagerActivo && window.Estado) {
-      var tipoDel = delBtnLista.dataset.tipoLista, indiceDel = Number(delBtnLista.dataset.indice);
+      var tipoDel = delBtnLista.dataset.tipoLista, entradaIdDel = delBtnLista.dataset.entradaId;
       if (window.Main) {
         window.Main.pedirPinAdmin(function () {
-          window.Estado.quitarJugadorDeLista(window._idManagerActivo, tipoDel, indiceDel);
+          // Se cierra desde el partido cuya previa está abierta ahora —
+          // los partidos ANTERIORES a este (ya jugados o no) lo siguen
+          // mostrando lesionado/sancionado; este y los siguientes, no.
+          var ordenBaja = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+          window.Estado.quitarJugadorDeLista(window._idManagerActivo, tipoDel, entradaIdDel, ordenBaja);
           renderListasJugadores();
         }, "🔒 Quitar de la lista", "Solo el administrador puede quitar lesionados/sancionados.");
       }

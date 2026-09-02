@@ -466,6 +466,45 @@
     return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
   }
 
+  // Competiciones de ELIMINACIÓN DIRECTA (partido único o eliminatoria, sin
+  // fase de grupos): perder aquí saca del cuadro entero, y una ronda NUNCA
+  // se puede jugar sin haber ganado antes la anterior (petición usuario:
+  // "hasta que el Atlético Madrid no elimine en 1/64 al AD Mérida no puede
+  // jugar los Dieciseisavos"). Un futuro playoff que cumpla lo mismo se
+  // añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder un
+  // partido no elimina, y las jornadas no dependen de ganar la anterior).
+  var COMPS_ELIMINACION_DIRECTA = { copa: true };
+
+  // Dado el listado de partidos de UNA sola competición de eliminación
+  // directa para UN club, YA ordenado cronológicamente (mismo criterio que
+  // el resto de la app: fecha real, o el fallback _fechaFallbackMs/orden
+  // del texto), calcula qué rondas quedan:
+  //  - eliminadas: el club ya cayó en una ronda anterior — no hay nada
+  //    real que jugar (se pinta apagada, "Eliminado").
+  //  - bloqueadas: el club SIGUE vivo pero la ronda anterior aún no está
+  //    jugada/ganada — no se puede adelantar (se pinta con 🔒).
+  // La PRIMERA ronda sin jugar de la lista es siempre la única jugable
+  // (nunca se bloquea a sí misma); cualquier ronda posterior sí, hasta que
+  // esa se resuelva. 0 KB nuevos en localStorage — se recalcula en cada
+  // render a partir de los mismos partidos que ya se estaban pintando.
+  function _estadoRondasEliminacion(partidos, clubId) {
+    var eliminado = false, pendiente = false;
+    var eliminadoIds = {}, bloqueadoIds = {};
+    partidos.forEach(function (p) {
+      if (eliminado) { eliminadoIds[p.id] = true; return; }
+      if (p.jugado && p.resultado) {
+        var esLocal = p.local === clubId;
+        var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        if (golesClub < golesRival) eliminado = true;
+        return;
+      }
+      if (pendiente) bloqueadoIds[p.id] = true;
+      else pendiente = true;
+    });
+    return { eliminadoIds: eliminadoIds, bloqueadoIds: bloqueadoIds };
+  }
+
   // ============================================================
   // 3. CALENDARIO LATERAL DERECHO
   // ============================================================
@@ -1734,16 +1773,23 @@
   // Bloque "estado de la Copa" de UN club: ronda actual (la de su partido
   // MÁS RECIENTE por fecha, jugado o no — es literalmente "dónde está" en
   // el cuadro ahora mismo) + la lista de sus partidos, cada uno con su
-  // ronda/rival/resultado. Devuelve null si el club no tiene ningún
+  // ronda/rival/resultado — más qué rondas quedan eliminadas/bloqueadas
+  // (mismo cálculo _estadoRondasEliminacion que usa el calendario general,
+  // así esta pantalla NUNCA muestra "PREVIA" en una ronda que en realidad
+  // no se puede jugar todavía). Devuelve null si el club no tiene ningún
   // partido de Copa todavía (no aporta bloque).
   function _copaEstadoClub(datos, e) {
     var partidos = _copaPartidosDelClub(datos, e.id);
     if (!partidos.length) return null;
     var ultima = partidos[partidos.length - 1];
-    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
   }
 
-  function _copaPartidoRowHTML(p, clubId, datos) {
+  function _copaPartidoRowHTML(p, clubId, datos, esEliminado, esBloqueado) {
     var esLocal = p.local === clubId;
     var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
     var claseEstado = "";
@@ -1754,6 +1800,12 @@
       claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
         : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
       resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esEliminado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">Eliminado</span>';
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Aún no has ganado la ronda anterior">🔒</span>';
     } else {
       claseEstado = " copa-partido-row--pendiente";
       resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
@@ -1843,7 +1895,7 @@
             '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
             "</div>" +
             '<div class="copa-club-partidos">' +
-            b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+            b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos, !!b.eliminadoIds[p.id], !!b.bloqueadoIds[p.id]); }).join("") +
             "</div>";
           contenedor.appendChild(bloque);
         });
@@ -2634,7 +2686,7 @@
     return '<span class="match-card-pin" title="Tu próximo partido">📌</span>';
   }
 
-  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado) {
+  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado, esBloqueado) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
     var rival = buscarEquipoPorId(rivalId, datos);
@@ -2678,9 +2730,12 @@
     // derrota que ya eliminó al club de esa competición: se pinta apagada
     // igual que un partido jugado (misma opacidad .is-played) aunque no
     // haya marcador real — el club ya no participa, no hay nada que
-    // jugar (ver detección en generarCalendarioLateralDerecho).
+    // jugar (ver detección en generarCalendarioLateralDerecho). Una ronda
+    // BLOQUEADA (el club sigue vivo pero aún no ganó la ronda anterior de
+    // esa misma eliminatoria) se pinta apagada IGUAL, con 🔒 en vez de
+    // PREVIA — no se puede adelantar a Dieciseisavos sin haber ganado 1/64.
     card.className = "match-card" + (claseComp ? " " + claseComp : "") +
-      ((partido.jugado || esEliminado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
+      ((partido.jugado || esEliminado || esBloqueado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
     card.dataset.partidoId = partido.id;
 
     var compLabel = COMP_LABEL[compKeyResuelto] || partido.competicion;
@@ -2698,7 +2753,9 @@
         partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</button>"
       : (esEliminado
         ? '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>'
-        : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>');
+        : (esBloqueado
+          ? '<span class="match-card-bloqueado" title="Aún no has ganado la ronda anterior de esta eliminatoria">🔒</span>'
+          : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>'));
 
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
@@ -2788,43 +2845,46 @@
 
         _ultimoContexto = { datos: datos, equipo: equipo, totalJornadas: totalJornadas, partidosPorId: partidosPorId };
 
-        // Eliminación en Copa del Rey (partido único, sin fase de grupos):
+        // Eliminación/bloqueo en competiciones de eliminación directa
+        // (Copa del Rey, futuros playoffs — ver COMPS_ELIMINACION_DIRECTA):
         // en cuanto el club pierde una ronda ya jugada, TODAS las rondas
         // POSTERIORES de esa misma competición (mismo orden que ya usa
         // "próximo partido" — fecha real o, sin ella, el orden en que se
         // pegó la línea en el Calendario extra) dejan de ser jugables —
         // se pintan apagadas en vez de activas con un rival "?" pendiente
-        // y un botón PREVIA que no lleva a ningún partido real. Acotado a
-        // "copa" (Copa del Rey): a diferencia de una liga/grupo, aquí
-        // perder SIEMPRE elimina — otras competiciones del calendario
-        // extra (Selecciones, Champions...) pueden tener fase de grupos
-        // donde perder un partido no te saca del todo.
-        var _eliminadoEnComp = {};
-        var idsEliminados = {};
+        // y un botón PREVIA que no lleva a ningún partido real. Y aunque el
+        // club SIGA vivo, no puede adelantarse a una ronda posterior sin
+        // haber ganado antes la anterior (1/64 antes que Dieciseisavos) —
+        // esa ronda se pinta apagada con 🔒 en vez de PREVIA. Se calcula
+        // COMP POR COMP (nunca mezclando Copa con Liga u otra competición
+        // en paralelo) vía _estadoRondasEliminacion, ver comentario ahí.
+        var partidosElimPorComp = {};
         partidosDelClub.forEach(function (p) {
           var compKeyP = _resolverCompKeyBalon(p.competicion);
-          if (compKeyP !== "copa") return;
-          if (_eliminadoEnComp[compKeyP]) { idsEliminados[p.id] = true; return; }
-          if (p.jugado && p.resultado) {
-            var esLocalP = p.local === idEquipoHumanoActivo;
-            var golesActivoP = esLocalP ? p.resultado.golesLocal : p.resultado.golesVisitante;
-            var golesRivalP = esLocalP ? p.resultado.golesVisitante : p.resultado.golesLocal;
-            if (golesActivoP < golesRivalP) _eliminadoEnComp[compKeyP] = true;
-          }
+          if (!COMPS_ELIMINACION_DIRECTA[compKeyP]) return;
+          (partidosElimPorComp[compKeyP] = partidosElimPorComp[compKeyP] || []).push(p);
+        });
+        var idsEliminados = {};
+        var idsBloqueados = {};
+        Object.keys(partidosElimPorComp).forEach(function (compKeyP) {
+          var estadoComp = _estadoRondasEliminacion(partidosElimPorComp[compKeyP], idEquipoHumanoActivo);
+          Object.keys(estadoComp.eliminadoIds).forEach(function (id) { idsEliminados[id] = true; });
+          Object.keys(estadoComp.bloqueadoIds).forEach(function (id) { idsBloqueados[id] = true; });
         });
 
         // El primer partido sin jugar de la lista (ya ordenada por fecha)
         // es "el próximo" — se resalta con su propia clase para que
         // destaque de un vistazo cuál toca jugar ahora. Una ronda ya
-        // eliminada nunca puede ser "el próximo partido".
+        // eliminada, o aún bloqueada por no haber ganado la anterior,
+        // nunca puede ser "el próximo partido".
         var idSiguiente = null;
         for (var i = 0; i < partidosDelClub.length; i++) {
-          if (!partidosDelClub[i].jugado && !idsEliminados[partidosDelClub[i].id]) { idSiguiente = partidosDelClub[i].id; break; }
+          if (!partidosDelClub[i].jugado && !idsEliminados[partidosDelClub[i].id] && !idsBloqueados[partidosDelClub[i].id]) { idSiguiente = partidosDelClub[i].id; break; }
         }
 
         var frag = document.createDocumentFragment();
         partidosDelClub.forEach(function (p) {
-          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente, !!idsEliminados[p.id]));
+          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente, !!idsEliminados[p.id], !!idsBloqueados[p.id]));
         });
         contenedor.appendChild(frag);
 

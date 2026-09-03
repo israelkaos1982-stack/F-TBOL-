@@ -2900,6 +2900,34 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid rgba(255, 184, 80, 0.4);
   background: rgba(255, 184, 80, 0.1);
 }
+.live-tanda-titulo { margin-bottom: 6px; }
+/* Resultado final de la tanda EDITABLE a mano (petición usuario — antes
+   solo se podía sumar penalti a penalti pulsando 🥅 GOL PENAL, muy
+   lento con tandas largas). Los 2 números se pueden escribir
+   directamente; js/acta.js reconstruye los eventos PENALTI_GOL de la
+   tanda de ESE equipo para que cuadren con lo tecleado — el equipo que
+   marque MÁS avanza de ronda (misma lógica de siempre, ver
+   sistema-temporadas.js). Los botones del grid (🥅 GOL PENAL) SIGUEN
+   funcionando igual si el admin prefiere ir sumando uno a uno. */
+.live-tanda-marcador {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.live-tanda-input {
+  width: 52px;
+  font-size: 20px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text-hi);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 184, 80, 0.5);
+  border-radius: var(--radius-s);
+  padding: 4px 2px;
+}
+.live-tanda-input:focus { outline: 2px solid rgba(255, 184, 80, 0.7); }
+.live-tanda-guion { font-size: 18px; font-weight: 800; color: var(--text-hi); }
 
 /* 3x3 fijo "como videojuego" — 8 eventos + Descanso como 9ª caja (ver
    .live-evt-btn--descanso), icono grande arriba + etiqueta corta debajo

@@ -273,19 +273,70 @@
     actualizarTandaInfo();
   }
 
-  // Caja "🎯 Tanda de penaltis: X - Y" — oculta salvo que el admin haya
+  // Caja "🎯 Tanda de penaltis" — oculta salvo que el admin haya
   // seleccionado esa opción del minuto, o ya haya penaltis registrados
   // en la tanda (para que no desaparezca si vuelve a cambiar el minuto).
+  // Los 2 números son INPUTS editables (ver _fijarTandaPenaltis) — este
+  // helper solo los refleja, nunca decide el ganador (eso lo sigue
+  // haciendo sistema-temporadas.js contando estos mismos eventos).
   function actualizarTandaInfo() {
     var box = document.getElementById("live-tanda-info");
-    var marcador = document.getElementById("live-tanda-marcador");
-    if (!box || !marcador || !_partidoActivo) return;
+    var inputL = document.getElementById("live-tanda-local");
+    var inputV = document.getElementById("live-tanda-visitante");
+    if (!box || !inputL || !inputV || !_partidoActivo) return;
     var minutoSel = document.getElementById("live-minuto");
     var enModoTanda = !!(minutoSel && minutoSel.value === MINUTO_TANDA);
-    var penL = actaTemporal.filter(function (e) { return e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === _partidoActivo.local.id; }).length;
-    var penV = actaTemporal.filter(function (e) { return e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === _partidoActivo.visitante.id; }).length;
+    var penL = _contarTandaPenaltis(_partidoActivo.local.id);
+    var penV = _contarTandaPenaltis(_partidoActivo.visitante.id);
     box.hidden = !(enModoTanda || (penL + penV) > 0);
-    marcador.textContent = penL + " - " + penV;
+    // No pisar el input mientras el admin lo tiene enfocado (escribiendo)
+    // — evita que el eco de _fijarTandaPenaltis le mueva el cursor/borre
+    // lo que lleva tecleado a mitad de un número de 2 cifras.
+    if (document.activeElement !== inputL) inputL.value = String(penL);
+    if (document.activeElement !== inputV) inputV.value = String(penV);
+  }
+
+  function _contarTandaPenaltis(equipoId) {
+    return actaTemporal.filter(function (e) {
+      return e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === equipoId;
+    }).length;
+  }
+
+  // Etiqueta genérica para un penalti de la tanda añadido por el
+  // resultado-final-editable — no hay forma de saber QUÉ jugador tiró
+  // cada uno cuando el admin escribe el número directamente (es
+  // precisamente lo que este atajo evita tener que registrar uno a
+  // uno). Los botones del grid (🥅 GOL PENAL, con jugador/IA
+  // resueltos) siguen funcionando en paralelo si el admin prefiere ir
+  // sumando penalti a penalti con atribución real.
+  var _JUGADOR_TANDA_GENERICO = "Tanda de penaltis";
+
+  // Fija el resultado final de la tanda de ESE equipo: borra sus
+  // eventos PENALTI_GOL@TANDA ya existentes (los venga de donde vengan
+  // — botón o edición anterior) y crea exactamente `cantidad` nuevos.
+  // Mismo modelo de datos que el flujo de botones (un evento por
+  // penalti marcado), así que sistema-temporadas.js (_tandaPenaltis,
+  // que solo CUENTA estos eventos) decide el ganador exactamente igual:
+  // el equipo que termine con más penaltis marcados avanza de ronda.
+  function _fijarTandaPenaltis(equipo, cantidad) {
+    if (!_partidoActivo || !equipo) return;
+    var n = Math.max(0, Math.floor(Number(cantidad)) || 0);
+    actaTemporal = actaTemporal.filter(function (e) {
+      return !(e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === equipo.id);
+    });
+    for (var i = 0; i < n; i++) {
+      actaTemporal.push({
+        id_evento: nuevoIdEvento(),
+        minuto: MINUTO_TANDA,
+        tipo: "PENALTI_GOL",
+        equipo_id: equipo.id,
+        equipo_nombre: equipo.nombre || null,
+        es_humano: false,
+        jugador_id: null,
+        jugador_nombre: _JUGADOR_TANDA_GENERICO
+      });
+    }
+    pintarActaLista();
   }
 
   // Mismo orden/etiquetas que la pantalla "Plantilla" (Renderizadores) —
@@ -650,6 +701,20 @@
   document.addEventListener("change", function (ev) {
     if (ev.target.id === "live-minuto") {
       actualizarTandaInfo();
+      return;
+    }
+  });
+
+  // Resultado final de la tanda tecleado a mano — "input" (no "change")
+  // para que se refleje al momento, no solo al perder el foco.
+  document.addEventListener("input", function (ev) {
+    if (!_partidoActivo) return;
+    if (ev.target.id === "live-tanda-local") {
+      _fijarTandaPenaltis(_partidoActivo.local, ev.target.value);
+      return;
+    }
+    if (ev.target.id === "live-tanda-visitante") {
+      _fijarTandaPenaltis(_partidoActivo.visitante, ev.target.value);
       return;
     }
   });

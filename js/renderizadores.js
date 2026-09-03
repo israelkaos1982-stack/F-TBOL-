@@ -4631,8 +4631,17 @@
   }
 
   // Casilla "Activar Prórroga y Penaltis": SOLO en modo "eliminatoria-
-  // unica" (Copa a partido único, etc.) — ahí sí es opcional, el admin
-  // decide de antemano si ESE partido concreto puede necesitar prórroga.
+  // unica" (Copa a partido único, etc.). OBLIGATORIA (marcada y
+  // bloqueada, el admin no puede desactivarla) en cualquier eliminatoria
+  // real a partido único — un partido de este tipo SIEMPRE puede acabar
+  // en empate y necesitar decidirse (petición usuario 2026-09-03: antes
+  // era opcional y el admin podía olvidarse de activarla antes de
+  // empezar, dejando el partido sin forma de resolver un empate). Sigue
+  // siendo OPCIONAL únicamente en un amistoso de verdad
+  // (_resolverCompKeyBalon(partido.competicion) === "amistosos" — el
+  // MISMO alias que ya usa el balón para reconocer "Amistoso"/
+  // "Amistosos" en el texto libre de Calendario extra): un amistoso
+  // puede terminar en empate sin más, sin prórroga ni penaltis.
   // La VUELTA de una eliminatoria a doble partido (Semis de Copa,
   // Playoffs de Champions/Europa League/Conference League, Previa de
   // Champions...) NUNCA la muestra como casilla: es el ÚNICO partido que
@@ -4647,10 +4656,9 @@
   // el checkbox (cuando existe) se decide de antemano; js/acta.js solo
   // lee su `.checked` al arrancar el partido (mismo id
   // `live-prorroga-toggle`, el DOM sobrevive porque la previa se OCULTA,
-  // no se destruye, al pulsar "▶ Empezar partido"). Sin texto largo
-  // debajo — solo la etiqueta, en azul clarito (petición usuario: el
-  // aviso tapaba la ✕ y el botón de Empezar, sin scroll para llegar a
-  // ellos).
+  // no se destruye, al pulsar "▶ Empezar partido") — un checkbox
+  // `disabled` sigue reportando `.checked` con normalidad vía JS, así
+  // que no hace falta tocar js/acta.js para que la lea correctamente.
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
@@ -4658,6 +4666,10 @@
     var checkboxHtml =
       '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
+    var checkboxObligatorioHtml =
+      '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle" checked disabled>' +
+      '<span>Activar Prórroga y Penaltis</span></label>' +
+      '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Obligatoria en un partido único a eliminatoria — no se puede desactivar.</p>';
     // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =
@@ -4665,7 +4677,8 @@
     var avisoProrrogaSiempre =
       '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta.</p>';
     if (modo === "eliminatoria-unica") {
-      box.innerHTML = checkboxHtml;
+      var esAmistoso = _resolverCompKeyBalon(partido.competicion) === "amistosos";
+      box.innerHTML = esAmistoso ? checkboxHtml : checkboxObligatorioHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
       box.innerHTML = avisoGolVisitante + avisoProrrogaSiempre;
     } else if (modo === "ida-vuelta") {
@@ -5638,7 +5651,20 @@
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
       if (!btnEmpezar.dataset.armado) {
-        window.alert("📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
+        // window.alert() nativo NO admite HTML/CSS — no hay forma de pintar
+        // texto en verde dentro de él (petición usuario 2026-09-03). Como
+        // aproximación con texto plano, se añade una 2ª línea que CONFIRMA
+        // el estado real de "Activar Prórroga y Penaltis" justo antes de
+        // arrancar — desde el fix de arriba (_renderFormatoBoxPrevia) esa
+        // casilla ya viene marcada y bloqueada SIEMPRE en una eliminatoria
+        // real a partido único, así que aquí solo se reafirma (nunca hace
+        // falta "avisar" para que el admin la active a mano).
+        var avisoTxt = "📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.";
+        var chkProrroga = document.getElementById("live-prorroga-toggle");
+        if (chkProrroga && chkProrroga.checked) {
+          avisoTxt += "\n\n⏱️ PRÓRROGA Y PENALTIS: ACTIVADA.";
+        }
+        window.alert(avisoTxt);
         btnEmpezar.dataset.armado = "1";
         btnEmpezar.textContent = "✅ Ya hice la captura — Empezar";
         return;

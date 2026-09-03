@@ -181,6 +181,25 @@
             console.error("[sync] no se pudo escribir la clave recibida del servidor:", k, err);
           }
         });
+
+        // AUTO-REPARACIÓN — si `_snapshot` cree que una clave YA está
+        // confirmada con el servidor (mismo hash reconciliado en un ciclo
+        // anterior) pero el servidor, AHORA, no la tiene en absoluto (se
+        // perdió: reinicio de base de datos, migración, fila borrada...),
+        // ese "ya está sincronizada" es mentira. Sin este chequeo el
+        // dispositivo se queda creyendo PARA SIEMPRE que no hay nada que
+        // subir — ni cerrar y reabrir la app lo arregla, porque
+        // `_snapshot` vive en localStorage y sobrevive a los reinicios de
+        // pestaña. Se vuelve a marcar pendiente para que el próximo push
+        // la restaure sola.
+        Object.keys(_snapshot).forEach(function (k) {
+          if (Object.prototype.hasOwnProperty.call(resp.claves, k)) return; // el servidor SÍ la tiene
+          if (actuales[k] === undefined) return; // tampoco existe en local, nada que restaurar
+          delete _snapshot[k];
+          _pendientes[k] = true;
+          huboSnapshotNuevo = true;
+        });
+
         if (huboSnapshotNuevo) _guardarSnapshotPersistido();
         if (huboCambio) {
           if (window.Estado.invalidarCache) window.Estado.invalidarCache();

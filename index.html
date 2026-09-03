@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=118">
+<link rel="stylesheet" href="css/estilos.css?v=119">
 </head>
 <body>
 
@@ -329,6 +329,23 @@
       </div>
     </div>
 
+    <!-- VISTA C: DESCANSO — pantalla limpia (mismo molde que la VISTA B:
+         escudos/marcador/nombres/mini-acta ya están FIJOS arriba, fuera
+         de las 3 vistas) para poder hacer la captura sin el formulario
+         de eventos (minuto/jugador/grid 3x3) tapando la pantalla detrás
+         de un alert() nativo (petición usuario: antes un alert bloqueaba
+         SOBRE el formulario lleno, nunca sobre una vista limpia). Un
+         solo toque en "Continuar" basta — no hace falta el patrón de 2
+         toques del cierre final: aquí no se sale del partido ni se
+         pierde nada, la 2ª parte sigue en la MISMA acta. -->
+    <div id="live-descanso-vista" hidden>
+      <div class="live-resumen-titulo live-resumen-titulo--descanso">🛌 DESCANSO</div>
+      <p class="live-captura-hint">📸 Haz una captura del marcador actual para el Grupo WhatsApp LIGA.</p>
+      <div class="live-footer">
+        <button type="button" class="btn-confirmar" id="live-continuar-2parte">▶ Continuar 2ª parte</button>
+      </div>
+    </div>
+
     <!-- VISTA B: resumen post-partido — el resultado y los equipos ya se
          ven arriba (marcador + escudos, fijos y siempre visibles), así
          que repetirlos aquí en texto es redundante (petición usuario). Sin
@@ -337,8 +354,15 @@
          relacionado con ESTE partido: eliminatoria (si aplica) y el aviso
          de captura AL FINAL de todo. Sin botón de WhatsApp (petición
          usuario: si ya se hace captura de pantalla, ese botón no aporta
-         nada — ver js/acta.js). -->
+         nada — ver js/acta.js). El botón "Cerrar" (y la ✕ de arriba
+         mientras esta vista esté visible) usan el MISMO patrón de 2
+         toques que "▶ Empezar partido": el 1er toque solo arma el botón
+         (sin alert bloqueando la pantalla limpia), el 2º sí cierra —
+         así siempre queda un hueco real para hacer la captura antes de
+         volver al menú (petición usuario: antes el alert nativo se
+         cerraba con el mismo toque que sacaba al menú, sin margen). -->
     <div id="live-resumen" hidden>
+      <div class="live-resumen-titulo live-resumen-titulo--fin">🏁 FINALIZADO</div>
       <div id="live-resumen-eliminatoria"></div>
 
       <div class="live-footer">
@@ -355,17 +379,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=118" defer></script>
-<script src="js/sync.js?v=118" defer></script>
-<script src="js/renderizadores.js?v=118" defer></script>
-<script src="js/sistema-temporadas.js?v=118" defer></script>
-<script src="js/acta.js?v=118" defer></script>
-<script src="js/estadios.js?v=118" defer></script>
-<script src="js/balones.js?v=118" defer></script>
-<script src="js/escudos.js?v=118" defer></script>
-<script src="js/calendario.js?v=118" defer></script>
-<script src="js/persistencia.js?v=118" defer></script>
-<script src="js/main.js?v=118" defer></script>
+<script src="js/estado.js?v=119" defer></script>
+<script src="js/sync.js?v=119" defer></script>
+<script src="js/renderizadores.js?v=119" defer></script>
+<script src="js/sistema-temporadas.js?v=119" defer></script>
+<script src="js/acta.js?v=119" defer></script>
+<script src="js/estadios.js?v=119" defer></script>
+<script src="js/balones.js?v=119" defer></script>
+<script src="js/escudos.js?v=119" defer></script>
+<script src="js/calendario.js?v=119" defer></script>
+<script src="js/persistencia.js?v=119" defer></script>
+<script src="js/main.js?v=119" defer></script>
 
 </body>
 </html>

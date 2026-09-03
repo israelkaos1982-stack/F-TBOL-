@@ -557,6 +557,32 @@
     document.getElementById("partido-live-overlay").hidden = true;
     actaTemporal = [];
     _partidoActivo = null;
+    _resumenArmado = false;
+  }
+
+  // Cierre de la VISTA B (resumen final) — MISMO patrón de 2 toques que
+  // "▶ Empezar partido" (ver js/renderizadores.js): el 1er toque SOLO
+  // arma el botón (la pantalla limpia — escudos/marcador/acta/FINALIZADO
+  // — sigue ahí, sin ningún alert() bloqueándola encima), el 2º sí
+  // cierra de verdad. Antes un alert() nativo se disparaba al pulsar
+  // "Cerrar" y, al aceptarlo, ESE MISMO toque ya sacaba al menú — sin
+  // ningún hueco real para hacer la captura (petición usuario
+  // 2026-09-03 #3, foto "directamente al pulsar aceptar ya te saca al
+  // menú principal sin poder hacer la captura"). La ✕ de arriba usa el
+  // MISMO flag: cualquiera de los 2 botones arma o cierra por igual.
+  var _resumenArmado = false;
+  function _actualizarBotonCerrarResumen() {
+    var btn = document.getElementById("live-cerrar-resumen");
+    if (!btn) return;
+    btn.textContent = _resumenArmado ? "✅ Ya hice la captura — Cerrar" : "Cerrar";
+  }
+  function _intentarCerrarResumen() {
+    if (!_resumenArmado) {
+      _resumenArmado = true;
+      _actualizarBotonCerrarResumen();
+      return;
+    }
+    cerrarPartidoEnVivo();
   }
 
   function textoEliminatoria(res, datos) {
@@ -604,6 +630,8 @@
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;
+    _resumenArmado = false;
+    _actualizarBotonCerrarResumen();
 
     // 💾 Backup: se resalta el botón de guardado en vez de forzar una
     // descarga automática en cada partido (evitaría que el navegador
@@ -617,10 +645,23 @@
   document.addEventListener("click", function (ev) {
     // Descanso ANTES que el chequeo genérico de .live-evt-btn: es la 9ª
     // caja del grid (misma clase), pero no registra ningún evento del
-    // acta — solo el aviso de captura.
+    // acta — solo cambia de vista (VISTA A -> VISTA C, ver index.html)
+    // para poder hacer la captura sobre una pantalla limpia, sin el
+    // formulario de eventos (minuto/jugador/grid 3x3) detrás de un
+    // alert() bloqueando la vista (petición usuario 2026-09-03 #3).
     var descansoBtn = ev.target.closest && ev.target.closest("#live-descanso");
     if (descansoBtn) {
-      window.alert("📸 Descanso — haz una captura del marcador actual para el Grupo WhatsApp LIGA antes de continuar la 2ª parte.");
+      document.getElementById("live-entrada").hidden = true;
+      document.getElementById("live-descanso-vista").hidden = false;
+      return;
+    }
+    // Vuelta de la VISTA C a la VISTA A — la acta (mini-eventos,
+    // escudos, marcador) sigue siendo la MISMA de siempre, arriba de
+    // ambas vistas; aquí solo se reactiva el formulario para seguir
+    // registrando eventos de la 2ª parte.
+    if (ev.target.id === "live-continuar-2parte") {
+      document.getElementById("live-descanso-vista").hidden = true;
+      document.getElementById("live-entrada").hidden = false;
       return;
     }
 
@@ -670,13 +711,15 @@
     }
 
     // El ✕ superior cierra el overlay en CUALQUIER vista — si el partido
-    // ya está finalizado (VISTA B, el resumen visible), debe avisar
-    // igual que el botón "Cerrar" de abajo: no hay 2 caminos para saltarse
-    // el aviso de la captura final.
+    // ya está finalizado (VISTA B, el resumen visible), usa el MISMO
+    // armado de 2 toques que "Cerrar" (ver _intentarCerrarResumen):
+    // ambos botones comparten el flag _resumenArmado, así que da igual
+    // por cuál de los 2 se arme o se cierre.
     if (ev.target.id === "live-close") {
       var resumenAbiertoAlCerrar = !document.getElementById("live-resumen").hidden;
       if (resumenAbiertoAlCerrar) {
-        window.alert("📸 Final — haz una captura del marcador final del partido para el Grupo WhatsApp LIGA.");
+        _intentarCerrarResumen();
+        return;
       }
       cerrarPartidoEnVivo();
       return;
@@ -688,8 +731,7 @@
     }
 
     if (ev.target.id === "live-cerrar-resumen") {
-      window.alert("📸 Final — haz una captura del marcador final del partido para el Grupo WhatsApp LIGA.");
-      document.getElementById("partido-live-overlay").hidden = true;
+      _intentarCerrarResumen();
       return;
     }
   });

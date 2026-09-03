@@ -2827,7 +2827,6 @@
   function _championsAppendStatsGrid(contenedor, idClubActivo) {
     contenedor.appendChild(nodoSeparador());
     contenedor.appendChild(nodoTituloEstadisticas());
-    contenedor.insertAdjacentHTML("beforeend", '<p class="admin-nota champions-stats-nota">Mismas en Fase de Grupos y Playoffs — suman juntas.</p>');
 
     var statsGrid = document.createElement("div");
     statsGrid.className = "liga1ref-stats-grid";

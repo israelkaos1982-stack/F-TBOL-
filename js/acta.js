@@ -613,7 +613,20 @@
       return;
     }
 
-    if (ev.target.id === "live-cancelar" || ev.target.id === "live-close") {
+    if (ev.target.id === "live-cancelar") {
+      cerrarPartidoEnVivo();
+      return;
+    }
+
+    // El ✕ superior cierra el overlay en CUALQUIER vista — si el partido
+    // ya está finalizado (VISTA B, el resumen visible), debe avisar
+    // igual que el botón "Cerrar" de abajo: no hay 2 caminos para saltarse
+    // el aviso de la captura final.
+    if (ev.target.id === "live-close") {
+      var resumenAbiertoAlCerrar = !document.getElementById("live-resumen").hidden;
+      if (resumenAbiertoAlCerrar) {
+        window.alert("📸 Final — haz una captura del marcador final del partido para el Grupo WhatsApp LIGA.");
+      }
       cerrarPartidoEnVivo();
       return;
     }
@@ -624,6 +637,7 @@
     }
 
     if (ev.target.id === "live-cerrar-resumen") {
+      window.alert("📸 Final — haz una captura del marcador final del partido para el Grupo WhatsApp LIGA.");
       document.getElementById("partido-live-overlay").hidden = true;
       return;
     }

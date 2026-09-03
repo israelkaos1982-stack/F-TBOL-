@@ -2363,10 +2363,20 @@
     var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
 
     equiposHumanos.forEach(function (e) {
-      var partidos = todosPartidos.filter(function (p) {
-        return p.jugado && p.resultado && p.competicion === "champions" &&
-          (p.local === e.id || p.visitante === e.id);
+      // A diferencia de Liga 1ª REF (los 6 humanos SIEMPRE están en su
+      // liga doméstica) o Copa/Superliga (SIEMPRE se juegan), la Champions
+      // NO garantiza que un club humano esté clasificado esta temporada —
+      // puede que ninguno de los 6 juegue (petición usuario: "los equipos
+      // humanos no juegan Champions este año"). Un club solo aporta fila
+      // si tiene AL MENOS un partido (jugado o programado, da igual —
+      // Calendario extra → Competición "Champions") registrado; sin
+      // ninguno, no participa y no se añade ninguna fila fantasma a 0.
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "champions" && (p.local === e.id || p.visitante === e.id);
       });
+      if (!partidosComp.length) return;
+
+      var partidos = partidosComp.filter(function (p) { return p.jugado && p.resultado; });
 
       var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
 

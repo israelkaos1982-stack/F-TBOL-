@@ -1808,43 +1808,13 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--champions-playoffs { background: rgba(139, 92, 246, 0.16); border-color: rgba(139, 92, 246, 0.4); color: var(--morado); }
 .champions-tabs { margin-bottom: 14px; }
 
-/* Rejilla de escudos clasificados (arriba de la pestaña Playoffs) —
-   compacta, solo escudo + posición + nombre, sin caber en tabla. */
-.champions-qualy-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0 16px;
-}
-.champions-qualy-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
-  padding: 4px 8px 4px 4px;
-  max-width: 100%;
-}
-.champions-qualy-pos {
-  font-size: 9px;
-  font-weight: 900;
-  color: var(--text-lo);
-}
-.champions-qualy-nombre {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-hi);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-}
-
 /* Cruces de una ronda de Playoffs — reutiliza .copa-club-block/
    .copa-club-header/.copa-club-nombre como contenedor de cada ronda (0
    CSS nuevo para eso), solo la fila del cruce en sí (2 escudos + marcador
-   agregado) es nueva. */
+   agregado) es nueva. A partir de Octavos los cruces se emparejan solos
+   (ver js/renderizadores.js::calcularChampionsPlayoffTodasLasRondas) —
+   ".champions-tie-lado--pendiente" es el hueco "Pendiente" mientras la
+   ronda anterior todavía no tiene ganador. */
 .champions-playoff-ties { display: flex; flex-direction: column; }
 .champions-tie-row {
   display: flex;
@@ -1871,6 +1841,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .champions-tie-lado--gano .champions-tie-nombre { color: var(--neon); }
 .champions-tie-lado--perdio .champions-tie-nombre { color: var(--text-lo); }
+.champions-tie-lado--pendiente .champions-tie-nombre { color: var(--text-lo); font-style: italic; }
+.champions-tie-lado--pendiente .escudo { opacity: 0.4; }
 .champions-tie-marcador {
   flex: 0 0 auto;
   font-size: 13px;
@@ -1878,6 +1850,30 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--text-hi);
   white-space: nowrap;
 }
+.champions-tie-marcador--pendiente { font-weight: 700; color: var(--text-lo); }
+.champions-tie-auto {
+  display: block;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--neon);
+  text-align: center;
+}
+/* Flecha "→ espera en Octavos" bajo un cruce de Dieciseisavos — mismo
+   lenguaje visual que la app real que enseñó el usuario ("→ Chelsea"),
+   solo que en texto plano en vez de una línea de bracket dibujada. */
+.champions-tie-espera {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 8px 26px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-lo);
+}
+.champions-tie-espera .escudo--sm { width: 16px; height: 16px; min-width: 16px; border-radius: 4px; }
+.champions-tie-espera .champions-tie-nombre { color: var(--text-lo); font-weight: 700; }
 .champions-stats-nota { margin: 6px 0 10px; }
 
 /* ---------- 6b. SALA DE TÍTULOS — sin imágenes, icono + color CSS ----------

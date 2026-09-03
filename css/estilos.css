@@ -407,8 +407,26 @@ button { font-family: inherit; cursor: pointer; }
 /* Formato "Sólido" — un solo color dominante (equipos como Chelsea,
    Nápoli, Manchester City: la camiseta real es prácticamente un único
    tono, sin franjas). 0 KB extra — solo cambia qué color pinta la
-   base ya presente en .escudo. */
+   base ya presente en .escudo.
+   El color SECUNDARIO se pinta como un ANILLO alrededor del relleno
+   (petición usuario, fotos Celta Fortuna/Huesca/FC Andorra/Cultural
+   Leonesa: "en redondo modo chapa... se ven horribles, usa al menos
+   los colores del escudo" — antes `--secondary` ni se usaba en este
+   formato, quedaba un círculo de un solo color plano). Casi todo
+   escudo real de verdad lleva un aro/borde de un color distinto al
+   relleno (el aro amarillo de Andorra, el aro rojo de Cultural
+   Leonesa…), así que usar los 2 colores YA guardados en
+   data/rivales_reales.json se parece mucho más al escudo real sin
+   añadir ni un KB de imagen. Selector compuesto `.escudo--ia` (mayor
+   especificidad) para ganarle al box-shadow de esa clase — sin él, el
+   anillo se perdía en la cascada (ver .escudo--ia más abajo). */
 .escudo--solido { background-color: var(--primary); }
+.escudo--ia.escudo--solido {
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 3px var(--secondary),
+    inset 0 0 0 4px rgba(255, 255, 255, 0.18);
+}
 
 /* Formato "Mitad" — camiseta partida arriba/abajo (Aston Villa granate/
    celeste, Borussia Dortmund amarillo/negro). Gradiente con corte seco

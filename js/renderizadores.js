@@ -2505,16 +2505,22 @@
   // clasificados ya te los sabes, no hace falta mostrarlos") retiró el
   // grid de escudos que existía antes de este cambio.
 
+  // Marcador de una línea: acepta TANTO "3-1" (guion) COMO "4 vs 5" (el
+  // formato que usa la propia app real de la Champions, con espacios a
+  // los 2 lados) — el admin no tiene por qué recordar cuál de los 2 usar.
+  var _CHAMPIONS_MARCADOR_RE = /^(.*\S)\s+(\d+)\s*(?:-|vs\.?)\s*(\d+)\s+(\S.*)$/i;
+
   // Parser de una línea de eliminatoria YA CONOCIDA (Octavos en
-  // adelante): "Equipo A 3-1 Equipo B" — marcador AGREGADO (ida+vuelta ya
-  // sumada por el admin). El orden de los 2 nombres no implica localía
-  // (una eliminatoria a doble partido no tiene un "local" único).
+  // adelante): "Equipo A 3-1 Equipo B" (o "Equipo A 3 vs 1 Equipo B") —
+  // marcador AGREGADO (ida+vuelta ya sumada por el admin). El orden de
+  // los 2 nombres no implica localía (una eliminatoria a doble partido
+  // no tiene un "local" único).
   function parsearChampionsPlayoffTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
-      var m = l.match(/^(.*\S)\s+(\d+)\s*-\s*(\d+)\s+(\S.*)$/);
+      var m = l.match(_CHAMPIONS_MARCADOR_RE);
       if (!m) return;
       var equipoA = m[1].trim(), equipoB = m[4].trim();
       if (!equipoA || !equipoB) return;
@@ -2524,34 +2530,36 @@
   }
 
   // Parser de los cruces de Dieciseisavos — la ÚNICA ronda donde el
-  // admin SÍ crea el emparejamiento: "Equipo A [3-1] Equipo B > Equipo
-  // que espera en Octavos" (marcador opcional — sin él, el cruce queda
-  // definido pero pendiente de jugar). El " > " separa el duelo
-  // (izquierda) del equipo directo que aguarda al ganador (derecha).
+  // admin SÍ crea el emparejamiento: "Equipo A [marcador] Equipo B [>
+  // Equipo que espera en Octavos]". TODO lo de la derecha es OPCIONAL:
+  // sin marcador el cruce queda definido pero pendiente de jugar, y sin
+  // "> Equipo" el cruce se guarda igual (el ganador ya se ve) — el
+  // "espera" se puede añadir después con solo editar esa línea. Petición
+  // usuario ("no entiendo... encima no salen"): pegar el marcador tal
+  // cual lo copia de la app real ("AS Monaco 4 vs 5 PSG", sin ningún
+  // ">") DEBE registrar el cruce igualmente, nunca perderse en silencio.
   function parsearChampionsDieciseisavosTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
       var partes = l.split(">");
-      if (partes.length < 2) return;
       var izq = partes[0].trim();
-      var espera = partes.slice(1).join(">").trim();
-      if (!izq || !espera) return;
-      var conMarcador = izq.match(/^(.*\S)\s+(\d+)\s*-\s*(\d+)\s+(\S.*)$/);
+      var espera = partes.length > 1 ? partes.slice(1).join(">").trim() : "";
+      if (!izq) return;
+      var conMarcador = izq.match(_CHAMPIONS_MARCADOR_RE);
       if (conMarcador) {
         items.push({
           equipoA: conMarcador[1].trim(), golA: Number(conMarcador[2]), golB: Number(conMarcador[3]),
-          equipoB: conMarcador[4].trim(), espera: espera
+          equipoB: conMarcador[4].trim(), espera: espera || null
         });
         return;
       }
       // Sin marcador todavía (cruce definido, pendiente de jugar): admite
-      // tanto "Equipo A - Equipo B" (guion, el formato documentado en el
-      // editor) como "Equipo A vs Equipo B".
+      // tanto "Equipo A - Equipo B" (guion) como "Equipo A vs Equipo B".
       var sinMarcador = izq.match(/^(.*\S)\s+-\s+(\S.*)$/) || izq.match(/^(.*\S)\s+vs\.?\s+(\S.*)$/i);
       if (sinMarcador) {
-        items.push({ equipoA: sinMarcador[1].trim(), golA: null, golB: null, equipoB: sinMarcador[2].trim(), espera: espera });
+        items.push({ equipoA: sinMarcador[1].trim(), golA: null, golB: null, equipoB: sinMarcador[2].trim(), espera: espera || null });
       }
     });
     return items;
@@ -2627,7 +2635,7 @@
     parsearChampionsDieciseisavosTexto(texto).forEach(function (it) {
       var objA = resolverRivalPorNombre(it.equipoA, datos, null);
       var objB = resolverRivalPorNombre(it.equipoB, datos, null);
-      var objEspera = resolverRivalPorNombre(it.espera, datos, null);
+      var objEspera = it.espera ? resolverRivalPorNombre(it.espera, datos, null) : null;
       var esperaNombre = objEspera ? objEspera.nombre : it.espera;
 
       var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
@@ -3039,15 +3047,18 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent = esDieciseisavos
-      ? "Una línea por cruce: «Equipo A - Equipo B > Equipo que espera en Octavos» (con marcador ya jugado: " +
-        "«Equipo A 3-1 Equipo B > Equipo que espera»). Usa los nombres TAL CUAL salen en la clasificación — " +
-        "el resto del cuadro (Octavos, Cuartos, Semis, Final) se empareja SOLO a partir de estos 8 cruces. " +
-        "Si un club humano ya tiene su cruce jugado (Calendario extra), solo hace falta indicar quién le " +
-        "espera: «Liverpool - AS Monaco > Chelsea»."
-      : "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria: " +
-        "«Equipo A 3-1 Equipo B». Los cruces de esta ronda salen SOLOS de la ronda anterior — solo hace " +
-        "falta el marcador. Si un club humano ya tiene sus propios partidos de Champions jugados en esta " +
-        "ronda (Calendario extra), su cruce se calcula solo y esta línea se ignora.";
+      ? "Una línea por cruce, pega el marcador TAL CUAL lo veas en el juego — vale «-» o «vs»: " +
+        "«PSG 4-0 AS Monaco» o «AS Monaco 4 vs 5 PSG», da igual el orden. Usa los nombres TAL CUAL " +
+        "salen en la clasificación — el resto del cuadro (Octavos, Cuartos, Semis, Final) se empareja " +
+        "SOLO a partir de estos 8 cruces. Lo de «> Equipo que espera en Octavos» es OPCIONAL — puedes " +
+        "guardar solo el cruce y añadir el rival de Octavos más tarde editando esa misma línea: " +
+        "«AS Monaco 4 vs 5 PSG > Chelsea». Si un club humano ya tiene su cruce jugado (Calendario extra), " +
+        "solo hace falta indicar quién le espera: «Liverpool - AS Monaco > Chelsea»."
+      : "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria — " +
+        "vale «-» o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Los cruces de esta ronda " +
+        "salen SOLOS de la ronda anterior — solo hace falta el marcador. Si un club humano ya tiene sus " +
+        "propios partidos de Champions jugados en esta ronda (Calendario extra), su cruce se calcula solo " +
+        "y esta línea se ignora.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -3055,8 +3066,8 @@
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = esDieciseisavos ? 10 : 12;
     textarea.placeholder = esDieciseisavos
-      ? "PSG 4-0 AS Monaco > Chelsea\nGalatasaray 7-5 Juventus > Liverpool"
-      : "Bayern Munich 4-2 Milan\nManchester City 3-3 Juventus";
+      ? "AS Monaco 4 vs 5 PSG\nGalatasaray 7 vs 5 Juventus > Liverpool"
+      : "Bayern Munich 4-2 Milan\nManchester City 3 vs 3 Juventus";
     textarea.value = window.Estado ? window.Estado.obtenerChampionsPlayoffTexto(rondaKey) : "";
     contenedor.appendChild(textarea);
 

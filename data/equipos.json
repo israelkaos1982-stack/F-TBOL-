@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "descripcion": "Los 6 clubes humanos de eFOOTBALL Temporada 7. Cada mánager dirige un club (Liga EA Sports) y una selección nacional. Los 6 tienen escudo REAL (campo \"crest\"): 5 reusan los SVG ya servidos por la app Flask hermana en /static/img/escudos-*/ (cero KB nuevos); el del PSG (/static/img/escudos-1/france_psg.svg) es un vector propio dibujado a mano a partir de fotos del escudo oficial (aro azul marino + disco blanco con 'PARIS'/'SAINT · GERMAIN' en arco + escudete rojo con la Torre Eiffel y la flor de lis), ~2 KB, sin ningún raster incrustado — el fallback CSS de siglas+colorPrimario+colorSecundario+escudoFormato (ver js/escudos.js, Fase 2) de crearEscudoHTML ya no hace falta para ninguno de los 6, pero se deja intacto por si algún club pierde su \"crest\". Incluye valoracionPoder (50-98) para resolver su estadio local vía el algoritmo correlativo de data/estadios.json, salvo que tenga \"estadioId\" (id de data/estadios.json.estadios) — asignación fija elegida por el usuario que SIEMPRE gana sobre el algoritmo. Los 6 humanos tienen estadioId fijo; el resto de equipos (IA) sigue resolviendo por poder.",
+    "descripcion": "Los 6 clubes humanos de eFOOTBALL Temporada 7. Cada mánager dirige un club (Liga EA Sports) y una selección nacional. Los 6 tienen escudo REAL (campo \"crest\"), TODOS como PNG oficial transparente embebido en un SVG wrapper (mismo patrón para los 6, cero peticiones externas — ver el comentario dentro de cada archivo en /static/img/escudos-1/): el del PSG usaba antes (france_psg.svg) un vector dibujado a mano que nunca llegó a parecerse al escudo real (varios intentos fallidos en el historial) — 2026-09-03 se sustituyó por el escudo oficial real (france_psg_v2.svg — nombre nuevo A PROPÓSITO: /static/img/ se cachea 30 días con `immutable`, así que reescribir el archivo viejo en la MISMA URL no habría llegado a los móviles que ya lo tenían cacheado), igual que los otros 5. El fallback CSS de siglas+colorPrimario+colorSecundario+escudoFormato (ver js/escudos.js, Fase 2) de crearEscudoHTML ya no hace falta para ninguno de los 6, pero se deja intacto por si algún club pierde su \"crest\". Incluye valoracionPoder (50-98) para resolver su estadio local vía el algoritmo correlativo de data/estadios.json, salvo que tenga \"estadioId\" (id de data/estadios.json.estadios) — asignación fija elegida por el usuario que SIEMPRE gana sobre el algoritmo. Los 6 humanos tienen estadioId fijo; el resto de equipos (IA) sigue resolviendo por poder.",
     "escudoFormatos": [
       "rombo",
       "rayas"
@@ -99,7 +99,7 @@
       "seleccion": "España",
       "valoracionPoder": 92,
       "estadioId": "neo-quimica-arena",
-      "crest": "/static/img/escudos-1/france_psg.svg",
+      "crest": "/static/img/escudos-1/france_psg_v2.svg",
       "misterEmoji": "🦆",
       "banderaSeleccion": "🇪🇸"
     }

@@ -3425,13 +3425,15 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
 
-      var header = document.createElement("div");
-      header.className = "liga1ref-header";
-      header.innerHTML =
-        '<span class="liga1ref-leyenda-mini">Trofeos conseguidos como entrenador</span>' +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-titulos-inline" data-club-id="' +
-        (idClubActivo || "") + '" aria-label="Editar títulos">✏️</button>';
-      contenedor.appendChild(header);
+      // Nombre del entrenador — el mánager REAL de este club (dato fijo
+      // de data/equipos.json, campo "mister"), NO un texto genérico. Si
+      // por lo que sea no se resuelve (club sin ese dato), se cae al
+      // texto genérico anterior en vez de dejar "por " sin nombre.
+      var equipoActivo = buscarEquipoPorId(idClubActivo, datos);
+      var misterNombre = equipoActivo && equipoActivo.mister;
+      var leyendaTitulos = misterNombre
+        ? "Trofeos conseguidos por " + escapeHTML(misterNombre)
+        : "Trofeos conseguidos como entrenador";
 
       var indice = _titulosCatalogoIndexado(datos);
       var texto = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
@@ -3443,6 +3445,17 @@
       // "arriba el número total Clubes - Selección - Individuales").
       var totales = { club: 0, individual: 0, seleccion: 0 };
       ganados.forEach(function (g) { totales[g.categoria] = (totales[g.categoria] || 0) + g.veces; });
+      var totalGeneral = totales.club + totales.individual + totales.seleccion;
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<span class="liga1ref-leyenda-mini">' + leyendaTitulos + "</span>" +
+        '<span class="titulos-header-total" title="Total de títulos conseguidos">' + totalGeneral + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-titulos-inline" data-club-id="' +
+        (idClubActivo || "") + '" aria-label="Editar títulos">✏️</button>';
+      contenedor.appendChild(header);
+
       var resumen = document.createElement("div");
       resumen.className = "titulos-resumen";
       resumen.innerHTML = TITULOS_RESUMEN_ORDEN.map(function (cat) {

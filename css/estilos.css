@@ -2888,6 +2888,13 @@ button { font-family: inherit; cursor: pointer; }
   margin: 4px 0 10px;
 }
 .live-checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--neon); }
+/* Obligatoria en eliminatoria a partido único (checked+disabled, ver
+   js/renderizadores.js::_renderFormatoBoxPrevia) — VERDE, no el azul
+   clarito de arriba (petición usuario: un checkbox disabled se ve
+   "apagado"/gris por defecto del navegador; el texto en verde vivo dice
+   claramente "esto está ACTIVADO", no "esto está deshabilitado"). */
+.live-checkbox-row--activa { color: var(--neon); }
+.live-checkbox-row--activa input[type="checkbox"] { accent-color: var(--neon); opacity: 1; }
 
 .live-tanda-info {
   text-align: center;
@@ -3071,6 +3078,20 @@ button { font-family: inherit; cursor: pointer; }
   color: #7fd3ff;
   margin: 14px 0 0;
 }
+/* Cabecera de VISTA B (FINALIZADO, verde --neon) y VISTA C (DESCANSO,
+   naranja — mismo tono que .live-evt-btn--descanso). Reemplaza el
+   texto de "LIGA · 3ª JORNADA" (#live-comp, siempre fijo arriba) SOLO
+   visualmente para estas 2 vistas — #live-comp no se toca, así que el
+   dato de competición sigue intacto si el admin vuelve a la VISTA A. */
+.live-resumen-titulo {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  margin: 0 0 12px;
+}
+.live-resumen-titulo--fin { color: var(--neon); text-shadow: var(--neon-glow); }
+.live-resumen-titulo--descanso { color: #ff9500; }
 .live-eliminatoria {
   font-size: 12px;
   line-height: 1.5;

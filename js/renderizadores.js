@@ -4659,6 +4659,11 @@
   // no se destruye, al pulsar "▶ Empezar partido") — un checkbox
   // `disabled` sigue reportando `.checked` con normalidad vía JS, así
   // que no hace falta tocar js/acta.js para que la lea correctamente.
+  // SIN aviso aparte debajo cuando es obligatoria (petición usuario
+  // 2026-09-03 #2: ya lo dice el alert de "Vas a INICIAR el partido" al
+  // pulsar Empezar — un 2º aviso aquí era redundante) — solo la propia
+  // casilla, en VERDE (clase `--activa`, ver css/estilos.css) para que
+  // se lea claramente "ACTIVADA", no "deshabilitada".
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
@@ -4667,9 +4672,8 @@
       '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
     var checkboxObligatorioHtml =
-      '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle" checked disabled>' +
-      '<span>Activar Prórroga y Penaltis</span></label>' +
-      '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Obligatoria en un partido único a eliminatoria — no se puede desactivar.</p>';
+      '<label class="live-checkbox-row live-checkbox-row--activa"><input type="checkbox" id="live-prorroga-toggle" checked disabled>' +
+      '<span>Activar Prórroga y Penaltis</span></label>';
     // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =

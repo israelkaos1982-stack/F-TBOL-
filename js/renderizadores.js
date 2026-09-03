@@ -2621,6 +2621,28 @@
     );
   }
 
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén
+  // (petición usuario: "abras una o otra tienen que salir las mismas
+  // estadísticas"). Se pintan al final de LAS 2 pestañas — nunca solo en
+  // Fase de Grupos — para que el admin nunca tenga que cambiar de pestaña
+  // para llegar a ellas, y para dejar claro a simple vista que es la
+  // MISMA caja (mismo `ver-champions-stat`, mismo
+  // calcularChampionsStatsCombinado, sin distinguir fase por diseño).
+  function _championsAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+    contenedor.insertAdjacentHTML("beforeend", '<p class="admin-nota champions-stats-nota">Mismas en Fase de Grupos y Playoffs — suman juntas.</p>');
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = CHAMPIONS_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-champions-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
   function _renderizarChampionsGrupos(contenedor, datos, idClubActivo) {
     var filas = calcularChampionsCombinada(datos);
 
@@ -2651,18 +2673,7 @@
       ));
     }
 
-    contenedor.appendChild(nodoSeparador());
-    contenedor.appendChild(nodoTituloEstadisticas());
-    contenedor.insertAdjacentHTML("beforeend", '<p class="admin-nota champions-stats-nota">Suman Fase de Grupos + Playoffs juntos.</p>');
-
-    var statsGrid = document.createElement("div");
-    statsGrid.className = "liga1ref-stats-grid";
-    statsGrid.innerHTML = CHAMPIONS_STATS.map(function (s) {
-      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-champions-stat" data-club-id="' +
-        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
-        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
-    }).join("");
-    contenedor.appendChild(statsGrid);
+    _championsAppendStatsGrid(contenedor, idClubActivo);
   }
 
   function _renderizarChampionsPlayoffs(contenedor, datos, idClubActivo) {
@@ -2702,6 +2713,8 @@
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Los cruces de un club humano se auto-computan solos</span></div>'
     ));
+
+    _championsAppendStatsGrid(contenedor, idClubActivo);
   }
 
   function renderizarChampions(contenedorId, idClubActivo) {

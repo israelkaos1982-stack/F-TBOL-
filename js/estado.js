@@ -106,20 +106,49 @@
   // exactamente eso: el id de un partido de Calendario extra sale de un
   // hash de competición+ronda+rival, así que editar la RONDA de una línea
   // YA jugada cambia su id y `e.resultados[idViejo]` deja de encontrarse).
+  // Qué club(es) HUMANO(s) (de los 6 de data/equipos.json) participan en
+  // este partido — casi siempre 1 (el dueño del calendario donde se
+  // pegó la línea), pero puede haber 2 si son dos de los 6 enfrentados
+  // entre sí. Se usa SOLO para poder "reclamar" el resultado desde
+  // reiniciarResultadosDeClub más abajo — nunca decide nada del propio
+  // partido.
+  function _clubesHumanosDePartido(partido, datos) {
+    if (!partido || !datos || !datos.equipos || !Array.isArray(datos.equipos.equipos)) return [];
+    var vistos = {};
+    (datos.equipos.equipos || []).forEach(function (c) {
+      if (c.id === partido.local || c.id === partido.visitante) vistos[c.id] = true;
+    });
+    return Object.keys(vistos);
+  }
+
   function registrarResultadoPartido(partidoId, golesLocal, golesVisitante, eventos, contextoPartido) {
     var e = cargarEstado();
     var identidad = null;
+    var clubes = [];
+    var competicion = null;
     try {
       if (contextoPartido && contextoPartido.partido && contextoPartido.datos) {
         identidad = _identidadFallbackDePartido(contextoPartido.partido, contextoPartido.datos, window.Renderizadores);
+        clubes = _clubesHumanosDePartido(contextoPartido.partido, contextoPartido.datos);
+        competicion = contextoPartido.partido.competicion || null;
       }
-    } catch (err) { identidad = null; }
+    } catch (err) { identidad = null; clubes = []; competicion = null; }
     e.resultados[partidoId] = {
       jugado: true,
       golesLocal: golesLocal,
       golesVisitante: golesVisitante,
       eventos: (eventos || []).slice(),
-      _identidad: identidad
+      _identidad: identidad,
+      // `_clubes`/`_competicion`: solo para reiniciarResultadosDeClub (fin
+      // de temporada) — permiten "reclamar y borrar" este resultado por
+      // club SIN depender de que su línea siga presente/reconocible en el
+      // Calendario extra ACTUAL (ver comentario de esa función). Un
+      // resultado guardado ANTES de este campo existir se queda sin ellos
+      // (`[]`/`null`) y sencillamente no lo alcanza esta vía nueva — sigue
+      // limpiándose por la vía antigua (basada en lo que el calendario en
+      // pantalla tenga marcado como jugado) con total normalidad.
+      _clubes: clubes,
+      _competicion: competicion
     };
     return guardarEstado();
   }
@@ -143,6 +172,43 @@
     if (!e.resultados[partidoId]) return false;
     delete e.resultados[partidoId];
     return guardarEstado();
+  }
+
+  // Borra TODOS los resultados confirmados en vivo de un club humano —
+  // el propio botón "🔄 Reiniciar" de la cabecera de su calendario
+  // (js/renderizadores.js::reiniciarTodosPartidosClub) lo llama ADEMÁS
+  // de su barrido normal (lo visible en pantalla ahora mismo), no en
+  // sustitución. La diferencia importa al cerrar una temporada: si el
+  // admin pega el Calendario extra de la temporada NUEVA (que cambia el
+  // id de las líneas ya jugadas — son un hash de competición+ronda+
+  // rival) ANTES de pulsar "Reiniciar", el barrido normal ya no
+  // encuentra esas líneas — recorre el calendario NUEVO, casi todo sin
+  // jugar, y no hay nada que reiniciar ahí — así que los resultados de
+  // la temporada VIEJA se quedaban huérfanos para SIEMPRE: invisibles en
+  // cualquier pantalla, pero sin borrarse — puro peso muerto acumulado
+  // en ef7_estado_liga_v1 temporada tras temporada, sin límite. Esta vía
+  // reclama por `_clubes` (sellado en registrarResultadoPartido, ver
+  // arriba) — funciona pase lo que pase con el orden en que se hagan las
+  // cosas, y con CUALQUIER competición del club (Liga, Copa, Champions,
+  // Recopa...), no solo las que reconozca el calendario actual.
+  //
+  // `excluirComps` (por defecto solo "superliga") respeta la exclusión
+  // YA intencional del barrido normal: Superliga tiene su propio ciclo/
+  // reset aparte, este botón general nunca debe tocarla de rebote.
+  function reiniciarResultadosDeClub(clubId, excluirComps) {
+    if (!clubId) return 0;
+    var excluir = excluirComps || ["superliga"];
+    var e = cargarEstado();
+    var n = 0;
+    Object.keys(e.resultados).forEach(function (id) {
+      var r = e.resultados[id];
+      if (!r || !Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
+      if (r._competicion && excluir.indexOf(r._competicion) !== -1) return;
+      delete e.resultados[id];
+      n++;
+    });
+    if (n) guardarEstado();
+    return n;
   }
 
   function registrarPartidoGenerado(partido) {
@@ -1930,6 +1996,7 @@
     registrarResultadoPartido: registrarResultadoPartido,
     obtenerResultadoOverride: obtenerResultadoOverride,
     reiniciarResultadoPartido: reiniciarResultadoPartido,
+    reiniciarResultadosDeClub: reiniciarResultadosDeClub,
     registrarPartidoGenerado: registrarPartidoGenerado,
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,

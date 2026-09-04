@@ -36,6 +36,39 @@
     _estado = null;
   }
 
+  // ---------- Guardado a prueba de cuota (aviso VISIBLE, no solo consola) ----------
+  // Cualquier localStorage.setItem() de este archivo puede reventar
+  // (QuotaExceededError — el navegador se ha quedado sin espacio, o el
+  // modo privado de Safari lo bloquea del todo) sin lanzar nada que rompa
+  // la ejecución: el catch de cada función atrapa el error, hace
+  // console.error y devuelve `false` — pero NINGÚN caller de este archivo
+  // ni de js/main.js comprueba ese `false` antes de esta función. El admin
+  // pega su calendario, confirma un partido, cierra el editor... y ve la
+  // pantalla "normal" de siempre, sin ningún indicio de que ese dato en
+  // concreto nunca llegó a guardarse - solo lo descubre más tarde, al
+  // recargar o sincronizar con otro dispositivo, cuando "se ha perdido"
+  // sin explicación. Un aviso VISIBLE la PRIMERA vez que esto pasa en la
+  // sesión (no uno por cada intento - sería invasivo, y el usuario ya lo
+  // sabe tras el primero) es lo mínimo para que sepa que tiene que liberar
+  // espacio (Panel Admin -> Espacio del navegador) en vez de asumir que
+  // todo se guardó bien.
+  var _avisoCuotaMostrado = false;
+  function _avisarFalloGuardado(err) {
+    if (_avisoCuotaMostrado) return;
+    _avisoCuotaMostrado = true;
+    try {
+      window.setTimeout(function () {
+        window.alert(
+          "⚠️ El navegador se ha quedado sin espacio (o bloquea el guardado local) " +
+          "y lo que acabas de editar puede NO haberse guardado.\n\n" +
+          "Ve a Panel Admin → 📊 Espacio del navegador para liberar espacio " +
+          "(o borra datos de otras webs), y vuelve a pegar/confirmar lo último " +
+          "que hiciste para asegurarte de que se guarda de verdad."
+        );
+      }, 0);
+    } catch (err2) { /* ni el propio alert está disponible, nada más que hacer aquí */ }
+  }
+
   function cargarEstado() {
     if (_estado) return _estado;
     try {
@@ -56,6 +89,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar en localStorage:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -495,6 +529,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la temporada:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -527,6 +562,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el nombre de la liga:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -559,6 +595,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la división del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -609,6 +646,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el calendario de competiciones:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -655,6 +693,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el menú del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -784,6 +823,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el calendario extra del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -838,6 +878,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar los títulos del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -916,6 +957,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la lista de " + tipo + " del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1001,6 +1043,7 @@
       localStorage.setItem(_tarjetaFlagsKey(clubId), JSON.stringify(flags));
     } catch (err) {
       console.error("[estado] no se pudo guardar el bloqueo de tarjetas:", err);
+      _avisarFalloGuardado(err);
     }
     return flags;
   }
@@ -1051,6 +1094,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar los objetivos del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1079,6 +1123,7 @@
       localStorage.setItem(_objetivosLogradosKey(clubId), JSON.stringify(lista));
     } catch (err) {
       console.error("[estado] no se pudo guardar el progreso de objetivos:", err);
+      _avisarFalloGuardado(err);
     }
     return lista;
   }
@@ -1108,6 +1153,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la valoración del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1140,6 +1186,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el icono del objetivo:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1219,6 +1266,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar los derbys del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1248,6 +1296,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la plantilla del club:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1300,6 +1349,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de 1ª REF:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1325,6 +1375,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la estadística " + categoria + " de 1ª REF:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1357,6 +1408,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de " + ligaId + ":", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1382,6 +1434,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el formato de " + clave + ":", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1401,6 +1454,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la estadística " + categoria + " de " + ligaId + ":", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1430,6 +1484,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la estadística " + categoria + " de Copa del Rey:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1459,6 +1514,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el playoff " + ronda + " de Copa del Rey:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1487,6 +1543,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de Champions:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1513,6 +1570,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la estadística " + categoria + " de Champions:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1541,6 +1599,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el playoff " + ronda + " de Champions:", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1585,6 +1644,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el alias eFootball de \"" + clave + "\":", err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1651,6 +1711,7 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar overlay", key, err);
+      _avisarFalloGuardado(err);
       return false;
     }
   }
@@ -1831,6 +1892,7 @@
     // Formato NUEVO (v2) — volcado completo de todas las claves ef7_*.
     if (obj.formato === FORMATO_BACKUP_COMPLETO && obj.claves && typeof obj.claves === "object") {
       var huboAlgo = false;
+      var huboFallo = false;
       Object.keys(obj.claves).forEach(function (key) {
         if (key.indexOf(PREFIJO_CLAVES) !== 0) return; // nunca escribas nada ajeno a esta app
         try {
@@ -1838,8 +1900,14 @@
           huboAlgo = true;
         } catch (err) {
           console.error("[estado] no se pudo restaurar la clave " + key + ":", err);
+          huboFallo = true;
         }
       });
+      // Un solo aviso al final (no uno por cada clave — un backup completo
+      // son ~100 claves, y si falla por falta de espacio probablemente
+      // fallarán varias seguidas): la restauración puede haber quedado A
+      // MEDIAS (unas claves sí, otras no) sin que nada más lo indique.
+      if (huboFallo) _avisarFalloGuardado(new Error("restauración de backup incompleta"));
       _estado = null; // fuerza a releer desde localStorage en el próximo cargarEstado()
       return huboAlgo;
     }

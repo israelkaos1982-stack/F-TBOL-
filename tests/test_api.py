@@ -2395,3 +2395,202 @@ class TestTourWipe:
         c = client
         r = c.post("/api/tour-wipe/registry")  # -> tour_registry_v1, no es un torneo
         assert r.status_code == 400
+
+
+class TestEf7EstadoLigaMerge:
+    """`/api/ef7/state` fusiona `ef7_estado_liga_v1` PARTIDO A PARTIDO
+    (`_ef7_merge_resultados`) en vez de dejar que el último POST la
+    sobreescriba entera. Reporte usuario 2026-09-04 ("6 vez que se
+    vuelven a perder los partidos de copa del rey"): un dispositivo con
+    una copia LOCAL desactualizada de esta clave (sin el partido que OTRO
+    dispositivo acaba de confirmar y sincronizar) volvía a subir su copia
+    entera al hacer CUALQUIER cambio propio, borrando el partido ajeno del
+    servidor sin que nadie lo tocara a propósito. Ver el bloque de
+    comentario "EXCEPCIÓN — `ef7_estado_liga_v1`" en app.py."""
+
+    _EF7_KEY = "ef7_estado_liga_v1"
+
+    @pytest.fixture(autouse=True)
+    def _limpiar_ef7(self, client):
+        # La fila `ef7_estado_liga_v1` no la resetea el fixture `client`
+        # compartido (solo toca live_state/global_state/calendario) — la
+        # BD es un fichero compartido entre tests de la suite, así que se
+        # borra explícitamente para que cada test de esta clase parta de
+        # cero.
+        with app_module.app.app_context():
+            filas = app_module.GlobalState.query.filter(
+                app_module.GlobalState.clave.like("ef7_%")
+            ).all()
+            for f in filas:
+                app_module.db.session.delete(f)
+            app_module.db.session.commit()
+
+    def _post(self, client, resultados, partidos_generados=None, extra=None):
+        payload = {"version": 1, "resultados": resultados}
+        payload["partidosGenerados"] = partidos_generados or {}
+        if extra:
+            payload.update(extra)
+        raw = json.dumps(payload, ensure_ascii=False)
+        r = client.post("/api/ef7/state", json={"claves": {self._EF7_KEY: raw}})
+        assert r.status_code == 200
+        return r.get_json()
+
+    def _get_resultados(self, client):
+        r = client.get("/api/ef7/state")
+        assert r.status_code == 200
+        j = r.get_json()
+        raw = j["claves"].get(self._EF7_KEY)
+        if raw is None:
+            return {}
+        # Doble-JSON-encoding: `raw` YA es el texto JSON crudo que el
+        # cliente esperaría encontrar en localStorage (una única
+        # deserialización más, como hace js/sync.js).
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        return parsed.get("resultados", {})
+
+    def test_partido_confirmado_por_otro_dispositivo_sobrevive_a_push_stale(self, client):
+        c = client
+        # Dispositivo A confirma y sincroniza el partido de Copa.
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": True,
+                "golesLocal": 0,
+                "golesVisitante": 5,
+                "eventos": [],
+                "_clubes": ["atletico-madrid"],
+                "_competicion": "copa",
+                "_actualizadoEn": 1000,
+            }
+        })
+        # Dispositivo B, con una copia LOCAL vieja que nunca llegó a ver el
+        # partido de A, confirma un partido de Liga SUYO y sincroniza — su
+        # `resultados` local no incluye el de Copa en absoluto.
+        self._post(c, {
+            "liga_j3_1": {
+                "jugado": True,
+                "golesLocal": 2,
+                "golesVisitante": 1,
+                "eventos": [],
+                "_clubes": ["real-madrid"],
+                "_competicion": "liga",
+                "_actualizadoEn": 2000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        assert "copa_1a_ronda_0" in resultados
+        assert resultados["copa_1a_ronda_0"]["jugado"] is True
+        assert resultados["copa_1a_ronda_0"]["golesVisitante"] == 5
+        assert "liga_j3_1" in resultados
+        assert resultados["liga_j3_1"]["golesLocal"] == 2
+
+    def test_conflicto_mismo_partido_gana_mayor_actualizadoEn(self, client):
+        c = client
+        # Push más ANTIGUO llega en SEGUNDO lugar (p.ej. un dispositivo que
+        # estuvo offline y sincroniza tarde con datos obsoletos de ESE
+        # partido) — no debe poder pisar la versión más reciente.
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": True,
+                "golesLocal": 0,
+                "golesVisitante": 5,
+                "eventos": [{"tipo": "gol", "min": 90}],
+                "_actualizadoEn": 5000,
+            }
+        })
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": True,
+                "golesLocal": 0,
+                "golesVisitante": 1,
+                "eventos": [],
+                "_actualizadoEn": 1000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        assert resultados["copa_1a_ronda_0"]["golesVisitante"] == 5
+        assert resultados["copa_1a_ronda_0"]["_actualizadoEn"] == 5000
+
+    def test_tombstone_mas_reciente_gana_sobre_confirmado(self, client):
+        """El botón "🔄 Reiniciar" (reset de temporada) escribe una tumba
+        (`jugado:false, _borrado:true`) con un sello FRESCO — debe poder
+        borrar de verdad un partido ya confirmado en el servidor, no
+        quedarse bloqueada por el criterio de recencia."""
+        c = client
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": True,
+                "golesLocal": 0,
+                "golesVisitante": 5,
+                "_clubes": ["atletico-madrid"],
+                "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": False,
+                "_borrado": True,
+                "_clubes": ["atletico-madrid"],
+                "_actualizadoEn": 9000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        assert resultados["copa_1a_ronda_0"]["jugado"] is False
+        assert resultados["copa_1a_ronda_0"].get("_borrado") is True
+
+    def test_tombstone_mas_antigua_no_borra_confirmacion_posterior(self, client):
+        """Al revés: una tumba vieja (p.ej. un dispositivo que reinició la
+        temporada y sincronizó tarde) NUNCA debe borrar una confirmación
+        MÁS RECIENTE del mismo partido (el usuario volvió a jugarlo tras el
+        reset)."""
+        c = client
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": False,
+                "_borrado": True,
+                "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "copa_1a_ronda_0": {
+                "jugado": True,
+                "golesLocal": 2,
+                "golesVisitante": 0,
+                "_actualizadoEn": 9000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        assert resultados["copa_1a_ronda_0"]["jugado"] is True
+        assert resultados["copa_1a_ronda_0"]["golesLocal"] == 2
+
+    def test_primer_push_sin_fila_previa_no_revienta(self, client):
+        c = client
+        resp = self._post(c, {
+            "copa_1a_ronda_0": {"jugado": True, "golesLocal": 1, "golesVisitante": 0, "_actualizadoEn": 1},
+        })
+        assert self._EF7_KEY in resp["guardadas"]
+        resultados = self._get_resultados(c)
+        assert resultados["copa_1a_ronda_0"]["golesLocal"] == 1
+
+    def test_otras_claves_ef7_no_se_ven_afectadas_por_el_merge_especial(self, client):
+        """Cualquier otra clave `ef7_*` (calendario/título/plantilla por
+        club) sigue siendo "el último POST gana entero" — el merge
+        partido-a-partido es EXCLUSIVO de `ef7_estado_liga_v1`."""
+        c = client
+        r1 = c.post("/api/ef7/state", json={"claves": {
+            "ef7_calendario_liverpool": json.dumps({"dia": 1, "extra": "algo-viejo"})
+        }})
+        assert r1.status_code == 200
+        r2 = c.post("/api/ef7/state", json={"claves": {
+            "ef7_calendario_liverpool": json.dumps({"dia": 2})
+        }})
+        assert r2.status_code == 200
+
+        r = c.get("/api/ef7/state")
+        j = r.get_json()
+        raw = j["claves"]["ef7_calendario_liverpool"]
+        parsed = json.loads(raw)
+        assert parsed == {"dia": 2}  # el 2º POST reemplaza ENTERO al 1º, sin fusión

@@ -42,6 +42,14 @@ html, body { margin: 0; padding: 0; }
   --info: #3ba7ff;
   --info-glow: 0 0 10px rgba(59, 167, 255, 0.5), 0 0 22px rgba(59, 167, 255, 0.22);
 
+  /* Ámbar — "Humano vs Humano pospuesto" (ver .match-card-pospuesto-btn/
+     .match-card--pospuesto). Deliberadamente distinto de --info (azul,
+     "próximo partido") y de --gold/--amarillo-vivo (ya usados como color
+     de competición) para que "pospuesto" se lea siempre igual sin
+     confundirse con ningún otro significado de borde/icono. */
+  --pospuesto: #ffb238;
+  --pospuesto-glow: 0 0 10px rgba(255, 178, 56, 0.5), 0 0 22px rgba(255, 178, 56, 0.22);
+
   /* Dorado — etiqueta de la Copa del Rey, para distinguirla de un
      vistazo del rojo de Liga. */
   --gold: #f1c40f;
@@ -2266,6 +2274,42 @@ button { font-family: inherit; cursor: pointer; }
   transform: rotate(18deg);
   z-index: 2;
 }
+
+/* ⏳ Posponer un Humano vs Humano — espejo del pin 📌 de arriba pero en
+   la esquina superior IZQUIERDA (ver _pospuestoIconoHTML en
+   js/renderizadores.js). A diferencia del pin (un simple <span>, solo
+   informativo) este SÍ es un botón real — reset de apariencia nativa +
+   mismo tamaño/posición para que ambos iconos queden simétricos. */
+.match-card-pospuesto-btn {
+  position: absolute;
+  top: -10px;
+  left: -8px;
+  font-size: 20px;
+  line-height: 1;
+  z-index: 2;
+  background: rgba(23, 24, 29, 0.9);
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.55;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
+  transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.match-card-pospuesto-btn:hover { opacity: 0.9; }
+/* Ya pospuesto — "encendida" a propósito (petición usuario), para que
+   se distinga de un vistazo del resto de partidos sin jugar. */
+.match-card-pospuesto-btn--activo {
+  opacity: 1;
+  border-color: var(--pospuesto);
+  box-shadow: var(--pospuesto-glow);
+}
+
 .match-card:hover { border-color: rgba(255, 255, 255, 0.16); }
 
 .match-card-comp {
@@ -2504,6 +2548,19 @@ button { font-family: inherit; cursor: pointer; }
   border-color: var(--info);
   border-left-color: var(--info);
   box-shadow: var(--info-glow);
+}
+
+/* Humano vs Humano pospuesto (ver .match-card-pospuesto-btn arriba) —
+   sigue "sin jugar" (nunca lleva .is-played: se puede abrir su PREVIA y
+   jugarlo en cualquier momento), pero se queda encendida con su propio
+   color ámbar para que el mánager sepa de un vistazo cuál dejó pendiente
+   de coincidir con el otro humano. Mismo criterio de especificidad que
+   --siguiente/--gano/--empate/--perdio (selector compuesto, gana al
+   color de competición y sobrevive al :hover). */
+.match-card.match-card--pospuesto {
+  border-color: var(--pospuesto);
+  border-left-color: var(--pospuesto);
+  box-shadow: var(--pospuesto-glow);
 }
 
 /* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */

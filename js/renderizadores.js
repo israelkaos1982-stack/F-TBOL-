@@ -4600,6 +4600,20 @@
     return '<span class="match-card-pin" title="Tu próximo partido">📌</span>';
   }
 
+  // Icono ⏳ "posponer" — SOLO en partidos Humano vs Humano sin jugar (los
+  // 2 mánagers pueden tardar en coincidir para jugarlo en directo). Espejo
+  // del pin 📌 pero en la esquina superior IZQUIERDA (ver css/estilos.css,
+  // .match-card-pospuesto-btn) y con 2 estados: normal (posponer) y ya
+  // pospuesto (pulsar para reactivarlo). Ver Estado.marcarPartidoPospuesto/
+  // cancelarPospuestoPartido y la exclusión en generarCalendarioLateralDerecho
+  // (un partido pospuesto ya no puede ser "el próximo" — libera el 📌/borde
+  // azul para el siguiente pendiente real).
+  function _pospuestoIconoHTML(partido) {
+    return partido.pospuesto
+      ? '<button type="button" class="match-card-pospuesto-btn match-card-pospuesto-btn--activo" data-accion="cancelar-pospuesto" data-partido-id="' + partido.id + '" title="Pospuesto — pulsa para reactivarlo">⏳</button>'
+      : '<button type="button" class="match-card-pospuesto-btn" data-accion="posponer-partido" data-partido-id="' + partido.id + '" title="Aún no podéis coincidir para jugarlo — pulsa para posponerlo">⏳</button>';
+  }
+
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado, esBloqueado) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
@@ -4617,6 +4631,13 @@
 
     var local = esLocal ? activo : rival;
     var visitante = esLocal ? rival : activo;
+
+    // Humano vs Humano — los 2 lados tienen mánager (`.mister`, mismo
+    // criterio que ya usa acta.js::esEquipoHumano). Solo estas cards
+    // pueden bloquear el calendario esperando a que 2 personas coincidan
+    // — por eso son las únicas con el icono ⏳ de posponer.
+    var esHumanoVsHumano = !!(local && local.mister) && !!(visitante && visitante.mister);
+    var mostrarPospuestoBtn = esHumanoVsHumano && !partido.jugado && !esEliminado && !esBloqueado;
 
     var card = document.createElement("div");
 
@@ -4658,7 +4679,8 @@
     // esa misma eliminatoria) se pinta apagada IGUAL, con 🔒 en vez de
     // PREVIA — no se puede adelantar a Dieciseisavos sin haber ganado 1/64.
     card.className = "match-card" + (claseComp ? " " + claseComp : "") +
-      ((partido.jugado || esEliminado || esBloqueado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
+      ((partido.jugado || esEliminado || esBloqueado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "") +
+      (partido.pospuesto ? " match-card--pospuesto" : "");
     card.dataset.partidoId = partido.id;
 
     var compLabel = COMP_LABEL[compKeyResuelto] || partido.competicion;
@@ -4682,6 +4704,7 @@
 
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
+      (mostrarPospuestoBtn ? _pospuestoIconoHTML(partido) : "") +
       '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
       '<div class="match-card-teams">' +
       _bloqueEquipoHTML(local, "match-card-team--local") +
@@ -4808,10 +4831,14 @@
         // eliminada, aún bloqueada por no haber ganado la anterior, o con
         // rival todavía sin determinar ("?"), nunca puede ser "el próximo
         // partido" — no hay PREVIA real que abrir.
+        // Un Humano vs Humano "pospuesto" (ver el icono ⏳ en la propia card
+        // y Estado.marcarPartidoPospuesto) tampoco puede ser "el próximo" —
+        // es precisamente lo que existe para dejar de bloquear el 📌/borde
+        // azul mientras los 2 mánagers no puedan coincidir para jugarlo.
         var idSiguiente = null;
         for (var i = 0; i < partidosDelClub.length; i++) {
           var pp = partidosDelClub[i];
-          if (!pp.jugado && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && !_rivalDesconocido(pp, idEquipoHumanoActivo, datos)) { idSiguiente = pp.id; break; }
+          if (!pp.jugado && !pp.pospuesto && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && !_rivalDesconocido(pp, idEquipoHumanoActivo, datos)) { idSiguiente = pp.id; break; }
         }
 
         var frag = document.createDocumentFragment();
@@ -4831,7 +4858,12 @@
         // recortó el texto) y se re-abrevia con más margen.
         requestAnimationFrame(function () {
           _ajustarNombresQueNoQuepan(contenedor);
-          var actual = contenedor.querySelector(".match-card:not(.is-played)");
+          // .match-card--siguiente identifica EXACTAMENTE la card de
+          // idSiguiente (arriba) — a diferencia de ":not(.is-played)", que
+          // desde que existen los pospuestos (ver .match-card--pospuesto)
+          // también casaría con uno de ésos si cae antes en el calendario,
+          // aunque ya no sea "el próximo partido" real.
+          var actual = contenedor.querySelector(".match-card--siguiente") || contenedor.querySelector(".match-card:not(.is-played)");
           if (actual) actual.scrollIntoView({ block: "center" });
         });
       })
@@ -6015,6 +6047,26 @@
           window.Estado.reiniciarResultadoPartido(idReiniciar);
           if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
         }, "🔒 Reiniciar partido", "Solo el administrador puede reiniciar un partido ya jugado.");
+      }
+      return;
+    }
+
+    // ⏳ Posponer / reactivar un Humano vs Humano — ABIERTO a cualquiera
+    // (no es destructivo: no borra ningún resultado real, solo libera el
+    // 📌/borde azul mientras los 2 mánagers no puedan coincidir). Sin PIN
+    // a propósito, a diferencia de "reiniciar-partido".
+    var btnPosponer = ev.target.closest && ev.target.closest('[data-accion="posponer-partido"], [data-accion="cancelar-pospuesto"]');
+    if (btnPosponer) {
+      var idPosponer = btnPosponer.dataset.partidoId;
+      if (idPosponer && window.Estado && _ultimoContexto) {
+        var accionPosponer = btnPosponer.dataset.accion;
+        if (accionPosponer === "posponer-partido") {
+          var partidoAPosponer = _ultimoContexto.partidosPorId[idPosponer];
+          window.Estado.marcarPartidoPospuesto(idPosponer, { partido: partidoAPosponer, datos: _ultimoContexto.datos });
+        } else {
+          window.Estado.cancelarPospuestoPartido(idPosponer);
+        }
+        if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
       }
       return;
     }

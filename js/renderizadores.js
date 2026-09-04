@@ -4879,6 +4879,18 @@
       });
     }
     n += window.Estado.reiniciarCalendarioExtraJugados(clubId);
+    // Barrido ADICIONAL, robusto ante el orden en que se hagan las cosas
+    // al cerrar temporada: si el admin ya pegó el Calendario extra de la
+    // temporada NUEVA antes de pulsar este botón, el bucle de arriba (que
+    // solo ve lo que _ultimoContexto tiene pintado AHORA) ya no encuentra
+    // las líneas viejas — sin esto, los resultados de la temporada
+    // anterior quedaban huérfanos para siempre (ver
+    // Estado.reiniciarResultadosDeClub). No puede duplicar el conteo: un
+    // resultado que el bucle de arriba ya borró deja de existir, así que
+    // esta 2ª pasada simplemente no lo vuelve a encontrar.
+    if (window.Estado.reiniciarResultadosDeClub) {
+      n += window.Estado.reiniciarResultadosDeClub(clubId);
+    }
     generarCalendarioLateralDerecho(clubId);
     return n;
   }

@@ -96,6 +96,40 @@
   var _enVuelo = false;
   var _primerCicloHecho = false;
 
+  // ---------- Aviso si una clave NUNCA consigue sincronizar ----------
+  // El servidor responde 200 OK a /api/ef7/state incluso cuando RECHAZA
+  // en silencio alguna clave del cuerpo (app.py::api_ef7_state_post):
+  // una clave cuyo JSON supere 2 MB (el límite fijo _KV_MAX_BYTES) se
+  // salta sin más — solo aparece en `guardadas` la que SÍ se aceptó. La
+  // clave grande de resultados/actas (ef7_estado_liga_v1) es la única
+  // candidata realista a acercarse a ese tamaño con muchas temporadas de
+  // partidos confirmados en vivo (no hay ningún archivado automático de
+  // temporadas antiguas — crece para siempre). Sin este contador, una
+  // clave así queda en `_pendientes` INDEFINIDAMENTE: se reintenta cada
+  // 10 s, cada vez sin éxito, y NUNCA se avisa al usuario — el
+  // dispositivo sigue viéndose "normal" (todo funciona en local) pero
+  // esos partidos JAMÁS llegan a los demás dispositivos ni al backup del
+  // servidor, así que un borrado de datos en ESE móvil los pierde para
+  // siempre sin que nada lo hubiera advertido antes.
+  var UMBRAL_AVISO_SYNC_ATASCADO = 5; // ~5 ciclos (INTERVALO_MS) seguidos sin éxito
+  var _intentosFallidos = {}; // clave -> nº de ciclos seguidos rechazada por el servidor
+  var _avisoSyncMostrado = false;
+  function _avisarSyncAtascado(clave) {
+    if (_avisoSyncMostrado) return;
+    _avisoSyncMostrado = true;
+    try {
+      window.setTimeout(function () {
+        window.alert(
+          "⚠️ Llevas varios intentos sin poder sincronizar \"" + clave + "\" con el servidor " +
+          "(probablemente porque ha crecido demasiado — el límite es 2 MB por clave).\n\n" +
+          "Los partidos y datos de ESTE dispositivo se siguen viendo bien aquí, pero NO están " +
+          "llegando a los demás ni quedando respaldados en el servidor. Exporta una copia de " +
+          "seguridad (Panel Admin → Copia de seguridad) cuanto antes por si acaso."
+        );
+      }, 0);
+    } catch (err2) { /* nada más que hacer si ni alert está disponible */ }
+  }
+
   function _clavesLocales() {
     var backup = window.Estado.exportarEstadoCrudo();
     return (backup && backup.claves) || {};
@@ -132,15 +166,29 @@
         if (!resp || !resp.ok) return;
         var actualesTrasEnviar = _clavesLocales();
         var huboConfirmadas = false;
+        var confirmadasSet = {};
         (resp.guardadas || []).forEach(function (k) {
+          confirmadasSet[k] = true;
           // Solo se da por reconciliada si el valor no volvió a cambiar
           // MIENTRAS la petición estaba en vuelo — si cambió, se deja
           // pendiente para reintentar con el valor más reciente.
           if (actualesTrasEnviar[k] === cuerpo[k]) {
             _snapshot[k] = _hash(cuerpo[k]);
             delete _pendientes[k];
+            delete _intentosFallidos[k];
             huboConfirmadas = true;
           }
+        });
+        // Una clave que se mandó pero el servidor NO devolvió en
+        // `guardadas` fue RECHAZADA en silencio (formato inválido, o —
+        // el caso real — supera el límite de 2 MB por clave). Sigue en
+        // `_pendientes` para reintentarse sola, pero tras varios ciclos
+        // seguidos sin éxito el usuario merece saberlo (ver
+        // _avisarSyncAtascado más arriba).
+        claves.forEach(function (k) {
+          if (confirmadasSet[k]) return;
+          _intentosFallidos[k] = (_intentosFallidos[k] || 0) + 1;
+          if (_intentosFallidos[k] >= UMBRAL_AVISO_SYNC_ATASCADO) _avisarSyncAtascado(k);
         });
         if (huboConfirmadas) _guardarSnapshotPersistido();
       })

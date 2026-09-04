@@ -148,7 +148,18 @@
       // limpiándose por la vía antigua (basada en lo que el calendario en
       // pantalla tenga marcado como jugado) con total normalidad.
       _clubes: clubes,
-      _competicion: competicion
+      _competicion: competicion,
+      // `_actualizadoEn`: sello de cuándo se tocó ESTE partido en
+      // concreto (ms). Es lo que permite al servidor fusionar
+      // ef7_estado_liga_v1 PARTIDO A PARTIDO en vez de tratarlo como un
+      // bloque opaco de "el último POST gana entero" — ver
+      // app.py::_ef7_merge_resultados. Sin este sello por partido, un
+      // dispositivo con una copia local ATRASADA de este blob (otro
+      // mánager, o el mismo tras estar horas sin sincronizar) podía
+      // pisar en el servidor un partido que OTRO dispositivo acababa de
+      // confirmar, sin darse cuenta — reporte usuario "6 vez que se
+      // vuelven a perder los partidos de copa del rey" (2026-09-04).
+      _actualizadoEn: Date.now()
     };
     return guardarEstado();
   }
@@ -163,15 +174,41 @@
     return e.resultados[partidoId] || null;
   }
 
-  // Borra el resultado guardado de un partido — vuelve a "sin jugar"
-  // para poder repetirlo (pruebas). Acción destructiva: la UI que la
-  // dispara la gatea SIEMPRE detrás del PIN de administrador (ver
-  // js/renderizadores.js, window.Main.pedirPinAdmin).
+  // "Borra" (deja como TUMBA, ver más abajo) el resultado guardado de un
+  // partido — vuelve a "sin jugar" para poder repetirlo (pruebas).
+  // Acción destructiva: la UI que la dispara la gatea SIEMPRE detrás del
+  // PIN de administrador (ver js/renderizadores.js, window.Main.pedirPinAdmin).
   function reiniciarResultadoPartido(partidoId) {
     var e = cargarEstado();
-    if (!e.resultados[partidoId]) return false;
-    delete e.resultados[partidoId];
+    var actual = e.resultados[partidoId];
+    if (!actual || actual.jugado === false) return false; // no había nada que reiniciar (o ya lo estaba)
+    e.resultados[partidoId] = _tumbaDeResultado(actual);
     return guardarEstado();
+  }
+
+  // TUMBA — en vez de `delete e.resultados[id]`, se deja una entrada
+  // "vacía" con `jugado:false` + un sello de tiempo nuevo. Sin esto, el
+  // servidor (app.py::_ef7_merge_resultados) no puede distinguir "este
+  // dispositivo BORRÓ el partido a propósito" de "este dispositivo nunca
+  // llegó a tener ese partido" al fusionar dos copias de
+  // ef7_estado_liga_v1 — y sin esa distinción, o bien un borrado nunca
+  // llegaría a propagarse a los demás dispositivos, o bien (la opción
+  // seguida antes de esto) CUALQUIER copia vieja podría resucitar en el
+  // servidor un partido que otro dispositivo acababa de confirmar. La
+  // tumba SÍ tiene un timestamp más nuevo que la confirmación que borra,
+  // así que gana la fusión igual que ganaría una edición nueva cualquiera
+  // — y a la vez, listarPartidosResueltos() ya trata `jugado:false` como
+  // "sin jugar" sin que haga falta tocar nada más (copia.jugado =
+  // override.jugado). Pesa muy poco (sin `eventos`) y nunca vuelve a
+  // crecer una vez creada — coste de almacenamiento marginal.
+  function _tumbaDeResultado(actual) {
+    return {
+      jugado: false,
+      _borrado: true,
+      _clubes: (actual && actual._clubes) || [],
+      _competicion: (actual && actual._competicion) || null,
+      _actualizadoEn: Date.now()
+    };
   }
 
   // Borra TODOS los resultados confirmados en vivo de un club humano —
@@ -202,9 +239,10 @@
     var n = 0;
     Object.keys(e.resultados).forEach(function (id) {
       var r = e.resultados[id];
-      if (!r || !Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
+      if (!r || r.jugado === false) return; // no existe o ya es una tumba — nada que hacer
+      if (!Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
       if (r._competicion && excluir.indexOf(r._competicion) !== -1) return;
-      delete e.resultados[id];
+      e.resultados[id] = _tumbaDeResultado(r);
       n++;
     });
     if (n) guardarEstado();

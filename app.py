@@ -5893,7 +5893,96 @@ def _new_sim_static(subdir, filename):
 # peticiones simultáneas como tener que enumerar de antemano qué claves
 # existen (una clave nueva, p. ej. de un club añadido en el futuro,
 # queda cubierta sola).
+#
+# EXCEPCIÓN — `ef7_estado_liga_v1`: a diferencia de las claves POR CLUB
+# (calendario, títulos, plantilla...), esta clave ÚNICA acumula los
+# resultados/actas de los 6 clubes A LA VEZ (Liga+Copa+Champions+
+# Superliga de TODOS), así que "el último POST gana entero" SÍ podía
+# pisar partidos ajenos: si el dispositivo del club A confirma un
+# partido y sincroniza, y momentos/horas después el dispositivo del
+# club B (con una copia LOCAL todavía sin ese partido — nunca llegó a
+# pulearla, o llevaba un rato offline) confirma algo suyo y sincroniza,
+# su push manda SU copia entera de `resultados` — que no tiene el
+# partido de A — y lo borra del servidor sin que nadie lo tocara a
+# propósito. Reporte usuario, 2026-09-04, "6 vez que se vuelven a
+# perder los partidos de copa del rey" (AD Mérida 0-5 Atlético Madrid,
+# confirmado con acta completa, revertido a PREVIA horas después). Ver
+# `_ef7_merge_resultados` — fusiona esta clave PARTIDO A PARTIDO en vez
+# de tratarla como un bloque opaco.
 _EF7_KEY_PREFIX = "ef7_"
+_EF7_ESTADO_LIGA_KEY = "ef7_estado_liga_v1"
+
+
+def _ef7_merge_resultados(existing_row_value, incoming_value):
+    """Fusiona `resultados` de ef7_estado_liga_v1 PARTIDO A PARTIDO.
+
+    `existing_row_value` es `row.valor_json` tal cual está en la BD (el
+    doble-JSON-encoding que usa esta ruta — ver api_ef7_state_post: guarda
+    `json.dumps(value)` donde `value` YA es el texto JSON crudo que
+    js/estado.js tenía en localStorage, para poder guardar SIEMPRE un
+    documento JSON válido sea `value` lo que sea). `incoming_value` es el
+    `value` tal cual llega en este POST (texto JSON crudo, sin el doble
+    encoding). Devuelve el texto JSON crudo YA FUSIONADO, listo para
+    pasar por el mismo `json.dumps(...)` que el resto de claves.
+
+    Cada partido sobrevive si existe en CUALQUIERA de los 2 lados. Si
+    existe en ambos, gana el que tenga `_actualizadoEn` más alto (un
+    resultado nunca lleva sello -> cuenta como 0, así que cualquier
+    versión CON sello siempre le gana a una sin él; si ninguno de los 2
+    lleva sello, o llevan el mismo, gana el entrante — mismo criterio
+    de "el último POST manda" que ya regía para el blob entero, pero
+    ahora acotado a ESE partido en concreto).
+    """
+    try:
+        incoming = json.loads(incoming_value) if incoming_value else None
+    except (TypeError, ValueError):
+        incoming = None
+    if not isinstance(incoming, dict):
+        return incoming_value  # entrante corrupto/no-objeto: nada que fusionar, se deja tal cual (mismo comportamiento que antes)
+
+    existing = None
+    if existing_row_value:
+        try:
+            existing_text = json.loads(existing_row_value)
+            existing = json.loads(existing_text) if isinstance(existing_text, str) else None
+        except (TypeError, ValueError):
+            existing = None
+    if not isinstance(existing, dict):
+        return incoming_value  # no había nada guardado (o estaba corrupto): el entrante manda tal cual
+
+    existing_res = existing.get("resultados")
+    incoming_res = incoming.get("resultados")
+    existing_res = existing_res if isinstance(existing_res, dict) else {}
+    incoming_res = incoming_res if isinstance(incoming_res, dict) else {}
+
+    merged_res = dict(existing_res)
+    for match_id, incoming_entry in incoming_res.items():
+        existing_entry = existing_res.get(match_id)
+        if existing_entry is None or not isinstance(existing_entry, dict):
+            merged_res[match_id] = incoming_entry
+            continue
+        ts_in = (incoming_entry or {}).get("_actualizadoEn") if isinstance(incoming_entry, dict) else None
+        ts_ex = existing_entry.get("_actualizadoEn")
+        ts_in = ts_in if isinstance(ts_in, (int, float)) else 0
+        ts_ex = ts_ex if isinstance(ts_ex, (int, float)) else 0
+        merged_res[match_id] = incoming_entry if ts_in >= ts_ex else existing_entry
+
+    merged = dict(incoming)  # version/partidosGenerados/etc. del entrante mandan tal cual
+    merged["resultados"] = merged_res
+
+    # partidosGenerados: mismo tipo de union simple (nada lo rellena hoy,
+    # pero por si se usa en el futuro no debería perderse por el mismo motivo).
+    existing_gen = existing.get("partidosGenerados")
+    incoming_gen = incoming.get("partidosGenerados")
+    merged_gen = dict(existing_gen) if isinstance(existing_gen, dict) else {}
+    if isinstance(incoming_gen, dict):
+        merged_gen.update(incoming_gen)
+    merged["partidosGenerados"] = merged_gen
+
+    try:
+        return json.dumps(merged, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return incoming_value
 
 
 def _ef7_key_is_valid(key):
@@ -5927,13 +6016,19 @@ def api_ef7_state_post():
     for key, value in entrantes.items():
         if not _ef7_key_is_valid(key):
             continue
+        row = GlobalState.query.filter_by(clave=key).first()
+        value_a_guardar = value
+        # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
+        # que este POST la sobreescriba entera — ver _ef7_merge_resultados
+        # y el comentario "EXCEPCIÓN" más arriba.
+        if key == _EF7_ESTADO_LIGA_KEY and row is not None:
+            value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
         try:
-            payload = json.dumps(value, ensure_ascii=False)
+            payload = json.dumps(value_a_guardar, ensure_ascii=False)
         except (TypeError, ValueError):
             continue
         if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
             continue
-        row = GlobalState.query.filter_by(clave=key).first()
         if row:
             row.valor_json = payload
             row.updated_at = now

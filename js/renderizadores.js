@@ -2128,6 +2128,312 @@
     return override || FORMATO_COPA_TEXTO;
   }
 
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén
+  // (petición usuario: "ambas pantallas comparten las mismas
+  // estadísticas"). Se pintan al final de LAS 2 pestañas (👥️ Humanos y
+  // ⛓️ Eliminatorias), nunca solo en una — mismo criterio EXACTO que
+  // Champions (ver _championsAppendStatsGrid).
+  function _copaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = COPA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-copa-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias ----------
+  // Mismo patrón exacto que las pestañas de Champions (🔵 Fase Grupos /
+  // 🟣 Playoffs, ver _championsTabsHTML más abajo): reutiliza
+  // .liga-tab-boxes/.liga-tab-box/.liga-tab-box--activa tal cual.
+  var _copaTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _copaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_copaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="copa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_copaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="copa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (1/64 → Final) de CADA club
+  // humano, uno debajo del otro, con sus propios partidos ya jugados —
+  // exactamente lo que pintaba `renderizarCopaDelRey` antes de tener
+  // pestañas (mismo contenido, ahora como una de las 2 vistas posibles).
+  function _renderizarCopaHumanos(contenedor, datos, idClubActivo) {
+    // El club activo va primero (es el que se acaba de abrir); el resto,
+    // alfabético — nunca por "quién va más lejos" (no hay clasificación
+    // que ordenar en un cuadro eliminatorio).
+    var equiposHumanos = _copaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _copaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🏆", "Todavía no hay partidos de Copa del Rey. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Copa del Rey»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        // Separador ENTRE bloques de equipo (nunca antes del primero —
+        // el header ya hace de corte ahí) — petición usuario: cada club
+        // tiene su propio cuadro completo (1/64 → Final), sin ninguna
+        // línea que marque dónde acaba uno y empieza el siguiente.
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idClubActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos, !!b.eliminadoIds[p.id], !!b.bloqueadoIds[p.id]); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+      // Leyenda plegable, debajo de TODOS los cuadros (mismo patrón
+      // colapsable que 2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga)
+      // — antes vivía fija arriba del todo, antes de cualquier club.
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid">' +
+        "<span>🥈 Recopa Campeón y Subcampeón</span></div>"
+      ));
+    }
+
+    _copaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde Dieciseisavos ----------
+  // Petición usuario: "quiero que salgan las Eliminatorias de Copa desde
+  // Dieciseisavos (como tenemos organizado en champions pero con la copa
+  // del Rey... cada equipo con su escudo)". A diferencia de 👥️ Humanos
+  // (un cuadro POR CLUB, con SUS partidos), esta pestaña es UN ÚNICO
+  // cuadro compartido por las 6 cajas — igual que los Playoffs de
+  // Champions — que arranca en Dieciseisavos (la ronda "1/16 de Final" de
+  // esta app; la ronda anterior, "1/64", ya se ve completa en 👥️
+  // Humanos, no se repite aquí). Reutiliza el MISMO motor de Champions
+  // Playoffs (parsearChampionsPlayoffTexto/_championsGanadorTie/
+  // _championsTieRowHTML — genéricos sobre un objeto `tie`, sin nada
+  // específico de Champions) con su PROPIA clave de almacenamiento y su
+  // PROPIO detector de ronda — la Copa NO tiene fase de grupos que
+  // alimente "esperas" como Champions: los cruces de Dieciseisavos los
+  // crea el admin directamente, y Octavos/Cuartos/Semis/Final se
+  // emparejan SOLOS con los ganadores consecutivos de la ronda anterior.
+  var COPA_PLAYOFF_RONDAS = [
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // La convención libre que ya usa esta app para el campo `ronda` de un
+  // partido de Copa (Calendario extra) nombra CADA ronda terminando en la
+  // palabra "Final" — "1/64 Final", "1/16 Final", "Octavos Final",
+  // "Cuartos Final" — porque es el nombre de la propia competición, no
+  // "es la ronda final del torneo" ("Ida Semifinal"/"Vuelta Semifinal" son
+  // la única excepción, sin esa palabra). Por eso "final" a secas NUNCA
+  // basta para identificar la ÚLTIMA ronda: hay que descartar
+  // explícitamente el resto de rondas antes de aceptarla (mismo espíritu
+  // que el "excluir Semifinal" que ya usa Champions, generalizado aquí a
+  // las 4 rondas anteriores, que también lo necesitan).
+  function _copaPlayoffRondaCoincide(rondaKey, rondaTexto) {
+    var t = _normNombre(rondaTexto || "");
+    if (rondaKey === "dieciseisavos") return /1\s*\/\s*16/.test(t);
+    if (rondaKey === "octavos") return /\boctavos\b/.test(t);
+    if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
+    if (rondaKey === "semis") return /\bsemi/.test(t);
+    if (rondaKey === "final") {
+      return /\bfinal\b/.test(t) && !/1\s*\/\s*64/.test(t) && !/1\s*\/\s*16/.test(t) &&
+        !/\boctavos\b/.test(t) && !/\bcuartos\b/.test(t) && !/\bsemi/.test(t);
+    }
+    return false;
+  }
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano (agrega ida+vuelta si la
+  // ronda tiene 2 legs), filtrando competicion==="copa" en vez de
+  // "champions" y con el detector de ronda propio de Copa de arriba.
+  function _copaPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "copa" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de Dieciseisavos: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado; el resto sale del texto
+  // libre "Equipo A 3-1 Equipo B" (parsearChampionsPlayoffTexto, sin
+  // ningún "> Equipo" — a diferencia de Champions, la Copa no tiene
+  // "espera": son los 16 cruces completos del cuadro, sin cabezas de
+  // serie directas que entren más tarde).
+  function _copaDieciseisavosTies(datos) {
+    var equiposHumanos = _copaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _copaPlayoffHumano(datos, e, "dieciseisavos");
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto("dieciseisavos") : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA,
+        golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Fusiona, para una ronda YA CONOCIDA (Octavos en adelante — los pares
+  // salen SOLOS de la ronda anterior, nunca los crea el admin): partidos
+  // ya jugados de un club humano en esta ronda (auto) + el texto libre
+  // pegado (IA), casando por nombre en cualquier orden — mismo criterio
+  // EXACTO que _championsFusionarRondaIA, con la clave y el detector de
+  // ronda propios de Copa.
+  function _copaFusionarRondaIA(datos, rondaKey, pares) {
+    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto(rondaKey) : "";
+    var lineasTexto = parsearChampionsPlayoffTexto(texto);
+    var usadas = {};
+
+    return pares.map(function (p) {
+      if (!p.equipoA || !p.equipoB) {
+        return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
+      }
+      if (p.equipoAObj && p.equipoAObj.mister) {
+        var tA = _copaPlayoffHumano(datos, p.equipoAObj, rondaKey);
+        if (tA && _liga1RefNombresCoinciden(tA.equipoB, p.equipoB)) {
+          return { equipoA: tA.equipoA, equipoAObj: tA.equipoAObj, equipoB: tA.equipoB, equipoBObj: tA.equipoBObj, golA: tA.golA, golB: tA.golB, esAuto: true };
+        }
+      }
+      if (p.equipoBObj && p.equipoBObj.mister) {
+        var tB = _copaPlayoffHumano(datos, p.equipoBObj, rondaKey);
+        if (tB && _liga1RefNombresCoinciden(tB.equipoB, p.equipoA)) {
+          return { equipoA: tB.equipoB, equipoAObj: tB.equipoBObj, equipoB: tB.equipoA, equipoBObj: tB.equipoAObj, golA: tB.golB, golB: tB.golA, esAuto: true };
+        }
+      }
+      for (var i = 0; i < lineasTexto.length; i++) {
+        if (usadas[i]) continue;
+        var it = lineasTexto[i];
+        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoA) && _liga1RefNombresCoinciden(it.equipoB, p.equipoB)) {
+          usadas[i] = true;
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, golB: it.golB, esAuto: false };
+        }
+        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoB) && _liga1RefNombresCoinciden(it.equipoB, p.equipoA)) {
+          usadas[i] = true;
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, golB: it.golA, esAuto: false };
+        }
+      }
+      return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
+    });
+  }
+
+  // Cuartos/Semis/Final — igual que en Copa, TAMBIÉN Octavos (a
+  // diferencia de Champions, donde Octavos empareja "espera" vs ganador):
+  // cada par consecutivo de cruces YA resueltos de la ronda anterior
+  // enfrenta a sus 2 ganadores — el árbol de eliminación se construye
+  // SOLO, sin que el admin tenga que decir nada.
+  function _copaRondaDesdeGanadores(datos, rondaKey, tiesPrevias) {
+    var pares = [];
+    for (var i = 0; i < tiesPrevias.length; i += 2) {
+      var g1 = _championsGanadorTie(tiesPrevias[i]);
+      var g2 = tiesPrevias[i + 1] ? _championsGanadorTie(tiesPrevias[i + 1]) : null;
+      pares.push({
+        equipoA: g1 ? g1.nombre : null, equipoAObj: g1 ? g1.obj : null,
+        equipoB: g2 ? g2.nombre : null, equipoBObj: g2 ? g2.obj : null
+      });
+    }
+    return _copaFusionarRondaIA(datos, rondaKey, pares);
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO, de una sola pasada — cada
+  // ronda depende de la anterior, así que se computan en cadena.
+  function calcularCopaPlayoffTodasLasRondas(datos) {
+    var dieciseisavos = _copaDieciseisavosTies(datos);
+    var octavos = _copaRondaDesdeGanadores(datos, "octavos", dieciseisavos);
+    var cuartos = _copaRondaDesdeGanadores(datos, "cuartos", octavos);
+    var semis = _copaRondaDesdeGanadores(datos, "semis", cuartos);
+    var final = _copaRondaDesdeGanadores(datos, "final", semis);
+    return { dieciseisavos: dieciseisavos, octavos: octavos, cuartos: cuartos, semis: semis, final: final };
+  }
+
+  function _renderizarCopaEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularCopaPlayoffTodasLasRondas(datos);
+
+    COPA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-copa-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key === "dieciseisavos"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los 16 duelos de Dieciseisavos.</p>'
+          : '<p class="admin-nota">Se rellena sola en cuanto la ronda anterior tenga sus cruces creados.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador AGREGADO — partido único, o ida+vuelta ya sumada</span>' +
+      "<span>Octavos en adelante se emparejan solos — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _copaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
   function renderizarCopaDelRey(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -2136,66 +2442,19 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _copaTabsHTML(idClubActivo));
 
-      // El club activo va primero (es el que se acaba de abrir); el resto,
-      // alfabético — nunca por "quién va más lejos" (no hay clasificación
-      // que ordenar en un cuadro eliminatorio).
-      var equiposHumanos = _copaEquiposHumanos(datos).slice().sort(function (a, b) {
-        if (a.id === idClubActivo) return -1;
-        if (b.id === idClubActivo) return 1;
-        return a.nombre.localeCompare(b.nombre);
-      });
-
-      var bloques = equiposHumanos
-        .map(function (e) { return _copaEstadoClub(datos, e); })
-        .filter(Boolean);
-
-      if (!bloques.length) {
-        contenedor.appendChild(nodoEstado("🏆", "Todavía no hay partidos de Copa del Rey. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Copa del Rey»)."));
-      } else {
-        bloques.forEach(function (b, bi) {
-          // Separador ENTRE bloques de equipo (nunca antes del primero —
-          // el header ya hace de corte ahí) — petición usuario: cada club
-          // tiene su propio cuadro completo (1/64 → Final), sin ninguna
-          // línea que marque dónde acaba uno y empieza el siguiente.
-          if (bi > 0) contenedor.appendChild(nodoSeparador());
-          var esActivo = b.equipo.id === idClubActivo;
-          var bloque = document.createElement("div");
-          bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
-          bloque.innerHTML =
-            '<div class="copa-club-header">' +
-            crearEscudoHTML(b.equipo, "escudo--sm") +
-            '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
-            (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
-            '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
-            "</div>" +
-            '<div class="copa-club-partidos">' +
-            b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos, !!b.eliminadoIds[p.id], !!b.bloqueadoIds[p.id]); }).join("") +
-            "</div>";
-          contenedor.appendChild(bloque);
-        });
-        // Leyenda plegable, debajo de TODOS los cuadros (mismo patrón
-        // colapsable que 2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga)
-        // — antes vivía fija arriba del todo, antes de cualquier club.
-        contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-          '<div class="liga1ref-leyenda-grid">' +
-          "<span>🥈 Recopa Campeón y Subcampeón</span></div>"
-        ));
-      }
-
-      contenedor.appendChild(nodoSeparador());
-      contenedor.appendChild(nodoTituloEstadisticas());
-
-      // Cajas de estadísticas — Pichichi/MVP/Amarillas/Rojas (sin Zamora).
-      var statsGrid = document.createElement("div");
-      statsGrid.className = "liga1ref-stats-grid";
-      statsGrid.innerHTML = COPA_STATS.map(function (s) {
-        return '<button type="button" class="liga1ref-stat-box" data-accion="ver-copa-stat" data-club-id="' +
-          (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
-          s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
-      }).join("");
-      contenedor.appendChild(statsGrid);
+      if (_copaTabActual === "eliminatorias") _renderizarCopaEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarCopaHumanos(contenedor, datos, idClubActivo);
     });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_copaTabActual`, así siempre queda sincronizado con
+  // lo que se ve en pantalla — mismo patrón que irChampionsTab.
+  function irCopaTab(idClubActivo, tab) {
+    _copaTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarCopaDelRey("copa-content", idClubActivo);
   }
 
   // Ranking (top 15) de UNA categoría de Copa — mismo patrón exacto que
@@ -2283,6 +2542,49 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-copa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-copa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorChampionsPlayoff, sin el aparte
+  // de Dieciseisavos con "> Equipo que espera" (la Copa no lo necesita:
+  // TODAS las rondas se pegan igual, una línea por cruce).
+  function pintarEditorCopaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = COPA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esDieciseisavos = rondaKey === "dieciseisavos";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esDieciseisavos
+      ? "Una línea por cruce, pega el marcador TAL CUAL lo veas en el juego — vale «-» o «vs»: " +
+        "«CD Mirandés 2-1 Real Zaragoza» o «Real Zaragoza 1 vs 2 CD Mirandés», da igual el orden. " +
+        "Usa los nombres TAL CUAL salen en el resto de la app — el resto del cuadro (Octavos, Cuartos, " +
+        "Semis, Final) se empareja SOLO a partir de estos 16 cruces. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador AGREGADO (partido único, o ida+vuelta ya sumada) de cada cruce, una línea " +
+        "por eliminatoria — vale «-» o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». " +
+        "Los cruces de esta ronda salen SOLOS de la ronda anterior — solo hace falta el marcador. Si un " +
+        "club humano ya tiene sus propios partidos de Copa jugados en esta ronda (Calendario extra), " +
+        "su cruce se calcula solo y esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "copa-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esDieciseisavos ? 14 : 12;
+    textarea.placeholder = esDieciseisavos
+      ? "CD Mirandés 2-1 Real Zaragoza\nAlgeciras CF 0 vs 3 Real Sociedad"
+      : "CD Mirandés 4-2 Osasuna\nReal Sociedad 3 vs 3 Villarreal";
+    textarea.value = window.Estado ? window.Estado.obtenerCopaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-copa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-copa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -5823,8 +6125,11 @@
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarCopaDelRey: renderizarCopaDelRey,
+    irCopaTab: irCopaTab,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
+    pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,
+    calcularCopaPlayoffTodasLasRondas: calcularCopaPlayoffTodasLasRondas,
     renderizarChampions: renderizarChampions,
     irChampionsTab: irChampionsTab,
     renderizarChampionsStatDetalle: renderizarChampionsStatDetalle,

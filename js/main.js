@@ -127,7 +127,7 @@
         titulo, "Copa del Rey", "info-copa-formato", null,
         window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
       );
-      window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
+      window.Renderizadores.irCopaTab(clubId, "humanos");
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
       _pintarTituloModalInfo(
@@ -514,10 +514,13 @@
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
   }
 
-  // ---------- Copa del Rey — estado del cuadro + Pichichi/MVP/Amarillas/Rojas ----------
-  // Sin editor de "clasificación" (no es una liguilla, no hay tabla que
-  // pegar) — solo las 4 cajas de estadísticas tienen PIN, mismo patrón
-  // EXACTO que Liga 1ª REF, reutilizando el mismo contenedor "copa-content".
+  // ---------- Copa del Rey — 👥️ Humanos (cuadro por club) + ⛓️ Eliminatorias
+  // (cuadro único desde Dieciseisavos, editable con PIN) + Pichichi/MVP/
+  // Amarillas/Rojas (compartidas por las 2 pestañas), mismo contenedor
+  // "copa-content" — mismo patrón EXACTO que Champions.
+  function irCopaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irCopaTab(clubId, tab);
+  }
   function verCopaStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
   }
@@ -539,6 +542,22 @@
   }
   function cancelarCopaStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
+  }
+  function editarCopaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("copa-content");
+      if (cont) window.Renderizadores.pintarEditorCopaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "PIN de administrador (646)");
+  }
+  function guardarCopaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("copa-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarCopaPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
+  }
+  function cancelarCopaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
   }
 
   // ---------- Champions — Fase de Grupos (40 equipos, "batidora") +
@@ -1201,11 +1220,15 @@
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;
         case "info-superliga-formato": mostrarInfoSuperliga(); break;
         case "info-copa-formato": mostrarInfoCopa(); break;
+        case "copa-tab-ir": irCopaTab(d.clubId, d.tab); break;
         case "ver-copa-stat": verCopaStat(d.clubId, d.categoria); break;
         case "volver-copa": volverCopa(d.clubId); break;
         case "editar-copa-stat-inline": editarCopaStatInline(d.clubId, d.categoria); break;
         case "guardar-copa-stat": guardarCopaStat(d.clubId, d.categoria); break;
         case "cancelar-copa-stat": cancelarCopaStat(d.clubId, d.categoria); break;
+        case "editar-copa-playoff-inline": editarCopaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-copa-playoff": guardarCopaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-copa-playoff": cancelarCopaPlayoff(d.clubId); break;
         case "champions-tab-ir": irChampionsTab(d.clubId, d.tab); break;
         case "editar-champions-inline": editarChampionsInline(d.clubId); break;
         case "guardar-champions": guardarChampions(d.clubId); break;

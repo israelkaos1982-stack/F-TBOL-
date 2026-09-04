@@ -1351,6 +1351,35 @@
     }
   }
 
+  // ---------- Copa del Rey — Eliminatorias ⛓️, texto libre por ronda (candado 646) ----------
+  // Dieciseisavos/Octavos/Cuartos/Semis/Final: mismo mecanismo EXACTO que
+  // Champions Playoffs (ver obtenerChampionsPlayoffTexto más abajo), con
+  // su PROPIA clave — el admin pega, una línea por cruce, el marcador
+  // AGREGADO: "Equipo A 3-1 Equipo B". A diferencia de Champions, la Copa
+  // NO tiene fase de grupos que alimente "esperas" — los cruces de
+  // Dieciseisavos los crea el admin directamente, sin ningún "> Equipo",
+  // y el resto del cuadro se empareja solo (ver
+  // js/renderizadores.js::calcularCopaPlayoffTodasLasRondas).
+  function _copaPlayoffKey(ronda) {
+    return "ef7_copa_playoff_" + ronda + "_v1";
+  }
+  function obtenerCopaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_copaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarCopaPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_copaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Copa del Rey:", err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -1808,6 +1837,8 @@
     guardarLigaExtraStatTexto: guardarLigaExtraStatTexto,
     obtenerCopaStatTexto: obtenerCopaStatTexto,
     guardarCopaStatTexto: guardarCopaStatTexto,
+    obtenerCopaPlayoffTexto: obtenerCopaPlayoffTexto,
+    guardarCopaPlayoffTexto: guardarCopaPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

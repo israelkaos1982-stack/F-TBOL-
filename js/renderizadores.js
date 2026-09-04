@@ -703,7 +703,17 @@
       if (!l) return;
       l = l.replace(/^\d+[.)]\s*/, ""); // número de lista inicial opcional, cosmético
 
-      var partes = l.split(/\s+-\s+/);
+      // Tolerante a que falte el espacio en UNO de los 2 lados del guion
+      // separador (ej. "Ida Semifinal- Atlético Madrid" en vez de "Ida
+      // Semifinal - Atlético Madrid"): con el espacio ausente en un solo
+      // lado, la línea entera se perdía en silencio (menos de 3 partes) —
+      // exactamente lo que le pasaba a la ronda "Ida Semifinal" de
+      // Atlético Madrid/FC Barcelona (reporte usuario 2026-09-04, con el
+      // resto de rondas de la misma línea pegadas SIN ese typo
+      // funcionando bien). Sigue exigiendo espacio en AL MENOS un lado, así
+      // que nunca parte un guion SIN espacio a ningún lado (un nombre
+      // compuesto real, p.ej. "F5N5000-TL"/"Beira-Rio").
+      var partes = l.split(/\s+-\s*|\s*-\s+/);
       if (partes.length < 3) return; // hace falta Competición - Ronda - Rival como mínimo
 
       var competicion = partes[0].trim();
@@ -2229,13 +2239,13 @@
   // Champions — que arranca en Dieciseisavos (la ronda "1/16 de Final" de
   // esta app; la ronda anterior, "1/64", ya se ve completa en 👥️
   // Humanos, no se repite aquí). Reutiliza el MISMO motor de Champions
-  // Playoffs (parsearChampionsPlayoffTexto/_championsGanadorTie/
-  // _championsTieRowHTML — genéricos sobre un objeto `tie`, sin nada
-  // específico de Champions) con su PROPIA clave de almacenamiento y su
-  // PROPIO detector de ronda — la Copa NO tiene fase de grupos que
-  // alimente "esperas" como Champions: los cruces de Dieciseisavos los
-  // crea el admin directamente, y Octavos/Cuartos/Semis/Final se
-  // emparejan SOLOS con los ganadores consecutivos de la ronda anterior.
+  // Playoffs (parsearChampionsPlayoffTexto/_championsTieRowHTML —
+  // genéricos sobre un objeto `tie`, sin nada específico de Champions)
+  // con su PROPIA clave de almacenamiento y su PROPIO detector de ronda
+  // — la Copa NO tiene fase de grupos que alimente "esperas" como
+  // Champions: TODAS las rondas (Dieciseisavos, Octavos, Cuartos,
+  // Semis, Final) las da el admin directamente en texto, ninguna se
+  // infiere de la ronda anterior (ver `_copaRondaDesdeTexto`).
   var COPA_PLAYOFF_RONDAS = [
     { key: "dieciseisavos", label: "Dieciseisavos de Final" },
     { key: "octavos", label: "Octavos de Final" },
@@ -2291,19 +2301,24 @@
     };
   }
 
-  // Los cruces de Dieciseisavos: cada club humano con partidos YA jugados
-  // esta ronda aporta el suyo auto-computado; el resto sale del texto
-  // libre "Equipo A 3-1 Equipo B" (parsearChampionsPlayoffTexto, sin
-  // ningún "> Equipo" — a diferencia de Champions, la Copa no tiene
-  // "espera": son los 16 cruces completos del cuadro, sin cabezas de
-  // serie directas que entren más tarde).
-  function _copaDieciseisavosTies(datos) {
+  // Los cruces de UNA ronda de Copa (Dieciseisavos, Octavos, Cuartos,
+  // Semis o Final — LAS 5 se resuelven IGUAL, ninguna depende de la
+  // anterior): cada club humano con partidos YA jugados esta ronda
+  // aporta el suyo auto-computado (agregado ida+vuelta si aplica); el
+  // resto sale ÍNTEGRAMENTE del texto libre que el admin pega para ESA
+  // ronda concreta ("Equipo A 3-1 Equipo B",
+  // parsearChampionsPlayoffTexto). PROHIBIDO inferir el emparejamiento
+  // de una ronda a partir del ganador de la ronda anterior — petición
+  // usuario 2026-09-04: "los cruces los doy yo en texto, elimina el
+  // algoritmo de generarlos automáticamente" (se reportó con Octavos
+  // generándose solo a partir de los ganadores de Dieciseisavos).
+  function _copaRondaDesdeTexto(datos, rondaKey) {
     var equiposHumanos = _copaEquiposHumanos(datos);
     var ties = [];
     var indexPorHumano = {};
 
     equiposHumanos.forEach(function (e) {
-      var t = _copaPlayoffHumano(datos, e, "dieciseisavos");
+      var t = _copaPlayoffHumano(datos, e, rondaKey);
       if (!t) return;
       indexPorHumano[e.id] = ties.length;
       ties.push({
@@ -2312,7 +2327,7 @@
       });
     });
 
-    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto("dieciseisavos") : "";
+    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto(rondaKey) : "";
     parsearChampionsPlayoffTexto(texto).forEach(function (it) {
       var objA = resolverRivalPorNombre(it.equipoA, datos, null);
       var objB = resolverRivalPorNombre(it.equipoB, datos, null);
@@ -2329,76 +2344,17 @@
     return ties;
   }
 
-  // Fusiona, para una ronda YA CONOCIDA (Octavos en adelante — los pares
-  // salen SOLOS de la ronda anterior, nunca los crea el admin): partidos
-  // ya jugados de un club humano en esta ronda (auto) + el texto libre
-  // pegado (IA), casando por nombre en cualquier orden — mismo criterio
-  // EXACTO que _championsFusionarRondaIA, con la clave y el detector de
-  // ronda propios de Copa.
-  function _copaFusionarRondaIA(datos, rondaKey, pares) {
-    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto(rondaKey) : "";
-    var lineasTexto = parsearChampionsPlayoffTexto(texto);
-    var usadas = {};
-
-    return pares.map(function (p) {
-      if (!p.equipoA || !p.equipoB) {
-        return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
-      }
-      if (p.equipoAObj && p.equipoAObj.mister) {
-        var tA = _copaPlayoffHumano(datos, p.equipoAObj, rondaKey);
-        if (tA && _liga1RefNombresCoinciden(tA.equipoB, p.equipoB)) {
-          return { equipoA: tA.equipoA, equipoAObj: tA.equipoAObj, equipoB: tA.equipoB, equipoBObj: tA.equipoBObj, golA: tA.golA, golB: tA.golB, esAuto: true };
-        }
-      }
-      if (p.equipoBObj && p.equipoBObj.mister) {
-        var tB = _copaPlayoffHumano(datos, p.equipoBObj, rondaKey);
-        if (tB && _liga1RefNombresCoinciden(tB.equipoB, p.equipoA)) {
-          return { equipoA: tB.equipoB, equipoAObj: tB.equipoBObj, equipoB: tB.equipoA, equipoBObj: tB.equipoAObj, golA: tB.golB, golB: tB.golA, esAuto: true };
-        }
-      }
-      for (var i = 0; i < lineasTexto.length; i++) {
-        if (usadas[i]) continue;
-        var it = lineasTexto[i];
-        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoA) && _liga1RefNombresCoinciden(it.equipoB, p.equipoB)) {
-          usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, penA: it.penA, penB: it.penB, golB: it.golB, esAuto: false };
-        }
-        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoB) && _liga1RefNombresCoinciden(it.equipoB, p.equipoA)) {
-          usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, penA: it.penB, penB: it.penA, golB: it.golA, esAuto: false };
-        }
-      }
-      return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
-    });
-  }
-
-  // Cuartos/Semis/Final — igual que en Copa, TAMBIÉN Octavos (a
-  // diferencia de Champions, donde Octavos empareja "espera" vs ganador):
-  // cada par consecutivo de cruces YA resueltos de la ronda anterior
-  // enfrenta a sus 2 ganadores — el árbol de eliminación se construye
-  // SOLO, sin que el admin tenga que decir nada.
-  function _copaRondaDesdeGanadores(datos, rondaKey, tiesPrevias) {
-    var pares = [];
-    for (var i = 0; i < tiesPrevias.length; i += 2) {
-      var g1 = _championsGanadorTie(tiesPrevias[i]);
-      var g2 = tiesPrevias[i + 1] ? _championsGanadorTie(tiesPrevias[i + 1]) : null;
-      pares.push({
-        equipoA: g1 ? g1.nombre : null, equipoAObj: g1 ? g1.obj : null,
-        equipoB: g2 ? g2.nombre : null, equipoBObj: g2 ? g2.obj : null
-      });
-    }
-    return _copaFusionarRondaIA(datos, rondaKey, pares);
-  }
-
-  // Punto ÚNICO que calcula el cuadro ENTERO, de una sola pasada — cada
-  // ronda depende de la anterior, así que se computan en cadena.
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 5 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que
+  // el admin pegó para ESA ronda (nunca del ganador de la anterior).
   function calcularCopaPlayoffTodasLasRondas(datos) {
-    var dieciseisavos = _copaDieciseisavosTies(datos);
-    var octavos = _copaRondaDesdeGanadores(datos, "octavos", dieciseisavos);
-    var cuartos = _copaRondaDesdeGanadores(datos, "cuartos", octavos);
-    var semis = _copaRondaDesdeGanadores(datos, "semis", cuartos);
-    var final = _copaRondaDesdeGanadores(datos, "final", semis);
-    return { dieciseisavos: dieciseisavos, octavos: octavos, cuartos: cuartos, semis: semis, final: final };
+    return {
+      dieciseisavos: _copaRondaDesdeTexto(datos, "dieciseisavos"),
+      octavos: _copaRondaDesdeTexto(datos, "octavos"),
+      cuartos: _copaRondaDesdeTexto(datos, "cuartos"),
+      semis: _copaRondaDesdeTexto(datos, "semis"),
+      final: _copaRondaDesdeTexto(datos, "final")
+    };
   }
 
   function _renderizarCopaEliminatorias(contenedor, datos, idClubActivo) {
@@ -2418,7 +2374,7 @@
       if (!ties.length) {
         cuerpo = meta.key === "dieciseisavos"
           ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los 16 duelos de Dieciseisavos.</p>'
-          : '<p class="admin-nota">Se rellena sola en cuanto la ronda anterior tenga sus cruces creados.</p>';
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
         cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
       }
@@ -2428,7 +2384,7 @@
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador AGREGADO — partido único, o ida+vuelta ya sumada</span>' +
-      "<span>Octavos en adelante se emparejan solos — los cruces de un club humano se auto-computan</span></div>"
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
     ));
 
     _copaAppendStatsGrid(contenedor, idClubActivo);
@@ -2821,7 +2777,7 @@
   // decide nada por sí solo, la tanda entre paréntesis es la que dice
   // quién pasa). Se comprueba SIEMPRE antes que `_CHAMPIONS_MARCADOR_RE`
   // (que también matchearía el "1 ... 1" central sin ver los paréntesis
-  // y perdería la tanda) — ver _championsGanadorTie para el desempate.
+  // y perdería la tanda) — ver _championsTieRowHTML para el desempate.
   var _CHAMPIONS_MARCADOR_PEN_RE = /^(.*\S)\s+(\d+)\s*\(\s*(\d+)\s*\)\s*(?:-|vs\.?)\s*\(\s*(\d+)\s*\)\s*(\d+)\s+(\S.*)$/i;
 
   // Parser de una línea de eliminatoria YA CONOCIDA (Octavos en
@@ -2989,103 +2945,61 @@
     return ties;
   }
 
-  // Ganador de un cruce ya resuelto: si el marcador (agregado/reglamentario)
-  // decide, gana ese; si queda EMPATADO pero el texto traía penaltis
-  // ("1 (4) vs (5) 1"), decide la tanda. null = todavía sin marcador, o
-  // empate sin ninguna forma de desempatar.
-  function _championsGanadorTie(tie) {
-    if (tie.golA === null || tie.golA === undefined || tie.golB === null || tie.golB === undefined) return null;
-    if (tie.golA > tie.golB) return { nombre: tie.equipoA, obj: tie.equipoAObj };
-    if (tie.golB > tie.golA) return { nombre: tie.equipoB, obj: tie.equipoBObj };
-    if (tie.penA !== null && tie.penA !== undefined && tie.penB !== null && tie.penB !== undefined && tie.penA !== tie.penB) {
-      return tie.penA > tie.penB ? { nombre: tie.equipoA, obj: tie.equipoAObj } : { nombre: tie.equipoB, obj: tie.equipoBObj };
-    }
-    return null;
-  }
+  // Cruces de UNA ronda de Champions a partir de Octavos (Octavos,
+  // Cuartos, Semis, Final — LAS 4 se resuelven IGUAL, ninguna depende de
+  // la anterior): cada club humano con partidos YA jugados esta ronda
+  // aporta el suyo auto-computado; el resto sale ÍNTEGRAMENTE del texto
+  // libre que el admin pega para ESA ronda ("Equipo A 3-1 Equipo B",
+  // parsearChampionsPlayoffTexto). PROHIBIDO inferir el emparejamiento
+  // de Octavos+ a partir del ganador/espera de la ronda anterior —
+  // petición usuario 2026-09-04: "los cruces los doy yo en texto, elimina
+  // el algoritmo de generarlos automáticamente" (se reportó con Octavos
+  // generándose solo a partir de los ganadores/espera de Dieciseisavos).
+  // El "espera" de Dieciseisavos (`_championsDieciseisavosTies`) queda
+  // como anotación de SOLO DISPLAY — no alimenta esta función.
+  function _championsRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _championsEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
 
-  // Fusiona, para una ronda YA CONOCIDA (Octavos en adelante — los pares
-  // salen SOLOS de la ronda anterior, nunca los crea el admin): partidos
-  // ya jugados de un club humano en esta ronda (auto) + el texto libre
-  // pegado (IA), casando por nombre en cualquier orden. Un par con algún
-  // lado todavía sin resolver (`null`) queda "Pendiente" sin buscar nada.
-  function _championsFusionarRondaIA(datos, rondaKey, pares) {
+    equiposHumanos.forEach(function (e) {
+      var t = _championsPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
     var texto = window.Estado ? window.Estado.obtenerChampionsPlayoffTexto(rondaKey) : "";
-    var lineasTexto = parsearChampionsPlayoffTexto(texto);
-    var usadas = {};
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
 
-    return pares.map(function (p) {
-      if (!p.equipoA || !p.equipoB) {
-        return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
-      }
-      if (p.equipoAObj && p.equipoAObj.mister) {
-        var tA = _championsPlayoffHumano(datos, p.equipoAObj, rondaKey);
-        if (tA && _liga1RefNombresCoinciden(tA.equipoB, p.equipoB)) {
-          return { equipoA: tA.equipoA, equipoAObj: tA.equipoAObj, equipoB: tA.equipoB, equipoBObj: tA.equipoBObj, golA: tA.golA, golB: tA.golB, esAuto: true };
-        }
-      }
-      if (p.equipoBObj && p.equipoBObj.mister) {
-        var tB = _championsPlayoffHumano(datos, p.equipoBObj, rondaKey);
-        if (tB && _liga1RefNombresCoinciden(tB.equipoB, p.equipoA)) {
-          return { equipoA: tB.equipoB, equipoAObj: tB.equipoBObj, equipoB: tB.equipoA, equipoBObj: tB.equipoAObj, golA: tB.golB, golB: tB.golA, esAuto: true };
-        }
-      }
-      for (var i = 0; i < lineasTexto.length; i++) {
-        if (usadas[i]) continue;
-        var it = lineasTexto[i];
-        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoA) && _liga1RefNombresCoinciden(it.equipoB, p.equipoB)) {
-          usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, penA: it.penA, penB: it.penB, golB: it.golB, esAuto: false };
-        }
-        if (_liga1RefNombresCoinciden(it.equipoA, p.equipoB) && _liga1RefNombresCoinciden(it.equipoB, p.equipoA)) {
-          usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, penA: it.penB, penB: it.penA, golB: it.golA, esAuto: false };
-        }
-      }
-      return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
-    });
-  }
-
-  // Octavos: cada cruce de Dieciseisavos con "espera" ya asignado aporta
-  // un par (equipo directo que espera) vs (ganador del cruce, o
-  // "Pendiente" si aún no se sabe).
-  function _championsOctavosTies(datos, dieciseisavosTies) {
-    var pares = [];
-    dieciseisavosTies.forEach(function (t) {
-      if (!t.espera) return;
-      var ganador = _championsGanadorTie(t);
-      pares.push({
-        equipoA: t.espera, equipoAObj: t.esperaObj,
-        equipoB: ganador ? ganador.nombre : null, equipoBObj: ganador ? ganador.obj : null
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
       });
     });
-    return _championsFusionarRondaIA(datos, "octavos", pares);
+
+    return ties;
   }
 
-  // Cuartos/Semis/Final: cada par consecutivo de cruces YA resueltos de
-  // la ronda anterior enfrenta a sus 2 ganadores — el árbol de
-  // eliminación se construye SOLO, sin que el admin tenga que decir nada.
-  function _championsRondaDesdeGanadores(datos, rondaKey, tiesPrevias) {
-    var pares = [];
-    for (var i = 0; i < tiesPrevias.length; i += 2) {
-      var g1 = _championsGanadorTie(tiesPrevias[i]);
-      var g2 = tiesPrevias[i + 1] ? _championsGanadorTie(tiesPrevias[i + 1]) : null;
-      pares.push({
-        equipoA: g1 ? g1.nombre : null, equipoAObj: g1 ? g1.obj : null,
-        equipoB: g2 ? g2.nombre : null, equipoBObj: g2 ? g2.obj : null
-      });
-    }
-    return _championsFusionarRondaIA(datos, rondaKey, pares);
-  }
-
-  // Punto ÚNICO que calcula el bracket ENTERO, de una sola pasada — cada
-  // ronda depende de la anterior, así que se computan en cadena.
+  // Punto ÚNICO que calcula el bracket ENTERO — las 5 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que
+  // el admin pegó para ESA ronda (nunca del ganador de la anterior).
   function calcularChampionsPlayoffTodasLasRondas(datos) {
-    var dieciseisavos = _championsDieciseisavosTies(datos);
-    var octavos = _championsOctavosTies(datos, dieciseisavos);
-    var cuartos = _championsRondaDesdeGanadores(datos, "cuartos", octavos);
-    var semis = _championsRondaDesdeGanadores(datos, "semis", cuartos);
-    var final = _championsRondaDesdeGanadores(datos, "final", semis);
-    return { dieciseisavos: dieciseisavos, octavos: octavos, cuartos: cuartos, semis: semis, final: final };
+    return {
+      dieciseisavos: _championsDieciseisavosTies(datos),
+      octavos: _championsRondaDesdeTexto(datos, "octavos"),
+      cuartos: _championsRondaDesdeTexto(datos, "cuartos"),
+      semis: _championsRondaDesdeTexto(datos, "semis"),
+      final: _championsRondaDesdeTexto(datos, "final")
+    };
   }
 
   var _championsTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
@@ -3335,7 +3249,7 @@
       if (!ties.length) {
         cuerpo = meta.key === "dieciseisavos"
           ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los 8 duelos y qué equipo espera a cada ganador en Octavos.</p>'
-          : '<p class="admin-nota">Se rellena sola en cuanto la ronda anterior tenga sus cruces creados.</p>';
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
         cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
       }
@@ -3344,7 +3258,7 @@
     });
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Octavos en adelante se emparejan solos — los cruces de un club humano se auto-computan</span></div>'
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
 
     _championsAppendStatsGrid(contenedor, idClubActivo);

@@ -211,6 +211,49 @@
     };
   }
 
+  // POSPONER — un partido Humano vs Humano que no hay forma de jugar en
+  // vivo (los 2 mánagers no coinciden) se marca "pospuesto" en vez de
+  // dejarlo bloqueando el 📌/borde azul de "próximo partido" para
+  // siempre. Vive en el MISMO `e.resultados[id]` que un resultado real
+  // (mismo `_actualizadoEn` por partido, mismo merge server-side
+  // partido-a-partido de app.py::_ef7_merge_resultados — no hace falta
+  // tocar el servidor: ya fusiona por timestamp, sea el contenido "jugado"
+  // o "pospuesto"). `jugado:false` para que generarCalendarioLateralDerecho
+  // lo siga tratando como "sin marcador todavía" (sigue siendo jugable
+  // desde PREVIA en cualquier momento), pero lo excluye del cálculo de
+  // "próximo partido" igual que un rival aún sin determinar.
+  function marcarPartidoPospuesto(partidoId, contextoPartido) {
+    var e = cargarEstado();
+    var clubes = [];
+    var competicion = null;
+    try {
+      if (contextoPartido && contextoPartido.partido && contextoPartido.datos) {
+        clubes = _clubesHumanosDePartido(contextoPartido.partido, contextoPartido.datos);
+        competicion = contextoPartido.partido.competicion || null;
+      }
+    } catch (err) { clubes = []; competicion = null; }
+    e.resultados[partidoId] = {
+      jugado: false,
+      pospuesto: true,
+      _clubes: clubes,
+      _competicion: competicion,
+      _actualizadoEn: Date.now()
+    };
+    return guardarEstado();
+  }
+
+  // Deshace un "pospuesto" (toque accidental, o los 2 mánagers ya han
+  // podido coincidir y prefieren volver a verlo como PREVIA normal antes
+  // de jugarlo). Reutiliza la misma tumba que un reinicio normal — sin la
+  // marca `pospuesto`, vuelve a comportarse como un partido nunca tocado.
+  function cancelarPospuestoPartido(partidoId) {
+    var e = cargarEstado();
+    var actual = e.resultados[partidoId];
+    if (!actual || !actual.pospuesto) return false;
+    e.resultados[partidoId] = _tumbaDeResultado(actual);
+    return guardarEstado();
+  }
+
   // Borra TODOS los resultados confirmados en vivo de un club humano —
   // el propio botón "🔄 Reiniciar" de la cabecera de su calendario
   // (js/renderizadores.js::reiniciarTodosPartidosClub) lo llama ADEMÁS
@@ -239,7 +282,11 @@
     var n = 0;
     Object.keys(e.resultados).forEach(function (id) {
       var r = e.resultados[id];
-      if (!r || r.jugado === false) return; // no existe o ya es una tumba — nada que hacer
+      if (!r) return; // no existe — nada que hacer
+      // Solo hay algo que limpiar si es un partido REALMENTE jugado o un
+      // "pospuesto" colgado de la temporada que se cierra — una tumba ya
+      // vacía (jugado:false, sin pospuesto) no necesita otro reinicio.
+      if (r.jugado !== true && !r.pospuesto) return;
       if (!Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
       if (r._competicion && excluir.indexOf(r._competicion) !== -1) return;
       e.resultados[id] = _tumbaDeResultado(r);
@@ -568,6 +615,11 @@
       copia.jugado = override.jugado;
       copia.resultado = { golesLocal: override.golesLocal, golesVisitante: override.golesVisitante };
       copia.eventos = override.eventos;
+      // Pospuesto (ver marcarPartidoPospuesto): sigue "sin jugar" para
+      // todo lo demás (clasificación, próximo partido...), pero el
+      // calendario necesita saberlo para pintar el aviso ⏳ y excluirlo
+      // del cálculo de "próximo partido a jugar".
+      copia.pospuesto = !!override.pospuesto;
       return copia;
     });
   }
@@ -2035,6 +2087,8 @@
     obtenerResultadoOverride: obtenerResultadoOverride,
     reiniciarResultadoPartido: reiniciarResultadoPartido,
     reiniciarResultadosDeClub: reiniciarResultadosDeClub,
+    marcarPartidoPospuesto: marcarPartidoPospuesto,
+    cancelarPospuestoPartido: cancelarPospuestoPartido,
     registrarPartidoGenerado: registrarPartidoGenerado,
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,

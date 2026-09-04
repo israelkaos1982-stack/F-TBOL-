@@ -60,13 +60,32 @@
     }
   }
 
-  function registrarResultadoPartido(partidoId, golesLocal, golesVisitante, eventos) {
+  // `contextoPartido` (opcional) = { partido, datos } — el partido REAL
+  // (con .competicion/.ronda/.local/.visitante) y el `datos` global en el
+  // instante de confirmar. Con ellos se sella una "identidad de reserva"
+  // (ver _identidadFallbackDePartido más abajo) que sobrevive a que el
+  // admin, DESPUÉS de jugar el partido, corrija el texto de la ronda de
+  // esa línea en su Calendario extra (p.ej. "1/64" -> "1ª Ronda") — sin
+  // esto, ese resultado YA CONFIRMADO quedaba huérfano (ver
+  // listarPartidosResueltos, reporte usuario "otra vez se ha perdido el
+  // partido de Copa... ¿quizás por cambiar el texto de 1/64 a 1ª Ronda?" —
+  // exactamente eso: el id de un partido de Calendario extra sale de un
+  // hash de competición+ronda+rival, así que editar la RONDA de una línea
+  // YA jugada cambia su id y `e.resultados[idViejo]` deja de encontrarse).
+  function registrarResultadoPartido(partidoId, golesLocal, golesVisitante, eventos, contextoPartido) {
     var e = cargarEstado();
+    var identidad = null;
+    try {
+      if (contextoPartido && contextoPartido.partido && contextoPartido.datos) {
+        identidad = _identidadFallbackDePartido(contextoPartido.partido, contextoPartido.datos, window.Renderizadores);
+      }
+    } catch (err) { identidad = null; }
     e.resultados[partidoId] = {
       jugado: true,
       golesLocal: golesLocal,
       golesVisitante: golesVisitante,
-      eventos: (eventos || []).slice()
+      eventos: (eventos || []).slice(),
+      _identidad: identidad
     };
     return guardarEstado();
   }
@@ -162,6 +181,59 @@
 
   function _normTxtExtra(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  // ---------- Identidad de RESERVA de un resultado confirmado en vivo ----------
+  // El id "real" de un partido de Calendario extra es un hash de
+  // competici\u00f3n+ronda+rival (ver parsearPartidosExtraTexto en
+  // renderizadores.js) \u2014 as\u00ed que corregir SOLO el texto de la ronda de una
+  // l\u00ednea YA JUGADA (p.ej. "1/64" -> "1\u00aa Ronda", el caso real reportado)
+  // cambia ese id y deja el resultado confirmado (`e.resultados[idViejo]`)
+  // sin ning\u00fan partido que lo reclame. Esta identidad de RESERVA es
+  // deliberadamente M\u00c1S ESTABLE que el id real: usa el PAR de nombres de
+  // equipo (sin importar qui\u00e9n es local/visitante) + competici\u00f3n + si la
+  // ronda es "ida"/"vuelta"/ninguna \u2014 pero NUNCA el resto del texto de la
+  // ronda, que es justo lo que puede cambiar sin que el partido deje de
+  // ser "el mismo". Se calcula IGUAL en el momento de confirmar
+  // (registrarResultadoPartido) y en el momento de leer
+  // (listarPartidosResueltos) \u2014 si de verdad es el mismo cruce (mismos 2
+  // equipos, misma competici\u00f3n, mismo ida/vuelta), la reserva encuentra el
+  // resultado aunque el id exacto ya no coincida. Sigue exigiendo el par
+  // de equipos EXACTO (normalizado) \u2014 una correcci\u00f3n de rival distinta a
+  // un simple acento/may\u00fascula (p.ej. "AD Merida" -> "AD M\u00e9rida CF") no
+  // encuentra reserva; es un caso mucho m\u00e1s raro que renombrar la ronda.
+  function _legDeRondaExtra(ronda) {
+    var n = _normTxtExtra(ronda || "");
+    if (/\bida\b/.test(n)) return "ida";
+    if (/\bvuelta\b/.test(n)) return "vuelta";
+    return "";
+  }
+  function _identidadFallbackKey(competicion, ronda, nombreA, nombreB) {
+    if (!competicion || !nombreA || !nombreB) return null;
+    var par = [_normTxtExtra(nombreA), _normTxtExtra(nombreB)].sort().join("|");
+    return _normTxtExtra(competicion) + "::" + _legDeRondaExtra(ronda) + "::" + par;
+  }
+  // `R` = window.Renderizadores (se pasa expl\u00edcito, nunca se lee de
+  // window aqu\u00ed dentro, para poder testear esta funci\u00f3n en aislado).
+  function _identidadFallbackDePartido(partido, datos, R) {
+    if (!partido || !R || !R.buscarEquipoPorId) return null;
+    var eqA = R.buscarEquipoPorId(partido.local, datos);
+    var eqB = R.buscarEquipoPorId(partido.visitante, datos);
+    if (!eqA || !eqB) return null;
+    return _identidadFallbackKey(partido.competicion, partido.ronda, eqA.nombre, eqB.nombre);
+  }
+  // \u00cdndice { claveIdentidad -> entrada de e.resultados } \u2014 el PRIMERO que
+  // aparezca gana en el rar\u00edsimo caso de colisi\u00f3n (2 resultados
+  // confirmados que reducen a la misma identidad de reserva); nunca se
+  // persiste, se reconstruye en cada listarPartidosResueltos().
+  function _indexarResultadosPorIdentidad(resultados) {
+    var idx = {};
+    Object.keys(resultados).forEach(function (id) {
+      var r = resultados[id];
+      var clave = r && r._identidad;
+      if (clave && !idx[clave]) idx[clave] = r;
+    });
+    return idx;
   }
 
   // Hash determinista simple (mismo texto -> mismo numero, siempre) - solo
@@ -339,8 +411,19 @@
     var generados = Object.keys(e.partidosGenerados).map(function (id) { return e.partidosGenerados[id]; });
     var todos = base.concat(extra).concat(superliga).concat(generados);
 
+    var R = window.Renderizadores;
+    var overridesPorIdentidad = _indexarResultadosPorIdentidad(e.resultados);
+
     return todos.map(function (p) {
       var override = e.resultados[p.id];
+      // Id exacto sin match: puede ser el MISMO partido con la ronda
+      // recién corregida (ver _identidadFallbackDePartido) — sin esto, un
+      // resultado YA confirmado en vivo se veía "sin jugar" en cuanto el
+      // admin arreglaba un typo/renombraba la ronda de esa línea.
+      if (!override && R) {
+        var clave = _identidadFallbackDePartido(p, datos, R);
+        if (clave && overridesPorIdentidad[clave]) override = overridesPorIdentidad[clave];
+      }
       if (!override) return p;
       var copia = {};
       for (var k in p) if (p.hasOwnProperty(k)) copia[k] = p[k];

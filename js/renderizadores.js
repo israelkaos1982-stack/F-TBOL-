@@ -3154,8 +3154,11 @@
     var esTuyoA = !!(tie.equipoAObj && tie.equipoAObj.id === idClubActivo);
     var esTuyoB = !!(tie.equipoBObj && tie.equipoBObj.id === idClubActivo);
 
+    // Petición usuario 2026-09-04: "(4 - 5 pen.)" -> "(4-5)", sin la
+    // etiqueta "pen." ni espacios alrededor del guion (el marcador
+    // agregado de arriba ya deja claro que el empate se resolvió aparte).
     var penHTML = hayPenaltis
-      ? '<span class="champions-tie-pen">(' + tie.penA + " - " + tie.penB + " pen.)</span>"
+      ? '<span class="champions-tie-pen">(' + tie.penA + "-" + tie.penB + ")</span>"
       : "";
     var marcadorHTML = pendiente
       ? '<span class="champions-tie-marcador champions-tie-marcador--pendiente">—</span>'

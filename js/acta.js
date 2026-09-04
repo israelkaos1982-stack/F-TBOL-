@@ -177,8 +177,12 @@
     // A) Cerrar partido: inyecta el marcador real + el acta y marca
     //    jugado:true. El calendario derecho lo pintará gris con la
     //    PREVIA oculta en el siguiente render (regla ya vigente desde
-    //    la Fase 1, CSS .match-card.is-played).
-    window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal);
+    //    la Fase 1, CSS .match-card.is-played). El 5º argumento sella la
+    //    "identidad de reserva" del partido (competición+rivales+ida o
+    //    vuelta) para que este resultado sobreviva si el admin corrige
+    //    DESPUÉS el texto de la ronda de esa línea en el Calendario extra
+    //    (ver Estado.registrarResultadoPartido/listarPartidosResueltos).
+    window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal, { partido: ctx.partido, datos: ctx.datos });
 
     // B) Clasificación de la liga: Estado.calcularClasificacion() la
     //    recalcula en caliente a partir de TODOS los partidos jugados —

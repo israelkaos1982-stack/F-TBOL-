@@ -52,7 +52,24 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v46';
+var CACHE_HTML   = 'ftbol-html-v47';
+/* v46 → v47 (bug real usuario — Copa del Rey): un partido de Copa
+   jugado por un humano se mostraba "FINALIZADO" con acta completa pero
+   al reabrir la web al día siguiente aparecía como no jugado. Causa:
+   (1) el POST a `/api/copa/guardar_resultado` no tenía NINGÚN timeout
+   — una conexión colgada (sin error, sin respuesta) dejaba los 3
+   reintentos sin disparar nunca; (2) tanto `init()`
+   (`copa-engine.js`) como el poll de `hydrateLigaStateFromBackend`
+   (misc_body_2.html, cada ~5s) adoptaban la copia `copa_state` del
+   servidor a pelo, sin comparar con lo que el dispositivo YA sabía —
+   si el POST fallaba, la SIGUIENTE respuesta del servidor (que nunca
+   tuvo el partido) pisaba en silencio el estado local que sí lo
+   tenía. Fix: timeout de 12s + aviso visible tras agotar reintentos,
+   más un mirror local INMEDIATO del resultado (`_copaLocalStoreResult`)
+   y una unión local↔servidor antes de adoptar
+   (`_copaMergeMissingLocalResults`, con re-subida self-heal) — mismo
+   patrón ya probado para Liga EA Sports (`persistSharedLigaState`/
+   `hydrateLigaStateFromBackend`'s `liga_results` merge). */
 /* v32 → v33 (2026-08-23, bug real crítico): un guardado de plantilla
    (`saveData`, Resto de Ligas/Liga EA Sports) cuyos 5 reintentos al
    servidor fallaban TODOS (red caída de verdad, confirmado en vivo con
@@ -261,7 +278,7 @@ var HTML_SWR_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutos
 var PRECACHE = [
   '/static/css/index.bundle.css?v=5.7',
   '/static/js/index.bundle.js?v=9.47',
-  '/static/js/copa-engine.js?v=1.9',
+  '/static/js/copa-engine.js?v=1.10',
 ];
 
 /* ── INSTALL: pre-cachear activos estáticos ─────────────────────────────── */

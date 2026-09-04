@@ -858,12 +858,34 @@
     if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
   }
 
-  function saveResult(payload) {
+  /* POST a /api/copa/guardar_resultado con TIMEOUT DURO + 3 reintentos
+     (obligatorio — mismo fix que `window._copaFetchGuardarResultado`,
+     misc_body_2.html, para el resultado HUMANO). Antes esta petición no
+     tenía NINGÚN timeout — si la conexión se quedaba colgada (sin error,
+     sin respuesta) la promesa nunca resolvía ni rechazaba, y una sim de
+     Copa (IA-vs-IA o el panel manual de humano) podía quedarse SOLO en
+     local sin que nadie se enterara. Mantiene el contrato original
+     (resuelve al JSON ya parseado) para no tocar los 3 call sites. */
+  function saveResult(payload, tries) {
+    tries = (tries == null) ? 3 : tries;
+    var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var to = ctl ? setTimeout(function () { try { ctl.abort(); } catch (_) {} }, 12000) : null;
     return fetch('/api/copa/guardar_resultado', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (r) { return r.json(); });
+      body: JSON.stringify(payload),
+      signal: ctl ? ctl.signal : undefined
+    }).then(function (r) {
+      if (to) clearTimeout(to);
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).catch(function (err) {
+      if (to) clearTimeout(to);
+      if (tries <= 1) throw err;
+      return new Promise(function (resolve) {
+        setTimeout(function () { resolve(saveResult(payload, tries - 1)); }, 1500);
+      });
+    });
   }
 
   function getTeamRating(teamName) {
@@ -1740,6 +1762,14 @@
       team_b: match.visitante,
       jugado: true
     };
+    /* Mirror local ANTES de la red — mismo fix que
+       `_copaSaveHumanResult` (misc_body_2.html), aplicado también a las
+       simulaciones IA-vs-IA para que "en todos los partidos" (petición
+       usuario) un POST que falla del todo no borre el resultado ya
+       calculado. */
+    if (typeof window._copaLocalStoreResult === 'function') {
+      window._copaLocalStoreResult(ronda, idx, !!esVuelta, false, payload);
+    }
     return saveResult(payload).then(function (d) {
       if (d.ok) {
         applyHumanResultMeta(payload, match.local, match.visitante);
@@ -1756,7 +1786,39 @@
     fetch('/api/copa/state')
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        _copa = d.copa || {};
+        var srv = d.copa || {};
+        /* UNIÓN con lo que YA sabíamos en local, ANTES de adoptar la
+           copia del servidor (obligatorio — bug usuario: partido de
+           Copa jugado y confirmado como FINALIZADO en pantalla, "no
+           jugado" al abrir la web al día siguiente). Si el POST de
+           `_copaSaveHumanResult`/`saveSimulatedMatch` nunca llegó a
+           confirmarse (o llegó DESPUÉS de que este `init()` corriera
+           una vez con la copia vieja), el mirror local de este
+           dispositivo puede tener un partido `jugado:true` que el
+           servidor todavía no tiene — adoptar la respuesta del
+           servidor a pelo lo borraría. Mismo principio que el merge de
+           `hydrateLigaStateFromBackend` (misc_body_2.html) y
+           `_tourMergeMissingLocalResults` (misc_body_1.html). */
+        try {
+          var loc = null;
+          try { var raw = localStorage.getItem('copa_state_v1'); if (raw) loc = JSON.parse(raw); } catch (_e1) {}
+          if (typeof window._copaMergeMissingLocalResults === 'function') {
+            var recovered = window._copaMergeMissingLocalResults(srv, loc);
+            if (recovered > 0) {
+              /* El servidor nunca tuvo estos partidos — re-subirlos
+                 para curarlo (state_set ya protege el acta con
+                 copa_state_merge server-side). */
+              try {
+                fetch('/api/copa/state_set', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ copa: srv })
+                }).catch(function () {});
+              } catch (_e2) {}
+            }
+          }
+        } catch (_e3) {}
+        _copa = srv;
         /* Mirror durable a localStorage para que rebuildPlayerStatsStore
            (Source 5) reconstruya las estadísticas de la Copa tras un
            borrado de datos / cambio de móvil. El acta vive en
@@ -3014,7 +3076,13 @@
     runSimCountdown(domId, totalSeconds, function () {
       saveSimulatedMatch(ronda, idx, !!esVuelta, { local: local, visitante: visitante }, result)
         .then(function (d) {
-          if (!d.ok) alert('❌ ' + (d.error || 'Error guardando simulación')); 
+          if (!d.ok) alert('❌ ' + (d.error || 'Error guardando simulación'));
+        })
+        .catch(function () {
+          /* Agotados los reintentos con timeout: el resultado ya quedó
+             mirroreado en local (saveSimulatedMatch lo hace antes de la
+             red) — solo avisamos, sin bloquear al usuario. */
+          alert('⚠️ No se pudo confirmar el guardado en el servidor (red lenta o sin respuesta). El resultado sigue guardado en este dispositivo — se reintentará solo al recuperar conexión.');
         });
     });
   };
@@ -3039,7 +3107,11 @@
       var visit = esVuelta ? m.l : m.v;
       if (!local || !visit || local === 'PENDIENTE' || visit === 'PENDIENTE') return false;
       var result = simulateCupMatch(local, visit, { twoLeg: !!TWO_LEG[ronda] });
-      saveSimulatedMatch(ronda, idx, !!esVuelta, { local: local, visitante: visit }, result);
+      /* Fire-and-forget por diseño (el caller no espera respuesta) — el
+         .catch(mudo) evita una "Uncaught (in promise)" ruidosa en
+         consola cuando la red falla del todo; el resultado ya quedó
+         mirroreado en local dentro de saveSimulatedMatch. */
+      saveSimulatedMatch(ronda, idx, !!esVuelta, { local: local, visitante: visit }, result).catch(function(){});
       return true;
     } catch (_) { return false; }
   };
@@ -3396,6 +3468,12 @@
       team_b: visitante,
       jugado: true
     };
+    /* Mirror local ANTES de la red — mismo fix que
+       `_copaSaveHumanResult` (misc_body_2.html): si el POST falla del
+       todo, el resultado no debe perderse por completo. */
+    if (typeof window._copaLocalStoreResult === 'function') {
+      window._copaLocalStoreResult(ronda, idx, esVuelta, false, payload);
+    }
     saveResult(payload).then(function (d) {
       if (!d.ok) {
         alert('❌ ' + (d.error || 'No se pudo guardar el partido'));
@@ -3405,6 +3483,8 @@
       panel.classList.remove('show');
       copaRender(d.copa);
       if (injuries.length && typeof window.showLesionPostOverlay === 'function') window.showLesionPostOverlay(injuries, null);
+    }).catch(function () {
+      alert('⚠️ No se pudo confirmar el guardado en el servidor (red lenta o sin respuesta). El resultado sigue guardado en este dispositivo — vuelve a abrir la Copa con mejor conexión para que se reintente subir solo.');
     });
   };
 

@@ -141,7 +141,7 @@
         titulo, "Champions", "info-champions-formato", null,
         window.Renderizadores.obtenerFormatoChampionsTexto(), etiqueta
       );
-      window.Renderizadores.irChampionsTab(clubId, "grupos");
+      window.Renderizadores.irChampionsTab(clubId, "humanos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);

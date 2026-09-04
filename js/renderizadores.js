@@ -2589,8 +2589,9 @@
   }
 
   // ============================================================
-  // 3c-sexies. CHAMPIONS — Fase de Grupos (40 equipos, "la batidora") +
-  // Playoffs (Dieciseisavos → Octavos → Cuartos → Semis → Final)
+  // 3c-sexies. CHAMPIONS — 👥️ Humanos (partidos de CADA club, como Copa) +
+  // 🔵 Fase de Grupos (40 equipos, "la batidora") + 🟣 Playoffs
+  // (Dieciseisavos → Octavos → Cuartos → Semis → Final)
   // ============================================================
   // Fase de Grupos: EXACTAMENTE el mismo mecanismo que Liga 1ª REF — texto
   // libre pegado para los equipos IA (misma línea "Pos Nombre Pts PJ PE PP
@@ -3051,11 +3052,14 @@
     return { dieciseisavos: dieciseisavos, octavos: octavos, cuartos: cuartos, semis: semis, final: final };
   }
 
-  var _championsTabActual = "grupos"; // "grupos" | "playoffs" — no se persiste, siempre reabre en Fase Grupos
+  var _championsTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
 
   function _championsTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes champions-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--champions-humanos' +
+      (_championsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="champions-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--champions-grupos' +
       (_championsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="champions-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Fase Grupos</button>' +
@@ -3064,6 +3068,107 @@
       '" data-accion="champions-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟣 Playoffs</button>' +
       "</div>"
     );
+  }
+
+  // Partidos de Champions de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _copaPartidosDelClub (Copa del Rey).
+  function _championsPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "champions" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Bloque "estado de Champions" de UN club: SU ronda actual (la del
+  // partido más reciente) + la lista de SUS partidos. A diferencia de
+  // Copa del Rey, la Champions NO es de eliminación directa
+  // (COMPS_ELIMINACION_DIRECTA no la incluye — perder la Fase de Grupos
+  // no saca del cuadro) así que aquí NO hay eliminado/bloqueado por
+  // ronda anterior: cada partido se pinta con su propio estado
+  // (jugado/PREVIA/rival aún sin determinar). Devuelve null si el club
+  // no tiene ningún partido de Champions todavía (no aporta bloque).
+  function _championsEstadoClub(datos, e) {
+    var partidos = _championsPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Champions de un club — mismo layout/clases
+  // EXACTOS que _copaPartidoRowHTML, sin el estado "Eliminado" (no
+  // aplica: la Champions no elimina por ronda anterior).
+  function _championsPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — igual que Copa del Rey: un cuadro POR CADA
+  // club humano con SUS partidos de Champions (Fase de Grupos + Playoffs
+  // juntos, sin distinguir — la propia fecha ya los ordena), en vez de la
+  // tabla/cuadro compartido de las otras 2 pestañas.
+  function _renderizarChampionsHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _championsEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _championsEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🇪🇺", "Todavía no hay partidos de Champions. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Champions»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idClubActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _championsPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _championsAppendStatsGrid(contenedor, idClubActivo);
   }
 
   // Fila de UN cruce — "Pendiente" (escudo genérico) mientras alguno de
@@ -3216,15 +3321,16 @@
       contenedor.insertAdjacentHTML("beforeend", _championsTabsHTML(idClubActivo));
 
       if (_championsTabActual === "playoffs") _renderizarChampionsPlayoffs(contenedor, datos, idClubActivo);
-      else _renderizarChampionsGrupos(contenedor, datos, idClubActivo);
+      else if (_championsTabActual === "grupos") _renderizarChampionsGrupos(contenedor, datos, idClubActivo);
+      else _renderizarChampionsHumanos(contenedor, datos, idClubActivo);
     });
   }
 
-  // Cambia de pestaña (Fase Grupos ⇄ Playoffs) y re-pinta — único punto
-  // que toca `_championsTabActual`, así siempre queda sincronizado con lo
-  // que se ve en pantalla.
+  // Cambia de pestaña (👥️ Humanos ⇄ 🔵 Fase Grupos ⇄ 🟣 Playoffs) y
+  // re-pinta — único punto que toca `_championsTabActual`, así siempre
+  // queda sincronizado con lo que se ve en pantalla.
   function irChampionsTab(idClubActivo, tab) {
-    _championsTabActual = tab === "playoffs" ? "playoffs" : "grupos";
+    _championsTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
     renderizarChampions("champions-content", idClubActivo);
   }
 

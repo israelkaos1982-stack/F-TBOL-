@@ -2321,8 +2321,8 @@
       if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
 
       ties.push({
-        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA,
-        golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
       });
     });
 
@@ -2361,11 +2361,11 @@
         var it = lineasTexto[i];
         if (_liga1RefNombresCoinciden(it.equipoA, p.equipoA) && _liga1RefNombresCoinciden(it.equipoB, p.equipoB)) {
           usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, golB: it.golB, esAuto: false };
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, penA: it.penA, penB: it.penB, golB: it.golB, esAuto: false };
         }
         if (_liga1RefNombresCoinciden(it.equipoA, p.equipoB) && _liga1RefNombresCoinciden(it.equipoB, p.equipoA)) {
           usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, golB: it.golA, esAuto: false };
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, penA: it.penB, penB: it.penA, golB: it.golA, esAuto: false };
         }
       }
       return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
@@ -2813,16 +2813,38 @@
   // los 2 lados) — el admin no tiene por qué recordar cuál de los 2 usar.
   var _CHAMPIONS_MARCADOR_RE = /^(.*\S)\s+(\d+)\s*(?:-|vs\.?)\s*(\d+)\s+(\S.*)$/i;
 
+  // Marcador CON TANDA DE PENALTIS: "Equipo A 1 (4) vs (5) 1 Equipo B" —
+  // el formato EXACTO que pega la propia app real cuando una eliminatoria
+  // a partido único (o el agregado ida+vuelta) queda empatada y se
+  // resuelve a penaltis (petición usuario, foto: "Rayo Vallecano 1 (4)
+  // vs (5) 1 Deportivo Alavés" no se detectaba — el 1-1 del marcador no
+  // decide nada por sí solo, la tanda entre paréntesis es la que dice
+  // quién pasa). Se comprueba SIEMPRE antes que `_CHAMPIONS_MARCADOR_RE`
+  // (que también matchearía el "1 ... 1" central sin ver los paréntesis
+  // y perdería la tanda) — ver _championsGanadorTie para el desempate.
+  var _CHAMPIONS_MARCADOR_PEN_RE = /^(.*\S)\s+(\d+)\s*\(\s*(\d+)\s*\)\s*(?:-|vs\.?)\s*\(\s*(\d+)\s*\)\s*(\d+)\s+(\S.*)$/i;
+
   // Parser de una línea de eliminatoria YA CONOCIDA (Octavos en
   // adelante): "Equipo A 3-1 Equipo B" (o "Equipo A 3 vs 1 Equipo B") —
-  // marcador AGREGADO (ida+vuelta ya sumada por el admin). El orden de
-  // los 2 nombres no implica localía (una eliminatoria a doble partido
-  // no tiene un "local" único).
+  // marcador AGREGADO (ida+vuelta ya sumada por el admin), o con tanda de
+  // penaltis si el agregado quedó empatado (ver _CHAMPIONS_MARCADOR_PEN_RE).
+  // El orden de los 2 nombres no implica localía (una eliminatoria a
+  // doble partido no tiene un "local" único).
   function parsearChampionsPlayoffTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
+      var mp = l.match(_CHAMPIONS_MARCADOR_PEN_RE);
+      if (mp) {
+        var equipoAp = mp[1].trim(), equipoBp = mp[6].trim();
+        if (!equipoAp || !equipoBp) return;
+        items.push({
+          equipoA: equipoAp, golA: Number(mp[2]), penA: Number(mp[3]),
+          penB: Number(mp[4]), golB: Number(mp[5]), equipoB: equipoBp
+        });
+        return;
+      }
       var m = l.match(_CHAMPIONS_MARCADOR_RE);
       if (!m) return;
       var equipoA = m[1].trim(), equipoB = m[4].trim();
@@ -2841,6 +2863,8 @@
   // usuario ("no entiendo... encima no salen"): pegar el marcador tal
   // cual lo copia de la app real ("AS Monaco 4 vs 5 PSG", sin ningún
   // ">") DEBE registrar el cruce igualmente, nunca perderse en silencio.
+  // También acepta el marcador con tanda de penaltis (ver
+  // _CHAMPIONS_MARCADOR_PEN_RE), comprobado ANTES que el marcador simple.
   function parsearChampionsDieciseisavosTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
@@ -2850,6 +2874,15 @@
       var izq = partes[0].trim();
       var espera = partes.length > 1 ? partes.slice(1).join(">").trim() : "";
       if (!izq) return;
+      var conPenaltis = izq.match(_CHAMPIONS_MARCADOR_PEN_RE);
+      if (conPenaltis) {
+        items.push({
+          equipoA: conPenaltis[1].trim(), golA: Number(conPenaltis[2]), penA: Number(conPenaltis[3]),
+          penB: Number(conPenaltis[4]), golB: Number(conPenaltis[5]),
+          equipoB: conPenaltis[6].trim(), espera: espera || null
+        });
+        return;
+      }
       var conMarcador = izq.match(_CHAMPIONS_MARCADOR_RE);
       if (conMarcador) {
         items.push({
@@ -2947,8 +2980,8 @@
       if (idxHumanoB !== undefined) { ties[idxHumanoB].espera = esperaNombre; ties[idxHumanoB].esperaObj = objEspera; return; }
 
       ties.push({
-        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA,
-        golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB,
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB,
         espera: esperaNombre, esperaObj: objEspera, esAuto: false
       });
     });
@@ -2956,14 +2989,17 @@
     return ties;
   }
 
-  // Ganador de un cruce ya resuelto (marcador agregado, sin empate — un
-  // aplazamiento a penaltis en la vida real ya viene reflejado en el
-  // marcador que pega el admin, igual que hacía el sistema anterior).
-  // null = todavía sin marcador, o empate sin resolver.
+  // Ganador de un cruce ya resuelto: si el marcador (agregado/reglamentario)
+  // decide, gana ese; si queda EMPATADO pero el texto traía penaltis
+  // ("1 (4) vs (5) 1"), decide la tanda. null = todavía sin marcador, o
+  // empate sin ninguna forma de desempatar.
   function _championsGanadorTie(tie) {
     if (tie.golA === null || tie.golA === undefined || tie.golB === null || tie.golB === undefined) return null;
     if (tie.golA > tie.golB) return { nombre: tie.equipoA, obj: tie.equipoAObj };
     if (tie.golB > tie.golA) return { nombre: tie.equipoB, obj: tie.equipoBObj };
+    if (tie.penA !== null && tie.penA !== undefined && tie.penB !== null && tie.penB !== undefined && tie.penA !== tie.penB) {
+      return tie.penA > tie.penB ? { nombre: tie.equipoA, obj: tie.equipoAObj } : { nombre: tie.equipoB, obj: tie.equipoBObj };
+    }
     return null;
   }
 
@@ -2998,11 +3034,11 @@
         var it = lineasTexto[i];
         if (_liga1RefNombresCoinciden(it.equipoA, p.equipoA) && _liga1RefNombresCoinciden(it.equipoB, p.equipoB)) {
           usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, golB: it.golB, esAuto: false };
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golA, penA: it.penA, penB: it.penB, golB: it.golB, esAuto: false };
         }
         if (_liga1RefNombresCoinciden(it.equipoA, p.equipoB) && _liga1RefNombresCoinciden(it.equipoB, p.equipoA)) {
           usadas[i] = true;
-          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, golB: it.golA, esAuto: false };
+          return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: it.golB, penA: it.penB, penB: it.penA, golB: it.golA, esAuto: false };
         }
       }
       return { equipoA: p.equipoA, equipoAObj: p.equipoAObj, equipoB: p.equipoB, equipoBObj: p.equipoBObj, golA: null, golB: null, esAuto: false };
@@ -3196,18 +3232,22 @@
   function _championsTieRowHTML(tie, idClubActivo) {
     var pendiente = !tie.equipoA || !tie.equipoB;
     var sinJugar = !pendiente && (tie.golA === null || tie.golA === undefined);
-    var esGanadorA = !pendiente && !sinJugar && tie.golA > tie.golB;
-    var esGanadorB = !pendiente && !sinJugar && tie.golB > tie.golA;
+    var hayPenaltis = !pendiente && !sinJugar && tie.penA !== null && tie.penA !== undefined && tie.penB !== null && tie.penB !== undefined && tie.golA === tie.golB;
+    var esGanadorA = !pendiente && !sinJugar && (tie.golA > tie.golB || (hayPenaltis && tie.penA > tie.penB));
+    var esGanadorB = !pendiente && !sinJugar && (tie.golB > tie.golA || (hayPenaltis && tie.penB > tie.penA));
     var claseA = esGanadorA ? " champions-tie-lado--gano" : (esGanadorB ? " champions-tie-lado--perdio" : "");
     var claseB = esGanadorB ? " champions-tie-lado--gano" : (esGanadorA ? " champions-tie-lado--perdio" : "");
     var esTuyoA = !!(tie.equipoAObj && tie.equipoAObj.id === idClubActivo);
     var esTuyoB = !!(tie.equipoBObj && tie.equipoBObj.id === idClubActivo);
 
+    var penHTML = hayPenaltis
+      ? '<span class="champions-tie-pen">(' + tie.penA + " - " + tie.penB + " pen.)</span>"
+      : "";
     var marcadorHTML = pendiente
       ? '<span class="champions-tie-marcador champions-tie-marcador--pendiente">—</span>'
       : sinJugar
         ? '<span class="champions-tie-marcador champions-tie-marcador--pendiente">vs</span>'
-        : '<span class="champions-tie-marcador">' + tie.golA + " - " + tie.golB + "</span>" +
+        : '<span class="champions-tie-marcador">' + tie.golA + " - " + tie.golB + penHTML + "</span>" +
           (tie.esAuto ? '<span class="champions-tie-auto">auto</span>' : "");
 
     var esperaHTML = tie.espera

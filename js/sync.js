@@ -160,6 +160,21 @@
       .then(function (resp) {
         if (!resp || !resp.ok || !resp.claves) return false;
         var actuales = _clavesLocales();
+        // RE-detecta cambios locales AQUÍ, con el valor recién leído —
+        // no basta con lo que _detectarCambiosLocales ya marcó al
+        // EMPEZAR el ciclo (antes de este fetch). Si el admin edita y
+        // guarda una clave (p. ej. pega el Calendario extra corregido de
+        // un club) justo MIENTRAS este GET está en vuelo, esa edición
+        // nunca se marcó pendiente para este ciclo — sin este re-chequeo
+        // el pull de abajo la pisaba con el valor viejo del servidor en
+        // cuanto la respuesta llegaba. Bug real (reporte usuario: "se me
+        // ha ido lo que te di del calendario de Copa del Rey... otra vez
+        // vuelve a salir 1 ronda menos" — la re-pegó, guardó, y un pull
+        // en vuelo en ESE instante la sobrescribió con la versión vieja
+        // en cuanto resolvió, sin que hiciera falta ningún otro
+        // dispositivo). Barato: es la misma comparación de hash de
+        // siempre, solo repetida con el valor más fresco posible.
+        _detectarCambiosLocales(actuales);
         var huboCambio = false;
         var huboSnapshotNuevo = false;
         Object.keys(resp.claves).forEach(function (k) {

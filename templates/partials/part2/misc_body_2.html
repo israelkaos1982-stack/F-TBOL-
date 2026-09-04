@@ -6016,12 +6016,46 @@
            pantalla de la Copa. El acta viaja en
            `copa_state.resultados[].events` (protegida en el server por
            `copa_state_merge`). Mismo patrón durable que `inter_state_v1`.
-           2026-06-06. */
+           2026-06-06.
+
+           UNIÓN con lo que YA sabíamos en local (obligatorio — bug
+           usuario: partido de Copa jugado y confirmado en pantalla como
+           FINALIZADO, "no jugado" al abrir la web al día siguiente).
+           Este poll corre cada ~5s: si el POST de `_copaSaveHumanResult`
+           nunca llegó a confirmarse en el servidor (o llegó tarde), la
+           SIGUIENTE respuesta de este poll (que nunca tuvo el partido)
+           pisaba en silencio el mirror local que sí lo tenía — mismo
+           patrón ya arreglado arriba para `liga_results` y en
+           `_tourLoad` → `_tourMergeMissingLocalResults`
+           (misc_body_1.html, 2026-07-17). Un partido `jugado:true` en
+           LOCAL pero ausente o no-jugado en la respuesta del servidor
+           se recupera desde local y se re-sube para curar el servidor —
+           nunca al revés (un partido que el servidor YA tiene jugado
+           manda siempre). */
         if (state.copa_state && typeof state.copa_state === 'object') {
           try {
-            var _copaJson = JSON.stringify(state.copa_state);
+            var _copaSrv = state.copa_state;
+            var _copaLoc = null;
+            try { var _copaRaw = localStorage.getItem('copa_state_v1'); if (_copaRaw) _copaLoc = JSON.parse(_copaRaw); } catch(_e4) {}
+            var _copaRecovered = (typeof window._copaMergeMissingLocalResults === 'function')
+              ? window._copaMergeMissingLocalResults(_copaSrv, _copaLoc) : 0;
+            var _copaJson = JSON.stringify(_copaSrv);
             if (window._lsSetSafe) window._lsSetSafe('copa_state_v1', _copaJson);
             else window._lsSetSafe('copa_state_v1', _copaJson);
+            /* El servidor nunca tuvo estos partidos — re-subirlos para
+               curarlo (state_set ya protege el acta con
+               copa_state_merge server-side), igual que se hace arriba
+               con liga_results. Sin esto, el próximo poll de CUALQUIER
+               dispositivo volvería a perderlos. */
+            if (_copaRecovered > 0) {
+              try {
+                fetch('/api/copa/state_set', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ copa: _copaSrv })
+                }).catch(function(){});
+              } catch (_e5) {}
+            }
           } catch (e) {}
         }
 
@@ -18559,22 +18593,130 @@
      2026-08-08) — helper compartido para no duplicar el bucle de
      backoff en cada caller. Devuelve la Response tal cual `fetch`
      (el caller sigue leyendo `.json()` igual que antes) del intento
-     que finalmente tuvo éxito, o RECHAZA tras agotar los intentos. */
+     que finalmente tuvo éxito, o RECHAZA tras agotar los intentos.
+
+     TIMEOUT DURO (obligatorio, corrige bug usuario — "jugué el partido
+     de Copa a las 23:14, se guardó bien [FINALIZADO con acta], pero al
+     abrir la web al día siguiente salía como no jugado"): esta petición
+     NO tenía NINGÚN timeout. Si la conexión se quedaba COLGADA (sin
+     error, sin respuesta — típico en red móvil floja o un cold-start
+     del servidor de Render) el `fetch` nunca resolvía NI rechazaba →
+     el `.catch()` de abajo nunca disparaba → los 3 reintentos con
+     backoff JAMÁS llegaban a correr → el resultado nunca llegaba al
+     servidor, en silencio, aunque el usuario ya viera "FINALIZADO" en
+     pantalla (esa pantalla se pinta con el resultado calculado en
+     LOCAL, independiente de si el guardado en servidor tuvo éxito).
+     Con AbortController, una petición que no responde en 12s se aborta
+     y CUENTA COMO FALLO — así entra en la cadena de reintentos. Mismo
+     patrón ya aplicado a `persistSharedLigaState` (Liga EA Sports) y
+     `_tourSave` (torneos). */
   window._copaFetchGuardarResultado = function(payload, tries){
     tries = (tries == null) ? 3 : tries;
+    var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 12000) : null;
     return fetch('/api/copa/guardar_resultado', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: ctl ? ctl.signal : undefined
     }).then(function(r){
+      if (to) clearTimeout(to);
       if (!r.ok) throw new Error('http ' + r.status);
       return r;
     }).catch(function(err){
+      if (to) clearTimeout(to);
       if (tries <= 1) throw err;
       return new Promise(function(resolve){
         setTimeout(function(){ resolve(window._copaFetchGuardarResultado(payload, tries - 1)); }, 1500);
       });
     });
+  };
+
+  /* Aviso VISIBLE (con cooldown de 3 min, mismo patrón que
+     `_ligaSaveWarnShouldShow`) si el guardado de un resultado humano de
+     Copa agota los 3 reintentos. Antes de este fix, un fallo total del
+     POST era COMPLETAMENTE SILENCIOSO (`.catch(function(){})`) — el
+     usuario no tenía forma de saber que su partido no había llegado al
+     servidor hasta el día siguiente, cuando ya era tarde para
+     reintentar con mejor conexión. */
+  var _COPA_SAVE_WARN_CD_KEY = 'copa_save_warn_cd_v1';
+  function _copaSaveWarnShouldShow(){
+    try {
+      var last = +(localStorage.getItem(_COPA_SAVE_WARN_CD_KEY) || 0);
+      if (Date.now() - last < 180000) return false; /* 3 min */
+      localStorage.setItem(_COPA_SAVE_WARN_CD_KEY, String(Date.now()));
+      return true;
+    } catch(_) { return true; }
+  }
+
+  /* Mirror LOCAL DURABLE de un resultado de Copa — corrige la causa raíz
+     real del bug: un partido jugado quedaba SOLO en el estado en memoria
+     del gm-modal (la pantalla FINALIZADO se pinta con el resultado ya
+     calculado en local, independiente de si el POST al servidor tuvo
+     éxito) — `copa_state_v1` en localStorage NUNCA se actualizaba con
+     el resultado hasta que el servidor lo confirmaba. Si el POST fallaba
+     del todo (aunque ahora reintenta con timeout, sigue siendo posible
+     sin conexión durante toda la sesión), el partido no sobrevivía a
+     cerrar la pestaña: no había NINGUNA copia de él en ningún sitio.
+     Esta función escribe el resultado en `copa_state_v1` INMEDIATAMENTE,
+     antes de intentar la red — mismo `key` (ronda/_ida/_vta/_des) que
+     usa el backend (`COPA_TWO_LEG`, app.py). Con esto, aunque el POST
+     nunca llegue a confirmarse, el resultado sobrevive en ESTE
+     dispositivo — y el merge-antes-de-adoptar de `init()`/
+     `hydrateLigaStateFromBackend` (más abajo) lo recupera y re-sube al
+     servidor en cuanto haya conexión, sin que el usuario tenga que
+     hacer nada. */
+  var _COPA_TWO_LEG_ROUNDS = { oct: true, cua: true, sf: true };
+  window._copaLocalStoreResult = function (ronda, idx, esVuelta, esDesempate, res) {
+    try {
+      var raw = localStorage.getItem('copa_state_v1');
+      var copa = raw ? JSON.parse(raw) : null;
+      if (!copa || typeof copa !== 'object') return; /* sin copa_state local todavía, nada que mirrorear */
+      copa.resultados = copa.resultados || {};
+      var key = _COPA_TWO_LEG_ROUNDS[ronda]
+        ? (esDesempate ? (ronda + '_des') : (ronda + (esVuelta ? '_vta' : '_ida')))
+        : ronda;
+      var list = copa.resultados[key];
+      if (!Array.isArray(list)) list = [];
+      while (list.length <= idx) list.push(null);
+      list[idx] = res;
+      copa.resultados[key] = list;
+      if (window._lsSetSafe) window._lsSetSafe('copa_state_v1', JSON.stringify(copa));
+      else localStorage.setItem('copa_state_v1', JSON.stringify(copa));
+    } catch (_) {}
+  };
+
+  /* Une, dentro de copa_state.resultados, los partidos JUGADOS que solo
+     existen en el mirror LOCAL — mismo principio que
+     `_tourMergeMissingLocalResults` (misc_body_1.html, 2026-07-17) y el
+     merge de `liga_results` de arriba en `hydrateLigaStateFromBackend`.
+     `srv`/`loc` son objetos copa_state completos; solo se leen/mutan sus
+     `.resultados`. Devuelve cuántas entradas se recuperaron (0 = nada
+     que curar). NUNCA pisa un resultado que el servidor YA tenga
+     jugado — un marcador que el servidor confirma manda SIEMPRE sobre
+     el local. */
+  window._copaMergeMissingLocalResults = function (srv, loc) {
+    if (!srv || typeof srv !== 'object') return 0;
+    if (!loc || typeof loc !== 'object' || !loc.resultados) return 0;
+    if (!srv.resultados || typeof srv.resultados !== 'object') srv.resultados = {};
+    var recovered = 0;
+    Object.keys(loc.resultados).forEach(function (roundKey) {
+      var locList = loc.resultados[roundKey];
+      if (!Array.isArray(locList)) return;
+      var srvList = srv.resultados[roundKey];
+      if (!Array.isArray(srvList)) { srvList = []; srv.resultados[roundKey] = srvList; }
+      for (var i = 0; i < locList.length; i++) {
+        var locRes = locList[i];
+        if (!locRes || !locRes.jugado) continue;
+        var srvRes = srvList[i];
+        if (!srvRes || !srvRes.jugado) {
+          while (srvList.length <= i) srvList.push(null);
+          srvList[i] = locRes;
+          recovered++;
+        }
+      }
+    });
+    return recovered;
   };
 
   /* Persiste un resultado humano de Copa del Rey. Llamado desde
@@ -18601,6 +18743,23 @@
     if (pen_winner) _copaWinName = pen_winner;
     else if (gh > ga) _copaWinName = home;
     else if (ga > gh) _copaWinName = away;
+    /* Mirror LOCAL DURABLE, ANTES de tocar la red (obligatorio — corrige
+       bug usuario: partido de Copa jugado a las 23:14, "FINALIZADO" en
+       pantalla, pero no jugado al abrir la web al día siguiente). El
+       resultado queda escrito en `copa_state_v1` de ESTE dispositivo
+       independientemente de si el POST de abajo llega a confirmarse —
+       `init()`/`hydrateLigaStateFromBackend` lo recuperan y re-suben
+       solos en cuanto haya conexión. */
+    try {
+      if (typeof window._copaLocalStoreResult === 'function') {
+        window._copaLocalStoreResult(ronda, idx, !!esVuelta, !!esDesempate, {
+          gl: gh, gv: ga, et_gl: et_gh || 0, et_gv: et_ga || 0,
+          pen_winner: pen_winner || null, pen_score: '', mvp: mvp || '',
+          events: events || [], injuries: [], summary: '',
+          team_a: home || '', team_b: away || '', jugado: true
+        });
+      }
+    } catch(_){}
     try {
       /* Reintentos (obligatorio, 2026-08-08): un único intento sin
          reintentar dejaba el resultado de un partido humano de Copa
@@ -18639,7 +18798,23 @@
                async y re-renderiza cuando llegue. */
             if (typeof window.copaInit === 'function') window.copaInit();
           } catch(_){}
-        }).catch(function(){});
+        }).catch(function(){
+          /* Los 3 reintentos (con timeout de 12s cada uno) se agotaron:
+             el resultado NUNCA llegó al servidor. Avisar VISIBLEMENTE
+             en vez de fallar en silencio — es exactamente lo que le
+             pasó a este usuario ("se guardó bien" en pantalla, pero al
+             día siguiente el partido aparecía sin jugar). El resultado
+             sigue en memoria/localStorage de ESTE dispositivo — si el
+             usuario vuelve a abrir la web con mejor conexión, el propio
+             `init()` de Copa lo detecta y lo re-sube solo (self-heal). */
+          if (_copaSaveWarnShouldShow()) {
+            var _msg = '⚠️ No se pudo confirmar el guardado de este partido de Copa del Rey en el servidor (red lenta o el servidor no respondió). El partido sigue guardado en ESTE dispositivo — no cierres la pestaña sin conexión, y vuelve a abrir la web cuando tengas mejor cobertura para que se reintente subir solo.';
+            try {
+              if (typeof window._gmCriticalNotice === 'function') window._gmCriticalNotice(_msg);
+              else alert(_msg);
+            } catch(_){}
+          }
+        });
     } catch(_){}
     /* Sumar al store de stats de Liga EA con compKey='copa' (storeKey
        diferenciado) para que goles/tarjetas/MVP de partidos humanos de

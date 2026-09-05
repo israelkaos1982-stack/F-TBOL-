@@ -561,32 +561,6 @@
     document.getElementById("partido-live-overlay").hidden = true;
     actaTemporal = [];
     _partidoActivo = null;
-    _resumenArmado = false;
-  }
-
-  // Cierre de la VISTA B (resumen final) — MISMO patrón de 2 toques que
-  // "▶ Empezar partido" (ver js/renderizadores.js): el 1er toque SOLO
-  // arma el botón (la pantalla limpia — escudos/marcador/acta/FINALIZADO
-  // — sigue ahí, sin ningún alert() bloqueándola encima), el 2º sí
-  // cierra de verdad. Antes un alert() nativo se disparaba al pulsar
-  // "Cerrar" y, al aceptarlo, ESE MISMO toque ya sacaba al menú — sin
-  // ningún hueco real para hacer la captura (petición usuario
-  // 2026-09-03 #3, foto "directamente al pulsar aceptar ya te saca al
-  // menú principal sin poder hacer la captura"). La ✕ de arriba usa el
-  // MISMO flag: cualquiera de los 2 botones arma o cierra por igual.
-  var _resumenArmado = false;
-  function _actualizarBotonCerrarResumen() {
-    var btn = document.getElementById("live-cerrar-resumen");
-    if (!btn) return;
-    btn.textContent = _resumenArmado ? "✅ Ya hice la captura — Cerrar" : "Cerrar";
-  }
-  function _intentarCerrarResumen() {
-    if (!_resumenArmado) {
-      _resumenArmado = true;
-      _actualizarBotonCerrarResumen();
-      return;
-    }
-    cerrarPartidoEnVivo();
   }
 
   function textoEliminatoria(res, datos) {
@@ -617,10 +591,7 @@
     // El MVP es OBLIGATORIO antes de finalizar — si nadie lo ha marcado
     // todavía, avisamos claramente y volvemos a la MISMA pantalla de
     // registro de eventos para que lo elija (nunca "confirmar de todas
-    // formas": ese mensaje generaba confusión — petición usuario). La
-    // captura para el WhatsApp ya NO se pide aquí — se pide en el
-    // resumen final, una vez el partido está confirmado (ver el aviso
-    // fijo de #live-resumen en index.html).
+    // formas": ese mensaje generaba confusión — petición usuario).
     var tieneMvp = actaTemporal.some(function (e) { return e.tipo === "MVP"; });
     if (!tieneMvp) {
       window.alert("⭐ Tienes que elegir el MVP del partido antes de finalizar.");
@@ -634,8 +605,6 @@
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;
-    _resumenArmado = false;
-    _actualizarBotonCerrarResumen();
 
     // 💾 Backup: se resalta el botón de guardado en vez de forzar una
     // descarga automática en cada partido (evitaría que el navegador
@@ -643,6 +612,22 @@
     if (window.Persistencia) window.Persistencia.resaltarBotonGuardado();
 
     _partidoActivo = null;
+
+    // Captura automática de ESTA pantalla (🏁 FINALIZADO, ya visible con
+    // marcador/acta/MVP/eliminatoria) + apertura del Grupo WhatsApp LIGA
+    // — mismo patrón que "▶ Empezar partido"/"▶ Continuar 2ª parte" (ver
+    // js/renderizadores.js::_capturarYCompartirPreviaWhatsapp). A
+    // diferencia de esos 2 (capturan la pantalla ANTES de pasar a la
+    // siguiente), aquí se captura DESPUÉS de mostrar el resumen — es
+    // justo lo que pedía el antiguo aviso "📸 Envía captura final del
+    // partido" (ya retirado de index.html), ahora automático.
+    if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
+      if (window.Renderizadores.whatsappGrupoLigaUrl) {
+        window.open(window.Renderizadores.whatsappGrupoLigaUrl, "_blank");
+      }
+      var liveCardEl = document.querySelector("#partido-live-overlay .live-card");
+      window.Renderizadores.capturarYCompartirPreviaWhatsapp(liveCardEl, function () {});
+    }
   }
 
   // ---------- Delegación de eventos de la pantalla en vivo ----------
@@ -736,28 +721,18 @@
       return;
     }
 
-    // El ✕ superior cierra el overlay en CUALQUIER vista — si el partido
-    // ya está finalizado (VISTA B, el resumen visible), usa el MISMO
-    // armado de 2 toques que "Cerrar" (ver _intentarCerrarResumen):
-    // ambos botones comparten el flag _resumenArmado, así que da igual
-    // por cuál de los 2 se arme o se cierre.
-    if (ev.target.id === "live-close") {
-      var resumenAbiertoAlCerrar = !document.getElementById("live-resumen").hidden;
-      if (resumenAbiertoAlCerrar) {
-        _intentarCerrarResumen();
-        return;
-      }
+    // El ✕ superior cierra el overlay en CUALQUIER vista — incluida la
+    // VISTA B (resumen), donde ya no hace falta ningún patrón de 2
+    // toques: al llegar aquí la captura + el Grupo WhatsApp LIGA ya se
+    // dispararon solos al pulsar "🏁 FINALIZAR" (ver confirmarPartido()),
+    // así que un solo toque para cerrar es seguro.
+    if (ev.target.id === "live-close" || ev.target.id === "live-cerrar-resumen") {
       cerrarPartidoEnVivo();
       return;
     }
 
     if (ev.target.id === "live-confirmar") {
       confirmarPartido();
-      return;
-    }
-
-    if (ev.target.id === "live-cerrar-resumen") {
-      _intentarCerrarResumen();
       return;
     }
   });

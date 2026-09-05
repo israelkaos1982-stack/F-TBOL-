@@ -3283,13 +3283,6 @@ button { font-family: inherit; cursor: pointer; }
 .live-footer .btn-ghost { flex: 1; justify-content: center; }
 .live-footer .btn-confirmar { margin-top: 0; flex: 1; }
 
-.live-captura-hint {
-  text-align: center;
-  font-size: 13px;
-  font-weight: 800;
-  color: #7fd3ff;
-  margin: 14px 0 0;
-}
 /* Cabecera de VISTA B (FINALIZADO, verde --neon) y VISTA C (DESCANSO,
    naranja — mismo tono que .live-evt-btn--descanso). Reemplaza el
    texto de "LIGA · 3ª JORNADA" (#live-comp, siempre fijo arriba) SOLO
@@ -3319,6 +3312,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-eliminatoria--decidida { background: rgba(57, 255, 106, 0.1); border: 1px solid var(--neon-soft); color: var(--text-hi); }
 .live-eliminatoria--pendiente { background: rgba(255, 184, 80, 0.1); border: 1px solid rgba(255, 184, 80, 0.4); color: var(--text-hi); }
+/* Sin el aviso "Envía captura final del partido" debajo (petición
+   usuario 2026-09-05: la captura + el Grupo WhatsApp LIGA ya son
+   automáticos al pulsar "🏁 FINALIZAR", ver confirmarPartido() en
+   js/acta.js), "Cerrar" quedaba pegado al borde inferior de la tarjeta
+   sin ningún margen de respiro cuando el partido no tenía eliminatoria
+   que mostrar. Un margen superior extra reserva ese hueco. */
+#live-resumen .live-footer { margin-top: 22px; }
 
 /* ---------- 9. UTILIDADES ---------- */
 .visually-hidden {

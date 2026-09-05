@@ -1391,19 +1391,38 @@
   // igual que siempre) · Hypermotion (azul) · Ea Sports (rojo) — los
   // mismos colores que ya llevan sus bordes de pestaña.
   // ============================================================
-  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports"];
+  // "ligue1" se añade AL FINAL (petición usuario: "después de EA
+  // Sport") — apéndice, no inserción en medio, para que los cálculos de
+  // vecino arriba/abajo en la pirámide de 2ª REF/1ª REF/Hypermotion/Ea
+  // Sports (_ligaLeyendaHTML, rama "promocion") NUNCA cambien de vecino.
+  // Ligue 1 es 100% independiente de esa pirámide (liga francesa, sin
+  // ascenso/descenso hacia ninguna de las 4 españolas).
+  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports", "ligue1"];
   var LIGA_NAV_META = {
     "2ref": { corta: "2ª REF", boxClase: "liga-tab-box--2ref", leyenda: "promocion" },
     "1ref": { corta: "1ª REF", boxClase: "liga-tab-box--1ref", leyenda: "promocion" },
     hypermotion: { corta: "Hypermotion", boxClase: "liga-tab-box--hypermotion", leyenda: "promocion" },
-    easports: { corta: "Ea Sports", boxClase: "liga-tab-box--easports", leyenda: "europa" }
+    easports: { corta: "Ea Sports", boxClase: "liga-tab-box--easports", leyenda: "europa" },
+    // Liga francesa 100% texto libre (mismo mecanismo que 2ª REF/
+    // Hypermotion/Ea Sports) — pero con SU PROPIO reparto de zonas
+    // (_EUROPA_ZONA_CONFIG.ligue1) y SU PROPIA leyenda con las
+    // posiciones exactas entre paréntesis (mostrarPosiciones:true,
+    // petición usuario — las otras 4 ligas siguen SIN posiciones, eso
+    // no cambia). "descensoDestino" es solo una ETIQUETA de la leyenda
+    // — Ligue 2 no es una división navegable de esta app.
+    ligue1: {
+      corta: "Ligue 1", boxClase: "liga-tab-box--ligue1", leyenda: "europa",
+      tituloLargo: "🇫🇷 Ligue 1", mostrarPosiciones: true, descensoDestino: "Ligue 2"
+    }
   };
-  // Título largo de cada liga — "🇪🇸 Liga <nombre corto>" (petición
-  // usuario: antes decía solo "🇪🇸 1ª REF"), calculado a partir de
-  // `corta` para las 4 sin repetirlo en cada entrada.
+  // Título largo de cada liga — "🇪🇸 Liga <nombre corto>" por defecto
+  // (petición usuario: antes decía solo "🇪🇸 1ª REF"), calculado a
+  // partir de `corta`. Una liga puede fijar su propio `tituloLargo`
+  // completo (bandera + formato de nombre distinto) si no encaja en
+  // ese patrón — caso de Ligue 1 (🇫🇷, sin el prefijo "Liga").
   function _ligaTituloLargo(ligaId) {
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
-    return "🇪🇸 Liga " + meta.corta;
+    return meta.tituloLargo || ("🇪🇸 Liga " + meta.corta);
   }
   // Nombre corto de una división ("1ª REF", "Hypermotion"...) — lo usa
   // la cabecera del modal del club para el título "ℹ️ <corta>".
@@ -1509,6 +1528,23 @@
       " 🟫 Penúltimo grupo de descenso: Promoción de permanencia en eliminatoria contra Liga Hypermotion.",
       "",
       " 🟥 Últimos clasificados: Descenso directo a Liga Hypermotion."
+    ].join("\n"),
+    ligue1: [
+      "📋FORMATO LIGUE 1:",
+      "Clasificación de texto libre pegada por el admin.",
+      "",
+      FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
+      "",
+      "🏁RESOLUCIÓN CLASIFICACIÓN:",
+      " 🟦 Puestos 1º al 3º: Champions League.",
+      "",
+      " 🟪 Puesto 4º: Previa Champions League.",
+      "",
+      " 🟧 Puestos 5º y 6º: Europa League.",
+      "",
+      " 🟩 Puesto 7º: Conference League.",
+      "",
+      " 🟥 Últimos 4 clasificados: Descenso directo a Ligue 2."
     ].join("\n")
   };
 
@@ -1614,17 +1650,36 @@
     var bajaTxt = abajo ? " a Liga " + abajo : "";
     var items = [];
     if (meta.leyenda === "europa") {
-      // Zonas 1-4/5/6-7/8 (_ligaEuropaZona) — Promoción/Descenso
-      // apuntan SIEMPRE a Hypermotion (la liga de abajo de Ea Sports en
-      // la pirámide, ver LIGA_NAV_ORDEN). Solo color + destino, SIN la
-      // posición exacta entre paréntesis (petición usuario: la quita).
-      var zE = _ligaZonaPosiciones(_ligaEuropaZona, total);
-      if (zE.champions) items.push({ e: "🟦", t: "Champions" });
-      if (zE.previa) items.push({ e: "🟪", t: "Previa Champions" });
-      if (zE.eleague) items.push({ e: "🟧", t: "Europa League" });
-      if (zE.conference) items.push({ e: "🟩", t: "Conference League" });
-      if (abajo && zE["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt });
-      if (abajo && zE.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt });
+      // Zonas de _ligaEuropaZona, con el reparto propio de ESTA liga
+      // (_EUROPA_ZONA_CONFIG[ligaId]) — Ea Sports: Promoción/Descenso
+      // apuntan SIEMPRE a Hypermotion (la liga de abajo en la pirámide,
+      // ver LIGA_NAV_ORDEN), sin posición exacta entre paréntesis
+      // (petición usuario: la quitó). Ligue 1 (meta.mostrarPosiciones)
+      // es la EXCEPCIÓN pedida después: SÍ lleva la posición exacta
+      // entre paréntesis, no tiene "promoción descenso" (descenso
+      // directo de los últimos 4) y su destino de descenso es una
+      // etiqueta fija (meta.descensoDestino = "Ligue 2"), no la liga de
+      // abajo en la pirámide (Ligue 1 no pertenece a esa pirámide).
+      var zE = _ligaZonaPosiciones(function (pos, tot) { return _ligaEuropaZona(pos, tot, ligaId); }, total);
+      if (meta.mostrarPosiciones) {
+        if (zE.champions) items.push({ e: "🟦", t: "Champions (" + zE.champions.join("+") + ")" });
+        if (zE.previa) items.push({ e: "🟪", t: "Previa Champions (" + zE.previa.join("+") + ")" });
+        if (zE.eleague) items.push({ e: "🟧", t: "Europa League (" + zE.eleague.join("+") + ")" });
+        if (zE.conference) items.push({ e: "🟩", t: "Conference League (" + zE.conference.join("+") + ")" });
+        if (zE.descenso) {
+          items.push({
+            e: "🟥",
+            t: "Descenso" + (meta.descensoDestino ? " a " + meta.descensoDestino : "") + " (" + zE.descenso.join("+") + ")"
+          });
+        }
+      } else {
+        if (zE.champions) items.push({ e: "🟦", t: "Champions" });
+        if (zE.previa) items.push({ e: "🟪", t: "Previa Champions" });
+        if (zE.eleague) items.push({ e: "🟧", t: "Europa League" });
+        if (zE.conference) items.push({ e: "🟩", t: "Conference League" });
+        if (abajo && zE["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt });
+        if (abajo && zE.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt });
+      }
     } else {
       // Zonas 1-4/5 (_liga1RefZona) — Ascenso/Promoción ascenso apuntan
       // a la liga de ARRIBA en la pirámide; Promoción descenso/Descenso
@@ -1657,18 +1712,30 @@
     );
   }
 
-  // Zonas de la clasificación de Ea Sports (estilo europeo): 1-4
-  // Champions, 5 Previa, 6-7 Europa League, 8 Conference, promoción de
-  // descenso el 4º empezando por el final, descenso los últimos 3 —
-  // reparto provisional (editable aquí si el usuario da otro reparto
-  // exacto), reutiliza las clases de color ya definidas en CSS.
-  function _ligaEuropaZona(pos, total) {
-    if (pos <= 4) return "champions";
-    if (pos === 5) return "previa";
-    if (pos === 6 || pos === 7) return "eleague";
-    if (pos === 8) return "conference";
-    if (total && pos === total - 3) return "promo-descenso";
-    if (total && pos > total - 3) return "descenso";
+  // Zonas de una clasificación de estilo EUROPEO (Ea Sports / Ligue 1) —
+  // reparto de posiciones por liga, ya que cada una da un nº de plazas
+  // distinto (Ea Sports: 1-4 Champions, 5 Previa, 6-7 UEL, 8 UECL, con
+  // promoción de descenso de por medio; Ligue 1: 1-3/4/5-6/7, SIN
+  // promoción de descenso, descenso directo de los últimos 4). Toda
+  // liga NUEVA de estilo "europa" añade su propia entrada aquí — nunca
+  // reutilizar el reparto de otra liga sin comprobarlo primero.
+  var _EUROPA_ZONA_CONFIG = {
+    easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: true, descensoN: 3 },
+    ligue1: { champions: 3, previa: 4, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 4 }
+  };
+  function _ligaEuropaZona(pos, total, ligaId) {
+    var cfg = _EUROPA_ZONA_CONFIG[ligaId] || _EUROPA_ZONA_CONFIG.easports;
+    if (pos <= cfg.champions) return "champions";
+    if (pos === cfg.previa) return "previa";
+    if (pos > cfg.previa && pos <= cfg.eleagueHasta) return "eleague";
+    if (pos === cfg.conference) return "conference";
+    if (!total) return "";
+    if (cfg.promoDescenso) {
+      if (pos === total - cfg.descensoN) return "promo-descenso";
+      if (pos > total - cfg.descensoN) return "descenso";
+    } else if (pos > total - cfg.descensoN) {
+      return "descenso";
+    }
     return "";
   }
 
@@ -1746,7 +1813,9 @@
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
-      var zonaFn = metaZona.leyenda === "europa" ? _ligaEuropaZona : _liga1RefZonaFn(ligaId);
+      var zonaFn = metaZona.leyenda === "europa"
+        ? function (pos, tot) { return _ligaEuropaZona(pos, tot, ligaId); }
+        : _liga1RefZonaFn(ligaId);
 
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));

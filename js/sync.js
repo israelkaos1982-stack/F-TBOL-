@@ -134,6 +134,23 @@
     } catch (err2) { /* nada más que hacer si ni alert está disponible */ }
   }
 
+  // Mismo umbral/criterio que app.py::_ef7_es_regresion_grave, aplicado
+  // aquí en la dirección CONTRARIA (PULL en vez de PUSH): protege a ESTE
+  // dispositivo de adoptar a ciegas una copia del servidor mucho más
+  // pobre que la que ya tiene en local. El guard del servidor por sí solo
+  // no basta — si el servidor YA se quedó con una copia vieja/vacía
+  // (p. ej. otro dispositivo la pisó ANTES de que existiera ese guard, o
+  // importó una copia de seguridad de hace días), un dispositivo con la
+  // copia buena la habría perdido igualmente al sincronizar, sin que
+  // nadie la hubiera tocado aquí. Umbral idéntico: por debajo de 20
+  // caracteres no se protege (ruido/campos cortos); por debajo de la
+  // mitad del tamaño local, se considera una regresión.
+  var _REGRESION_LEN_MINIMO = 20;
+  function _esRegresionGrave(valorLocal, valorServidor) {
+    if (typeof valorLocal !== "string" || valorLocal.length < _REGRESION_LEN_MINIMO) return false;
+    return valorServidor.length < valorLocal.length * 0.5;
+  }
+
   function _clavesLocales() {
     var backup = window.Estado.exportarEstadoCrudo();
     return (backup && backup.claves) || {};
@@ -253,6 +270,18 @@
           if (valorServidor === actuales[k]) {
             _snapshot[k] = _hash(valorServidor);
             huboSnapshotNuevo = true;
+            return;
+          }
+          // El servidor tiene una copia MUCHO más pobre que la de este
+          // dispositivo (ver _esRegresionGrave arriba) — no se adopta.
+          // En vez de descartarlo sin más, se marca PENDIENTE para que el
+          // próximo push suba la copia buena de este dispositivo y la
+          // "cure" en el servidor (el guard de app.py deja pasar ese push
+          // porque va a MEJOR, nunca a peor) — así el dispositivo con la
+          // copia rica es el que gana, sea cual sea el orden en que cada
+          // uno sincronizó.
+          if (_esRegresionGrave(actuales[k], valorServidor)) {
+            _pendientes[k] = true;
             return;
           }
           try {

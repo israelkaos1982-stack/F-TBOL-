@@ -2147,12 +2147,21 @@
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
   ];
 
-  // Los 6 clubes humanos pueden jugar Copa del Rey (a diferencia de Liga
-  // 1ª REF, PSG NO queda excluido: el admin decide libremente en qué
-  // competiciones mete a cada club vía "Calendario extra" — si PSG nunca
-  // tiene líneas de Copa, sencillamente no aporta ningún bloque aquí).
+  // PSG no juega la Copa del Rey — juega su propia Coupe de France (ni
+  // siquiera está en España). Mismo motivo y mismo criterio que
+  // LIGA1REF_HUMANOS_EXCLUIDOS: sus partidos con competicion==="copa" son
+  // la Coupe de France (resueltos vía "resultado rápido", ver
+  // RESULTADO_RAPIDO_POR_CLUB), no Copa del Rey — sin esta exclusión
+  // aparecían mezclados aquí como si fueran de la Copa española (bug real,
+  // foto usuario: bloque "PSG" con su propio cuadro Octavos→Final dentro
+  // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
+  // humano de fuera de España, su id va aquí también.
+  var COPA_HUMANOS_EXCLUIDOS = ["psg"];
+
   function _copaEquiposHumanos(datos) {
-    return datos.equipos.equipos || [];
+    return (datos.equipos.equipos || []).filter(function (e) {
+      return COPA_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
   }
 
   // Partidos de Copa de UN club, ordenados por fecha — misma fuente y

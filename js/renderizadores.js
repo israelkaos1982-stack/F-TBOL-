@@ -4616,14 +4616,16 @@
 
   // RESULTADO RÁPIDO — clubes que NO juegan sus partidos EN VIVO dentro de
   // la app para estas competiciones (petición usuario: PSG/Izan resuelve
-  // Liga, Copa y Champions fuera de la app y solo quiere anotar el
-  // resultado final). En vez del botón PREVIA, la card muestra 3 iconos
-  // ✅➖❌ directamente — sin pasar por la pantalla de previa/en vivo.
-  // Mapa club → { compKey: true }, con `_resolverCompKeyBalon` de por
-  // medio (mismo alias que ya usa el color/balón de la card) para que
-  // "Coupe"/"Champions League"/etc. casen igual que "Copa"/"Champions".
+  // TODAS sus competiciones fuera de la app y solo quiere anotar el
+  // resultado final — Liga/Copa/Champions primero, ampliado después a
+  // Recopa/Supercopa de Europa/Intercontinental/Mundialito de Clubes). En
+  // vez del botón PREVIA, la card muestra 3 iconos ✅➖❌ directamente —
+  // sin pasar por la pantalla de previa/en vivo. Mapa club → { compKey:
+  // true }, con `_resolverCompKeyBalon` de por medio (mismo alias que ya
+  // usa el color/balón de la card) para que "Coupe"/"Champions League"/
+  // "Supercopa de Europa"/etc. casen igual que sus claves internas.
   var RESULTADO_RAPIDO_POR_CLUB = {
-    psg: { liga: true, copa: true, champions: true }
+    psg: { liga: true, copa: true, champions: true, recopa: true, usc: true, intercontinental: true, mundialito: true }
   };
   function _usaResultadoRapido(idClub, compKeyResuelto) {
     var cfg = RESULTADO_RAPIDO_POR_CLUB[idClub];

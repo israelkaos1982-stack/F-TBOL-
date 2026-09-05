@@ -250,6 +250,14 @@
       _borrado: true,
       _clubes: (actual && actual._clubes) || [],
       _competicion: (actual && actual._competicion) || null,
+      // Preserva la identidad de reserva del resultado que se borra (si la
+      // tenía) — sin esto, `_indexarResultadosPorIdentidad` no distinguía
+      // "esta tumba viene de un partido con identidad conocida" de
+      // "nunca tuvo una", aunque en la práctica una tumba no debe
+      // resucitar por identidad (jugado:false ya la hace invisible para
+      // listarPartidosResueltos). Se conserva solo por consistencia con el
+      // resto de campos que SÍ se preservan (_clubes/_competicion).
+      _identidad: (actual && actual._identidad) || null,
       _actualizadoEn: Date.now()
     };
   }

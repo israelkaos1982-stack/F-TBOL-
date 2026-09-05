@@ -7335,11 +7335,43 @@
     if (btn) { abrirPreviaPartido(btn.dataset.partidoId); return; }
 
     // Reiniciar un partido ya jugado (pruebas) — EXCLUSIVO del
-    // administrador (PIN), igual que Sancionados/quitar de la lista.
+    // administrador (PIN) + confirmación EXPLÍCITA que nombra el partido
+    // concreto (rivales + marcador). Antes solo pedía el PIN, sin decir
+    // NUNCA qué partido se iba a borrar — el marcador de CUALQUIER partido
+    // ya jugado es un botón que ocupa el centro de la card (justo donde un
+    // dedo tiende a tocar al desplazarse por el calendario o al intentar
+    // ver el acta), así que un toque accidental + el PIN tecleado por
+    // costumbre (sin leer el título del candado) bastaba para borrar un
+    // resultado real sin ningún "¿seguro?" de por medio — reporte usuario,
+    // 3 partidos de Atlético Madrid (Copa Dieciseisavos + Liga J8 + J9)
+    // vueltos a PREVIA de un momento a otro. Mismo doble gate (PIN +
+    // confirm) que ya tenía "🔄 Reiniciar" (reiniciarTodosPartidosClub,
+    // más abajo) para la versión "reiniciar TODOS" — el de un único
+    // partido no puede tener MENOS fricción que el masivo.
     var btnReiniciar = ev.target.closest && ev.target.closest('[data-accion="reiniciar-partido"]');
     if (btnReiniciar) {
       var idReiniciar = btnReiniciar.dataset.partidoId;
-      if (idReiniciar && window.Estado && window.Main) {
+      if (idReiniciar && window.Estado && window.Main && _ultimoContexto) {
+        var partidoAReiniciar = _ultimoContexto.partidosPorId[idReiniciar];
+        var descPartido = "este partido";
+        if (partidoAReiniciar) {
+          var eqLocal = buscarEquipoPorId(partidoAReiniciar.local, _ultimoContexto.datos);
+          var eqVisitante = buscarEquipoPorId(partidoAReiniciar.visitante, _ultimoContexto.datos);
+          var nomLocal = (eqLocal && eqLocal.nombre) || "?";
+          var nomVisitante = (eqVisitante && eqVisitante.nombre) || "?";
+          var marcadorDesc = partidoAReiniciar.resultado
+            ? " (" + partidoAReiniciar.resultado.golesLocal + " - " + partidoAReiniciar.resultado.golesVisitante + ")"
+            : "";
+          var etiquetaComp = COMP_LABEL[partidoAReiniciar.competicion] || partidoAReiniciar.competicion;
+          descPartido = nomLocal + " vs " + nomVisitante + marcadorDesc +
+            (partidoAReiniciar.ronda ? " — " + etiquetaComp + " · " + partidoAReiniciar.ronda : "");
+        }
+        var ok = window.confirm(
+          "⚠️ Vas a reiniciar a CERO este partido ya jugado:\n\n" + descPartido +
+          "\n\nEl resultado, el acta y las estadísticas que aporta se BORRAN. Esta acción NO se puede deshacer.\n\n" +
+          "¿Seguro que quieres continuar?"
+        );
+        if (!ok) return;
         window.Main.pedirPinAdmin(function () {
           window.Estado.reiniciarResultadoPartido(idReiniciar);
           if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);

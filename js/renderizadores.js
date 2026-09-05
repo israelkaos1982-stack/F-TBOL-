@@ -1771,6 +1771,94 @@
     return filas;
   }
 
+  // Liga EXTRA cuyo ÚNICO club humano SÍ la juega DE VERDAD dentro de la
+  // app (a diferencia de 2ª REF/Hypermotion/Ea Sports — ver comentario de
+  // calcularLigaExtraFilas): PSG juega su "Ligue 1" real vía Calendario
+  // extra (partido a partido, jugado en vivo o anotado con ✅➖❌
+  // resultado rápido — ver RESULTADO_RAPIDO_POR_CLUB), así que su fila
+  // en la tabla de esta liga NO debe ser texto pegado a mano — se suma
+  // sola, igual que 1ª REF ya hace con los 5 humanos que sí comparten esa
+  // liga (calcularLiga1RefCombinada). Toda liga EXTRA nueva cuyo único
+  // humano la juegue de verdad añade aquí su entrada ligaId->clubId.
+  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg" };
+
+  // Fusión: texto pegado (solo IA) + el partido a partido REAL del club
+  // humano dueño de esta liga (RESULTADO_RAPIDO_POR_CLUB, o jugado en
+  // vivo si algún día deja de usarlo) — mismo mecanismo, mismo criterio
+  // de "el rival IA también se actualiza", que calcularLiga1RefCombinada,
+  // simplificado a UN solo club humano (esta liga nunca la comparten 2).
+  // Su propia fila NUNCA sale del texto pegado (se descarta si el admin
+  // la escribe ahí por error) — sale SIEMPRE de sus propios partidos.
+  function calcularLigaExtraFilasConHumano(ligaId, datos) {
+    var clubId = LIGA_NAV_HUMANO_PROPIO[ligaId];
+    var club = clubId ? buscarEquipoPorId(clubId, datos) : null;
+    if (!club) return calcularLigaExtraFilas(ligaId);
+
+    var filas = [];
+    var texto = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
+    parsearLiga1RefTexto(texto).forEach(function (f) {
+      if (_liga1RefNombresCoinciden(f.nombre, club.nombre)) return;
+      filas.push({
+        nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+      });
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    // Solo partidos de Liga doméstica — `p.competicion` de un partido de
+    // Calendario extra YA es el compKey RESUELTO (cualquier grafía que
+    // el admin tecleara — "Liga"/"Ligue 1"/etc. — ver
+    // Estado::_partidosExtraDeTodosLosClubes, que aplica el mismo alias
+    // ANTES de llegar aquí), así que comparar contra "liga" a pelo es lo
+    // mismo que hace calcularLiga1RefCombinada para 1ª REF. Copa/
+    // Champions/Superliga de este mismo club NO cuentan para ESTA tabla.
+    var partidos = todosPartidos.filter(function (p) {
+      return p.jugado && p.resultado && (p.local === club.id || p.visitante === club.id) &&
+        p.competicion === "liga";
+    });
+
+    var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      var oponenteId = esLocal ? p.visitante : p.local;
+      var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+
+      // Rival TODAVÍA sin determinar ("?", típico de un resultado
+      // rápido — ver resolverRivalPorNombre) no tiene fila real a la
+      // que sumar: el punto/goles de ESTE club ya se contaron arriba,
+      // pero no hay ningún equipo IA identificado al que atribuírselos.
+      var rival = buscarEquipoPorId(oponenteId, datos);
+      if (!rival || rival.desconocido) return;
+      var nombreRival = rival.nombre;
+      var destino = filas.find(function (fl) {
+        return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival);
+      });
+      if (!destino) {
+        destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+        filas.push(destino);
+      }
+      _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+    });
+
+    filas.push({
+      nombre: club.nombre,
+      nombreMostrado: (club.misterEmoji || "") + club.nombre,
+      equipoId: club.id,
+      pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+    });
+
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return filas;
+  }
+
   // Construye el <tbody> de la tabla de clasificación — compartido por
   // 1ª REF (filas de la batidora) y las 3 ligas extra (filas del texto
   // pegado), solo cambia qué `filas`/zonaFn se le pasa.
@@ -1820,7 +1908,7 @@
       contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
       _actualizarTituloModalLiga(ligaId);
 
-      var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilas(ligaId);
+      var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilasConHumano(ligaId, datos);
       var metaZona = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
       var zonaFn = metaZona.leyenda === "europa"
         ? function (pos, tot) { return _ligaEuropaZona(pos, tot, ligaId); }

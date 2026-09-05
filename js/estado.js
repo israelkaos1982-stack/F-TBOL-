@@ -882,7 +882,17 @@
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
     { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
     { id: "supercopaespana", icono: "🏅", etiqueta: "Supercopa España" },
-    { id: "champions", icono: "🇪🇺", etiqueta: "Champions" }
+    { id: "champions", icono: "🇪🇺", etiqueta: "Champions" },
+    // Petición usuario ("quiero que la E.League tenga el mismo formato
+    // que la champions"): mismo tratamiento de fábrica que "champions"
+    // — tarjeta builtin disponible en las 6 cajas (cualquiera puede
+    // clasificar a Europa League esta temporada, o ninguna, igual que
+    // Champions). Se añade AL FINAL de la lista de fábrica: el mecanismo
+    // ya existente de obtenerMenuClub() (ver comentario "Cualquier
+    // tarjeta de fábrica NUEVA..." un poco más abajo) la incorpora sola,
+    // al final del orden guardado, en cualquier club que ya tuviera su
+    // menú personalizado ANTES de esta versión.
+    { id: "uel", icono: "🟠", etiqueta: "E. League" }
   ];
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
@@ -1824,6 +1834,73 @@
     }
   }
 
+  // ---------- Europa League ("E. League") — MISMO FORMATO que Champions
+  // (candado 646) ----------
+  // Réplica 1:1 de las 3 claves de Champions de arriba (clasificación +
+  // Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda), con su PROPIA
+  // clave de almacenamiento — nunca comparte contador con Champions ni
+  // con Copa del Rey. Ver js/renderizadores.js::calcularUelCombinada.
+  var UEL_TEXTO_KEY = "ef7_uel_clasificacion_v1";
+  function obtenerUelTexto() {
+    try {
+      return localStorage.getItem(UEL_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUelTexto(texto) {
+    try {
+      localStorage.setItem(UEL_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Europa League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _uelStatKey(categoria) {
+    return "ef7_uel_stat_" + categoria + "_v1";
+  }
+  function obtenerUelStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_uelStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUelStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_uelStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Europa League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _uelPlayoffKey(ronda) {
+    return "ef7_uel_playoff_" + ronda + "_v1";
+  }
+  function obtenerUelPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_uelPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUelPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_uelPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Europa League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
   // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
   // app simula — el admin ha comparado, equipo a equipo, nivel/escudo/
@@ -2267,6 +2344,12 @@
     guardarChampionsStatTexto: guardarChampionsStatTexto,
     obtenerChampionsPlayoffTexto: obtenerChampionsPlayoffTexto,
     guardarChampionsPlayoffTexto: guardarChampionsPlayoffTexto,
+    obtenerUelTexto: obtenerUelTexto,
+    guardarUelTexto: guardarUelTexto,
+    obtenerUelStatTexto: obtenerUelStatTexto,
+    guardarUelStatTexto: guardarUelStatTexto,
+    obtenerUelPlayoffTexto: obtenerUelPlayoffTexto,
+    guardarUelPlayoffTexto: guardarUelPlayoffTexto,
     obtenerAliasEfootball: obtenerAliasEfootball,
     guardarAliasEfootball: guardarAliasEfootball,
     fusionarBalones: fusionarBalones,

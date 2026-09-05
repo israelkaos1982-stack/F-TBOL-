@@ -964,6 +964,33 @@
     window.Estado.borrarBalon(id);
     repintarVistaAdminActual();
   }
+  // Reasigna un balón existente a otra competición (data/balones.json
+  // .asignacionPorCompeticion) — antes solo se podía editar el NOMBRE del
+  // balón, nunca a qué torneo estaba asignado. La clave debe ser una de
+  // las ya conocidas (se listan como pista en el propio prompt) para que
+  // la reasignación de verdad tenga efecto en el balón de cada partido.
+  function asignarBalonTorneoPrompt(id, nombre) {
+    if (!window.Estado || !window.Renderizadores) return;
+    window.Renderizadores.cargarTodo().then(function (datos) {
+      var asign = (datos.balones && datos.balones.asignacionPorCompeticion) || {};
+      var claves = Object.keys(asign);
+      var hint = claves.map(function (k) { return k + " = " + (asign[k].comp || k); }).join("\n");
+      var compKey = window.prompt(
+        '¿A qué competición asignar el balón "' + nombre + '"?\n\n' +
+        "Escribe la CLAVE exacta (a la izquierda del \"=\"):\n\n" + hint,
+        ""
+      );
+      if (compKey === null || !compKey.trim()) return;
+      var clave = compKey.trim();
+      var actual = asign[clave];
+      if (!actual) {
+        window.alert('"' + clave + '" no es una clave de competición válida. Copia una de la lista tal cual.');
+        return;
+      }
+      window.Estado.asignarBalonATorneo(clave, id, actual.comp, actual.clima);
+      repintarVistaAdminActual();
+    });
+  }
 
   // ---------- Calendario de competiciones (roadmap editable) ----------
   // Toggle in-place entre el roadmap de lectura y un textarea de edición,
@@ -1190,6 +1217,7 @@
         case "borrar-estadio": borrarEstadioPrompt(d.id, d.nombre); break;
         case "anadir-balon": anadirBalonPrompt(); break;
         case "editar-balon": editarBalonPrompt(d.id, d.nombre); break;
+        case "asignar-balon": asignarBalonTorneoPrompt(d.id, d.nombre); break;
         case "borrar-balon": borrarBalonPrompt(d.id, d.nombre); break;
         case "editar-calendario-comp": abrirEditorCalendarioComp(); break;
         case "cancelar-calendario-comp": cancelarEditorCalendarioComp(); break;

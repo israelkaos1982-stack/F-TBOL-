@@ -659,13 +659,35 @@
       document.getElementById("live-descanso-vista").hidden = false;
       return;
     }
-    // Vuelta de la VISTA C a la VISTA A — la acta (mini-eventos,
-    // escudos, marcador) sigue siendo la MISMA de siempre, arriba de
-    // ambas vistas; aquí solo se reactiva el formulario para seguir
-    // registrando eventos de la 2ª parte.
-    if (ev.target.id === "live-continuar-2parte") {
-      document.getElementById("live-descanso-vista").hidden = true;
-      document.getElementById("live-entrada").hidden = false;
+    // "▶ Continuar 2ª parte" (petición usuario 2026-09-05, mismo
+    // automatismo que "▶ Empezar partido" — ver js/renderizadores.js::
+    // _capturarYCompartirPreviaWhatsapp): UN SOLO toque ⇒ captura la
+    // pantalla de DESCANSO tal cual se ve (escudos/marcador/nombres +
+    // el aviso 🛌 DESCANSO) y la copia al portapapeles, abre el Grupo
+    // WhatsApp LIGA en una pestaña nueva, y SOLO ENTONCES vuelve a la
+    // VISTA A (la acta —mini-eventos, escudos, marcador— sigue siendo
+    // la MISMA de siempre, arriba de ambas vistas; aquí solo se
+    // reactiva el formulario para seguir registrando eventos de la 2ª
+    // parte). La captura debe correr ANTES de ocultar la vista de
+    // DESCANSO — html2canvas no puede fotografiar un nodo ya oculto.
+    var btnContinuar2 = ev.target.closest && ev.target.closest("#live-continuar-2parte");
+    if (btnContinuar2) {
+      if (btnContinuar2.dataset.enCurso) return; // evita doble-toque mientras se genera la captura
+      btnContinuar2.dataset.enCurso = "1";
+      var seguirA2Parte = function () {
+        btnContinuar2.dataset.enCurso = "";
+        document.getElementById("live-descanso-vista").hidden = true;
+        document.getElementById("live-entrada").hidden = false;
+      };
+      if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
+        if (window.Renderizadores.whatsappGrupoLigaUrl) {
+          window.open(window.Renderizadores.whatsappGrupoLigaUrl, "_blank");
+        }
+        var liveCardEl = document.querySelector("#partido-live-overlay .live-card");
+        window.Renderizadores.capturarYCompartirPreviaWhatsapp(liveCardEl, seguirA2Parte);
+      } else {
+        seguirA2Parte();
+      }
       return;
     }
 

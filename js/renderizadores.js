@@ -6809,6 +6809,11 @@
     crearEscudoHTML: crearEscudoHTML,
     formatFecha: formatFecha,
     COMP_LABEL: COMP_LABEL,
-    TOTAL_JORNADAS_POR_LIGA: TOTAL_JORNADAS_POR_LIGA
+    TOTAL_JORNADAS_POR_LIGA: TOTAL_JORNADAS_POR_LIGA,
+    // Expuestas para que js/acta.js reutilice la MISMA captura+redirección
+    // automática de "▶ Empezar partido" en "▶ Continuar 2ª parte" (ver
+    // el propio js/acta.js) — un único punto de verdad, nada duplicado.
+    capturarYCompartirPreviaWhatsapp: _capturarYCompartirPreviaWhatsapp,
+    whatsappGrupoLigaUrl: WHATSAPP_GRUPO_LIGA_URL
   };
 })();

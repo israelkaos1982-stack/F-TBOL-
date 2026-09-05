@@ -5679,6 +5679,40 @@
     };
   }
 
+  // Los botones .live-team-nombre.tiene-color-escudo (nombre del equipo
+  // en la pantalla EN VIVO) pintan el texto con un degradado de los
+  // colores del escudo vía "background-clip:text" + "color:transparent"
+  // (ver css/estilos.css) — el MISMO truco que ya rompió los escudos
+  // (ver _dibujarEscudoEnCanvas): html2canvas no soporta de forma fiable
+  // el recorte del fondo a la silueta del texto, así que en la captura
+  // el botón sale como un simple rectángulo relleno del degradado, con
+  // el texto invisible encima (petición usuario, foto "el pantallazo
+  // del descanso el nombre del equipo visitante no se ve"). Se quita
+  // TEMPORALMENTE el truco (vuelve a texto plano de un solo color, el
+  // primario del escudo) justo antes de capturar — perfectamente
+  // legible para html2canvas — y se restaura el estilo original justo
+  // después, haya ido bien la captura o no.
+  function _aplanarNombresConDegradado(el) {
+    var restauradores = [];
+    var nodos = el.querySelectorAll(".live-team-nombre.tiene-color-escudo");
+    for (var i = 0; i < nodos.length; i++) {
+      var nodo = nodos[i];
+      try {
+        var estiloOriginal = nodo.getAttribute("style") || "";
+        var color = (getComputedStyle(nodo).getPropertyValue("--team-color-a") || "").trim() || "#e8ecf4";
+        nodo.style.backgroundImage = "none";
+        nodo.style.webkitBackgroundClip = "initial";
+        nodo.style.backgroundClip = "initial";
+        nodo.style.webkitTextFillColor = color;
+        nodo.style.color = color;
+        restauradores.push((function (n, style) { return function () { n.setAttribute("style", style); }; })(nodo, estiloOriginal));
+      } catch (e) {}
+    }
+    return function () {
+      for (var j = 0; j < restauradores.length; j++) restauradores[j]();
+    };
+  }
+
   // Captura `el` (la previa TAL CUAL se ve, con html2canvas cargado por
   // CDN en index.html) a un <canvas> en memoria y copia el resultado al
   // portapapeles del dispositivo (Clipboard API) — nada se guarda en
@@ -5699,9 +5733,11 @@
     var listo = false;
     var restaurarExpansion = function () {};
     var restaurarEscudos = function () {};
+    var restaurarNombres = function () {};
     var terminar = function () {
       if (listo) return;
       listo = true;
+      restaurarNombres();
       restaurarEscudos();
       restaurarExpansion();
       cb();
@@ -5712,6 +5748,7 @@
     try {
       restaurarExpansion = _expandirParaCaptura(el);
       restaurarEscudos = _sustituirEscudosPorCanvas(el);
+      restaurarNombres = _aplanarNombresConDegradado(el);
       window
         .html2canvas(el, { backgroundColor: "#101114", scale: 2 })
         .then(function (canvas) {

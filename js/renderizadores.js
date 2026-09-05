@@ -5313,13 +5313,10 @@
   }
 
   // Casilla "Activar Prórroga y Penaltis": SOLO en modo "eliminatoria-
-  // unica" (Copa a partido único, etc.). OBLIGATORIA (marcada y
-  // bloqueada, el admin no puede desactivarla) en cualquier eliminatoria
-  // real a partido único — un partido de este tipo SIEMPRE puede acabar
-  // en empate y necesitar decidirse (petición usuario 2026-09-03: antes
-  // era opcional y el admin podía olvidarse de activarla antes de
-  // empezar, dejando el partido sin forma de resolver un empate). Sigue
-  // siendo OPCIONAL únicamente en un amistoso de verdad
+  // unica" (Copa a partido único, etc.). OBLIGATORIA en cualquier
+  // eliminatoria real a partido único — un partido de este tipo SIEMPRE
+  // puede acabar en empate y necesitar decidirse. Sigue siendo OPCIONAL
+  // únicamente en un amistoso de verdad
   // (_resolverCompKeyBalon(partido.competicion) === "amistosos" — el
   // MISMO alias que ya usa el balón para reconocer "Amistoso"/
   // "Amistosos" en el texto libre de Calendario extra): un amistoso
@@ -5338,14 +5335,21 @@
   // el checkbox (cuando existe) se decide de antemano; js/acta.js solo
   // lee su `.checked` al arrancar el partido (mismo id
   // `live-prorroga-toggle`, el DOM sobrevive porque la previa se OCULTA,
-  // no se destruye, al pulsar "▶ Empezar partido") — un checkbox
-  // `disabled` sigue reportando `.checked` con normalidad vía JS, así
-  // que no hace falta tocar js/acta.js para que la lea correctamente.
-  // SIN aviso aparte debajo cuando es obligatoria (petición usuario
-  // 2026-09-03 #2: ya lo dice el alert de "Vas a INICIAR el partido" al
-  // pulsar Empezar — un 2º aviso aquí era redundante) — solo la propia
-  // casilla, en VERDE (clase `--activa`, ver css/estilos.css) para que
-  // se lea claramente "ACTIVADA", no "deshabilitada".
+  // no se destruye, al pulsar "▶ Empezar partido").
+  //
+  // Petición usuario 2026-09-05: antes se marcaba SOLA (`checked
+  // disabled`) y el único aviso de que estaba activada era el alert
+  // manual de "Vas a INICIAR el partido" — pero ese alert desapareció al
+  // automatizar la captura (ver _capturarYCompartirPreviaWhatsapp), así
+  // que ya no quedaba NINGÚN aviso de que esta casilla, obligatoria en
+  // Copa, estaba activa. Ahora arranca DESMARCADA y en color "fuego"
+  // llamativo con pulso (clase `--fuego`, ver css/estilos.css); el
+  // propio toque del usuario para marcarla es la confirmación — al
+  // marcarla pasa a verde (`--activa`, mismo listener `change` de la
+  // sección "Delegación de eventos" más abajo). "▶ Empezar partido"
+  // queda BLOQUEADO (sin alert, solo una sacudida visual) mientras esta
+  // casilla obligatoria siga sin marcar — ver el guard en el click
+  // delegado de #previa-empezar.
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
@@ -5354,7 +5358,7 @@
       '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
     var checkboxObligatorioHtml =
-      '<label class="live-checkbox-row live-checkbox-row--activa"><input type="checkbox" id="live-prorroga-toggle" checked disabled>' +
+      '<label class="live-checkbox-row live-checkbox-row--fuego"><input type="checkbox" id="live-prorroga-toggle" data-obligatoria="1">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
     // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
     // antes tenían textos distintos y más largos por fase).
@@ -6503,6 +6507,21 @@
   }
 
   // ---------- Delegación de eventos ----------
+
+  // Casilla OBLIGATORIA "Activar Prórroga y Penaltis" (ver
+  // _renderFormatoBoxPrevia) — pasa de "fuego" (sin marcar) a "activa"
+  // (verde, marcada) según el propio toque del usuario. La casilla
+  // OPCIONAL del amistoso (sin `data-obligatoria`) no lleva este color,
+  // se queda con el azul clarito de siempre.
+  document.addEventListener("change", function (ev) {
+    var chk = ev.target.closest && ev.target.closest("#live-prorroga-toggle[data-obligatoria]");
+    if (!chk) return;
+    var fila = chk.closest(".live-checkbox-row");
+    if (!fila) return;
+    fila.classList.toggle("live-checkbox-row--fuego", !chk.checked);
+    fila.classList.toggle("live-checkbox-row--activa", chk.checked);
+  });
+
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest(".match-card-btn");
     if (btn) { abrirPreviaPartido(btn.dataset.partidoId); return; }
@@ -6575,6 +6594,21 @@
     // trataría como pop-up no solicitado y lo bloquearía.
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
+      // Guard de la casilla OBLIGATORIA "Activar Prórroga y Penaltis"
+      // (eliminatoria a partido único, no-amistoso — ver
+      // _renderFormatoBoxPrevia): mientras siga SIN marcar, el partido
+      // NO arranca — solo se sacude la fila para llamar la atención, sin
+      // ningún alert que bloquee la pantalla.
+      var chkObligatorio = document.querySelector("#live-prorroga-toggle[data-obligatoria]");
+      if (chkObligatorio && !chkObligatorio.checked) {
+        var filaObligatoria = chkObligatorio.closest(".live-checkbox-row");
+        if (filaObligatoria) {
+          filaObligatoria.classList.remove("live-checkbox-row--sacude");
+          void filaObligatoria.offsetWidth; // reflow: permite re-disparar la animación
+          filaObligatoria.classList.add("live-checkbox-row--sacude");
+        }
+        return;
+      }
       if (btnEmpezar.dataset.enCurso) return; // evita doble-toque mientras se genera la captura
       btnEmpezar.dataset.enCurso = "1";
       var partidoIdEmpezar = btnEmpezar.dataset.partidoId;

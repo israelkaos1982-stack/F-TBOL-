@@ -3073,13 +3073,40 @@ button { font-family: inherit; cursor: pointer; }
   margin: 4px 0 10px;
 }
 .live-checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--neon); }
-/* Obligatoria en eliminatoria a partido único (checked+disabled, ver
+/* Obligatoria en eliminatoria a partido único, YA MARCADA (ver
    js/renderizadores.js::_renderFormatoBoxPrevia) — VERDE, no el azul
-   clarito de arriba (petición usuario: un checkbox disabled se ve
-   "apagado"/gris por defecto del navegador; el texto en verde vivo dice
-   claramente "esto está ACTIVADO", no "esto está deshabilitado"). */
+   clarito de arriba, para que se lea claramente "esto está ACTIVADO". */
 .live-checkbox-row--activa { color: var(--neon); }
 .live-checkbox-row--activa input[type="checkbox"] { accent-color: var(--neon); opacity: 1; }
+
+/* Obligatoria en eliminatoria a partido único, TODAVÍA SIN MARCAR
+   (petición usuario 2026-09-05): arranca en "fuego" — naranja/rojo vivo
+   con pulso — para que sea imposible no verla. "▶ Empezar partido" la
+   deja bloqueada mientras siga así (ver el guard del click delegado en
+   js/renderizadores.js). En cuanto el usuario la marca, el listener
+   `change` la pasa a `--activa` (verde) de arriba. */
+.live-checkbox-row--fuego { color: #ff7a1a; font-weight: 900; }
+.live-checkbox-row--fuego input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #ff3b1a;
+  border-radius: 4px;
+  animation: fuegoProrrogaPulso 1s ease-in-out infinite;
+}
+@keyframes fuegoProrrogaPulso {
+  0%, 100% { box-shadow: 0 0 4px rgba(255, 90, 20, 0.4), 0 0 0 2px rgba(255, 90, 20, 0.5); }
+  50% { box-shadow: 0 0 14px rgba(255, 122, 26, 0.95), 0 0 0 2px rgba(255, 160, 60, 0.9); }
+}
+/* Sacudida cuando el usuario pulsa "▶ Empezar partido" con esta casilla
+   todavía sin marcar — feedback visual sin ningún alert bloqueante. */
+@keyframes fuegoProrrogaSacude {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.live-checkbox-row--sacude { animation: fuegoProrrogaSacude 0.4s ease; }
 
 .live-tanda-info {
   text-align: center;

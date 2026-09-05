@@ -5524,6 +5524,24 @@
   // llegó a cargar (sin red / CDN caído) — para que "▶ Empezar partido"
   // nunca se quede esperando: la captura es un extra, jamás un bloqueo
   // para arrancar el partido.
+  //
+  // `foreignObjectRendering: true` (bug reportado por el usuario, foto
+  // "Levante vs Atlético Madrid"): el motor POR DEFECTO de html2canvas
+  // reimplementa el CSS a mano y no soporta bien `repeating-linear-
+  // gradient` (los escudos IA sin imagen —rayas/rombo/mitad— salían de
+  // un solo color liso, sin patrón) ni siempre consigue dibujar
+  // `<img src="*.svg">` (los escudos reales —los 6 humanos— salían en
+  // blanco o con una imagen ajena). `foreignObjectRendering` delega el
+  // pintado en el propio motor del navegador (serializa la previa a un
+  // <foreignObject> SVG y deja que Chrome la renderice como una página
+  // normal), así que hereda gratis TODO lo que el CSS/HTML ya pintan
+  // bien en pantalla. Con reintento SIN esa opción si el navegador no la
+  // soporta bien (algunos Firefox antiguos) — peor fidelidad en los
+  // escudos, pero el resto de la captura (texto/estadio/clima/balón)
+  // sigue siendo correcto. Además, `onclone` quita `loading="lazy"` de
+  // los <img> del escudo real dentro del DOM CLONADO (ver
+  // quitarLazyEnClon más abajo) — ese atributo nunca llega a disparar la
+  // carga en el clon aislado que usa html2canvas para renderizar.
   function _capturarYCompartirPreviaWhatsapp(el, cb) {
     if (!el || typeof window.html2canvas !== "function") {
       cb();
@@ -5536,33 +5554,67 @@
       cb();
     };
     // Red de seguridad: si la librería se cuelga (móvil lento, CDN
-    // caído a mitad de carga), el partido arranca igual a los 2.5s.
+    // caído a mitad de carga, o el reintento sin foreignObject tarda),
+    // el partido arranca igual a los 2.5s.
     var watchdog = setTimeout(terminar, 2500);
+
+    function copiarAlPortapapeles(canvas) {
+      try {
+        canvas.toBlob(function (blob) {
+          if (blob && navigator.clipboard && window.ClipboardItem) {
+            navigator.clipboard
+              .write([new window.ClipboardItem({ "image/png": blob })])
+              .catch(function () {});
+          }
+          terminar();
+        }, "image/png");
+      } catch (e) {
+        terminar();
+      }
+    }
+
+    // Los <img> de escudo llevan `loading="lazy"` (ver crearEscudoHTML) —
+    // dentro del DOM clonado que usa html2canvas (aislado del clon real
+    // de la página, sin "cerca del viewport" que valga) ese lazy-load
+    // nunca llega a dispararse y la imagen se queda sin cargar. `onclone`
+    // corre sobre el documento clonado ANTES de renderizarlo — quitar el
+    // atributo ahí fuerza la carga inmediata en ese clon, sin tocar la
+    // previa real en pantalla.
+    function quitarLazyEnClon(doc) {
+      try {
+        var imgs = doc.querySelectorAll("img[loading]");
+        for (var i = 0; i < imgs.length; i++) imgs[i].removeAttribute("loading");
+      } catch (e) {}
+    }
+
+    function intentoSinForeignObject() {
+      try {
+        window
+          .html2canvas(el, { backgroundColor: "#101114", scale: 2, useCORS: true, onclone: quitarLazyEnClon })
+          .then(function (canvas) {
+            clearTimeout(watchdog);
+            copiarAlPortapapeles(canvas);
+          })
+          .catch(function () {
+            clearTimeout(watchdog);
+            terminar();
+          });
+      } catch (e) {
+        clearTimeout(watchdog);
+        terminar();
+      }
+    }
+
     try {
       window
-        .html2canvas(el, { backgroundColor: "#101114", scale: 2 })
+        .html2canvas(el, { backgroundColor: "#101114", scale: 2, useCORS: true, foreignObjectRendering: true, onclone: quitarLazyEnClon })
         .then(function (canvas) {
           clearTimeout(watchdog);
-          try {
-            canvas.toBlob(function (blob) {
-              if (blob && navigator.clipboard && window.ClipboardItem) {
-                navigator.clipboard
-                  .write([new window.ClipboardItem({ "image/png": blob })])
-                  .catch(function () {});
-              }
-              terminar();
-            }, "image/png");
-          } catch (e) {
-            terminar();
-          }
+          copiarAlPortapapeles(canvas);
         })
-        .catch(function () {
-          clearTimeout(watchdog);
-          terminar();
-        });
+        .catch(intentoSinForeignObject);
     } catch (e) {
-      clearTimeout(watchdog);
-      terminar();
+      intentoSinForeignObject();
     }
   }
 

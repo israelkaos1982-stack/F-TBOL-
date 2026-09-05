@@ -1969,6 +1969,53 @@
     return _guardarOverlay(BALONES_KEY, ov);
   }
 
+  // Reasignación admin de "qué balón usa cada competición"
+  // (data/balones.json.asignacionPorCompeticion, compKey -> {balonId, comp,
+  // clima}) — mismo patrón overlay que balones/estadios, pero como MAPA
+  // (no lista) porque las claves son fijas (una por competición), no algo
+  // que se añada/borre. El caller (main.js) SIEMPRE pasa comp/clima ya
+  // resueltos desde la asignación fusionada vigente, así una reasignación
+  // que solo cambia el balón nunca pierde el label/clima que ya tenía.
+  var BALON_ASIGNACION_KEY = "ef7_balon_asignacion_v1";
+  function _cargarAsignacionOverlay() {
+    try {
+      var raw = localStorage.getItem(BALON_ASIGNACION_KEY);
+      var ov = raw ? JSON.parse(raw) : null;
+      return (ov && typeof ov === "object") ? ov : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function _guardarAsignacionOverlay(ov) {
+    try {
+      localStorage.setItem(BALON_ASIGNACION_KEY, JSON.stringify(ov));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la asignación de balón por competición", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+  function fusionarAsignacionBalones(baseAsignacion) {
+    var ov = _cargarAsignacionOverlay();
+    var fusion = {};
+    var base = baseAsignacion || {};
+    for (var k in base) if (base.hasOwnProperty(k)) fusion[k] = base[k];
+    for (var k2 in ov) if (ov.hasOwnProperty(k2)) fusion[k2] = ov[k2];
+    return fusion;
+  }
+  function asignarBalonATorneo(compKey, balonId, comp, clima) {
+    if (!compKey || !String(compKey).trim() || !balonId) return false;
+    var clave = String(compKey).trim();
+    var ov = _cargarAsignacionOverlay();
+    ov[clave] = {
+      balonId: balonId,
+      comp: (comp && String(comp).trim()) || clave,
+      clima: clima || "sol"
+    };
+    return _guardarAsignacionOverlay(ov);
+  }
+
   var CATEGORIAS_ESTADIO = ["Modesto", "Medio", "Grande", "Élite"];
   function anadirEstadio(nombre, capacidad, categoria) {
     if (!nombre || !nombre.trim()) return null;
@@ -2210,6 +2257,8 @@
     anadirBalon: anadirBalon,
     editarBalon: editarBalon,
     borrarBalon: borrarBalon,
+    fusionarAsignacionBalones: fusionarAsignacionBalones,
+    asignarBalonATorneo: asignarBalonATorneo,
     anadirEstadio: anadirEstadio,
     editarEstadio: editarEstadio,
     borrarEstadio: borrarEstadio,

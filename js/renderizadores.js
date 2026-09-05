@@ -68,16 +68,19 @@
       // dos veces (duplicando los "añadidos") en la siguiente llamada.
       var estadiosBase = r[2].estadios || [];
       var balonesBase = r[3].balones || [];
+      var asignacionBase = r[3].asignacionPorCompeticion || {};
       var estadiosFusion = (window.Estado && window.Estado.fusionarEstadios)
         ? window.Estado.fusionarEstadios(estadiosBase) : estadiosBase;
       var balonesFusion = (window.Estado && window.Estado.fusionarBalones)
         ? window.Estado.fusionarBalones(balonesBase) : balonesBase;
+      var asignacionFusion = (window.Estado && window.Estado.fusionarAsignacionBalones)
+        ? window.Estado.fusionarAsignacionBalones(asignacionBase) : asignacionBase;
 
       var datos = {
         equipos: r[0],
         equiposIA: r[1],
         estadios: Object.assign({}, r[2], { estadios: estadiosFusion }),
-        balones: Object.assign({}, r[3], { balones: balonesFusion }),
+        balones: Object.assign({}, r[3], { balones: balonesFusion, asignacionPorCompeticion: asignacionFusion }),
         partidos: r[4],
         rivalesReales: r[5],
         titulos: r[6]
@@ -6022,6 +6025,8 @@
           '<div class="admin-list-item-actions">' +
           '<button type="button" class="admin-list-item-btn" data-accion="editar-balon" data-id="' + b.id +
           '" data-nombre="' + escapeHTML(b.nombre) + '" aria-label="Editar">✏️</button>' +
+          '<button type="button" class="admin-list-item-btn" data-accion="asignar-balon" data-id="' + b.id +
+          '" data-nombre="' + escapeHTML(b.nombre) + '" aria-label="Asignar torneo">🏆</button>' +
           '<button type="button" class="admin-list-item-btn admin-list-item-btn--danger" data-accion="borrar-balon" data-id="' + b.id +
           '" data-nombre="' + escapeHTML(b.nombre) + '" aria-label="Borrar">🗑️</button>' +
           "</div>";

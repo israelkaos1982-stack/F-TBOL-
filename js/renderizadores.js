@@ -5512,6 +5512,144 @@
     if (ov) ov.hidden = true;
   }
 
+  // Dibuja UN escudo (nodo `.escudo`) en un <canvas> propio, replicando A
+  // MANO el mismo CSS de crearEscudoHTML (rayas/rombo/sólido/mitad, o la
+  // imagen real con object-fit:contain) — sin gradientes CSS ni <img> de
+  // por medio. html2canvas reimplementa el CSS a pelo y no soporta bien
+  // `repeating-linear-gradient` (los escudos IA salían de un solo color
+  // liso, sin patrón) ni siempre consigue dibujar un `<img src=".svg">`
+  // (los escudos reales salían en blanco o con una imagen ajena — foto
+  // del usuario, "Levante vs Atlético Madrid"). Aquí se usan solo
+  // operaciones 2D normales (relleno de color, `drawImage` de un `<img>`
+  // YA cargado en pantalla) — nada que html2canvas pueda interpretar
+  // mal, porque el resultado que le pasamos ya es un PNG plano.
+  function _dibujarEscudoEnCanvas(nodo) {
+    var rect = nodo.getBoundingClientRect();
+    var w = Math.max(1, Math.round(rect.width));
+    var h = Math.max(1, Math.round(rect.height));
+    var escala = 2; // nitidez — igual que el scale:2 de la captura completa
+    var lienzo = document.createElement("canvas");
+    lienzo.width = w * escala;
+    lienzo.height = h * escala;
+    var ctx = lienzo.getContext("2d");
+    ctx.scale(escala, escala);
+
+    var estilo = getComputedStyle(nodo);
+    var esCirculo = nodo.classList.contains("escudo--ia");
+
+    ctx.beginPath();
+    if (esCirculo) {
+      ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+    } else {
+      var r = Math.min(parseFloat(estilo.borderRadius) || 0, w / 2, h / 2);
+      ctx.moveTo(r, 0);
+      ctx.arcTo(w, 0, w, h, r);
+      ctx.arcTo(w, h, 0, h, r);
+      ctx.arcTo(0, h, 0, 0, r);
+      ctx.arcTo(0, 0, w, 0, r);
+    }
+    ctx.closePath();
+    ctx.clip();
+
+    var img = nodo.querySelector("img");
+    if (img && img.complete && img.naturalWidth) {
+      // object-fit:contain a mano — la imagen conserva su proporción
+      // real dentro del cuadro, centrada, igual que en pantalla.
+      var escalaImg = Math.min(w / img.naturalWidth, h / img.naturalHeight);
+      var iw = img.naturalWidth * escalaImg, ih = img.naturalHeight * escalaImg;
+      ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih);
+      return lienzo;
+    }
+
+    var primario = (estilo.getPropertyValue("--primary") || "#39ff6a").trim();
+    var secundario = (estilo.getPropertyValue("--secondary") || "#101114").trim();
+
+    if (nodo.classList.contains("escudo--rayas")) {
+      ctx.fillStyle = secundario;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = primario;
+      for (var x = 0; x < w; x += 20) ctx.fillRect(x, 0, 10, h);
+    } else if (nodo.classList.contains("escudo--rombo")) {
+      ctx.fillStyle = secundario;
+      ctx.fillRect(0, 0, w, h);
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(Math.PI / 4);
+      var lado = Math.min(w, h) * 0.72;
+      ctx.fillStyle = secundario;
+      ctx.fillRect(-lado / 2, -lado / 2, lado, lado);
+      ctx.fillStyle = primario;
+      // 90deg = bandas VERTICALES (varían en X), igual que en la CSS
+      // real (`repeating-linear-gradient(90deg, ...)` — mismo criterio
+      // que .escudo--rayas, solo con un periodo más corto: 6px llenos +
+      // 6px "transparent" que aquí ya no hace falta pintar, el fondo
+      // secundario de la línea de arriba ya se ve debajo).
+      for (var xr = -lado / 2; xr < lado / 2; xr += 12) ctx.fillRect(xr, -lado / 2, 6, lado);
+      ctx.strokeStyle = "rgba(255,255,255,.45)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-lado / 2, -lado / 2, lado, lado);
+      ctx.restore();
+    } else if (nodo.classList.contains("escudo--mitad")) {
+      ctx.fillStyle = primario;
+      ctx.fillRect(0, 0, w, h / 2);
+      ctx.fillStyle = secundario;
+      ctx.fillRect(0, h / 2, w, h / 2);
+    } else if (nodo.classList.contains("escudo--solido")) {
+      ctx.fillStyle = primario;
+      ctx.fillRect(0, 0, w, h);
+      if (esCirculo) {
+        ctx.strokeStyle = secundario;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - 1.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // `.escudo--desconocido` (rival "?" sin sortear) y cualquier caso
+      // sin patrón conocido: NUNCA debería llegar aquí (se filtra antes
+      // de llamar a esta función — conserva su glifo ❓️ de texto), pero
+      // por si acaso deja el mismo fondo liso que `.escudo` de base.
+      ctx.fillStyle = secundario;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    if (esCirculo) {
+      var brillo = ctx.createRadialGradient(w * 0.32, h * 0.26, 0, w * 0.32, h * 0.26, Math.max(w, h) * 0.58);
+      brillo.addColorStop(0, "rgba(255,255,255,.5)");
+      brillo.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = brillo;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    return lienzo;
+  }
+
+  // Sustituye TEMPORALMENTE cada `.escudo` de `el` (salvo el ❓️ de rival
+  // sin sortear, que ya renderiza bien tal cual) por una imagen ya
+  // dibujada a mano (ver _dibujarEscudoEnCanvas) — así, cuando html2canvas
+  // recorra el DOM para la captura, no encuentra NINGÚN gradiente CSS
+  // complejo ni ningún `<img>` que resolver: solo un `<img src="data:
+  // image/png...">` plano, que cualquier motor sabe dibujar sin fallos.
+  // Devuelve una función que restaura cada escudo a su HTML original —
+  // SIEMPRE hay que llamarla después, haya ido bien la captura o no.
+  function _sustituirEscudosPorCanvas(el) {
+    var restauradores = [];
+    var nodos = el.querySelectorAll(".escudo:not(.escudo--desconocido)");
+    for (var i = 0; i < nodos.length; i++) {
+      var nodo = nodos[i];
+      try {
+        var lienzo = _dibujarEscudoEnCanvas(nodo);
+        var dataUrl = lienzo.toDataURL("image/png");
+        var htmlOriginal = nodo.innerHTML;
+        nodo.innerHTML = '<img src="' + dataUrl + '" style="width:100%;height:100%;display:block;">';
+        restauradores.push((function (n, html) { return function () { n.innerHTML = html; }; })(nodo, htmlOriginal));
+      } catch (e) {}
+    }
+    return function () {
+      for (var j = 0; j < restauradores.length; j++) restauradores[j]();
+    };
+  }
+
   // Captura `el` (la previa TAL CUAL se ve, con html2canvas cargado por
   // CDN en index.html) a un <canvas> en memoria y copia el resultado al
   // portapapeles del dispositivo (Clipboard API) — nada se guarda en
@@ -5524,97 +5662,48 @@
   // llegó a cargar (sin red / CDN caído) — para que "▶ Empezar partido"
   // nunca se quede esperando: la captura es un extra, jamás un bloqueo
   // para arrancar el partido.
-  //
-  // `foreignObjectRendering: true` (bug reportado por el usuario, foto
-  // "Levante vs Atlético Madrid"): el motor POR DEFECTO de html2canvas
-  // reimplementa el CSS a mano y no soporta bien `repeating-linear-
-  // gradient` (los escudos IA sin imagen —rayas/rombo/mitad— salían de
-  // un solo color liso, sin patrón) ni siempre consigue dibujar
-  // `<img src="*.svg">` (los escudos reales —los 6 humanos— salían en
-  // blanco o con una imagen ajena). `foreignObjectRendering` delega el
-  // pintado en el propio motor del navegador (serializa la previa a un
-  // <foreignObject> SVG y deja que Chrome la renderice como una página
-  // normal), así que hereda gratis TODO lo que el CSS/HTML ya pintan
-  // bien en pantalla. Con reintento SIN esa opción si el navegador no la
-  // soporta bien (algunos Firefox antiguos) — peor fidelidad en los
-  // escudos, pero el resto de la captura (texto/estadio/clima/balón)
-  // sigue siendo correcto. Además, `onclone` quita `loading="lazy"` de
-  // los <img> del escudo real dentro del DOM CLONADO (ver
-  // quitarLazyEnClon más abajo) — ese atributo nunca llega a disparar la
-  // carga en el clon aislado que usa html2canvas para renderizar.
   function _capturarYCompartirPreviaWhatsapp(el, cb) {
     if (!el || typeof window.html2canvas !== "function") {
       cb();
       return;
     }
     var listo = false;
+    var restaurarEscudos = function () {};
     var terminar = function () {
       if (listo) return;
       listo = true;
+      restaurarEscudos();
       cb();
     };
     // Red de seguridad: si la librería se cuelga (móvil lento, CDN
-    // caído a mitad de carga, o el reintento sin foreignObject tarda),
-    // el partido arranca igual a los 2.5s.
+    // caído a mitad de carga), el partido arranca igual a los 2.5s.
     var watchdog = setTimeout(terminar, 2500);
-
-    function copiarAlPortapapeles(canvas) {
-      try {
-        canvas.toBlob(function (blob) {
-          if (blob && navigator.clipboard && window.ClipboardItem) {
-            navigator.clipboard
-              .write([new window.ClipboardItem({ "image/png": blob })])
-              .catch(function () {});
-          }
-          terminar();
-        }, "image/png");
-      } catch (e) {
-        terminar();
-      }
-    }
-
-    // Los <img> de escudo llevan `loading="lazy"` (ver crearEscudoHTML) —
-    // dentro del DOM clonado que usa html2canvas (aislado del clon real
-    // de la página, sin "cerca del viewport" que valga) ese lazy-load
-    // nunca llega a dispararse y la imagen se queda sin cargar. `onclone`
-    // corre sobre el documento clonado ANTES de renderizarlo — quitar el
-    // atributo ahí fuerza la carga inmediata en ese clon, sin tocar la
-    // previa real en pantalla.
-    function quitarLazyEnClon(doc) {
-      try {
-        var imgs = doc.querySelectorAll("img[loading]");
-        for (var i = 0; i < imgs.length; i++) imgs[i].removeAttribute("loading");
-      } catch (e) {}
-    }
-
-    function intentoSinForeignObject() {
-      try {
-        window
-          .html2canvas(el, { backgroundColor: "#101114", scale: 2, useCORS: true, onclone: quitarLazyEnClon })
-          .then(function (canvas) {
-            clearTimeout(watchdog);
-            copiarAlPortapapeles(canvas);
-          })
-          .catch(function () {
-            clearTimeout(watchdog);
-            terminar();
-          });
-      } catch (e) {
-        clearTimeout(watchdog);
-        terminar();
-      }
-    }
-
     try {
+      restaurarEscudos = _sustituirEscudosPorCanvas(el);
       window
-        .html2canvas(el, { backgroundColor: "#101114", scale: 2, useCORS: true, foreignObjectRendering: true, onclone: quitarLazyEnClon })
+        .html2canvas(el, { backgroundColor: "#101114", scale: 2 })
         .then(function (canvas) {
           clearTimeout(watchdog);
-          copiarAlPortapapeles(canvas);
+          try {
+            canvas.toBlob(function (blob) {
+              if (blob && navigator.clipboard && window.ClipboardItem) {
+                navigator.clipboard
+                  .write([new window.ClipboardItem({ "image/png": blob })])
+                  .catch(function () {});
+              }
+              terminar();
+            }, "image/png");
+          } catch (e) {
+            terminar();
+          }
         })
-        .catch(intentoSinForeignObject);
+        .catch(function () {
+          clearTimeout(watchdog);
+          terminar();
+        });
     } catch (e) {
-      intentoSinForeignObject();
+      clearTimeout(watchdog);
+      terminar();
     }
   }
 

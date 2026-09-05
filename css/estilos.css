@@ -1282,17 +1282,19 @@ button { font-family: inherit; cursor: pointer; }
    horizontal, incluida la activa (marcada con --activa); al pulsar
    una, esa liga pasa a título único centrado en la fila de abajo (ver
    js/renderizadores.js::_ligaTabBoxesHTML/_ligaTituloRowHTML). Ancho
-   por CONTENIDO (flex:0 1 auto, no 1 1 0 — antes las 4 cajas repartían
-   el mismo ancho fijo entre sí SIN mirar su texto; con 5 cajas y
-   "Hypermotion" siendo mucho más largo que el resto, ese reparto
-   igualitario lo recortaba de más). Con ancho por contenido, cada caja
-   pide solo el suyo y, si no caben todas, se reduce TODA la fila
-   proporcionalmente — 2ª REF/1ª REF/Ea Sports/Ligue 1 (texto corto)
-   apenas lo notan; Hypermotion (el texto más largo) es el único que
-   necesitaba mantener su ancho de sobra (petición usuario: "Hypermotion
-   no se puede reducir más el ancho"). Solo dentro de "liga1ref-content":
-   no afecta a Copa/Superliga/Títulos, que reutilizan .liga1ref-header
-   pero nunca estas 2 filas. ---------- */
+   por CONTENIDO COMO PUNTO DE PARTIDA (flex-basis:auto) MÁS reparto
+   del espacio sobrante (flex-grow:1 en todas) — con solo "0 1 auto"
+   (sin grow) las 5 cajas se quedaban con su ancho justo y el resto de
+   la fila quedaba VACÍO a la derecha (bug reportado: "las has dejado
+   desplazadas a la izquierda"). Con flex-grow:1 en todas, el sobrante
+   se reparte a partes iguales ENCIMA del ancho de cada una — la fila
+   ocupa SIEMPRE el 100% del ancho, y como "Hypermotion" ya partía de
+   un ancho de contenido mayor que el resto, sigue siendo la más ancha
+   de las 5 (petición usuario: "Hypermotion no se puede reducir más el
+   ancho") sin necesitar un peso de crecimiento distinto al de las
+   demás. Solo dentro de "liga1ref-content": no afecta a Copa/
+   Superliga/Títulos, que reutilizan .liga1ref-header pero nunca estas
+   2 filas. ---------- */
 .liga-tab-boxes {
   display: flex;
   flex-wrap: nowrap;
@@ -1300,7 +1302,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 10px;
 }
 .liga-tab-box {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
   border: 1px solid;
   border-radius: var(--radius-s);
@@ -1313,11 +1315,13 @@ button { font-family: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 .liga-tab-box--2ref { background: rgba(168, 113, 74, 0.16); border-color: rgba(168, 113, 74, 0.4); color: var(--brown); }
-/* flex-shrink:0 — Hypermotion es la caja de texto más largo; con 5
-   cajas en la fila es la única que de verdad no puede perder ancho sin
-   que su nombre deje de leerse (petición usuario). Las otras 4 (texto
-   corto) absorben TODO el ajuste con su flex-shrink normal. */
-.liga-tab-box--hypermotion { background: rgba(59, 167, 255, 0.14); border-color: rgba(59, 167, 255, 0.4); color: var(--info); flex-shrink: 0; }
+/* Azul VERDOSO (teal) propio de esta caja — a propósito NO usa
+   var(--info) (esa var también pinta Champions League en otras
+   pantallas; cambiarla habría movido el color de Champions sin que se
+   pidiera). Deliberadamente distinto del azul de Ligue 1 de abajo
+   (petición usuario: "un azul más verdoso para distinguirlo de Ligue
+   1" — ambas son "azules" pero con un matiz claramente distinto). */
+.liga-tab-box--hypermotion { background: rgba(23, 184, 176, 0.16); border-color: rgba(23, 184, 176, 0.45); color: #22c9bd; }
 .liga-tab-box--easports { background: rgba(255, 59, 92, 0.14); border-color: rgba(255, 59, 92, 0.4); color: var(--accent-2); }
 .liga-tab-box--1ref { background: rgba(57, 255, 106, 0.14); border-color: rgba(57, 255, 106, 0.4); color: var(--neon); }
 .liga-tab-box--ligue1 { background: rgba(0, 85, 164, 0.18); border-color: rgba(0, 85, 164, 0.5); color: #4d8fd6; }

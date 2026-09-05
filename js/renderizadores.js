@@ -36,6 +36,15 @@
   var CLIMA_ICONO = { sol: "☀️", lluvia: "🌧️", nieve: "❄️" };
   var CLIMA_LABEL = { sol: "Sol", lluvia: "Lluvia", nieve: "Nieve" };
 
+  // Grupo de WhatsApp "LIGA" donde se comparten las capturas de cada
+  // partido (petición usuario 2026-09-05). El enlace de invitación es
+  // SOLO para unirse/abrir el grupo — WhatsApp no ofrece ninguna vía
+  // para que una web adjunte un archivo dentro de un grupo concreto sin
+  // que la persona lo pegue ella misma, así que la imagen se copia
+  // APARTE al portapapeles (ver _capturarYCompartirPreviaWhatsapp) para
+  // poder pegarla con un solo toque una vez dentro del chat.
+  var WHATSAPP_GRUPO_LIGA_URL = "https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX?s=cl&p=a&mlu=4&ilr=4";
+
   // ---------- Carga de datos (fetch una sola vez, caché en memoria) ----------
   var _cacheFetch = {};
   function cargarJSON(ruta) {
@@ -5488,10 +5497,10 @@
     if (btnEmpezar) {
       btnEmpezar.hidden = !!partido.jugado;
       btnEmpezar.dataset.partidoId = partido.id;
-      // Se reinicia el flujo de "captura antes de empezar" en cada
-      // apertura de previa (misma pantalla reutilizada para partidos
-      // distintos) — ver el 1er click de #previa-empezar más abajo.
-      btnEmpezar.dataset.armado = "";
+      // Se reinicia el guard anti-doble-toque en cada apertura de previa
+      // (misma pantalla reutilizada para partidos distintos) — ver el
+      // click de #previa-empezar más abajo.
+      btnEmpezar.dataset.enCurso = "";
       btnEmpezar.textContent = "▶ Empezar partido";
     }
 
@@ -5501,6 +5510,60 @@
   function cerrarPreviaPartido() {
     var ov = document.getElementById("previa-overlay");
     if (ov) ov.hidden = true;
+  }
+
+  // Captura `el` (la previa TAL CUAL se ve, con html2canvas cargado por
+  // CDN en index.html) a un <canvas> en memoria y copia el resultado al
+  // portapapeles del dispositivo (Clipboard API) — nada se guarda en
+  // disco ni se envía a ningún servidor, solo unas decenas de KB
+  // efímeros. DEBE llamarse con `el` todavía VISIBLE (antes de cerrar la
+  // previa): html2canvas no puede fotografiar un nodo ya oculto
+  // (display:none no tiene layout que capturar).
+  //
+  // `cb()` se llama SIEMPRE — con éxito, con fallo, o si html2canvas no
+  // llegó a cargar (sin red / CDN caído) — para que "▶ Empezar partido"
+  // nunca se quede esperando: la captura es un extra, jamás un bloqueo
+  // para arrancar el partido.
+  function _capturarYCompartirPreviaWhatsapp(el, cb) {
+    if (!el || typeof window.html2canvas !== "function") {
+      cb();
+      return;
+    }
+    var listo = false;
+    var terminar = function () {
+      if (listo) return;
+      listo = true;
+      cb();
+    };
+    // Red de seguridad: si la librería se cuelga (móvil lento, CDN
+    // caído a mitad de carga), el partido arranca igual a los 2.5s.
+    var watchdog = setTimeout(terminar, 2500);
+    try {
+      window
+        .html2canvas(el, { backgroundColor: "#101114", scale: 2 })
+        .then(function (canvas) {
+          clearTimeout(watchdog);
+          try {
+            canvas.toBlob(function (blob) {
+              if (blob && navigator.clipboard && window.ClipboardItem) {
+                navigator.clipboard
+                  .write([new window.ClipboardItem({ "image/png": blob })])
+                  .catch(function () {});
+              }
+              terminar();
+            }, "image/png");
+          } catch (e) {
+            terminar();
+          }
+        })
+        .catch(function () {
+          clearTimeout(watchdog);
+          terminar();
+        });
+    } catch (e) {
+      clearTimeout(watchdog);
+      terminar();
+    }
   }
 
   // ============================================================
@@ -6358,36 +6421,29 @@
       return;
     }
 
-    // 1er toque: solo avisa (📸) y NO sale de la previa — así el usuario
-    // puede hacer la captura de la propia pantalla que está viendo antes
-    // de que cambie. 2º toque (botón ya "armado"): ahí sí arranca el
-    // partido en vivo. Se rearma en cada apertura de previa (ver
-    // abrirPreviaPartido más arriba).
+    // "▶ Empezar partido" (petición usuario 2026-09-05, automatiza el
+    // aviso manual de arriba): UN SOLO toque ⇒ (1) captura la previa TAL
+    // CUAL se ve y la copia al portapapeles del dispositivo, (2) abre el
+    // Grupo WhatsApp LIGA en una pestaña NUEVA (el enlace de invitación
+    // no puede llevar la imagen adjunta — WhatsApp no ofrece ninguna vía
+    // para que una web mande un archivo dentro de un grupo concreto sin
+    // que la persona lo pegue ella misma: basta con pegarla ahí con un
+    // toque), y (3) arranca el partido en vivo en ESTA pestaña, que sigue
+    // intacta. `window.open` va SÍNCRONO con el toque (antes de esperar
+    // la captura, que es async) — si se llamara después, el navegador lo
+    // trataría como pop-up no solicitado y lo bloquearía.
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
-      if (!btnEmpezar.dataset.armado) {
-        // window.alert() nativo NO admite HTML/CSS — no hay forma de pintar
-        // texto en verde dentro de él (petición usuario 2026-09-03). Como
-        // aproximación con texto plano, se añade una 2ª línea que CONFIRMA
-        // el estado real de "Activar Prórroga y Penaltis" justo antes de
-        // arrancar — desde el fix de arriba (_renderFormatoBoxPrevia) esa
-        // casilla ya viene marcada y bloqueada SIEMPRE en una eliminatoria
-        // real a partido único, así que aquí solo se reafirma (nunca hace
-        // falta "avisar" para que el admin la active a mano).
-        var avisoTxt = "📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.";
-        var chkProrroga = document.getElementById("live-prorroga-toggle");
-        if (chkProrroga && chkProrroga.checked) {
-          avisoTxt += "\n\n⏱️ PRÓRROGA Y PENALTIS: ACTIVADA.";
-        }
-        window.alert(avisoTxt);
-        btnEmpezar.dataset.armado = "1";
-        btnEmpezar.textContent = "✅ Ya hice la captura — Empezar";
-        return;
-      }
-      btnEmpezar.dataset.armado = "";
-      btnEmpezar.textContent = "▶ Empezar partido";
-      cerrarPreviaPartido();
-      window.Acta.iniciarPartidoEnVivo(btnEmpezar.dataset.partidoId, _ultimoContexto);
+      if (btnEmpezar.dataset.enCurso) return; // evita doble-toque mientras se genera la captura
+      btnEmpezar.dataset.enCurso = "1";
+      var partidoIdEmpezar = btnEmpezar.dataset.partidoId;
+      var previaCardEl = document.querySelector("#previa-overlay .previa-card");
+      window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank");
+      _capturarYCompartirPreviaWhatsapp(previaCardEl, function () {
+        btnEmpezar.dataset.enCurso = "";
+        cerrarPreviaPartido();
+        window.Acta.iniciarPartidoEnVivo(partidoIdEmpezar, _ultimoContexto);
+      });
       return;
     }
 

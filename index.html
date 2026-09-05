@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=147">
+<link rel="stylesheet" href="css/estilos.css?v=148">
 </head>
 <body>
 
@@ -355,12 +355,14 @@
          de captura AL FINAL de todo. Sin botón de WhatsApp (petición
          usuario: si ya se hace captura de pantalla, ese botón no aporta
          nada — ver js/acta.js). El botón "Cerrar" (y la ✕ de arriba
-         mientras esta vista esté visible) usan el MISMO patrón de 2
-         toques que "▶ Empezar partido": el 1er toque solo arma el botón
-         (sin alert bloqueando la pantalla limpia), el 2º sí cierra —
-         así siempre queda un hueco real para hacer la captura antes de
-         volver al menú (petición usuario: antes el alert nativo se
-         cerraba con el mismo toque que sacaba al menú, sin margen). -->
+         mientras esta vista esté visible) usan un patrón de 2 toques
+         propio: el 1er toque solo arma el botón (sin alert bloqueando la
+         pantalla limpia), el 2º sí cierra — así siempre queda un hueco
+         real para hacer la captura antes de volver al menú (petición
+         usuario: antes el alert nativo se cerraba con el mismo toque que
+         sacaba al menú, sin margen). "▶ Empezar partido" ya NO usa este
+         patrón — automatiza la captura entera (ver
+         js/renderizadores.js::_capturarYCompartirPreviaWhatsapp). -->
     <div id="live-resumen" hidden>
       <div class="live-resumen-titulo live-resumen-titulo--fin">🏁 FINALIZADO</div>
       <div id="live-resumen-eliminatoria"></div>
@@ -379,17 +381,23 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=147" defer></script>
-<script src="js/sync.js?v=147" defer></script>
-<script src="js/renderizadores.js?v=147" defer></script>
-<script src="js/sistema-temporadas.js?v=147" defer></script>
-<script src="js/acta.js?v=147" defer></script>
-<script src="js/estadios.js?v=147" defer></script>
-<script src="js/balones.js?v=147" defer></script>
-<script src="js/escudos.js?v=147" defer></script>
-<script src="js/calendario.js?v=147" defer></script>
-<script src="js/persistencia.js?v=147" defer></script>
-<script src="js/main.js?v=147" defer></script>
+<!-- Solo para la captura automática de "▶ Empezar partido" (ver
+     js/renderizadores.js::_capturarYCompartirPreviaWhatsapp) — "fotografía"
+     la previa a un <canvas> en el propio dispositivo, sin subir nada a
+     ningún servidor. Si el CDN no carga (sin red), el helper detecta que
+     window.html2canvas no existe y el partido arranca igual, sin captura. -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+<script src="js/estado.js?v=148" defer></script>
+<script src="js/sync.js?v=148" defer></script>
+<script src="js/renderizadores.js?v=148" defer></script>
+<script src="js/sistema-temporadas.js?v=148" defer></script>
+<script src="js/acta.js?v=148" defer></script>
+<script src="js/estadios.js?v=148" defer></script>
+<script src="js/balones.js?v=148" defer></script>
+<script src="js/escudos.js?v=148" defer></script>
+<script src="js/calendario.js?v=148" defer></script>
+<script src="js/persistencia.js?v=148" defer></script>
+<script src="js/main.js?v=148" defer></script>
 
 </body>
 </html>

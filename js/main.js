@@ -356,7 +356,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
       if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId, ligaId);
-    }, "🔒 Editar clasificación", "PIN de administrador (646)");
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
   }
   function guardarLiga1Ref(clubId, ligaId) {
     var ta = document.getElementById("liga1ref-textarea");
@@ -390,7 +390,7 @@
       window.Estado.guardarDivisionClub(clubId, ligaId);
       _ligaNavActual = ligaId;
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
-    }, "🔒 Fijar liga del club", "PIN de administrador (646)");
+    }, "🔒 Fijar liga del club", "Introduce el PIN de administrador.");
   }
 
   // ---------- ℹ️ Formato/reglas (Liga 1ª REF/2ª REF/Hypermotion/Ea
@@ -463,7 +463,7 @@
       body.hidden = true;
       if (hint) hint.hidden = true;
       editor.hidden = false;
-    }, "🔒 Editar texto", "PIN de administrador (646)");
+    }, "🔒 Editar texto", "Introduce el PIN de administrador.");
   }
   function _infoOverlayGuardar() {
     var ta = document.getElementById("liga-info-textarea");
@@ -499,7 +499,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
       if (cont) window.Renderizadores.pintarEditorLiga1RefStat(cont, clubId, categoria, ligaId);
-    }, "🔒 Editar estadística", "PIN de administrador (646)");
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
   }
   function guardarLiga1RefStat(clubId, categoria, ligaId) {
     var ta = document.getElementById("liga1ref-stat-textarea");
@@ -532,7 +532,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("copa-content");
       if (cont) window.Renderizadores.pintarEditorCopaStat(cont, clubId, categoria);
-    }, "🔒 Editar estadística", "PIN de administrador (646)");
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
   }
   function guardarCopaStat(clubId, categoria) {
     var ta = document.getElementById("copa-stat-textarea");
@@ -548,7 +548,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("copa-content");
       if (cont) window.Renderizadores.pintarEditorCopaPlayoff(cont, clubId, ronda);
-    }, "🔒 Editar eliminatoria", "PIN de administrador (646)");
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
   }
   function guardarCopaPlayoff(clubId, ronda) {
     var ta = document.getElementById("copa-playoff-textarea");
@@ -572,7 +572,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("champions-content");
       if (cont) window.Renderizadores.pintarEditorChampions(cont, clubId);
-    }, "🔒 Editar clasificación", "PIN de administrador (646)");
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
   }
   function guardarChampions(clubId) {
     var ta = document.getElementById("champions-textarea");
@@ -594,7 +594,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("champions-content");
       if (cont) window.Renderizadores.pintarEditorChampionsStat(cont, clubId, categoria);
-    }, "🔒 Editar estadística", "PIN de administrador (646)");
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
   }
   function guardarChampionsStat(clubId, categoria) {
     var ta = document.getElementById("champions-stat-textarea");
@@ -610,7 +610,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("champions-content");
       if (cont) window.Renderizadores.pintarEditorChampionsPlayoff(cont, clubId, ronda);
-    }, "🔒 Editar playoff", "PIN de administrador (646)");
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
   }
   function guardarChampionsPlayoff(clubId, ronda) {
     var ta = document.getElementById("champions-playoff-textarea");
@@ -666,7 +666,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("objetivos-content");
       if (cont) window.Renderizadores.pintarEditorObjetivos(cont, clubId);
-    }, "🔒 Editar objetivos", "PIN de administrador (646)");
+    }, "🔒 Editar objetivos", "Introduce el PIN de administrador.");
   }
   function guardarObjetivos(clubId) {
     var ta = document.getElementById("objetivos-textarea");
@@ -700,7 +700,7 @@
     abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("derbys-content");
       if (cont) window.Renderizadores.pintarEditorDerbys(cont, clubId);
-    }, "🔒 Editar derbys", "PIN de administrador (646)");
+    }, "🔒 Editar derbys", "Introduce el PIN de administrador.");
   }
   function guardarDerbys(clubId) {
     var ta = document.getElementById("derbys-textarea");
@@ -780,7 +780,7 @@
       if (nuevo === null || !nuevo.trim()) return;
       window.Estado.guardarObjetivosIconoSeccion(clubId, seccion, nuevo.trim());
       window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
-    }, "🔒 Editar icono", "PIN de administrador (646)");
+    }, "🔒 Editar icono", "Introduce el PIN de administrador.");
   }
 
   function salirDelClub() {
@@ -1050,7 +1050,7 @@
       if (!nueva.trim()) return;
       window.Estado.guardarTemporada(nueva);
       if (window.Renderizadores) window.Renderizadores.pintarTemporada();
-    }, "🔒 Editar temporada", "PIN de administrador (646)");
+    }, "🔒 Editar temporada", "Introduce el PIN de administrador.");
   }
 
   // ---------- Nombre de la liga — editable pulsando el propio badge ----------

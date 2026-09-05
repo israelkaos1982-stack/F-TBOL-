@@ -3972,10 +3972,10 @@
       '" data-accion="uel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-grupos' +
       (_uelTabActual === "grupos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Fase Grupos</button>' +
+      '" data-accion="uel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🟠 Fase Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-playoffs' +
       (_uelTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟣 Playoffs</button>' +
+      '" data-accion="uel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟧 Playoffs</button>' +
       "</div>"
     );
   }

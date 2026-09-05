@@ -2491,12 +2491,16 @@ button { font-family: inherit; cursor: pointer; }
    ganado / gris = empate / rojo = perdido sea inmediata. */
 /* Card de "resultado rápido" completa (ver RESULTADO_RAPIDO_POR_CLUB en
    js/renderizadores.js) — sin rival real que enfrentar, así que en vez de
-   local+vs+visitante en fila se centra en columna: el escudo del propio
-   club arriba, los 3 iconos (o el resultado ya anotado) debajo. */
+   local+vs+visitante se centra en UNA sola fila: el escudo del propio
+   club y, justo al lado, los 3 iconos (o el resultado ya anotado) — más
+   compacta que ponerlos en columna (petición usuario: la card ocupa
+   menos alto). Hereda el `display:flex` de .match-card-teams (fila), solo
+   se pisa `justify-content` (antes `space-between`, aquí solo hay 2
+   bloques que centrar) y se añade separación entre ambos. */
 .match-card-teams--rapido {
-  flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  align-items: center;
+  gap: 10px;
 }
 .match-card-team--rapido {
   flex: 0 0 auto;

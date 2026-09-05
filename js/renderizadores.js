@@ -5628,6 +5628,31 @@
     return lienzo;
   }
 
+  // `.previa-card`/`.live-card` están limitadas a `max-height:90vh` +
+  // `overflow-y:auto` (para que quepan en pantallas pequeñas) — capturar
+  // la tarjeta TAL CUAL está en el DOM en ese instante solo recoge la
+  // porción que esté scrolleada AHORA MISMO. Con lesionados/sancionados
+  // ya listados, la tarjeta puede ser más alta que la pantalla, y si el
+  // usuario había bajado hasta el botón para pulsarlo, los escudos y la
+  // competición/ronda de arriba quedaban FUERA de la captura (foto
+  // usuario: "apenas se ven los escudos ni la ronda que jugamos"). Se
+  // quita el límite de altura y el scroll justo ANTES de medir/capturar
+  // — el navegador la re-maqueta a su alto natural completo, se la ve
+  // "crecer" un instante en pantalla — y se restaura todo tal cual
+  // estaba justo después. Así la captura sale SIEMPRE completa, de
+  // arriba a abajo, sin importar por dónde estuviera scrolleada.
+  function _expandirParaCaptura(el) {
+    var estiloOriginal = el.getAttribute("style") || "";
+    var scrollTopOriginal = el.scrollTop;
+    el.style.maxHeight = "none";
+    el.style.overflow = "visible";
+    el.scrollTop = 0;
+    return function () {
+      el.setAttribute("style", estiloOriginal);
+      el.scrollTop = scrollTopOriginal;
+    };
+  }
+
   // Sustituye TEMPORALMENTE cada `.escudo` de `el` (salvo el ❓️ de rival
   // sin sortear, que ya renderiza bien tal cual) por una imagen ya
   // dibujada a mano (ver _dibujarEscudoEnCanvas) — así, cuando html2canvas
@@ -5672,17 +5697,20 @@
       return;
     }
     var listo = false;
+    var restaurarExpansion = function () {};
     var restaurarEscudos = function () {};
     var terminar = function () {
       if (listo) return;
       listo = true;
       restaurarEscudos();
+      restaurarExpansion();
       cb();
     };
     // Red de seguridad: si la librería se cuelga (móvil lento, CDN
     // caído a mitad de carga), el partido arranca igual a los 2.5s.
     var watchdog = setTimeout(terminar, 2500);
     try {
+      restaurarExpansion = _expandirParaCaptura(el);
       restaurarEscudos = _sustituirEscudosPorCanvas(el);
       window
         .html2canvas(el, { backgroundColor: "#101114", scale: 2 })

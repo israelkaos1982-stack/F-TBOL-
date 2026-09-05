@@ -585,8 +585,53 @@
     return '<p class="live-eliminatoria live-eliminatoria--decidida">🏆 <strong>' + nombre + '</strong> avanza de ronda ' + (motivos[res.motivo] || "") + ".</p>";
   }
 
+  // Un partido a ELIMINACIÓN DIRECTA (Copa/competición europea a
+  // partido único, final, dieciseisavos… "eliminatoria-unica" en
+  // Renderizadores.detectarModoPartido) SIEMPRE tiene que dar un
+  // ganador — nunca puede quedarse en empate (bug real, foto usuario:
+  // "Levante 0-0 Atlético Madrid" confirmado tal cual en Dieciseisavos
+  // de Copa del Rey). El amistoso es la ÚNICA excepción dentro de
+  // "eliminatoria-unica" — su casilla de prórroga es OPCIONAL, no
+  // obligatoria (ver _renderFormatoBoxPrevia en js/renderizadores.js):
+  // un amistoso sí puede terminar en tablas, como en la vida real.
+  function _necesitaGanador(partido) {
+    var R = window.Renderizadores;
+    if (!R || !R.detectarModoPartido) return false;
+    if (R.detectarModoPartido(partido) !== "eliminatoria-unica") return false;
+    return R.resolverCompKeyPartido(partido.competicion) !== "amistosos";
+  }
+
   function confirmarPartido() {
     if (!_partidoActivo) return;
+
+    // Si este partido NECESITA un ganador y sigue empatado, se bloquea
+    // el finalizado con un aviso claro de qué falta por jugar — nunca
+    // se confirma un empate en una eliminatoria a partido único. Misma
+    // cadena de resolución que la VUELTA de una eliminatoria a doble
+    // partido (ver js/sistema-temporadas.js): primero la prórroga
+    // (100'-120', el gol de oro desempata solo), y si sigue empate tras
+    // ella, la tanda de penaltis. "Activar Prórroga y Penaltis" ya es
+    // OBLIGATORIA en la previa de estos partidos (checkbox "fuego"), así
+    // que el desplegable de Minuto ya ofrece 100'-120' + Tanda — aquí
+    // solo se comprueba que el admin de verdad los haya usado.
+    if (_necesitaGanador(_partidoActivo.partido)) {
+      var rEmpate = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
+      if (rEmpate.golesLocal === rEmpate.golesVisitante) {
+        var huboProrroga = actaTemporal.some(function (e) {
+          return e.minuto === MINUTO_TANDA || (typeof e.minuto === "number" && e.minuto > 95);
+        });
+        if (!huboProrroga) {
+          window.alert("⏱️ Este partido es a eliminación directa y no puede terminar en empate — juega la PRÓRROGA (100'-120') y, si sigue igual, la TANDA DE PENALTIS antes de finalizar.");
+          return;
+        }
+        var penL = _contarTandaPenaltis(_partidoActivo.local.id);
+        var penV = _contarTandaPenaltis(_partidoActivo.visitante.id);
+        if (penL === penV) {
+          window.alert("🎯 Sigue empate tras la prórroga — decide la TANDA DE PENALTIS (elige el minuto \"🎯 Tanda de penaltis\" y registra los goles de cada equipo) antes de finalizar.");
+          return;
+        }
+      }
+    }
 
     // El MVP es OBLIGATORIO antes de finalizar — si nadie lo ha marcado
     // todavía, avisamos claramente y volvemos a la MISMA pantalla de

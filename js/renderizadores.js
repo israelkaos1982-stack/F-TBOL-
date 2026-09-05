@@ -4981,15 +4981,19 @@
       // card). Sigue siendo el mismo botón de reinicio (PIN admin).
       var etiquetaCentro = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
       // Marcador decidido en la tanda de penaltis (penL/penV ya
-      // calculados arriba, distintos entre sí): se añade el resultado
-      // de la tanda entre paréntesis — sin esto, una card ya en verde
-      // por haber ganado en penaltis seguiría mostrando solo el "0-0"
-      // del marcador real, sin explicar por qué es una victoria. Con
-      // fuente reducida (mismo criterio que --rapido): es más texto que
-      // un marcador normal y tiene que seguir cabiendo en una línea.
+      // calculados arriba, distintos entre sí): sin esto, una card ya en
+      // verde por haber ganado en penaltis seguiría mostrando solo el
+      // "0-0" del marcador real, sin explicar por qué es una victoria.
+      // En 2 líneas apiladas — "(3-2)" arriba (pequeño, el resultado que
+      // de verdad decide) y "0-0" debajo (el marcador real) — en vez de
+      // todo en una sola línea larga (petición usuario, foto: "hay
+      // espacio para ponerlo así"). Los paréntesis son el MISMO criterio
+      // que ya usa el resto de la app para una tanda de penaltis (ver
+      // _CHAMPIONS_MARCADOR_PEN_RE), sin repetir la palabra "pen.".
       var huboTanda = penL !== null && penV !== null && penL !== penV;
       if (huboTanda) {
-        etiquetaCentro += " (" + penL + "-" + penV + " pen.)";
+        etiquetaCentro = '<span class="match-card-marcador-pen">(' + penL + "-" + penV + ")</span>" +
+          '<span class="match-card-marcador-real">' + partido.resultado.golesLocal + "-" + partido.resultado.golesVisitante + "</span>";
       }
       if (partido.resultadoRapido) {
         etiquetaCentro = claseResultado === " match-card--gano" ? "✅ GANADO"

@@ -5989,6 +5989,56 @@ def _ef7_key_is_valid(key):
     return isinstance(key, str) and key.startswith(_EF7_KEY_PREFIX) and 0 < len(key) < 200
 
 
+# GUARD DE REGRESIÓN — aplica a TODAS las claves "ef7_*" salvo la que ya
+# tiene su propio merge fino (_EF7_ESTADO_LIGA_KEY). El resto (calendario
+# extra de cada club, plantilla, iconos del menú, textos de Liga 1ª REF,
+# reglas de Copa...) se guardaba con "el último POST gana entero, sin
+# comparar con lo que ya había" — el MISMO patrón que causaba el bug de
+# `ef7_estado_liga_v1` (ver comentario EXCEPCIÓN de más arriba), pero sin
+# ninguna protección: un dispositivo con una copia VIEJA o VACÍA de estas
+# claves (típicamente tras importar una copia de seguridad antigua, o un
+# dispositivo que llevaba mucho sin sincronizar) podía pisar en el
+# servidor el calendario/plantilla/etc. que el admin acababa de terminar
+# de pegar en OTRO dispositivo — reporte usuario: "había editado el
+# calendario de todos los equipos humanos y también se había eliminado...
+# creo que pasa cuando se conecta otro humano aunque yo no esté
+# conectado". Al no tener un merge por-campo posible para texto libre
+# (a diferencia de los resultados, que sí tienen un id por partido), la
+# defensa es un guard de RIQUEZA: si lo que llega es MUCHO más corto que
+# lo que ya había, se rechaza el guardado de esa clave — un recorte
+# normal del admin (quitar unas pocas líneas de un texto largo) nunca
+# reduce el contenido a MENOS DE LA MITAD de golpe; un dispositivo con una
+# copia vieja/vacía sí. La clave queda sin guardar (no aparece en
+# `guardadas`) y el cliente la reintenta sola (ver js/sync.js) — si de
+# verdad era un borrado deliberado del admin, sigue reintentándose hasta
+# que dejen de perder la comparación (p.ej. porque el dispositivo rico
+# también reduce su copia); mientras tanto, tras varios intentos seguidos
+# fallidos, js/sync.js avisa al usuario Y adopta el valor del servidor en
+# su lugar (nunca se queda bloqueado para siempre — ver `_ciclo`).
+_EF7_REGRESION_LEN_MINIMO = 20  # por debajo de esto no merece la pena proteger (ruido/campos cortos)
+
+
+def _ef7_valor_como_texto(v):
+    """Toda clave ef7_* termina siendo un string cuando sale de
+    localStorage (texto libre, o JSON que el propio cliente serializó a
+    mano) — si no es un string reconocible se trata como "sin contenido",
+    así el guard nunca bloquea un tipo de dato que no sepa medir."""
+    return v if isinstance(v, str) else ""
+
+
+def _ef7_es_regresion_grave(existing_row_value, incoming_value):
+    if not existing_row_value:
+        return False
+    try:
+        existing_text = _ef7_valor_como_texto(json.loads(existing_row_value))
+    except (TypeError, ValueError):
+        return False
+    if len(existing_text) < _EF7_REGRESION_LEN_MINIMO:
+        return False
+    incoming_text = _ef7_valor_como_texto(incoming_value)
+    return len(incoming_text) < len(existing_text) * 0.5
+
+
 @app.route("/api/ef7/state", methods=["GET"])
 def api_ef7_state_get():
     filas = GlobalState.query.filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
@@ -6023,6 +6073,11 @@ def api_ef7_state_post():
         # y el comentario "EXCEPCIÓN" más arriba.
         if key == _EF7_ESTADO_LIGA_KEY and row is not None:
             value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
+        elif row is not None and _ef7_es_regresion_grave(row.valor_json, value):
+            # Ver "GUARD DE REGRESIÓN" más arriba — el resto de claves NO
+            # llegan a este punto (row=None es la 1ª vez que se guardan, y
+            # ahí no hay nada que proteger todavía).
+            continue
         try:
             payload = json.dumps(value_a_guardar, ensure_ascii=False)
         except (TypeError, ValueError):

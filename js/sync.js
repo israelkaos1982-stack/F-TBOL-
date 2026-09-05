@@ -98,19 +98,21 @@
 
   // ---------- Aviso si una clave NUNCA consigue sincronizar ----------
   // El servidor responde 200 OK a /api/ef7/state incluso cuando RECHAZA
-  // en silencio alguna clave del cuerpo (app.py::api_ef7_state_post):
-  // una clave cuyo JSON supere 2 MB (el límite fijo _KV_MAX_BYTES) se
-  // salta sin más — solo aparece en `guardadas` la que SÍ se aceptó. La
-  // clave grande de resultados/actas (ef7_estado_liga_v1) es la única
-  // candidata realista a acercarse a ese tamaño con muchas temporadas de
-  // partidos confirmados en vivo (no hay ningún archivado automático de
-  // temporadas antiguas — crece para siempre). Sin este contador, una
-  // clave así queda en `_pendientes` INDEFINIDAMENTE: se reintenta cada
-  // 10 s, cada vez sin éxito, y NUNCA se avisa al usuario — el
-  // dispositivo sigue viéndose "normal" (todo funciona en local) pero
-  // esos partidos JAMÁS llegan a los demás dispositivos ni al backup del
-  // servidor, así que un borrado de datos en ESE móvil los pierde para
-  // siempre sin que nada lo hubiera advertido antes.
+  // en silencio alguna clave del cuerpo (app.py::api_ef7_state_post), por
+  // 2 motivos distintos: (a) el JSON supera 2 MB (_KV_MAX_BYTES) — solo
+  // realista en la clave grande de resultados/actas (ef7_estado_liga_v1),
+  // que no tiene archivado automático de temporadas antiguas; o (b) el
+  // "guard de regresión" (_ef7_es_regresion_grave) — CUALQUIER otra
+  // clave (calendario extra de un club, plantilla, textos de Liga 1ª
+  // REF...) cuyo valor entrante sea MUCHO más corto que el ya guardado en
+  // el servidor: típico de un dispositivo con una copia vieja/vacía (tras
+  // importar una copia de seguridad antigua, o llevar mucho sin
+  // sincronizar) intentando pisar lo que el admin acaba de terminar de
+  // pegar en OTRO dispositivo. Sin este contador, una clave así queda en
+  // `_pendientes` INDEFINIDAMENTE: se reintenta cada 10 s, cada vez sin
+  // éxito, sin avisar nunca — este dispositivo sigue viéndose "normal"
+  // con SU copia (la vieja/pobre), sin enterarse de que el servidor (y
+  // todos los demás) tienen la buena.
   var UMBRAL_AVISO_SYNC_ATASCADO = 5; // ~5 ciclos (INTERVALO_MS) seguidos sin éxito
   var _intentosFallidos = {}; // clave -> nº de ciclos seguidos rechazada por el servidor
   var _avisoSyncMostrado = false;
@@ -120,11 +122,13 @@
     try {
       window.setTimeout(function () {
         window.alert(
-          "⚠️ Llevas varios intentos sin poder sincronizar \"" + clave + "\" con el servidor " +
-          "(probablemente porque ha crecido demasiado — el límite es 2 MB por clave).\n\n" +
-          "Los partidos y datos de ESTE dispositivo se siguen viendo bien aquí, pero NO están " +
-          "llegando a los demás ni quedando respaldados en el servidor. Exporta una copia de " +
-          "seguridad (Panel Admin → Copia de seguridad) cuanto antes por si acaso."
+          "⚠️ La copia de \"" + clave + "\" de ESTE dispositivo no se pudo subir al servidor " +
+          "tras varios intentos — probablemente porque el servidor ya tiene una versión más " +
+          "completa (p. ej. si aquí se importó una copia de seguridad antigua) y la protege para " +
+          "que no se pierda por accidente.\n\n" +
+          "Este dispositivo va a adoptar AHORA la versión del servidor — si de verdad querías " +
+          "guardar un cambio grande aquí, vuelve a hacerlo tras comprobar que el resto de " +
+          "dispositivos ya lo reflejan."
         );
       }, 0);
     } catch (err2) { /* nada más que hacer si ni alert está disponible */ }
@@ -180,15 +184,31 @@
           }
         });
         // Una clave que se mandó pero el servidor NO devolvió en
-        // `guardadas` fue RECHAZADA en silencio (formato inválido, o —
-        // el caso real — supera el límite de 2 MB por clave). Sigue en
-        // `_pendientes` para reintentarse sola, pero tras varios ciclos
-        // seguidos sin éxito el usuario merece saberlo (ver
-        // _avisarSyncAtascado más arriba).
+        // `guardadas` fue RECHAZADA en silencio (formato inválido, límite
+        // de 2 MB, o el guard de regresión de app.py — ver
+        // _avisarSyncAtascado más arriba). Sigue en `_pendientes` para
+        // reintentarse unos ciclos, por si el rechazo fuera transitorio,
+        // pero tras varios seguidos sin éxito NO se deja atascada para
+        // siempre insistiendo con SU copia: se abandona (se quita de
+        // `_pendientes` y se avisa) para que el SIGUIENTE pull la trate
+        // como cualquier otra clave sin edición local pendiente y adopte
+        // la del servidor — sin este auto-abandono, un dispositivo con
+        // una copia vieja/vacía se quedaría viendo esa copia para
+        // siempre, sin enterarse nunca de que el resto tiene la buena
+        // (el guard del servidor protege a los DEMÁS, pero por sí solo no
+        // arregla la vista de ESTE dispositivo).
         claves.forEach(function (k) {
           if (confirmadasSet[k]) return;
           _intentosFallidos[k] = (_intentosFallidos[k] || 0) + 1;
-          if (_intentosFallidos[k] >= UMBRAL_AVISO_SYNC_ATASCADO) _avisarSyncAtascado(k);
+          if (_intentosFallidos[k] >= UMBRAL_AVISO_SYNC_ATASCADO) {
+            _avisarSyncAtascado(k);
+            // Se limpia YA (no en el próximo ciclo): en la rama normal
+            // (no primer ciclo) el pull de este mismo _ciclo() corre
+            // justo después de este .then, así que la clave abandonada
+            // adopta la copia del servidor sin esperar 10 s más.
+            delete _pendientes[k];
+            delete _intentosFallidos[k];
+          }
         });
         if (huboConfirmadas) _guardarSnapshotPersistido();
       })

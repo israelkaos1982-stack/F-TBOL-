@@ -4200,22 +4200,41 @@
   // Estado.obtenerValoracionClub/guardarValoracionClub) — estos puntos
   // son solo un contador de referencia, no se suman solos al 💼.
   // ============================================================
-  var OBJETIVOS_SECCION_ORDEN = ["LIGA", "COPA", "SUPERLIGA", "GLOBALES"];
-  var OBJETIVOS_SECCION_NOMBRE = { LIGA: "Liga", COPA: "Copa", SUPERLIGA: "Superliga", GLOBALES: "Globales" };
+  var OBJETIVOS_SECCION_ORDEN = ["LIGA", "COPA", "CHAMPIONS", "SUPERLIGA", "GLOBALES"];
+  var OBJETIVOS_SECCION_NOMBRE = { LIGA: "Liga", COPA: "Copa", CHAMPIONS: "Champions", SUPERLIGA: "Superliga", GLOBALES: "Globales" };
   // Iconos por defecto — SOLO se usan si Estado no está disponible; la
   // fuente real (editable por el admin, candado 646) es
   // Estado.obtenerObjetivosIconos/guardarObjetivosIconoSeccion.
-  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", SUPERLIGA: "🌟", GLOBALES: "🌍" };
+  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", CHAMPIONS: "🇪🇺", SUPERLIGA: "🌟", GLOBALES: "🌍" };
 
-  // "# SECCIÓN" (LIGA/COPA/SUPERLIGA/GLOBALES) abre caja; toda línea
-  // siguiente "Texto - N" (N=1 o 2, cualquier otro valor cae a 1) es un
-  // objetivo de esa caja. Una cabecera desconocida se ignora junto con
-  // sus líneas (catálogo de cajas CERRADO a las 4 de la pantalla,
+  // Alias de la PRIMERA palabra de la cabecera — un club cuya liga/copa
+  // domésticas no se llaman literalmente "Liga"/"Copa" (el PSG juega
+  // "Ligue 1"/"Coupe [de France]") sigue cayendo en la MISMA caja
+  // cerrada, sin tener que reescribir el nombre real de su competición.
+  // Se comprueba por PREFIJO con límite de palabra (igual que la clave
+  // propia, más abajo), así que tolera texto extra detrás — "Coupe
+  // Framce" (con errata) sigue reconociéndose porque empieza por
+  // "COUPE", igual que "Ligue 1" empieza por "LIGUE". Mismo espíritu que
+  // _BALON_COMP_ALIAS (balón/color de card) pero por prefijo de UNA sola
+  // palabra en vez de frase completa — necesario porque aquí puede venir
+  // texto libre detrás (bug: "# LIGUE 1" y "# COUPE FRAMCE" del PSG
+  // quedaban sin caja porque solo se reconocía "LIGA"/"COPA" literales).
+  var OBJETIVOS_SECCION_ALIAS_PREFIJO = {
+    LIGA: ["LIGA", "LIGUE"],
+    COPA: ["COPA", "COUPE"],
+    CHAMPIONS: ["CHAMPIONS"]
+  };
+
+  // "# SECCIÓN" (LIGA/COPA/CHAMPIONS/SUPERLIGA/GLOBALES, o un alias
+  // reconocido — ver OBJETIVOS_SECCION_ALIAS_PREFIJO) abre caja; toda
+  // línea siguiente "Texto - N" (N=1 o 2, cualquier otro valor cae a 1)
+  // es un objetivo de esa caja. Una cabecera desconocida se ignora junto
+  // con sus líneas (catálogo de cajas CERRADO a las 5 de la pantalla,
   // aunque el TEXTO de dentro sea libre). `clave` identifica el
   // objetivo para el progreso marcado — por sección+texto, así cambiar
   // solo el nº de puntos de una línea no borra el progreso ya tocado.
   //
-  // La cabecera admite texto EXTRA tras la palabra clave (p.ej.
+  // La cabecera admite texto EXTRA tras la palabra clave/alias (p.ej.
   // "# LIGA 1ª REF" o "# COPA DEL REY") — se sigue mapeando a esa caja
   // (por prefijo, con límite de palabra) y el texto completo se guarda
   // como TÍTULO visible de la caja (bug 2026: escribir "# LIGA 1ª REF"
@@ -4241,7 +4260,9 @@
         var clave = null;
         for (var i = 0; i < OBJETIVOS_SECCION_ORDEN.length; i++) {
           var k = OBJETIVOS_SECCION_ORDEN[i];
-          if (new RegExp("^" + k + "\\b").test(norm)) { clave = k; break; }
+          var alias = OBJETIVOS_SECCION_ALIAS_PREFIJO[k] || [k];
+          var casa = alias.some(function (a) { return new RegExp("^" + a + "\\b").test(norm); });
+          if (casa) { clave = k; break; }
         }
         actual = clave;
         if (clave && norm !== clave) etiquetas[clave] = etiqueta;
@@ -4371,11 +4392,12 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      'Una línea "# LIGA" / "# COPA" / "# SUPERLIGA" / "# GLOBALES" abre cada caja — puedes añadir ' +
-      'texto detrás (p.ej. "# LIGA 1ª REF") y se usará como título de la caja, sigue siendo la ' +
-      "misma caja. Debajo, un objetivo por línea con \"- 1\" o \"- 2\" al final (los puntos que vale); " +
-      "si te dejas el número o el guion mal puesto, el objetivo se guarda igual con 1 punto, nunca " +
-      "desaparece. Añade, edita o borra líneas libremente.";
+      'Una línea "# LIGA" / "# COPA" / "# CHAMPIONS" / "# SUPERLIGA" / "# GLOBALES" abre cada caja ' +
+      '(también vale "# LIGUE 1" para la caja Liga, o "# COUPE ..." para la caja Copa) — puedes ' +
+      'añadir texto detrás (p.ej. "# LIGUE 1 FRANCIA") y se usará como título de la caja, sigue ' +
+      "siendo la misma caja. Debajo, un objetivo por línea con \"- 1\" o \"- 2\" al final (los puntos " +
+      "que vale); si te dejas el número o el guion mal puesto, el objetivo se guarda igual con 1 " +
+      "punto, nunca desaparece. Añade, edita o borra líneas libremente.";
     contenedor.appendChild(nota);
 
     var textoGuardado = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";

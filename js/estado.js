@@ -448,6 +448,19 @@
     var eqA = R.buscarEquipoPorId(partido.local, datos);
     var eqB = R.buscarEquipoPorId(partido.visitante, datos);
     if (!eqA || !eqB) return null;
+    // Rival AÚN sin determinar ("?", ver resolverRivalPorNombre): TODOS
+    // los partidos con rival desconocido de un club colapsan al MISMO
+    // equipo sintético (id "extra-rival--", cacheado una única vez), así
+    // que emparejarlos por identidad aquí fusionaría el resultado de UN
+    // partido con el de CUALQUIER OTRO que comparta ese mismo placeholder
+    // — es justo lo que le pasaba a las 23 jornadas de Ligue 1 del PSG
+    // (todas "club vs ?" sin ida/vuelta en la ronda, así que
+    // _legDeRondaExtra las reducía a la MISMA clave): marcar el resultado
+    // rápido de la Jornada 1 marcaba las 23 igual. Sin identidad de
+    // reserva no hay riesgo — el resultado sigue viéndose por su id EXACTO
+    // (e.resultados[p.id], en listarPartidosResueltos), esto solo evita
+    // que colisione con partidos completamente distintos.
+    if (eqA.desconocido || eqB.desconocido) return null;
     return _identidadFallbackKey(partido.competicion, partido.ronda, eqA.nombre, eqB.nombre);
   }
   // \u00cdndice { claveIdentidad -> entrada de e.resultados } \u2014 el PRIMERO que

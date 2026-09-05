@@ -4842,15 +4842,29 @@
       centroTop = '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
     }
 
+    // Resultado rápido (ver RESULTADO_RAPIDO_POR_CLUB): sin rival real que
+    // enfrentar (Liga/Copa del PSG se resuelven fuera de la app, el rival
+    // suele quedar "?" — ver parsearPartidosExtraTexto), así que NO tiene
+    // sentido pintar un "vs" contra un escudo desconocido. En su lugar: el
+    // escudo del propio club activo, centrado, y debajo los 3 iconos
+    // ✅➖❌ (o la etiqueta GANADO/EMPATE/PERDIDO si ya está anotado) — sin
+    // separador "vs" ni bloque de rival.
+    var equiposHTML = usaResultadoRapido
+      ? '<div class="match-card-teams match-card-teams--rapido">' +
+        _bloqueEquipoHTML(activo, "match-card-team--rapido") +
+        '<div class="match-card-center match-card-center--rapido">' + centroTop + "</div>" +
+        "</div>"
+      : '<div class="match-card-teams">' +
+        _bloqueEquipoHTML(local, "match-card-team--local") +
+        '<div class="match-card-center">' + centroTop + '<span class="match-card-vs-sep">vs</span></div>' +
+        _bloqueEquipoHTML(visitante, "match-card-team--visitante") +
+        "</div>";
+
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
       (mostrarPospuestoBtn ? _pospuestoIconoHTML(partido) : "") +
       '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
-      '<div class="match-card-teams">' +
-      _bloqueEquipoHTML(local, "match-card-team--local") +
-      '<div class="match-card-center">' + centroTop + '<span class="match-card-vs-sep">vs</span></div>' +
-      _bloqueEquipoHTML(visitante, "match-card-team--visitante") +
-      "</div>";
+      equiposHTML;
 
     return card;
   }

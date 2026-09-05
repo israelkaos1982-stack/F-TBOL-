@@ -1818,7 +1818,7 @@
         : _liga1RefZonaFn(ligaId);
 
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
+        contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ para añadirla."));
       } else {
         var wrap = document.createElement("div");
         wrap.className = "clasificacion-wrap";
@@ -1895,7 +1895,7 @@
 
       var filas = ligaId === "1ref" ? calcularLiga1RefStatsCombinado(datos, categoria) : calcularLigaExtraStatFilas(ligaId, categoria);
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
       }
 
@@ -2445,8 +2445,8 @@
       var cuerpo;
       if (!ties.length) {
         cuerpo = meta.key === "dieciseisavos"
-          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los 16 duelos de Dieciseisavos.</p>'
-          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 16 duelos de Dieciseisavos.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
         cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
       }
@@ -2514,7 +2514,7 @@
 
       var filas = calcularCopaStatsCombinado(datos, categoria);
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
       }
 
@@ -3287,7 +3287,7 @@
     contenedor.appendChild(tituloRow);
 
     if (!filas.length) {
-      contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadir los 40 equipos."));
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ para añadir los 40 equipos."));
     } else {
       var wrap = document.createElement("div");
       wrap.className = "clasificacion-wrap";
@@ -3323,8 +3323,8 @@
       var cuerpo;
       if (!ties.length) {
         cuerpo = meta.key === "dieciseisavos"
-          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los 8 duelos y qué equipo espera a cada ganador en Octavos.</p>'
-          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ (PIN 646) para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 8 duelos y qué equipo espera a cada ganador en Octavos.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
         cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
       }
@@ -3390,7 +3390,7 @@
 
       var filas = calcularChampionsStatsCombinado(datos, categoria);
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ (PIN 646) para añadirlos, o suman solos al añadir eventos de un club humano."));
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
       }
 

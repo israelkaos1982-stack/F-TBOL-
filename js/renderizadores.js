@@ -717,11 +717,20 @@
       // que nunca parte un guion SIN espacio a ningún lado (un nombre
       // compuesto real, p.ej. "F5N5000-TL"/"Beira-Rio").
       var partes = l.split(/\s+-\s*|\s*-\s+/);
-      if (partes.length < 3) return; // hace falta Competición - Ronda - Rival como mínimo
+      if (partes.length < 2) return; // hace falta al menos Competición - Ronda
 
       var competicion = partes[0].trim();
       var ronda = partes[1].trim();
-      var rivalCrudo = partes[2].trim();
+      // Rival OMITIDO ("Competición - Ronda" sin 3ª parte, p.ej. un
+      // calendario pegado ronda a ronda antes de conocer al rival real):
+      // se trata como "?" — el MISMO marcador de "rival aún sin
+      // determinar" que ya usa el resto de la app (resolverRivalPorNombre,
+      // más abajo, línea `desconocido: /^[?¿]+$/.test(...)` → escudo "?" +
+      // card bloqueada hasta editarla con el rival real). Antes, una línea
+      // sin rival se DESCARTABA entera en silencio — el reporte "el
+      // calendario del PSG no se sube" era justo esto: sus 50 líneas son
+      // todas "Competición - Ronda", sin rival, así que NINGUNA cargaba.
+      var rivalCrudo = partes.length >= 3 ? partes[2].trim() : "?";
       var fecha = partes.length > 3 ? partes.slice(3).join(" - ").trim() : "";
       if (!competicion || !ronda) return;
 
@@ -4721,15 +4730,6 @@
     var rival = buscarEquipoPorId(rivalId, datos);
     var activo = buscarEquipoPorId(idActivo, datos);
 
-    // Rival AÚN sin determinar ("?" en el calendario, ver crearEscudoHTML /
-    // resolverRivalPorNombre) — bloquea la card aunque el cálculo por orden
-    // de ronda (esBloqueado, ver generarCalendarioLateralDerecho) no lo
-    // haya detectado por su cuenta (p.ej. si ya se ganó la ronda anterior
-    // pero el admin todavía no escribió el nombre real del rival). No hay
-    // PREVIA real que abrir sin rival — señal SIEMPRE válida, en CUALQUIER
-    // competición, no solo en COMPS_ELIMINACION_DIRECTA.
-    esBloqueado = esBloqueado || !!(rival && rival.desconocido);
-
     var local = esLocal ? activo : rival;
     var visitante = esLocal ? rival : activo;
 
@@ -4741,7 +4741,8 @@
     // (_resolverCompKeyBalon, más arriba) — así una competición extra
     // también sale con su color real, no siempre en gris "comp-otro".
     // Se calcula AQUÍ (antes de decidir qué botones mostrar) porque
-    // _usaResultadoRapido también lo necesita.
+    // _usaResultadoRapido y el guard de rival desconocido, más abajo,
+    // también lo necesitan.
     var compKeyResuelto = _resolverCompKeyBalon(partido.competicion);
 
     // Humano vs Humano — los 2 lados tienen mánager (`.mister`, mismo
@@ -4754,6 +4755,21 @@
     // (pensado para 2 humanos que deben coincidir) no aplica — su card
     // ya sustituye PREVIA por los 3 iconos ✅➖❌ en el centro.
     var usaResultadoRapido = _usaResultadoRapido(idActivo, compKeyResuelto);
+
+    // Rival AÚN sin determinar ("?" en el calendario, ver crearEscudoHTML /
+    // resolverRivalPorNombre / parsearPartidosExtraTexto) — bloquea la card
+    // aunque el cálculo por orden de ronda (esBloqueado, ver
+    // generarCalendarioLateralDerecho) no lo haya detectado por su cuenta
+    // (p.ej. si ya se ganó la ronda anterior pero el admin todavía no
+    // escribió el nombre real del rival). No hay PREVIA real que abrir sin
+    // rival — señal SIEMPRE válida, en CUALQUIER competición.
+    // EXCEPCIÓN: si el club usa "resultado rápido" para esta competición
+    // (Liga/Copa del PSG, resueltas fuera de la app — ver
+    // RESULTADO_RAPIDO_POR_CLUB), el rival NUNCA se llega a rellenar a
+    // propósito; bloquear la card ahí dejaría los botones ✅➖❌
+    // inalcanzables para siempre. Ese flujo no necesita conocer al rival.
+    esBloqueado = esBloqueado || (!!(rival && rival.desconocido) && !usaResultadoRapido);
+
     var mostrarPospuestoBtn = esHumanoVsHumano && !partido.jugado && !esEliminado && !esBloqueado && !usaResultadoRapido;
 
     var card = document.createElement("div");

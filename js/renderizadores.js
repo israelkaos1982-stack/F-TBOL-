@@ -4899,11 +4899,37 @@
     // primer pendiente del calendario, calculado una vez en
     // generarCalendarioLateralDerecho y pasado aquí como flag).
     var claseResultado = "";
+    // Goles de la TANDA de penaltis (mismo sentinel de minuto "TANDA" que
+    // js/acta.js/js/sistema-temporadas.js), null mientras no haga falta
+    // mirarlos — solo se calculan si el marcador real quedó empatado.
+    // Estos eventos viven en el acta persistida (partido.eventos, ver
+    // Estado.listarPartidosResueltos), nunca en golesLocal/golesVisitante.
+    var penL = null, penV = null;
     if (partido.jugado && partido.resultado) {
       var golesActivo = esLocal ? partido.resultado.golesLocal : partido.resultado.golesVisitante;
       var golesRival = esLocal ? partido.resultado.golesVisitante : partido.resultado.golesLocal;
-      claseResultado = golesActivo > golesRival ? " match-card--gano"
-        : (golesActivo === golesRival ? " match-card--empate" : " match-card--perdio");
+      if (golesActivo === golesRival) {
+        // Marcador empatado: puede ser un empate real (Liga/amistoso) o
+        // haberse decidido por la tanda de penaltis de una eliminatoria a
+        // partido único (petición usuario, foto: "Levante 0-0 Atlético
+        // Madrid" resuelto 6-4 en penaltis seguía saliendo en gris, como
+        // si hubiera sido empate).
+        penL = 0; penV = 0;
+        (partido.eventos || []).forEach(function (ev) {
+          if (ev.tipo !== "PENALTI_GOL" || ev.minuto !== "TANDA") return;
+          if (ev.equipo_id === partido.local) penL++;
+          else if (ev.equipo_id === partido.visitante) penV++;
+        });
+        if (penL === penV) {
+          claseResultado = " match-card--empate";
+        } else {
+          var penActivo = esLocal ? penL : penV;
+          var penRival = esLocal ? penV : penL;
+          claseResultado = penActivo > penRival ? " match-card--gano" : " match-card--perdio";
+        }
+      } else {
+        claseResultado = golesActivo > golesRival ? " match-card--gano" : " match-card--perdio";
+      }
     }
 
     // La misma clase .comp-XXX tiñe el borde de la card ENTERA (abajo)
@@ -4945,11 +4971,23 @@
       // de arriba, coherente con el color --gano/--empate/--perdio de la
       // card). Sigue siendo el mismo botón de reinicio (PIN admin).
       var etiquetaCentro = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
+      // Marcador decidido en la tanda de penaltis (penL/penV ya
+      // calculados arriba, distintos entre sí): se añade el resultado
+      // de la tanda entre paréntesis — sin esto, una card ya en verde
+      // por haber ganado en penaltis seguiría mostrando solo el "0-0"
+      // del marcador real, sin explicar por qué es una victoria. Con
+      // fuente reducida (mismo criterio que --rapido): es más texto que
+      // un marcador normal y tiene que seguir cabiendo en una línea.
+      var huboTanda = penL !== null && penV !== null && penL !== penV;
+      if (huboTanda) {
+        etiquetaCentro += " (" + penL + "-" + penV + " pen.)";
+      }
       if (partido.resultadoRapido) {
         etiquetaCentro = claseResultado === " match-card--gano" ? "✅ GANADO"
           : (claseResultado === " match-card--empate" ? "➖ EMPATE" : "❌ PERDIDO");
       }
-      centroTop = '<button type="button" class="match-card-marcador' + (partido.resultadoRapido ? " match-card-marcador--rapido" : "") +
+      centroTop = '<button type="button" class="match-card-marcador' +
+        (partido.resultadoRapido ? " match-card-marcador--rapido" : (huboTanda ? " match-card-marcador--tanda" : "")) +
         '" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' + etiquetaCentro + "</button>";
     } else if (esEliminado) {
       centroTop = '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>';

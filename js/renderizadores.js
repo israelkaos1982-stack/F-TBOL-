@@ -239,7 +239,7 @@
     uel: "uel", "europa league": "uel", "uefa europa league": "uel",
     uecl: "uecl", "conference league": "uecl", "uefa conference league": "uecl",
     recopa: "recopa", "recopa de europa": "recopa",
-    usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc",
+    usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc", "supercopa europa": "usc",
     "ucl-previa": "ucl-previa", previa: "ucl-previa", "previa champions": "ucl-previa", "fase previa champions": "ucl-previa",
     selecciones: "selecciones", "fase final selecciones": "selecciones", mundial: "selecciones",
     "sel-clasif": "sel-clasif", "clasificacion selecciones": "sel-clasif",

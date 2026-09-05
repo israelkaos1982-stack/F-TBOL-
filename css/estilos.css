@@ -2421,6 +2421,15 @@ button { font-family: inherit; cursor: pointer; }
   font-weight: 800;
   color: var(--text-hi);
 }
+/* Resultado rápido ya jugado (ver registrarResultadoRapido) — la etiqueta
+   "✅ GANADO"/"➖ EMPATE"/"❌ PERDIDO" es más larga que un marcador "N - N"
+   normal, así que baja un poco el tamaño para seguir cabiendo en una
+   sola línea entre los 2 escudos. */
+.match-card-marcador--rapido {
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
 .match-card-btn {
   padding: 4px 6px;
   border-radius: var(--radius-s);
@@ -2456,6 +2465,40 @@ button { font-family: inherit; cursor: pointer; }
   line-height: 1;
   white-space: nowrap;
 }
+
+/* Resultado rápido SIN jugar (ver RESULTADO_RAPIDO_POR_CLUB en
+   js/renderizadores.js / registrarResultadoRapido en js/estado.js) —
+   sustituye al botón PREVIA por 3 iconos, para clubes que resuelven ese
+   partido fuera de la app y solo quieren anotar quién ganó. Mismos
+   colores que ya usa el borde de resultado (--neon/--text-lo/--wine) al
+   pasar el dedo/cursor por encima, para que la asociación con verde =
+   ganado / gris = empate / rojo = perdido sea inmediata. */
+.match-card-rapido {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+.match-card-rapido-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.match-card-rapido-btn:active { transform: scale(0.9); }
+.match-card-rapido-btn--gano:hover { border-color: var(--neon); background: rgba(57, 255, 106, 0.14); }
+.match-card-rapido-btn--empate:hover { border-color: var(--text-lo); background: rgba(154, 160, 172, 0.14); }
+.match-card-rapido-btn--perdio:hover { border-color: var(--wine); background: rgba(194, 24, 91, 0.14); }
+
 .match-card-vs-sep {
   color: var(--text-lo);
   font-size: 10px;

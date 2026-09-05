@@ -230,8 +230,8 @@
   // para que el balón asignado a esa competición SIEMPRE se resuelva, no
   // solo cuando el admin teclea la clave interna a pelo.
   var _BALON_COMP_ALIAS = {
-    liga: "liga",
-    copa: "copa", "copa del rey": "copa",
+    liga: "liga", "ligue 1": "liga",
+    copa: "copa", "copa del rey": "copa", coupe: "copa", "coupe de france": "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
     promocion: "promocion", "promocion de ascenso": "promocion", "promocion de descenso": "promocion",
     "promocion ascenso": "promocion", "promocion descenso": "promocion",
@@ -4614,6 +4614,32 @@
       : '<button type="button" class="match-card-pospuesto-btn" data-accion="posponer-partido" data-partido-id="' + partido.id + '" title="Aún no podéis coincidir para jugarlo — pulsa para posponerlo">⏳</button>';
   }
 
+  // RESULTADO RÁPIDO — clubes que NO juegan sus partidos EN VIVO dentro de
+  // la app para estas competiciones (petición usuario: PSG/Izan resuelve
+  // Liga, Copa y Champions fuera de la app y solo quiere anotar el
+  // resultado final). En vez del botón PREVIA, la card muestra 3 iconos
+  // ✅➖❌ directamente — sin pasar por la pantalla de previa/en vivo.
+  // Mapa club → { compKey: true }, con `_resolverCompKeyBalon` de por
+  // medio (mismo alias que ya usa el color/balón de la card) para que
+  // "Coupe"/"Champions League"/etc. casen igual que "Copa"/"Champions".
+  var RESULTADO_RAPIDO_POR_CLUB = {
+    psg: { liga: true, copa: true, champions: true }
+  };
+  function _usaResultadoRapido(idClub, compKeyResuelto) {
+    var cfg = RESULTADO_RAPIDO_POR_CLUB[idClub];
+    return !!(cfg && cfg[compKeyResuelto]);
+  }
+
+  function _resultadoRapidoBotonesHTML(partidoId) {
+    return (
+      '<div class="match-card-rapido">' +
+      '<button type="button" class="match-card-rapido-btn match-card-rapido-btn--gano" data-accion="resultado-rapido" data-resultado="gano" data-partido-id="' + partidoId + '" title="Ganado">✅</button>' +
+      '<button type="button" class="match-card-rapido-btn match-card-rapido-btn--empate" data-accion="resultado-rapido" data-resultado="empate" data-partido-id="' + partidoId + '" title="Empate">➖</button>' +
+      '<button type="button" class="match-card-rapido-btn match-card-rapido-btn--perdio" data-accion="resultado-rapido" data-resultado="perdio" data-partido-id="' + partidoId + '" title="Perdido">❌</button>' +
+      "</div>"
+    );
+  }
+
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado, esBloqueado) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
@@ -4632,12 +4658,28 @@
     var local = esLocal ? activo : rival;
     var visitante = esLocal ? rival : activo;
 
+    // `partido.competicion` de un partido REAL ya es el compKey interno
+    // ("liga", "copa"...), pero el de un partido del "Calendario extra"
+    // (ver parsearPartidosExtraTexto) es texto LIBRE tecleado por el
+    // admin ("Champions League", "Copa Intercontinental"...). Reusamos
+    // el MISMO alias que ya normaliza esos nombres para el balón
+    // (_resolverCompKeyBalon, más arriba) — así una competición extra
+    // también sale con su color real, no siempre en gris "comp-otro".
+    // Se calcula AQUÍ (antes de decidir qué botones mostrar) porque
+    // _usaResultadoRapido también lo necesita.
+    var compKeyResuelto = _resolverCompKeyBalon(partido.competicion);
+
     // Humano vs Humano — los 2 lados tienen mánager (`.mister`, mismo
     // criterio que ya usa acta.js::esEquipoHumano). Solo estas cards
     // pueden bloquear el calendario esperando a que 2 personas coincidan
     // — por eso son las únicas con el icono ⏳ de posponer.
     var esHumanoVsHumano = !!(local && local.mister) && !!(visitante && visitante.mister);
-    var mostrarPospuestoBtn = esHumanoVsHumano && !partido.jugado && !esEliminado && !esBloqueado;
+    // Resultado rápido (ver RESULTADO_RAPIDO_POR_CLUB): el club activo NO
+    // juega este partido en vivo dentro de la app, así que "posponer"
+    // (pensado para 2 humanos que deben coincidir) no aplica — su card
+    // ya sustituye PREVIA por los 3 iconos ✅➖❌ en el centro.
+    var usaResultadoRapido = _usaResultadoRapido(idActivo, compKeyResuelto);
+    var mostrarPospuestoBtn = esHumanoVsHumano && !partido.jugado && !esEliminado && !esBloqueado && !usaResultadoRapido;
 
     var card = document.createElement("div");
 
@@ -4653,15 +4695,6 @@
       claseResultado = golesActivo > golesRival ? " match-card--gano"
         : (golesActivo === golesRival ? " match-card--empate" : " match-card--perdio");
     }
-
-    // `partido.competicion` de un partido REAL ya es el compKey interno
-    // ("liga", "copa"...), pero el de un partido del "Calendario extra"
-    // (ver parsearPartidosExtraTexto) es texto LIBRE tecleado por el
-    // admin ("Champions League", "Copa Intercontinental"...). Reusamos
-    // el MISMO alias que ya normaliza esos nombres para el balón
-    // (_resolverCompKeyBalon, más arriba) — así una competición extra
-    // también sale con su color real, no siempre en gris "comp-otro".
-    var compKeyResuelto = _resolverCompKeyBalon(partido.competicion);
 
     // La misma clase .comp-XXX tiñe el borde de la card ENTERA (abajo)
     // y la etiqueta interior (más abajo, en el innerHTML) — mismo color
@@ -4693,14 +4726,30 @@
     // reinicia el partido (vuelve a "sin jugar", para poder repetirlo
     // en pruebas), pero SOLO el administrador puede hacerlo (PIN, ver
     // la delegación de eventos más abajo) — petición usuario.
-    var centroTop = (partido.jugado && partido.resultado)
-      ? '<button type="button" class="match-card-marcador" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' +
-        partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</button>"
-      : (esEliminado
-        ? '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>'
-        : (esBloqueado
-          ? '<span class="match-card-bloqueado" title="Aún no has ganado la ronda anterior de esta eliminatoria">🔒</span>'
-          : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>'));
+    var centroTop;
+    if (partido.jugado && partido.resultado) {
+      // Resultado rápido (ver RESULTADO_RAPIDO_POR_CLUB/registrarResultadoRapido):
+      // el marcador guardado es un PLACEHOLDER (1-0/0-0/0-1), nunca un
+      // resultado real — mostrar "1 - 0" sería engañoso, así que se pinta
+      // la etiqueta del resultado (mismo criterio golesActivo/golesRival
+      // de arriba, coherente con el color --gano/--empate/--perdio de la
+      // card). Sigue siendo el mismo botón de reinicio (PIN admin).
+      var etiquetaCentro = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
+      if (partido.resultadoRapido) {
+        etiquetaCentro = claseResultado === " match-card--gano" ? "✅ GANADO"
+          : (claseResultado === " match-card--empate" ? "➖ EMPATE" : "❌ PERDIDO");
+      }
+      centroTop = '<button type="button" class="match-card-marcador' + (partido.resultadoRapido ? " match-card-marcador--rapido" : "") +
+        '" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' + etiquetaCentro + "</button>";
+    } else if (esEliminado) {
+      centroTop = '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>';
+    } else if (esBloqueado) {
+      centroTop = '<span class="match-card-bloqueado" title="Aún no has ganado la ronda anterior de esta eliminatoria">🔒</span>';
+    } else if (usaResultadoRapido) {
+      centroTop = _resultadoRapidoBotonesHTML(partido.id);
+    } else {
+      centroTop = '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
+    }
 
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
@@ -6067,6 +6116,22 @@
           window.Estado.cancelarPospuestoPartido(idPosponer);
         }
         if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
+      }
+      return;
+    }
+
+    // ✅➖❌ Resultado rápido (ver RESULTADO_RAPIDO_POR_CLUB) — abierto a
+    // cualquiera, igual que PREVIA/"▶ Empezar partido": no es una acción
+    // de administrador, es la forma normal de jugar este partido para
+    // este club en esta competición.
+    var btnRapido = ev.target.closest && ev.target.closest('[data-accion="resultado-rapido"]');
+    if (btnRapido) {
+      var idRapido = btnRapido.dataset.partidoId;
+      var tipoRapido = btnRapido.dataset.resultado;
+      if (idRapido && tipoRapido && window.Estado && window._idManagerActivo && _ultimoContexto) {
+        var partidoRapido = _ultimoContexto.partidosPorId[idRapido];
+        window.Estado.registrarResultadoRapido(idRapido, tipoRapido, window._idManagerActivo, { partido: partidoRapido, datos: _ultimoContexto.datos });
+        generarCalendarioLateralDerecho(window._idManagerActivo);
       }
       return;
     }

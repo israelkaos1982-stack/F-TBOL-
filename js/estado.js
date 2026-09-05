@@ -164,6 +164,49 @@
     return guardarEstado();
   }
 
+  // RESULTADO RÁPIDO — para un club que NO juega este partido en vivo
+  // dentro de la app (ver RESULTADO_RAPIDO_POR_CLUB en js/renderizadores.js
+  // — PSG/Izan resuelve Liga/Copa/Champions fuera de la app y solo quiere
+  // anotar quién ganó). `resultadoTipo` es "gano"/"empate"/"perdio" DESDE
+  // EL PUNTO DE VISTA de `idClubActivo` — se traduce a un marcador
+  // PLACEHOLDER (1-0 / 0-0 / 0-1) según de qué lado (local/visitante) juega
+  // ese club, para que la clasificación (PJ/PG/PE/PP/PTS) siga contando el
+  // partido correctamente. El marcador NO es real — `resultadoRapido:true`
+  // le dice al calendario que pinte "✅ GANADO"/"➖ EMPATE"/"❌ PERDIDO" en
+  // vez de un marcador numérico, y a cualquier futura caja de goleadores
+  // que NO son datos reales de gol (aquí `eventos` siempre queda vacío).
+  function registrarResultadoRapido(partidoId, resultadoTipo, idClubActivo, contextoPartido) {
+    var e = cargarEstado();
+    var partido = contextoPartido && contextoPartido.partido;
+    var esLocalActivo = !!(partido && partido.local === idClubActivo);
+    var golesActivo = resultadoTipo === "gano" ? 1 : 0;
+    var golesRival = resultadoTipo === "perdio" ? 1 : 0;
+
+    var identidad = null;
+    var clubes = [];
+    var competicion = null;
+    try {
+      if (partido && contextoPartido.datos) {
+        identidad = _identidadFallbackDePartido(partido, contextoPartido.datos, window.Renderizadores);
+        clubes = _clubesHumanosDePartido(partido, contextoPartido.datos);
+        competicion = partido.competicion || null;
+      }
+    } catch (err) { identidad = null; clubes = []; competicion = null; }
+
+    e.resultados[partidoId] = {
+      jugado: true,
+      golesLocal: esLocalActivo ? golesActivo : golesRival,
+      golesVisitante: esLocalActivo ? golesRival : golesActivo,
+      eventos: [],
+      resultadoRapido: true,
+      _identidad: identidad,
+      _clubes: clubes,
+      _competicion: competicion,
+      _actualizadoEn: Date.now()
+    };
+    return guardarEstado();
+  }
+
   // Resultado confirmado en vivo para UN partido, tal cual lo guardó
   // registrarResultadoPartido — lo usa generarCalendarioLateralDerecho
   // para superponerlo sobre un partido de "Calendario extra" (que se
@@ -620,6 +663,10 @@
       // calendario necesita saberlo para pintar el aviso ⏳ y excluirlo
       // del cálculo de "próximo partido a jugar".
       copia.pospuesto = !!override.pospuesto;
+      // Resultado rápido (ver registrarResultadoRapido): el marcador es un
+      // placeholder, no un resultado real — el calendario lo necesita para
+      // pintar la etiqueta ✅/➖/❌ en vez del marcador numérico.
+      copia.resultadoRapido = !!override.resultadoRapido;
       return copia;
     });
   }
@@ -2084,6 +2131,7 @@
     invalidarCache: invalidarCache,
     guardarEstado: guardarEstado,
     registrarResultadoPartido: registrarResultadoPartido,
+    registrarResultadoRapido: registrarResultadoRapido,
     obtenerResultadoOverride: obtenerResultadoOverride,
     reiniciarResultadoPartido: reiniciarResultadoPartido,
     reiniciarResultadosDeClub: reiniciarResultadosDeClub,

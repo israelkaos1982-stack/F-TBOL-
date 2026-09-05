@@ -1374,11 +1374,15 @@
     }
   }
 
-  // ---------- Iconos de las 4 cajas de Objetivos (candado 646) ----------
-  // Las 4 cajas (LIGA/COPA/SUPERLIGA/GLOBALES) son fijas — solo su
-  // ICONO es editable, no su nombre. Por defecto los puestos al crear
-  // la pantalla; el admin los cambia por caja, uno a uno.
-  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", SUPERLIGA: "🌟", GLOBALES: "🌍" };
+  // ---------- Iconos de las 5 cajas de Objetivos (candado 646) ----------
+  // Las 5 cajas (LIGA/COPA/CHAMPIONS/SUPERLIGA/GLOBALES) son fijas —
+  // solo su ICONO es editable, no su nombre. Por defecto los puestos al
+  // crear la pantalla; el admin los cambia por caja, uno a uno. Copia
+  // EXACTA (mismas claves) del mapa de js/renderizadores.js — si se
+  // añade una caja nueva ahí, añadirla también aquí o
+  // guardarObjetivosIconoSeccion no sabría a qué icono por defecto caer
+  // para esa caja.
+  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", CHAMPIONS: "🇪🇺", SUPERLIGA: "🌟", GLOBALES: "🌍" };
   function _objetivosIconosKey(clubId) { return "ef7_objetivos_iconos_v1_" + clubId; }
   function obtenerObjetivosIconos(clubId) {
     var out = {};

@@ -395,10 +395,12 @@
   // la posición ya lo dice).
   function _miniActaFila(ev) {
     var meta = TIPOS_EVENTO[ev.tipo];
-    var etiquetaMinuto = ev.minuto === MINUTO_TANDA ? "🎯" : ev.minuto + "'";
+    // El MVP es del PARTIDO ENTERO, no de un minuto concreto — mostrar
+    // "5' ⭐ Roger Brugué" no tenía sentido (petición usuario, foto).
+    var etiquetaMinuto = ev.tipo === "MVP" ? "" : (ev.minuto === MINUTO_TANDA ? "🎯" : ev.minuto + "'");
     return (
       '<div class="live-acta-mini-item">' +
-      '<span class="live-acta-mini-min">' + etiquetaMinuto + "</span>" +
+      (etiquetaMinuto ? '<span class="live-acta-mini-min">' + etiquetaMinuto + "</span>" : "") +
       '<span class="live-acta-mini-tipo">' + meta.emoji + "</span>" +
       '<span class="live-acta-mini-jugador">' + (ev.jugador_nombre || "—") + "</span>" +
       '<button type="button" class="live-acta-mini-del" data-id-evento="' + ev.id_evento + '" aria-label="Eliminar evento">✕</button>' +
@@ -410,8 +412,16 @@
     var contV = document.getElementById("live-acta-visitante");
     if (!contL || !contV || !_partidoActivo) return;
 
-    function ordenMinuto(ev) { return ev.minuto === MINUTO_TANDA ? 999 : ev.minuto; }
-    var ordenado = actaTemporal.slice().sort(function (a, b) { return ordenMinuto(a) - ordenMinuto(b); });
+    // Los goles de la TANDA de penaltis no se listan como fila de acta —
+    // no tiene sentido ver 6-11 filas idénticas de "🎯 Tanda de
+    // penaltis" (petición usuario, foto). Su resultado se edita en su
+    // propia caja (#live-tanda-info, ver actualizarTandaInfo, justo
+    // debajo) con 2 inputs numéricos — esos eventos SIGUEN existiendo en
+    // actaTemporal y contando para decidir quién avanza (ver
+    // _contarTandaPenaltis / sistema-temporadas.js), solo se dejan de
+    // listar uno a uno aquí.
+    var visibles = actaTemporal.filter(function (ev) { return ev.minuto !== MINUTO_TANDA; });
+    var ordenado = visibles.slice().sort(function (a, b) { return a.minuto - b.minuto; });
 
     var htmlL = "", htmlV = "";
     ordenado.forEach(function (ev) {

@@ -33,6 +33,20 @@
     });
   }
 
+  // Cabecera FIJA del club (position:fixed en CSS, ver .club-header) —
+  // mide su alto REAL y lo deja en --club-header-h para que
+  // .club-layout reserve exactamente ese hueco con padding-top (nunca
+  // un número fijo a ciegas: el nombre del mister puede ocupar 1 o 2
+  // líneas según el club). Se llama al abrir la caja del club y de
+  // nuevo tras pintar nombre/mister/escudo, por si el alto cambió.
+  function _ajustarAlturaClubHeader() {
+    var pantalla = document.getElementById("screen-club");
+    if (!pantalla || pantalla.hidden) return;
+    var header = pantalla.querySelector(".club-header");
+    if (!header) return;
+    pantalla.style.setProperty("--club-header-h", header.offsetHeight + "px");
+  }
+
   // "#c8102e" -> "200, 16, 46" — para poder usar rgba(var(--x-rgb), N) en
   // CSS sin depender de color-mix() (no está en todos los móviles).
   function _hexToRgbParts(hex) {
@@ -152,6 +166,16 @@
         window.Renderizadores.obtenerFormatoUelTexto(), etiqueta
       );
       window.Renderizadores.irUelTab(clubId, "humanos");
+    } else if (vista === "uecl") {
+      // Mismo patrón EXACTO que "champions"/"uel" (petición usuario:
+      // "Creame la Conference, idéntica a Champions y Europa League") —
+      // solo cambia el contenedor y el texto de formato/reglas.
+      body.innerHTML = '<div id="uecl-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Conference League", "info-uecl-formato", null,
+        window.Renderizadores.obtenerFormatoUeclTexto(), etiqueta
+      );
+      window.Renderizadores.irUeclTab(clubId, "humanos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -210,6 +234,7 @@
           nombreEl.title = equipo.nombre || "";
         }
         if (misterEl) misterEl.textContent = equipo.mister || "—";
+        _ajustarAlturaClubHeader();
 
         // Tema de color del club — cada caja se ve con SUS colores (menú +
         // calendario), leídos directamente de data/equipos.json. Se fija
@@ -234,6 +259,7 @@
 
     cerrarModalClub();
     mostrarPantalla("club");
+    _ajustarAlturaClubHeader();
   }
 
   // ---------- Editor del menú del club (candado 646) ----------
@@ -698,6 +724,71 @@
   function mostrarInfoUel() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUelTexto(), "uel", mostrarInfoUel);
+  }
+
+  // ---------- Conference League — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "uecl-content".
+  function irUeclTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irUeclTab(clubId, tab);
+  }
+  function editarUeclInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("uecl-content");
+      if (cont) window.Renderizadores.pintarEditorUecl(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarUecl(clubId) {
+    var ta = document.getElementById("uecl-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarUeclTexto(ta.value);
+    window.Renderizadores.renderizarUecl("uecl-content", clubId);
+  }
+  function cancelarUecl(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUecl("uecl-content", clubId);
+  }
+  function verUeclStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria);
+  }
+  function volverUecl(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUecl("uecl-content", clubId);
+  }
+  function editarUeclStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("uecl-content");
+      if (cont) window.Renderizadores.pintarEditorUeclStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarUeclStat(clubId, categoria) {
+    var ta = document.getElementById("uecl-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarUeclStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria);
+  }
+  function cancelarUeclStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria);
+  }
+  function editarUeclPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("uecl-content");
+      if (cont) window.Renderizadores.pintarEditorUeclPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarUeclPlayoff(clubId, ronda) {
+    var ta = document.getElementById("uecl-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarUeclPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarUecl("uecl-content", clubId);
+  }
+  function cancelarUeclPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUecl("uecl-content", clubId);
+  }
+  function mostrarInfoUecl() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUeclTexto(), "uecl", mostrarInfoUecl);
   }
 
   // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
@@ -1176,6 +1267,10 @@
       window.Renderizadores.pintarTemporada();
     }
 
+    // Recalcula el hueco de la cabecera fija si gira el móvil / cambia
+    // el tamaño de letra del sistema mientras la caja del club está abierta.
+    window.addEventListener("resize", _ajustarAlturaClubHeader);
+
     var btnTemporada = document.getElementById("btn-editar-temporada");
     if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);
 
@@ -1357,6 +1452,19 @@
         case "guardar-uel-playoff": guardarUelPlayoff(d.clubId, d.ronda); break;
         case "cancelar-uel-playoff": cancelarUelPlayoff(d.clubId); break;
         case "info-uel-formato": mostrarInfoUel(); break;
+        case "uecl-tab-ir": irUeclTab(d.clubId, d.tab); break;
+        case "editar-uecl-inline": editarUeclInline(d.clubId); break;
+        case "guardar-uecl": guardarUecl(d.clubId); break;
+        case "cancelar-uecl": cancelarUecl(d.clubId); break;
+        case "ver-uecl-stat": verUeclStat(d.clubId, d.categoria); break;
+        case "volver-uecl": volverUecl(d.clubId); break;
+        case "editar-uecl-stat-inline": editarUeclStatInline(d.clubId, d.categoria); break;
+        case "guardar-uecl-stat": guardarUeclStat(d.clubId, d.categoria); break;
+        case "cancelar-uecl-stat": cancelarUeclStat(d.clubId, d.categoria); break;
+        case "editar-uecl-playoff-inline": editarUeclPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-uecl-playoff": guardarUeclPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-uecl-playoff": cancelarUeclPlayoff(d.clubId); break;
+        case "info-uecl-formato": mostrarInfoUecl(); break;
         case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
         case "volver-superliga": volverSuperliga(d.clubId); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;

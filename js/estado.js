@@ -900,7 +900,15 @@
     // tarjeta de fábrica NUEVA..." un poco más abajo) la incorpora sola,
     // al final del orden guardado, en cualquier club que ya tuviera su
     // menú personalizado ANTES de esta versión.
-    { id: "uel", icono: "🟠", etiqueta: "E. League" }
+    { id: "uel", icono: "🟠", etiqueta: "E. League" },
+    // Petición usuario ("Creame la Conference, idéntica a Champions y
+    // Europa League con sus colores en verde"): MISMO tratamiento de
+    // fábrica que "champions"/"uel" — tarjeta builtin en las 6 cajas.
+    // Se añade AL FINAL de la lista de fábrica por el mismo motivo que
+    // "uel" (ver comentario justo arriba): el mecanismo ya existente de
+    // obtenerMenuClub() la incorpora sola en cualquier club que ya
+    // tuviera su menú personalizado antes de esta versión.
+    { id: "uecl", icono: "🟢", etiqueta: "Conference" }
   ];
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
@@ -1909,6 +1917,75 @@
     }
   }
 
+  // ---------- Conference League — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica 1:1 de las 3 claves de Champions/Europa League de arriba
+  // (clasificación + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularUeclCombinada.
+  var UECL_TEXTO_KEY = "ef7_uecl_clasificacion_v1";
+  function obtenerUeclTexto() {
+    try {
+      return localStorage.getItem(UECL_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUeclTexto(texto) {
+    try {
+      localStorage.setItem(UECL_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Conference League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _ueclStatKey(categoria) {
+    return "ef7_uecl_stat_" + categoria + "_v1";
+  }
+  function obtenerUeclStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_ueclStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUeclStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_ueclStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Conference League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _ueclPlayoffKey(ronda) {
+    return "ef7_uecl_playoff_" + ronda + "_v1";
+  }
+  function obtenerUeclPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_ueclPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUeclPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_ueclPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Conference League:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+
   // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
   // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
   // app simula — el admin ha comparado, equipo a equipo, nivel/escudo/
@@ -2370,6 +2447,12 @@
     guardarUelStatTexto: guardarUelStatTexto,
     obtenerUelPlayoffTexto: obtenerUelPlayoffTexto,
     guardarUelPlayoffTexto: guardarUelPlayoffTexto,
+    obtenerUeclTexto: obtenerUeclTexto,
+    guardarUeclTexto: guardarUeclTexto,
+    obtenerUeclStatTexto: obtenerUeclStatTexto,
+    guardarUeclStatTexto: guardarUeclStatTexto,
+    obtenerUeclPlayoffTexto: obtenerUeclPlayoffTexto,
+    guardarUeclPlayoffTexto: guardarUeclPlayoffTexto,
     obtenerAliasEfootball: obtenerAliasEfootball,
     guardarAliasEfootball: guardarAliasEfootball,
     fusionarBalones: fusionarBalones,

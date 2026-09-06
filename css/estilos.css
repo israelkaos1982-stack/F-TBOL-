@@ -866,11 +866,35 @@ button { font-family: inherit; cursor: pointer; }
   height: 100dvh; /* iOS/Android: descuenta la barra del navegador de verdad, evita cortar la última fila */
   overflow: hidden; /* todo el scroll vive en los 2 hijos de abajo, nunca en la página */
 }
+/* CABECERA FIJA de verdad, "bajes lo que bajes" (petición usuario, 3er
+   fix sobre este mismo bloque): con el acotado de arriba la cabecera YA
+   no debería moverse (solo scrollean sus 2 hijos), pero en la práctica
+   seguían colándose fugas de scroll de página en algunos moviles
+   (overscroll/rebote, redondeo de 100dvh) que desplazaban #screen-club
+   ENTERO al llegar al final del scroll, arrastrando la cabecera fuera
+   de la pantalla con él. Fix definitivo: la cabecera pasa a
+   position:fixed, anclada al VIEWPORT del navegador -- no a #screen-club
+   ni a la pagina -- asi ninguna fuga de scroll puede moverla NUNCA,
+   venga de donde venga. Al sacarla del flujo normal, .club-layout
+   necesita un padding-top exacto para no quedar tapada bajo ella; como
+   esa altura puede variar un poco (el nombre del mister no siempre cabe
+   en una sola linea), se mide DE VERDAD en JS (js/main.js,
+   _ajustarAlturaClubHeader, variable --club-header-h) en vez de clavar
+   un numero a ciegas -- el 62px de abajo es solo el fallback para el
+   primerisimo pintado, antes de que JS mida nada. */
+.club-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10; /* por encima de .club-layout, por debajo de cualquier overlay/modal (60+) */
+}
 .club-layout {
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 112px 1fr;
+  padding-top: var(--club-header-h, 62px);
 }
 .club-menu {
   display: flex;
@@ -1884,6 +1908,26 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--uel-grupos { background: rgba(255, 122, 41, 0.16); border-color: rgba(255, 122, 41, 0.4); color: var(--naranja); }
 .liga-tab-box--uel-playoffs { background: rgba(230, 81, 0, 0.18); border-color: rgba(230, 81, 0, 0.45); color: #e65100; }
 .uel-tabs { margin-bottom: 14px; }
+
+/* Pestañas "👥️ Humanos / 🟢 Fase Grupos / 🟩 Playoffs" de Conference
+   League — mismo patrón EXACTO que Champions/Europa League justo arriba
+   (petición usuario: "Creame la Conference, idéntica a Champions y
+   Europa League con sus colores en verde"), en familia VERDE. Humanos
+   se queda en el mismo --neon (57,255,106) que las otras 2 pestañas
+   Humanos — es un indicador genérico de "tus 6 cajas", no el color de
+   la competición. Fase Grupos/Playoffs usan un verde DISTINTO de ese
+   --neon (0,200,83 / 27,94,32 — el mismo patrón claro+oscuro que ya usa
+   Europa League con naranja/#e65100): Conference ya es "oficialmente"
+   verde en el resto del proyecto (.comp-uecl/.liga1ref-zona-conference
+   usan --neon), pero reutilizar ESE MISMO tono aquí dejaría la pestaña
+   Fase Grupos indistinguible de la pestaña Humanos (las 2 con
+   idéntico verde neón) dentro de la MISMA pantalla — nunca pasa con
+   Champions (azul/morado) ni con Europa League (naranja/quemado)
+   porque ninguna de las 2 comparte tono con el --neon de Humanos. */
+.liga-tab-box--uecl-humanos { background: rgba(57, 255, 106, 0.14); border-color: rgba(57, 255, 106, 0.4); color: var(--neon); }
+.liga-tab-box--uecl-grupos { background: rgba(0, 200, 83, 0.16); border-color: rgba(0, 200, 83, 0.4); color: #00c853; }
+.liga-tab-box--uecl-playoffs { background: rgba(27, 94, 32, 0.22); border-color: rgba(27, 94, 32, 0.5); color: #43a047; }
+.uecl-tabs { margin-bottom: 14px; }
 
 /* Cruces de una ronda de Playoffs — reutiliza .copa-club-block/
    .copa-club-header/.copa-club-nombre como contenedor de cada ronda (0

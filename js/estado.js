@@ -453,6 +453,21 @@
   // window aqu\u00ed dentro, para poder testear esta funci\u00f3n en aislado).
   function _identidadFallbackDePartido(partido, datos, R) {
     if (!partido || !R || !R.buscarEquipoPorId) return null;
+    // Superliga (ver Estado._partidosSuperliga): el id de cada leg es
+    // 100% ESTABLE y determinista ("superliga-i-j-leg") — nunca depende
+    // de texto libre editable, así que jamás necesita esta identidad de
+    // reserva (pensada para Calendario extra, cuyo id sale de un hash de
+    // competición+ronda+rival y puede cambiar si el admin corrige la
+    // ronda DESPUÉS de jugar). Además, un mismo cruce de Superliga juega
+    // SIEMPRE sus 3 legs contra el MISMO rival y con `ronda:null` en los
+    // 3 — sin este guard, los 3 legs colapsaban a la MISMA identidad
+    // ("superliga::::par de equipos", igual sin ronda que los distinga),
+    // así que confirmar UN leg hacía que listarPartidosResueltos()
+    // "encontrara" ese mismo resultado también para los otros 2 legs
+    // (aún sin jugar de verdad) — bug reportado: "he jugado 1 jornada vs
+    // Liverpool y ha repetido las otras 2", con la clasificación y el
+    // Pichichi/MVP triplicados por contar el mismo partido 3 veces.
+    if (partido.competicion === "superliga") return null;
     var eqA = R.buscarEquipoPorId(partido.local, datos);
     var eqB = R.buscarEquipoPorId(partido.visitante, datos);
     if (!eqA || !eqB) return null;

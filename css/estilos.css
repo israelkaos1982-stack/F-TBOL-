@@ -1909,6 +1909,26 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--uel-playoffs { background: rgba(230, 81, 0, 0.18); border-color: rgba(230, 81, 0, 0.45); color: #e65100; }
 .uel-tabs { margin-bottom: 14px; }
 
+/* Pestañas "👥️ Humanos / 🟢 Fase Grupos / 🟩 Playoffs" de Conference
+   League — mismo patrón EXACTO que Champions/Europa League justo arriba
+   (petición usuario: "Creame la Conference, idéntica a Champions y
+   Europa League con sus colores en verde"), en familia VERDE. Humanos
+   se queda en el mismo --neon (57,255,106) que las otras 2 pestañas
+   Humanos — es un indicador genérico de "tus 6 cajas", no el color de
+   la competición. Fase Grupos/Playoffs usan un verde DISTINTO de ese
+   --neon (0,200,83 / 27,94,32 — el mismo patrón claro+oscuro que ya usa
+   Europa League con naranja/#e65100): Conference ya es "oficialmente"
+   verde en el resto del proyecto (.comp-uecl/.liga1ref-zona-conference
+   usan --neon), pero reutilizar ESE MISMO tono aquí dejaría la pestaña
+   Fase Grupos indistinguible de la pestaña Humanos (las 2 con
+   idéntico verde neón) dentro de la MISMA pantalla — nunca pasa con
+   Champions (azul/morado) ni con Europa League (naranja/quemado)
+   porque ninguna de las 2 comparte tono con el --neon de Humanos. */
+.liga-tab-box--uecl-humanos { background: rgba(57, 255, 106, 0.14); border-color: rgba(57, 255, 106, 0.4); color: var(--neon); }
+.liga-tab-box--uecl-grupos { background: rgba(0, 200, 83, 0.16); border-color: rgba(0, 200, 83, 0.4); color: #00c853; }
+.liga-tab-box--uecl-playoffs { background: rgba(27, 94, 32, 0.22); border-color: rgba(27, 94, 32, 0.5); color: #43a047; }
+.uecl-tabs { margin-bottom: 14px; }
+
 /* Cruces de una ronda de Playoffs — reutiliza .copa-club-block/
    .copa-club-header/.copa-club-nombre como contenedor de cada ronda (0
    CSS nuevo para eso), solo la fila del cruce en sí (2 escudos + marcador

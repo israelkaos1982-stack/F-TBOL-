@@ -866,11 +866,35 @@ button { font-family: inherit; cursor: pointer; }
   height: 100dvh; /* iOS/Android: descuenta la barra del navegador de verdad, evita cortar la última fila */
   overflow: hidden; /* todo el scroll vive en los 2 hijos de abajo, nunca en la página */
 }
+/* CABECERA FIJA de verdad, "bajes lo que bajes" (petición usuario, 3er
+   fix sobre este mismo bloque): con el acotado de arriba la cabecera YA
+   no debería moverse (solo scrollean sus 2 hijos), pero en la práctica
+   seguían colándose fugas de scroll de página en algunos moviles
+   (overscroll/rebote, redondeo de 100dvh) que desplazaban #screen-club
+   ENTERO al llegar al final del scroll, arrastrando la cabecera fuera
+   de la pantalla con él. Fix definitivo: la cabecera pasa a
+   position:fixed, anclada al VIEWPORT del navegador -- no a #screen-club
+   ni a la pagina -- asi ninguna fuga de scroll puede moverla NUNCA,
+   venga de donde venga. Al sacarla del flujo normal, .club-layout
+   necesita un padding-top exacto para no quedar tapada bajo ella; como
+   esa altura puede variar un poco (el nombre del mister no siempre cabe
+   en una sola linea), se mide DE VERDAD en JS (js/main.js,
+   _ajustarAlturaClubHeader, variable --club-header-h) en vez de clavar
+   un numero a ciegas -- el 62px de abajo es solo el fallback para el
+   primerisimo pintado, antes de que JS mida nada. */
+.club-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10; /* por encima de .club-layout, por debajo de cualquier overlay/modal (60+) */
+}
 .club-layout {
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 112px 1fr;
+  padding-top: var(--club-header-h, 62px);
 }
 .club-menu {
   display: flex;

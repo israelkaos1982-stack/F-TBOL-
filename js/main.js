@@ -33,6 +33,20 @@
     });
   }
 
+  // Cabecera FIJA del club (position:fixed en CSS, ver .club-header) —
+  // mide su alto REAL y lo deja en --club-header-h para que
+  // .club-layout reserve exactamente ese hueco con padding-top (nunca
+  // un número fijo a ciegas: el nombre del mister puede ocupar 1 o 2
+  // líneas según el club). Se llama al abrir la caja del club y de
+  // nuevo tras pintar nombre/mister/escudo, por si el alto cambió.
+  function _ajustarAlturaClubHeader() {
+    var pantalla = document.getElementById("screen-club");
+    if (!pantalla || pantalla.hidden) return;
+    var header = pantalla.querySelector(".club-header");
+    if (!header) return;
+    pantalla.style.setProperty("--club-header-h", header.offsetHeight + "px");
+  }
+
   // "#c8102e" -> "200, 16, 46" — para poder usar rgba(var(--x-rgb), N) en
   // CSS sin depender de color-mix() (no está en todos los móviles).
   function _hexToRgbParts(hex) {
@@ -210,6 +224,7 @@
           nombreEl.title = equipo.nombre || "";
         }
         if (misterEl) misterEl.textContent = equipo.mister || "—";
+        _ajustarAlturaClubHeader();
 
         // Tema de color del club — cada caja se ve con SUS colores (menú +
         // calendario), leídos directamente de data/equipos.json. Se fija
@@ -234,6 +249,7 @@
 
     cerrarModalClub();
     mostrarPantalla("club");
+    _ajustarAlturaClubHeader();
   }
 
   // ---------- Editor del menú del club (candado 646) ----------
@@ -1175,6 +1191,10 @@
       window.Renderizadores.renderizarInicioEquipos();
       window.Renderizadores.pintarTemporada();
     }
+
+    // Recalcula el hueco de la cabecera fija si gira el móvil / cambia
+    // el tamaño de letra del sistema mientras la caja del club está abierta.
+    window.addEventListener("resize", _ajustarAlturaClubHeader);
 
     var btnTemporada = document.getElementById("btn-editar-temporada");
     if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);

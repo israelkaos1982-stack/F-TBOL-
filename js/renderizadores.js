@@ -5459,10 +5459,15 @@
   // siendo el mismo texto libre de siempre — el formato "Nombre - N" es
   // compatible con datos ya guardados (un nº ya es lo que se guardaba).
   // ============================================================
-  var TITULOS_CATEGORIA_LABEL = { club: "🏆 Clubes", individual: "🥇 Individuales", seleccion: "🌍 Selecciones" };
-  var TITULOS_CATEGORIA_ORDEN = ["club", "individual", "seleccion"];
+  var TITULOS_CATEGORIA_LABEL = {
+    club: "🏆 Clubes", individual: "🥇 Individuales", seleccion: "🌍 Selecciones",
+    "torneo-verano": "🤝 Torneos Verano"
+  };
+  var TITULOS_CATEGORIA_ORDEN = ["club", "individual", "seleccion", "torneo-verano"];
   // Orden del resumen de arriba — distinto al de los estantes de abajo
-  // (petición usuario: "Clubes - Selección - Individuales").
+  // (petición usuario: "Clubes - Selección - Individuales"). Torneos Verano
+  // no tiene su propio hueco en ESTE resumen (no se pidió) — su total SÍ
+  // cuenta en totalGeneral, ver renderizarTitulos.
   var TITULOS_RESUMEN_ORDEN = ["club", "seleccion", "individual"];
 
   // Palabras de enlace que el admin puede omitir/añadir sin querer decir
@@ -5595,9 +5600,13 @@
       // no nº de trofeos distintos): "3 títulos de Champions+Copa+Kao Cup"
       // cuenta 3, no 1. Siempre visible, incluso en 0 (petición usuario,
       // "arriba el número total Clubes - Selección - Individuales").
-      var totales = { club: 0, individual: 0, seleccion: 0 };
+      // Genérico sobre TITULOS_CATEGORIA_ORDEN (no una suma hardcodeada de
+      // 3 nombres) para que una categoría NUEVA como "torneo-verano" cuente
+      // en el total sin tener que tocar esta línea cada vez.
+      var totales = {};
+      TITULOS_CATEGORIA_ORDEN.forEach(function (cat) { totales[cat] = 0; });
       ganados.forEach(function (g) { totales[g.categoria] = (totales[g.categoria] || 0) + g.veces; });
-      var totalGeneral = totales.club + totales.individual + totales.seleccion;
+      var totalGeneral = TITULOS_CATEGORIA_ORDEN.reduce(function (s, cat) { return s + totales[cat]; }, 0);
 
       var header = document.createElement("div");
       header.className = "liga1ref-header";

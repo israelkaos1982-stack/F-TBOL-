@@ -151,6 +151,32 @@
     return valorServidor.length < valorLocal.length * 0.5;
   }
 
+  // Única EXCEPCIÓN al guard de arriba: "🗑️ Borrar TODO" (ver
+  // js/estado.js::borrarTodo) es una regresión LEGÍTIMA y deliberada de
+  // ef7_estado_liga_v1 — vacía a propósito, y DEBE llegar a un
+  // dispositivo que todavía tenga partidos jugados en local (si no,
+  // "Borrar TODO" nunca resetearía a los otros 5 móviles, que es
+  // justamente lo que promete). Se reconoce por el sello
+  // `_resetGlobalEn` que app.py::_ef7_merge_resultados ya usa para
+  // decidir lo mismo en el servidor: si el valor del servidor lleva un
+  // sello MÁS RECIENTE que el que este dispositivo conoce, es un reset
+  // de verdad — no una copia vieja/huérfana — y se adopta pese a ser
+  // más corto.
+  var CLAVE_RESULTADOS = "ef7_estado_liga_v1"; // igual que app.py::_EF7_ESTADO_LIGA_KEY
+  function _selloReset(valorStr) {
+    try {
+      var obj = JSON.parse(valorStr);
+      var v = obj && obj._resetGlobalEn;
+      return typeof v === "number" ? v : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+  function _esReseteoGlobalLegitimo(clave, valorLocal, valorServidor) {
+    if (clave !== CLAVE_RESULTADOS) return false;
+    return _selloReset(valorServidor) > _selloReset(valorLocal);
+  }
+
   function _clavesLocales() {
     var backup = window.Estado.exportarEstadoCrudo();
     return (backup && backup.claves) || {};
@@ -273,14 +299,17 @@
             return;
           }
           // El servidor tiene una copia MUCHO más pobre que la de este
-          // dispositivo (ver _esRegresionGrave arriba) — no se adopta.
-          // En vez de descartarlo sin más, se marca PENDIENTE para que el
-          // próximo push suba la copia buena de este dispositivo y la
-          // "cure" en el servidor (el guard de app.py deja pasar ese push
-          // porque va a MEJOR, nunca a peor) — así el dispositivo con la
-          // copia rica es el que gana, sea cual sea el orden en que cada
-          // uno sincronizó.
-          if (_esRegresionGrave(actuales[k], valorServidor)) {
+          // dispositivo (ver _esRegresionGrave arriba) — no se adopta,
+          // SALVO que sea un "🗑️ Borrar TODO" legítimo más reciente
+          // (ver _esReseteoGlobalLegitimo) — ese SÍ debe pisar aunque
+          // este dispositivo tenga partidos jugados en local, o el
+          // reseteo nunca llegaría a los otros 5 móviles. Cuando no lo
+          // es, se marca PENDIENTE para que el próximo push suba la
+          // copia buena de este dispositivo y la "cure" en el servidor
+          // (el guard de app.py deja pasar ese push porque va a MEJOR,
+          // nunca a peor) — así el dispositivo con la copia rica es el
+          // que gana, sea cual sea el orden en que cada uno sincronizó.
+          if (_esRegresionGrave(actuales[k], valorServidor) && !_esReseteoGlobalLegitimo(k, actuales[k], valorServidor)) {
             _pendientes[k] = true;
             return;
           }

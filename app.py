@@ -5932,6 +5932,21 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     lleva sello, o llevan el mismo, gana el entrante — mismo criterio
     de "el último POST manda" que ya regía para el blob entero, pero
     ahora acotado a ESE partido en concreto).
+
+    RESETEO GLOBAL ("🗑️ Borrar TODO", ver js/estado.js::borrarTodo): el
+    entrante puede llevar `_resetGlobalEn` (timestamp, mismo espíritu
+    que `_actualizadoEn` pero para el BLOB completo). Si es MAYOR que el
+    `_resetGlobalEn` ya guardado (0 si nunca hubo uno), es un reseteo
+    deliberado más reciente que cualquier partido ya guardado — gana
+    ENTERO en vez de fusionarse: todo resultado (de cualquiera de los 2
+    lados) con `_actualizadoEn` <= ese sello se descarta, y
+    `partidosGenerados` se vacía (es caché derivada, no algo que el
+    admin edite a mano). Solo sobreviven partidos confirmados DESPUÉS
+    del reset (timestamp posterior — un móvil pudo confirmar un
+    resultado justo cuando otro pulsaba "Borrar TODO"). El sello se
+    conserva en el documento fusionado para que un dispositivo con una
+    copia AÚN MÁS vieja (sin este campo, o con uno anterior) nunca
+    pueda resucitar partidos de antes del reset.
     """
     try:
         incoming = json.loads(incoming_value) if incoming_value else None
@@ -5955,10 +5970,39 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     existing_res = existing_res if isinstance(existing_res, dict) else {}
     incoming_res = incoming_res if isinstance(incoming_res, dict) else {}
 
+    def _num(v):
+        return v if isinstance(v, (int, float)) else 0
+
+    reset_in = _num(incoming.get("_resetGlobalEn"))
+    reset_ex = _num(existing.get("_resetGlobalEn"))
+
+    if reset_in > reset_ex:
+        merged_res = {}
+        for match_id, entry in list(existing_res.items()) + list(incoming_res.items()):
+            ts = _num((entry or {}).get("_actualizadoEn")) if isinstance(entry, dict) else 0
+            if ts > reset_in:
+                merged_res[match_id] = entry
+        merged = dict(incoming)
+        merged["resultados"] = merged_res
+        merged["partidosGenerados"] = {}
+        merged["_resetGlobalEn"] = reset_in
+        try:
+            return json.dumps(merged, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return incoming_value
+
     merged_res = dict(existing_res)
     for match_id, incoming_entry in incoming_res.items():
         existing_entry = existing_res.get(match_id)
         if existing_entry is None or not isinstance(existing_entry, dict):
+            # Ya hubo un reset (reset_ex) y este match_id no sobrevivió a
+            # él (no está en existing_res) — un dispositivo REZAGADO que
+            # nunca se enteró del reset podría intentar resucitarlo aquí.
+            # Se descarta si es de ANTES o IGUAL al reset; solo un
+            # partido confirmado DESPUÉS entra sin más comprobación.
+            ts_in_nuevo = _num((incoming_entry or {}).get("_actualizadoEn")) if isinstance(incoming_entry, dict) else 0
+            if reset_ex and ts_in_nuevo <= reset_ex:
+                continue
             merged_res[match_id] = incoming_entry
             continue
         ts_in = (incoming_entry or {}).get("_actualizadoEn") if isinstance(incoming_entry, dict) else None
@@ -5978,6 +6022,13 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     if isinstance(incoming_gen, dict):
         merged_gen.update(incoming_gen)
     merged["partidosGenerados"] = merged_gen
+
+    # Un reset ya sellado nunca se "olvida": si el entrante no trae
+    # ninguno (dispositivo que aún no ha pulsado Borrar TODO, o con una
+    # versión vieja del cliente), se conserva el ya guardado para que
+    # una copia stale futura no pueda resucitar partidos de antes de él.
+    if reset_ex and not incoming.get("_resetGlobalEn"):
+        merged["_resetGlobalEn"] = reset_ex
 
     try:
         return json.dumps(merged, ensure_ascii=False)

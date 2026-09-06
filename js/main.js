@@ -1101,7 +1101,7 @@
 
   function borrarTodoConfirmado() {
     var ok = window.confirm(
-      "⚠️ Esto borra TODO el progreso guardado en este dispositivo (partidos jugados, actas, terceros partidos de desempate por eliminatoria).\n\n" +
+      "⚠️ Esto borra TODO el progreso de partidos jugados (actas, terceros partidos de desempate por eliminatoria) — Y SE PROPAGA A LOS 6 MÓVILES en cuanto sincronicen, no solo a este dispositivo.\n\n" +
       "Las 6 plantillas y el calendario base NO se pierden — vuelven a su estado de fábrica. Esta acción NO se puede deshacer.\n\n" +
       "¿Seguro que quieres continuar?"
     );

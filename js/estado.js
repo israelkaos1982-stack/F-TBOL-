@@ -2185,14 +2185,26 @@
   // admin, no "progreso de partidos jugados". `_clavesDeLaApp()` solo
   // se usa para el backup completo (exportar/importar), no para este
   // borrado — son alcances distintos a propósito.
+  //
+  // RESETEO REAL, PARA LOS 6 MÓVILES (no solo este dispositivo): antes
+  // se hacía `localStorage.removeItem(STORAGE_KEY)` — una clave
+  // INEXISTENTE es invisible para js/sync.js (`_clavesDeLaApp()` solo
+  // enumera claves que SIGUEN en localStorage), así que el borrado
+  // nunca se detectaba como "cambio que subir" y el siguiente pull lo
+  // deshacía solo, restaurando el valor del servidor — "Borrar TODO"
+  // no sobrevivía ni 10 segundos en el propio dispositivo que lo pulsó.
+  // Ahora se GUARDA (no se borra) un estado vacío con un sello
+  // `_resetGlobalEn` — igual que `_actualizadoEn` sella cada partido
+  // individual, este sella el reseteo COMPLETO. El servidor
+  // (_ef7_merge_resultados) lo reconoce como más reciente que
+  // cualquier partido ya guardado y lo aplica como REEMPLAZO (nunca
+  // como unión) — así llega también a los otros 5 móviles en su
+  // siguiente sincronización. js/sync.js tiene el mismo sello en
+  // cuenta para no tratarlo como "un dispositivo con copia vieja"
+  // pisando lo demás (ver _esRegresionGrave allí).
   function borrarTodo() {
-    _estado = estadoPorDefecto();
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (err) {
-      console.error("[estado] no se pudo borrar localStorage:", err);
-    }
-    return true;
+    _estado = { version: 1, resultados: {}, partidosGenerados: {}, _resetGlobalEn: Date.now() };
+    return guardarEstado();
   }
 
   // ---------- Backup (panel antiborrado) ----------

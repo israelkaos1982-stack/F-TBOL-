@@ -1468,11 +1468,21 @@
   // cuenta de forma independiente (petición usuario) — el desglose de
   // Isra contra Álvaro no tiene por qué coincidir número a número con el
   // de Álvaro contra Isra, son 2 registros separados a propósito.
+  // Actualizado 2026 desde "Estadisticas_Derbys.xlsx" (petición usuario,
+  // "actualización de los derbys, actualiza cada caja de derbys de cada
+  // equipo") — cada bloque del Excel trae, POR MÁNAGER, su desglose
+  // PJ/PG/PE/PP/G+/G- contra cada uno de los otros 5 (el Excel guarda
+  // G- en negativo; aquí se transcribe en positivo, mismo formato que
+  // ya usaba esta tabla). Transcrito TAL CUAL viene en el Excel, sin
+  // "corregir" descuadres puntuales entre el registro de un mánager y
+  // el de su rival (p.ej. Toñín vs Acsa) — cada uno lleva su PROPIA
+  // cuenta de forma independiente, por diseño (ver comentario de más
+  // arriba).
   var DERBYS_DEFAULT_TEXTO = {
     "atletico-madrid": [ // ISRA ✏️
-      "Álvaro 🐭: PJ 9 PG 6 PE 1 PP 2 G+ 26 G- 19",
-      "Acsa 🔨: PJ 7 PG 6 PE 0 PP 1 G+ 37 G- 8",
-      "Toñín 💡: PJ 12 PG 9 PE 1 PP 2 G+ 52 G- 21",
+      "Álvaro 🐭: PJ 10 PG 7 PE 1 PP 2 G+ 30 G- 21",
+      "Acsa 🔨: PJ 8 PG 7 PE 0 PP 1 G+ 37 G- 9",
+      "Toñín 💡: PJ 14 PG 11 PE 1 PP 2 G+ 65 G- 23",
       "Ángel 😈: PJ 10 PG 8 PE 0 PP 2 G+ 40 G- 16",
       "Izan 🦆: PJ 3 PG 2 PE 0 PP 1 G+ 8 G- 4"
     ].join("\n"),
@@ -1495,7 +1505,7 @@
       "Acsa 🔨: PJ 8 PG 5 PE 1 PP 2 G+ 25 G- 19",
       "Toñín 💡: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
       "Izan 🦆: PJ 4 PG 3 PE 1 PP 0 G+ 9 G- 4",
-      "Isra ✏️: PJ 10 PG 1 PE 0 PP 9 G+ 15 G- 41"
+      "Isra ✏️: PJ 10 PG 2 PE 0 PP 8 G+ 16 G- 40"
     ].join("\n"),
     psg: [ // IZAN 🦆
       "Álvaro 🐭: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
@@ -1506,10 +1516,10 @@
     ].join("\n"),
     liverpool: [ // TOÑÍN 💡
       "Álvaro 🐭: PJ 11 PG 1 PE 1 PP 9 G+ 8 G- 27",
-      "Acsa 🔨: PJ 10 PG 3 PE 1 PP 6 G+ 15 G- 17",
+      "Acsa 🔨: PJ 10 PG 4 PE 1 PP 6 G+ 17 G- 15",
       "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
       "Izan 🦆: PJ 3 PG 1 PE 0 PP 2 G+ 3 G- 6",
-      "Isra ✏️: PJ 11 PG 2 PE 1 PP 8 G+ 17 G- 47"
+      "Isra ✏️: PJ 14 PG 2 PE 1 PP 11 G+ 23 G- 65"
     ].join("\n")
   };
   function _derbysKey(clubId) { return "ef7_derbys_v1_" + clubId; }

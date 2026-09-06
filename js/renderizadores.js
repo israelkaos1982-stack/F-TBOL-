@@ -6550,10 +6550,22 @@
         // y Estado.marcarPartidoPospuesto) tampoco puede ser "el próximo" —
         // es precisamente lo que existe para dejar de bloquear el 📌/borde
         // azul mientras los 2 mánagers no puedan coincidir para jugarlo.
+        // EXCEPCIÓN — Resultado rápido (RESULTADO_RAPIDO_POR_CLUB, ver
+        // construirTarjetaPartido): el rival de esos partidos SIEMPRE
+        // queda "?" a propósito (Liga/Copa del PSG se resuelven fuera de
+        // la app), así que el guard de "rival desconocido" tiene que
+        // IGNORARSE ahí — mismo criterio EXACTO que ya usa
+        // construirTarjetaPartido para no bloquear su card. Sin esta
+        // excepción, el bucle saltaba TODOS los partidos de resultado
+        // rápido (rival siempre "?") y el 📌/borde azul aterrizaba en el
+        // primer partido normal muy por delante, aunque Liga J1/J2 del
+        // PSG siguieran sin marcar (bug reportado: el pin salía en la
+        // 3ª card — Champions J1 — en vez de en la 1ª, Liga J1).
         var idSiguiente = null;
         for (var i = 0; i < partidosDelClub.length; i++) {
           var pp = partidosDelClub[i];
-          if (!pp.jugado && !pp.pospuesto && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && !_rivalDesconocido(pp, idEquipoHumanoActivo, datos)) { idSiguiente = pp.id; break; }
+          var rapidoPp = _usaResultadoRapido(idEquipoHumanoActivo, _resolverCompKeyBalon(pp.competicion));
+          if (!pp.jugado && !pp.pospuesto && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && (rapidoPp || !_rivalDesconocido(pp, idEquipoHumanoActivo, datos))) { idSiguiente = pp.id; break; }
         }
 
         var frag = document.createDocumentFragment();

@@ -224,7 +224,27 @@
     if (partido.competicion === "liga" && typeof partido.jornada === "number") {
       return calcularClimaDinamicoPartido(partido.jornada, totalJornadasLiga, seed);
     }
-    var fechaMs = new Date(partido.fecha).getTime();
+    // Partido de Calendario extra SIN fecha real tecleada (el caso normal:
+    // el admin casi nunca escribe una fecha por línea, ver
+    // parsearPartidosExtraTexto — "fecha" solo se rellena si hay una 4ª
+    // parte tras "Competición - Ronda - Rival"). Con `partido.fecha` vacío,
+    // `new Date(null).getTime()` da el EPOCH (1970) — SIEMPRE muy anterior
+    // a fechaInicioMs de la temporada real, así que el ratio se clampeaba
+    // a 0 -> progreso 0 -> SIEMPRE "VERANO", para CUALQUIER partido sin
+    // fecha (Liga, Copa a doble partido, Promoción…). Es la causa exacta
+    // del bug reportado por el usuario ("la estación siempre es verano, no
+    // sale invierno") con un calendario de Calendario extra sin fechas.
+    // Fallback: la posición CRONOLÓGICA de este partido dentro del propio
+    // calendario del club (_ordenClub/_totalClubCalendario, calculados en
+    // generarCalendarioLateralDerecho para el mismo propósito de "orden de
+    // temporada") sustituye a la fecha ausente — reparte el clima a lo
+    // largo de TODA la temporada real del club en vez de clavarlo al
+    // principio.
+    var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;
+    if (!isFinite(fechaCruda) && typeof partido._ordenClub === "number" && partido._totalClubCalendario) {
+      return calcularClimaDinamicoPartido(partido._ordenClub + 1, partido._totalClubCalendario, seed);
+    }
+    var fechaMs = isFinite(fechaCruda) ? fechaCruda : fechaInicioMs;
     var rango = Math.max(1, fechaFinMs - fechaInicioMs);
     var ratio = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
     return calcularClimaDinamicoPartido(Math.round(ratio * 1000), 1000, seed);
@@ -6505,8 +6525,11 @@
         // cambien los partidos/el Calendario extra — es la "línea de
         // tiempo" que usan los Lesionados/Sancionados con rango (ver
         // estado.js) para saber qué partidos ya habían pasado cuando se
-        // marcó/quitó a un jugador de la lista.
-        partidosDelClub.forEach(function (p, i) { p._ordenClub = i; });
+        // marcó/quitó a un jugador de la lista. `_totalClubCalendario`
+        // viaja al lado para que calcularClimaParaPartido pueda usar esta
+        // MISMA posición como "proporción de la temporada" cuando el
+        // partido no tiene fecha real (ver ese comentario para el porqué).
+        partidosDelClub.forEach(function (p, i) { p._ordenClub = i; p._totalClubCalendario = partidosDelClub.length; });
 
         var partidosPorId = {};
         partidosDelClub.forEach(function (p) { partidosPorId[p.id] = p; });

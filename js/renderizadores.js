@@ -7718,23 +7718,51 @@
     };
   }
 
-  // Captura `el` (la previa TAL CUAL se ve, con html2canvas cargado por
-  // CDN en index.html) a un <canvas> en memoria y copia el resultado al
-  // portapapeles del dispositivo (Clipboard API) — nada se guarda en
-  // disco ni se envía a ningún servidor, solo unas decenas de KB
-  // efímeros. DEBE llamarse con `el` todavía VISIBLE (antes de cerrar la
-  // previa): html2canvas no puede fotografiar un nodo ya oculto
-  // (display:none no tiene layout que capturar).
+  // Token global de la ÚLTIMA captura solicitada — ver el porqué justo
+  // debajo de _capturarYCompartirPreviaWhatsapp (bug real, petición
+  // usuario: "las capturas del inicio/descanso/final a veces son del
+  // partido anterior, creando confusión").
+  var _capturaScreenshotToken = 0;
+
+  // Captura `el` (la previa/pantalla en vivo TAL CUAL se ve, con
+  // html2canvas cargado por CDN en index.html) a un <canvas> en memoria
+  // y copia el resultado al portapapeles del dispositivo (Clipboard
+  // API) — nada se guarda en disco ni se envía a ningún servidor, solo
+  // unas decenas de KB efímeros. DEBE llamarse con `el` todavía VISIBLE
+  // (antes de cerrar la previa): html2canvas no puede fotografiar un
+  // nodo ya oculto (display:none no tiene layout que capturar).
   //
   // `cb()` se llama SIEMPRE — con éxito, con fallo, o si html2canvas no
   // llegó a cargar (sin red / CDN caído) — para que "▶ Empezar partido"
   // nunca se quede esperando: la captura es un extra, jamás un bloqueo
   // para arrancar el partido.
+  //
+  // GUARD anti-partido-equivocado (bug real, foto/queja usuario: "las
+  // capturas de pantalla del inicio del partido, descanso y final a
+  // veces se hacen capturas del partido anterior, creando confusión").
+  // Causa raíz: la captura automática de FINALIZAR (js/acta.js::
+  // confirmarPartido) es FIRE-AND-FORGET — con callback vacío, no
+  // bloquea nada — mientras que "▶ Empezar partido"/"▶ Continuar 2ª
+  // parte" SÍ esperan a `cb()` antes de avanzar de pantalla. Si el
+  // usuario avanza rápido al SIGUIENTE partido (previa → Empezar, o
+  // descanso → Continuar) mientras esa captura de FINALIZAR del
+  // partido ANTERIOR sigue en vuelo (html2canvas puede tardar bastante
+  // en un móvil lento, con muchos escudos/degradados que sustituir),
+  // las 2 escrituras al portapapeles pueden resolver en CUALQUIER
+  // orden — si la del partido VIEJO gana la carrera por llegar la
+  // última, pisa la del partido NUEVO ya correcta, y el usuario acaba
+  // pegando en WhatsApp la captura equivocada sin darse cuenta. Cada
+  // llamada se sella con un token creciente; solo la captura MÁS
+  // RECIENTE puede llegar a escribir en el portapapeles — cualquier
+  // captura más vieja que resuelva tarde se descarta en silencio (sigue
+  // llamando a `cb()` con normalidad, solo se salta el paso de
+  // clipboard) en vez de arriesgarse a pisar una más nueva.
   function _capturarYCompartirPreviaWhatsapp(el, cb) {
     if (!el || typeof window.html2canvas !== "function") {
       cb();
       return;
     }
+    var miToken = ++_capturaScreenshotToken;
     var listo = false;
     var restaurarExpansion = function () {};
     var restaurarEscudos = function () {};
@@ -7758,9 +7786,16 @@
         .html2canvas(el, { backgroundColor: "#101114", scale: 2 })
         .then(function (canvas) {
           clearTimeout(watchdog);
+          // Ya hay una captura MÁS RECIENTE en marcha (o terminada) — la
+          // de este partido llegó tarde, no se escribe al portapapeles
+          // para no pisar la correcta.
+          if (miToken !== _capturaScreenshotToken) {
+            terminar();
+            return;
+          }
           try {
             canvas.toBlob(function (blob) {
-              if (blob && navigator.clipboard && window.ClipboardItem) {
+              if (miToken === _capturaScreenshotToken && blob && navigator.clipboard && window.ClipboardItem) {
                 navigator.clipboard
                   .write([new window.ClipboardItem({ "image/png": blob })])
                   .catch(function () {});

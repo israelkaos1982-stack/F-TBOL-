@@ -923,7 +923,17 @@
     // "uel" (ver comentario justo arriba): el mecanismo ya existente de
     // obtenerMenuClub() la incorpora sola en cualquier club que ya
     // tuviera su menú personalizado antes de esta versión.
-    { id: "uecl", icono: "🟢", etiqueta: "Conference" }
+    { id: "uecl", icono: "🟢", etiqueta: "Conference" },
+    // Petición usuario ("vamos a crear la recopa de europa, Estilo caja
+    // Champions con caja humanos y eliminatorias"): MISMO tratamiento de
+    // fábrica que "champions"/"uel"/"uecl" — tarjeta builtin en las 6
+    // cajas (competición europea, sin exclusión de ningún club humano).
+    // Se añade AL FINAL por el mismo motivo que las 3 anteriores: el
+    // mecanismo ya existente de obtenerMenuClub() la incorpora sola en
+    // cualquier club que ya tuviera su menú personalizado antes de esta
+    // versión. 🥈 — mismo emoji que ya usa la app para "Recopa Campeón y
+    // Subcampeón" (ver renderizadores.js, leyenda de Copa del Rey).
+    { id: "recopa", icono: "🥈", etiqueta: "Recopa" }
   ];
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
@@ -1801,6 +1811,62 @@
     }
   }
 
+  // ---------- Recopa de Europa — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que Copa del Rey (texto libre + auto-suma), con
+  // su PROPIA clave — nunca comparte contador con Copa del Rey ni con
+  // ninguna otra competición. Sin Zamora, mismo motivo que Copa (un club
+  // puede quedar eliminado tras un solo partido). Ver
+  // js/renderizadores.js::RECOPA_STATS/calcularRecopaStatsCombinado/
+  // renderizarRecopaStatDetalle.
+  function _recopaStatKey(categoria) {
+    return "ef7_recopa_stat_" + categoria + "_v1";
+  }
+  function obtenerRecopaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_recopaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRecopaStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_recopaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Recopa de Europa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Recopa de Europa — Eliminatorias ⛓️, texto libre por ronda
+  // (candado 646) ----------
+  // Dieciseisavos/Octavos/Cuartos/Semis/Final: mismo mecanismo EXACTO que
+  // Copa del Rey (ver obtenerCopaPlayoffTexto más arriba), con su PROPIA
+  // clave — la ronda "1/64" (32 vs 32) no tiene texto propio aquí, se ve
+  // completa por club en la pestaña 👥️ Humanos (misma convención que la
+  // Copa con su "1/64", ver js/renderizadores.js::_renderizarRecopaHumanos).
+  function _recopaPlayoffKey(ronda) {
+    return "ef7_recopa_playoff_" + ronda + "_v1";
+  }
+  function obtenerRecopaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_recopaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRecopaPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_recopaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Recopa de Europa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -2471,6 +2537,10 @@
     guardarCopaStatTexto: guardarCopaStatTexto,
     obtenerCopaPlayoffTexto: obtenerCopaPlayoffTexto,
     guardarCopaPlayoffTexto: guardarCopaPlayoffTexto,
+    obtenerRecopaStatTexto: obtenerRecopaStatTexto,
+    guardarRecopaStatTexto: guardarRecopaStatTexto,
+    obtenerRecopaPlayoffTexto: obtenerRecopaPlayoffTexto,
+    guardarRecopaPlayoffTexto: guardarRecopaPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

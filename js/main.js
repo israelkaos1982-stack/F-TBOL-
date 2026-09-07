@@ -187,6 +187,18 @@
         window.Renderizadores.obtenerFormatoUeclTexto(), etiqueta
       );
       window.Renderizadores.irUeclTab(clubId, "humanos");
+    } else if (vista === "recopa") {
+      // Mismo patrón EXACTO que "copadelrey" (Humanos + Eliminatorias,
+      // sin fase de grupos) — petición usuario: "vamos a crear la recopa
+      // de europa, Estilo caja Champions con caja humanos y eliminatorias".
+      // A diferencia de Copa del Rey, aquí NO hay exclusión de club
+      // (competición europea, los 6 pueden jugarla).
+      body.innerHTML = '<div id="recopa-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Recopa de Europa", "info-recopa-formato", null,
+        window.Renderizadores.obtenerFormatoRecopaTexto(), etiqueta
+      );
+      window.Renderizadores.irRecopaTab(clubId, "humanos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -483,6 +495,10 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoCopaTexto(), "copa", mostrarInfoCopa);
   }
+  function mostrarInfoRecopa() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRecopaTexto(), "recopa", mostrarInfoRecopa);
+  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     var editor = document.getElementById("liga-info-editor");
@@ -605,6 +621,52 @@
   }
   function cancelarCopaPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
+  }
+
+  // ---------- Recopa de Europa — 👥️ Humanos (cuadro por club) + ⛓️
+  // Eliminatorias (cuadro único desde Dieciseisavos, editable con PIN) +
+  // Pichichi/MVP/Amarillas/Rojas (compartidas por las 2 pestañas), mismo
+  // contenedor "recopa-content" — mismo patrón EXACTO que Copa del Rey.
+  function irRecopaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRecopaTab(clubId, tab);
+  }
+  function verRecopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria);
+  }
+  function volverRecopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRecopa("recopa-content", clubId);
+  }
+  function editarRecopaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("recopa-content");
+      if (cont) window.Renderizadores.pintarEditorRecopaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRecopaStat(clubId, categoria) {
+    var ta = document.getElementById("recopa-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarRecopaStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria);
+  }
+  function cancelarRecopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria);
+  }
+  function editarRecopaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("recopa-content");
+      if (cont) window.Renderizadores.pintarEditorRecopaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
+  }
+  function guardarRecopaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("recopa-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarRecopaPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarRecopa("recopa-content", clubId);
+  }
+  function cancelarRecopaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRecopa("recopa-content", clubId);
   }
 
   // ---------- Champions — Fase de Grupos (40 equipos, "batidora") +
@@ -1437,6 +1499,16 @@
         case "editar-copa-playoff-inline": editarCopaPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-copa-playoff": guardarCopaPlayoff(d.clubId, d.ronda); break;
         case "cancelar-copa-playoff": cancelarCopaPlayoff(d.clubId); break;
+        case "info-recopa-formato": mostrarInfoRecopa(); break;
+        case "recopa-tab-ir": irRecopaTab(d.clubId, d.tab); break;
+        case "ver-recopa-stat": verRecopaStat(d.clubId, d.categoria); break;
+        case "volver-recopa": volverRecopa(d.clubId); break;
+        case "editar-recopa-stat-inline": editarRecopaStatInline(d.clubId, d.categoria); break;
+        case "guardar-recopa-stat": guardarRecopaStat(d.clubId, d.categoria); break;
+        case "cancelar-recopa-stat": cancelarRecopaStat(d.clubId, d.categoria); break;
+        case "editar-recopa-playoff-inline": editarRecopaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-recopa-playoff": guardarRecopaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-recopa-playoff": cancelarRecopaPlayoff(d.clubId); break;
         case "champions-tab-ir": irChampionsTab(d.clubId, d.tab); break;
         case "editar-champions-inline": editarChampionsInline(d.clubId); break;
         case "guardar-champions": guardarChampions(d.clubId); break;

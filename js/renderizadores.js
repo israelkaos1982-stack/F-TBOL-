@@ -537,17 +537,17 @@
   // (Liga rojo, Copa dorado, Supercopa España marrón, Promoción gris,
   // Champions azul, Previa Champions morado, Europa League naranja,
   // Conference League verde, Intercontinental amarillo vivo, Supercopa
-  // de Europa plata, Selecciones rosa), para que ninguna se pierda de
-  // un vistazo entre las demás. Recopa de Europa + cualquier nombre
-  // libre tecleado por el admin (calendario extra) caen en un tono
-  // neutro común ("comp-otro") — no se pidió color para ellas. Ver
+  // de Europa plata, Recopa de Europa bronce, Selecciones rosa), para
+  // que ninguna se pierda de un vistazo entre las demás. Solo el texto
+  // libre tecleado por el admin (calendario extra) que no reconozca
+  // ninguna clase cae en un tono neutro común ("comp-otro"). Ver
   // reglas .match-card-comp*/.match-card.comp-* en css/estilos.css.
   var COMP_CLASE = {
     liga: "comp-liga", copa: "comp-copa", supercopa: "comp-supercopa",
     promocion: "comp-promocion",
     champions: "comp-champions", "ucl-previa": "comp-previa",
     uel: "comp-uel", uecl: "comp-uecl",
-    recopa: "comp-otro", usc: "comp-usc",
+    recopa: "comp-recopa", usc: "comp-usc",
     intercontinental: "comp-intercontinental",
     selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones",
     superliga: "comp-superliga"
@@ -564,7 +564,7 @@
   // Promoción de ascenso/descenso). Un futuro playoff que cumpla lo mismo
   // se añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder
   // un partido no elimina, y las jornadas no dependen de ganar la anterior).
-  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true };
+  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true };
 
   // ¿Esta "ronda" es UNA de las 2 legs de una eliminatoria ida+vuelta
   // ("Ida", "Vuelta", "Ida Semifinal", "Promoción · Vuelta"...)? Y su base
@@ -2790,6 +2790,483 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-copa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-copa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
+  // 3c-quinquies. RECOPA DE EUROPA — 👥️ Humanos (cuadro completo por
+  // club, como Copa del Rey) + ⛓️ Eliminatorias (cuadro único desde
+  // Dieciseisavos) — MISMO estilo EXACTO que Copa del Rey (reutiliza su
+  // motor: _copaBloqueClubHTML/_estadoRondasEliminacion/
+  // _copaPlayoffRondaCoincide/parsearChampionsPlayoffTexto/
+  // _championsTieRowHTML), pero SIN exclusiones (competición europea,
+  // los 6 clubes humanos pueden jugarla, igual que Champions/UEL/UECL) y
+  // SIN fase de grupos: 6 rondas de eliminación directa, TODAS a partido
+  // único con prórroga y penaltis (petición usuario: "1/64 - 1ª Ronda 32
+  // vs 32, Dieciseisavos 16 vs 16, Octavos 8 vs 8, Cuartos 4 vs 4, Semis
+  // 2 vs 2, Final 1 vs 1 — eliminatorias a partido único con prorroga y
+  // penaltis"). El "1/64" (32 cruces) no tiene cuadro compartido propio,
+  // igual que en Copa del Rey — se ve completo por club en 👥️ Humanos.
+  // ============================================================
+  function _recopaEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de Recopa de UN club, ordenados por fecha — mismo criterio
+  // EXACTO que _copaPartidosDelClub. `competicion==="recopa"` ya sale
+  // normalizado de Calendario extra (_BALON_COMP_ALIAS: "Recopa"/"Recopa
+  // de Europa" tecleado por el admin siempre cuadra con este ===).
+  function _recopaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "recopa" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Recopa ya
+  // jugados y suma goles/MVP/amarillas/rojas por jugador — mismo criterio
+  // EXACTO que calcularCopaStatsHumanos, con su PROPIO acumulado (nunca
+  // comparte contador con Copa del Rey ni con ninguna otra competición).
+  function calcularRecopaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[jugadorId].cantidad++;
+    }
+    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
+      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
+      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    }
+
+    _recopaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _recopaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
+        (p.eventos || []).forEach(function (ev) {
+          if (!ev.jugador_id) return;
+          if (ev.equipo_id === e.id) {
+            if (!ev.es_humano) return;
+            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+            if (!nombreJ) return;
+            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
+          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
+            if (!ev.jugador_nombre) return;
+            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+          }
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularCopaStatsCombinado, sobre el
+  // almacén propio de Recopa (Estado.obtenerRecopaStatTexto).
+  function calcularRecopaStatsCombinado(datos, categoria) {
+    var equiposHumanos = _recopaEquiposHumanos(datos);
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerRecopaStatTexto(categoria) : "";
+    parsearLiga1RefStatTexto(texto).forEach(function (it) {
+      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
+      filas.push(it);
+    });
+
+    (calcularRecopaStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de la Recopa" de UN club — mismo cálculo EXACTO que
+  // _copaEstadoClub (reutiliza el mismo _estadoRondasEliminacion, genérico
+  // por competición). Devuelve null si el club no tiene ningún partido de
+  // Recopa todavía.
+  function _recopaEstadoClub(datos, e) {
+    var partidos = _recopaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
+  }
+
+  // Texto EXACTO del ℹ️ de Recopa de Europa — 6 rondas, TODAS a partido
+  // único con prórroga y penaltis (nunca ida+vuelta, a diferencia de la
+  // Semifinal de la Copa del Rey — ver FORMATO_COPA_TEXTO más arriba).
+  var FORMATO_RECOPA_TEXTO = [
+    "📋FORMATO RECOPA DE EUROPA:",
+    "64 clubes participan en 6 eliminatorias desde 1/64 de final hasta la final.",
+    "",
+    "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "1/64 · 1ª Ronda — 32 vs 32.",
+    "Dieciseisavos — 16 vs 16.",
+    "Octavos — 8 vs 8.",
+    "Cuartos — 4 vs 4.",
+    "Semis — 2 vs 2.",
+    "Final — 1 vs 1.",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan como Local"
+  ].join("\n");
+  function obtenerFormatoRecopaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("recopa") : "";
+    return override || FORMATO_RECOPA_TEXTO;
+  }
+
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
+  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
+  // criterio EXACTO que Copa del Rey (ver _copaAppendStatsGrid).
+  var RECOPA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  function _recopaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = RECOPA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-recopa-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
+  // exacto que las pestañas de Copa del Rey ----------
+  var _recopaTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _recopaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_recopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="recopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_recopaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="recopa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (1/64 → Final) de CADA club
+  // humano, uno debajo del otro — mismo patrón EXACTO que
+  // _renderizarCopaHumanos, reutilizando _copaBloqueClubHTML tal cual
+  // (genérico, no hardcodea "copa" en ningún sitio).
+  function _renderizarRecopaHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _recopaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _recopaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🥈", "Todavía no hay partidos de Recopa de Europa. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Recopa de Europa»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
+      });
+    }
+
+    _recopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde Dieciseisavos
+  // ---------- 5 rondas (Dieciseisavos→Final) — la ronda anterior "1/64"
+  // ya se ve completa en 👥️ Humanos, no se repite aquí (mismo criterio
+  // EXACTO que Copa del Rey).
+  var RECOPA_PLAYOFF_RONDAS = [
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _copaPlayoffHumano, filtrando competicion==="recopa"
+  // y reutilizando el detector de ronda de Copa (_copaPlayoffRondaCoincide,
+  // genérico por rondaKey/rondaTexto — no depende de qué competición sea).
+  function _recopaPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "recopa" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de UNA ronda de Recopa (Dieciseisavos, Octavos, Cuartos,
+  // Semis o Final — LAS 5 se resuelven IGUAL, ninguna depende de la
+  // anterior) — mismo criterio EXACTO que _copaRondaDesdeTexto: cada club
+  // humano con partidos YA jugados esta ronda aporta el suyo
+  // auto-computado; el resto sale del texto libre que el admin pega para
+  // ESA ronda concreta ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
+  function _recopaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _recopaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _recopaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRecopaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 5 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
+  // admin pegó para ESA ronda.
+  function calcularRecopaPlayoffTodasLasRondas(datos) {
+    return {
+      dieciseisavos: _recopaRondaDesdeTexto(datos, "dieciseisavos"),
+      octavos: _recopaRondaDesdeTexto(datos, "octavos"),
+      cuartos: _recopaRondaDesdeTexto(datos, "cuartos"),
+      semis: _recopaRondaDesdeTexto(datos, "semis"),
+      final: _recopaRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  function _renderizarRecopaEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularRecopaPlayoffTodasLasRondas(datos);
+
+    RECOPA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-recopa-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key === "dieciseisavos"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 16 duelos de Dieciseisavos.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _recopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRecopa(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _recopaTabsHTML(idClubActivo));
+
+      if (_recopaTabActual === "eliminatorias") _renderizarRecopaEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarRecopaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_recopaTabActual`, mismo patrón que irCopaTab.
+  function irRecopaTab(idClubActivo, tab) {
+    _recopaTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarRecopa("recopa-content", idClubActivo);
+  }
+
+  // Ranking (top 15) de UNA categoría de Recopa — mismo patrón exacto que
+  // renderizarCopaStatDetalle.
+  function renderizarRecopaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = RECOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-recopa" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-recopa-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRecopaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de Recopa (PIN 646) —
+  // mismo patrón exacto que pintarEditorCopaStat.
+  function pintarEditorRecopaStat(contenedor, idClubActivo, categoria) {
+    var meta = RECOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de Recopa — no hace falta escribirlos aquí.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "recopa-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
+    textarea.value = window.Estado ? window.Estado.obtenerRecopaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-recopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-recopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorCopaPlayoff: todas las rondas se
+  // pegan igual, una línea por cruce, siempre marcador de partido único.
+  function pintarEditorRecopaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = RECOPA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esDieciseisavos = rondaKey === "dieciseisavos";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esDieciseisavos
+      ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
+        "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
+        "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por " +
+        "eliminatoria — vale «-» o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Si un club " +
+        "humano ya tiene sus propios partidos de Recopa jugados en esta ronda (Calendario extra), su cruce " +
+        "se calcula solo y esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "recopa-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esDieciseisavos ? 14 : 12;
+    textarea.placeholder = esDieciseisavos
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      : "Liverpool 1-0 Arsenal\nReal Madrid 2 vs 2 Villarreal";
+    textarea.value = window.Estado ? window.Estado.obtenerRecopaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-recopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-recopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -8396,6 +8873,13 @@
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,
     calcularCopaPlayoffTodasLasRondas: calcularCopaPlayoffTodasLasRondas,
+    obtenerFormatoRecopaTexto: obtenerFormatoRecopaTexto,
+    renderizarRecopa: renderizarRecopa,
+    irRecopaTab: irRecopaTab,
+    renderizarRecopaStatDetalle: renderizarRecopaStatDetalle,
+    pintarEditorRecopaStat: pintarEditorRecopaStat,
+    pintarEditorRecopaPlayoff: pintarEditorRecopaPlayoff,
+    calcularRecopaPlayoffTodasLasRondas: calcularRecopaPlayoffTodasLasRondas,
     renderizarChampions: renderizarChampions,
     irChampionsTab: irChampionsTab,
     renderizarChampionsStatDetalle: renderizarChampionsStatDetalle,

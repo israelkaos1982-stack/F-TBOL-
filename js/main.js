@@ -137,11 +137,22 @@
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
-      _pintarTituloModalInfo(
-        titulo, "Copa del Rey", "info-copa-formato", null,
-        window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
-      );
-      window.Renderizadores.irCopaTab(clubId, "humanos");
+      // PSG no juega la Copa del Rey — juega su propia Coupe de France
+      // (petición usuario: "la Coupe France de la caja humana del PSG no
+      // juega la copa españa... adaptalo"). El título ya sale correcto
+      // ("🇫🇷 Coupe de France") porque sale de la propia tarjeta del menú
+      // (ver MENU_CLUB_BUILTIN_POR_CLUB en estado.js) — aquí solo hace
+      // falta NO pintar el cuadro compartido de España ni su ℹ️ (ese
+      // formato de 64 clubes no aplica a PSG).
+      if (clubId === "psg") {
+        window.Renderizadores.renderizarCoupeFrancia("copa-content", clubId);
+      } else {
+        _pintarTituloModalInfo(
+          titulo, "Copa del Rey", "info-copa-formato", null,
+          window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
+        );
+        window.Renderizadores.irCopaTab(clubId, "humanos");
+      }
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
       _pintarTituloModalInfo(

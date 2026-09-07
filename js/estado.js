@@ -925,6 +925,15 @@
     // tuviera su menú personalizado antes de esta versión.
     { id: "uecl", icono: "🟢", etiqueta: "Conference" }
   ];
+  // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
+  // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
+  // Coupe de France (ver COPA_HUMANOS_EXCLUIDOS/renderizarCoupeFrancia en
+  // renderizadores.js). Sigue siendo un valor DE FÁBRICA: si el admin la
+  // edita a mano (candado 646), su edición (overridesFabrica) gana igual
+  // que con cualquier otra tarjeta — este mapa solo sustituye el DEFAULT.
+  var MENU_CLUB_BUILTIN_POR_CLUB = {
+    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" } }
+  };
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
   function _menuClubDefault() {
@@ -971,9 +980,11 @@
     return orden.map(function (id) {
       if (builtinPorId[id]) {
         var override = ov.overridesFabrica[id];
+        var basePorClub = (MENU_CLUB_BUILTIN_POR_CLUB[clubId] && MENU_CLUB_BUILTIN_POR_CLUB[clubId][id]) || {};
         return Object.assign(
           { esCustom: false, esFabricaEditada: !!override, oculta: !!ov.ocultas[id] },
           builtinPorId[id],
+          basePorClub,
           override || {}
         );
       }

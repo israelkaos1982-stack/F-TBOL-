@@ -2383,6 +2383,27 @@
     );
   }
 
+  // Bloque HTML de UN club (cabecera + sus rondas) dentro de un cuadro de
+  // Copa — extraído de _renderizarCopaHumanos para poder reutilizarlo
+  // TAL CUAL en la Coupe de France de PSG (un solo club, mismo shape de
+  // ronda+rival+resultado, ver renderizarCoupeFrancia más abajo).
+  function _copaBloqueClubHTML(b, datos, idClubActivo) {
+    var esActivo = b.equipo.id === idClubActivo;
+    return (
+      '<div class="copa-club-block' + (esActivo ? " copa-club-block--activo" : "") + '">' +
+      '<div class="copa-club-header">' +
+      crearEscudoHTML(b.equipo, "escudo--sm") +
+      '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+      (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+      '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+      "</div>" +
+      '<div class="copa-club-partidos">' +
+      b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos, !!b.eliminadoIds[p.id], !!b.bloqueadoIds[p.id]); }).join("") +
+      "</div>" +
+      "</div>"
+    );
+  }
+
   // Pestaña 👥️ Humanos — el cuadro completo (1/64 → Final) de CADA club
   // humano, uno debajo del otro, con sus propios partidos ya jugados —
   // exactamente lo que pintaba `renderizarCopaDelRey` antes de tener
@@ -2410,20 +2431,7 @@
         // tiene su propio cuadro completo (1/64 → Final), sin ninguna
         // línea que marque dónde acaba uno y empieza el siguiente.
         if (bi > 0) contenedor.appendChild(nodoSeparador());
-        var esActivo = b.equipo.id === idClubActivo;
-        var bloque = document.createElement("div");
-        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
-        bloque.innerHTML =
-          '<div class="copa-club-header">' +
-          crearEscudoHTML(b.equipo, "escudo--sm") +
-          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
-          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
-          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
-          "</div>" +
-          '<div class="copa-club-partidos">' +
-          b.partidos.map(function (p) { return _copaPartidoRowHTML(p, b.equipo.id, datos, !!b.eliminadoIds[p.id], !!b.bloqueadoIds[p.id]); }).join("") +
-          "</div>";
-        contenedor.appendChild(bloque);
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
       });
       // Leyenda plegable, debajo de TODOS los cuadros (mismo patrón
       // colapsable que 2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga)
@@ -2618,6 +2626,40 @@
   function irCopaTab(idClubActivo, tab) {
     _copaTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
     renderizarCopaDelRey("copa-content", idClubActivo);
+  }
+
+  // ---------- 🇫🇷 Coupe de France — PSG, el ÚNICO club humano que la juega ----------
+  // PSG no compite en la Copa del Rey (juega en Francia, no en España) — su
+  // "Copa" es la Coupe de France, resuelta vía Calendario extra + resultado
+  // rápido (RESULTADO_RAPIDO_POR_CLUB.psg.copa), igual que su Ligue 1 (ver
+  // LIGA_NAV_HUMANO_PROPIO). Reutiliza EXACTAMENTE el mismo motor de Copa del
+  // Rey (_copaPartidosDelClub/_copaEstadoClub/_copaBloqueClubHTML — el shape
+  // ronda+rival+resultado es idéntico, solo cambia el nombre de la
+  // competición y que aquí hay UN SOLO club, sin cuadro compartido ni
+  // pestañas de Humanos/Eliminatorias).
+  function renderizarCoupeFrancia(contenedorId, clubId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var equipo = buscarEquipoPorId(clubId, datos);
+      var bloque = equipo ? _copaEstadoClub(datos, equipo) : null;
+
+      if (!bloque) {
+        contenedor.appendChild(nodoEstado("🇫🇷", "Todavía no hay partidos de Coupe de France. Añádelos desde el ✏️ de tu Calendario extra → Competición «Coupe de France»."));
+        return;
+      }
+      contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(bloque, datos, clubId));
+
+      var nota = document.createElement("p");
+      nota.className = "liga1ref-leyenda-mini";
+      nota.style.marginTop = "10px";
+      nota.textContent = "🇫🇷 Competición francesa — solo PSG la disputa, sin cuadro compartido con el resto de cajas.";
+      contenedor.appendChild(nota);
+    });
   }
 
   // Ranking (top 15) de UNA categoría de Copa — mismo patrón exacto que
@@ -8349,6 +8391,7 @@
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarCopaDelRey: renderizarCopaDelRey,
     irCopaTab: irCopaTab,
+    renderizarCoupeFrancia: renderizarCoupeFrancia,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,

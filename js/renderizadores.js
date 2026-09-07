@@ -7271,6 +7271,26 @@
     return null;
   }
 
+  // Champions League / Europa League / Conference League: comps con FASE
+  // DE GRUPOS ("1ª Jornada", "2ª Jornada"...) además de su cuadro de
+  // Playoffs (Dieciseisavos→Final, SIEMPRE ida y vuelta — ver
+  // CHAMPIONS_PLAYOFF_RONDAS/UEL_PLAYOFF_RONDAS/UECL_PLAYOFF_RONDAS).
+  var EUROPA_FASE_GRUPOS_COMPS = { champions: true, uel: true, uecl: true };
+  // ¿Es un partido de FASE DE GRUPOS de Champions/UEL/UECL? (bug real,
+  // foto usuario: "PSG vs Bodo Glimt · Champions League · 1ª Jornada"
+  // mostrando la casilla OBLIGATORIA "Activar Prórroga y Penaltis" — un
+  // empate en liguilla es un resultado normal, como en la Liga, jamás se
+  // decide con prórroga). Cualquier ronda de Playoffs (Dieciseisavos/
+  // Octavos/Cuartos/Semis/Final) es SIEMPRE eliminatoria real — aunque
+  // llegara sin "ida"/"vuelta" en el texto (typo del admin), nunca se
+  // trata como fase de grupos. Cualquier otra ronda ("N ª Jornada", o
+  // sin ronda) de estas 3 comps SÍ es fase de grupos.
+  function _esFaseDeGruposEuropea(partido) {
+    if (!partido.competicion || !EUROPA_FASE_GRUPOS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
+    var rondaNorm = _normNombre(partido.ronda || "");
+    return !/dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
+  }
+
   // Modo de la eliminatoria, deducido del texto libre que el admin
   // escribe en "Calendario extra" (competición/ronda) o, si algún día
   // vuelve a poblarse data/partidos.json con el campo `eliminatoria` de
@@ -7285,6 +7305,11 @@
       if (compNorm === "liga" || compNorm === "superliga") return "liga";
     }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
+    // Fase de grupos de Champions/Europa League/Conference League:
+    // mismo modo "liga" (sin casilla, sin aviso) — SOLO la vuelta de un
+    // cruce de Playoffs (capturada arriba por _faseIdaVuelta) puede
+    // necesitar prórroga y penaltis en estas 3 competiciones.
+    if (_esFaseDeGruposEuropea(partido)) return "liga";
     return "eliminatoria-unica";
   }
 

@@ -2424,6 +2424,41 @@
   }
 
   var FORMATO_BACKUP_COMPLETO = "ef7-backup-v2";
+
+  // Mismo umbral/criterio que js/sync.js::_esRegresionGrave y
+  // app.py::_ef7_es_regresion_grave — aplicado aquí a la IMPORTACIÓN
+  // MANUAL de una copia de seguridad ("Importar progreso"). Sin esto,
+  // importar un archivo VIEJO/INCOMPLETO (un backup exportado ANTES de
+  // pegar el calendario de un club, por ejemplo) sobreescribía SIEMPRE
+  // cada clave presente en el archivo con `localStorage.setItem`, aunque
+  // este dispositivo tuviera ya una copia local mucho más rica — y esa
+  // versión recién "vaciada" quedaba detectada por js/sync.js como un
+  // cambio LOCAL genuino, así que se intentaba subir tal cual al
+  // servidor en el siguiente ciclo. El guard de recepción del servidor
+  // (`_ef7_es_regresion_grave`, ver app.py) protege de que ESE push
+  // concreto se propague a los demás dispositivos, pero nunca protegió
+  // este punto — el origen real del valor "vaciado" — así que este
+  // mismo dispositivo se quedaba viendo su propio calendario borrado
+  // (y, si el guard del servidor no llegaba a tiempo o la clave aún no
+  // existía en el servidor, también machacaba a los demás). Fix real,
+  // documentado como causa ya confirmada de pérdida de datos en el
+  // commit "Aviso antes de importar una copia de seguridad" — ese commit
+  // solo avisa ANTES de importar; este guard hace que la propia
+  // importación sea segura por construcción, igual que ya lo es el push
+  // al servidor.
+  //
+  // Se salta (NO se importa) cualquier clave cuyo valor en el backup sea
+  // MUCHO más corto (<50%) que el que YA hay en este dispositivo — igual
+  // que el resto de guards de esta app, no protege campos cortos
+  // (<20 caracteres, ruido) ni una clave que este dispositivo todavía no
+  // tenga (ahí no hay nada que proteger, el backup manda tal cual).
+  var _IMPORT_REGRESION_LEN_MINIMO = 20;
+  function _importSeriaRegresionGrave(valorLocal, valorBackup) {
+    if (typeof valorLocal !== "string" || valorLocal.length < _IMPORT_REGRESION_LEN_MINIMO) return false;
+    if (typeof valorBackup !== "string") return true; // no-string sustituyendo texto real: rechazar
+    return valorBackup.length < valorLocal.length * 0.5;
+  }
+
   function exportarEstadoCrudo() {
     var claves = {};
     _clavesDeLaApp().forEach(function (k) { claves[k] = localStorage.getItem(k); });
@@ -2436,10 +2471,18 @@
     if (obj.formato === FORMATO_BACKUP_COMPLETO && obj.claves && typeof obj.claves === "object") {
       var huboAlgo = false;
       var huboFallo = false;
+      var saltadas = [];
       Object.keys(obj.claves).forEach(function (key) {
         if (key.indexOf(PREFIJO_CLAVES) !== 0) return; // nunca escribas nada ajeno a esta app
+        var valorBackup = obj.claves[key];
+        var valorLocal = null;
+        try { valorLocal = localStorage.getItem(key); } catch (err) { /* ilegible: nada que proteger, se deja pasar */ }
+        if (_importSeriaRegresionGrave(valorLocal, valorBackup)) {
+          saltadas.push(key);
+          return;
+        }
         try {
-          localStorage.setItem(key, obj.claves[key]);
+          localStorage.setItem(key, valorBackup);
           huboAlgo = true;
         } catch (err) {
           console.error("[estado] no se pudo restaurar la clave " + key + ":", err);
@@ -2451,6 +2494,17 @@
       // fallarán varias seguidas): la restauración puede haber quedado A
       // MEDIAS (unas claves sí, otras no) sin que nada más lo indique.
       if (huboFallo) _avisarFalloGuardado(new Error("restauración de backup incompleta"));
+      if (saltadas.length) {
+        try {
+          window.setTimeout(function () {
+            window.alert(
+              "ℹ️ " + saltadas.length + " clave(s) del archivo importado eran MUCHO más pobres que lo " +
+              "que este dispositivo ya tenía (probablemente un backup viejo/incompleto) — se SALTARON " +
+              "para no borrar progreso más reciente. El resto del archivo sí se ha importado."
+            );
+          }, 0);
+        } catch (err2) { /* nada más que hacer si ni alert está disponible */ }
+      }
       _estado = null; // fuerza a releer desde localStorage en el próximo cargarEstado()
       return huboAlgo;
     }

@@ -8636,6 +8636,91 @@
     contenedor.appendChild(nota);
   }
 
+  // ---------- Copias automáticas del servidor (snapshots) ----------
+  // El servidor se guarda a sí mismo, cada pocas horas, un volcado
+  // completo de todas las claves ef7_* (ver app.py::Ef7Snapshot) —
+  // INDEPENDIENTE de que algún dispositivo haga bien o mal la
+  // sincronización. Esta pantalla lista esas copias y deja restaurar
+  // cualquiera de ellas en el servidor con un par de confirmaciones.
+  function _fmtFechaSnapshot(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return iso || "?";
+    return d.toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderizarAdminSnapshots(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando copias del servidor…"));
+
+    fetch("/api/ef7/snapshots")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resp) {
+        contenedor.innerHTML = "";
+        if (!resp || !resp.ok) {
+          contenedor.appendChild(nodoEstado("⚠️", "No se pudo contactar con el servidor."));
+          return;
+        }
+        var lista = resp.snapshots || [];
+        if (!lista.length) {
+          contenedor.appendChild(nodoEstado("🛟", "Todavía no hay ninguna copia automática — la primera se toma sola en las próximas horas mientras la app siga abierta en algún dispositivo."));
+          return;
+        }
+        var frag = document.createDocumentFragment();
+        lista.forEach(function (s) {
+          var fila = document.createElement("div");
+          fila.className = "admin-list-item";
+          var kb = (s.bytes / 1024).toFixed(1);
+          fila.innerHTML =
+            '<div class="admin-list-item-main">' +
+            '<span class="admin-list-item-title">🛟 ' + escapeHTML(_fmtFechaSnapshot(s.created_at)) + "</span>" +
+            '<span class="admin-list-item-sub">' + (s.n_claves == null ? "?" : s.n_claves) + " clave(s) guardadas · " + kb + " KB</span>" +
+            "</div>" +
+            '<div class="admin-list-item-actions">' +
+            '<button type="button" class="admin-list-item-btn" data-accion="restaurar-snapshot" data-snapshot-id="' + s.id + '" data-snapshot-fecha="' + escapeHTML(_fmtFechaSnapshot(s.created_at)) + '" aria-label="Restaurar esta copia">♻️</button>' +
+            "</div>";
+          frag.appendChild(fila);
+        });
+        contenedor.appendChild(frag);
+
+        var nota = document.createElement("p");
+        nota.className = "admin-nota";
+        nota.textContent = "Restaurar sobreescribe en el servidor las claves de ese momento (calendarios, plantillas, iconos...). Un dispositivo que en ese instante tenga en local una copia más reciente/rica la vuelve a subir sola — esto es para cuando NINGÚN dispositivo conserva ya lo bueno.";
+        contenedor.appendChild(nota);
+      })
+      .catch(function () {
+        contenedor.innerHTML = "";
+        contenedor.appendChild(nodoEstado("⚠️", "No se pudo contactar con el servidor."));
+      });
+  }
+
+  function restaurarSnapshotPrompt(snapshotId, fechaTexto) {
+    var ok = window.confirm(
+      "⚠️ Vas a RESTAURAR la copia automática del " + fechaTexto + ".\n\n" +
+      "Esto sobreescribe en el SERVIDOR el calendario/plantilla/iconos de ese momento — cualquier cosa " +
+      "editada DESPUÉS de esa fecha que ningún dispositivo conserve ya en local se perderá.\n\n" +
+      "¿Seguro que quieres continuar?"
+    );
+    if (!ok) return;
+    if (!window.Main || !window.Main.pedirPinAdmin) return;
+    window.Main.pedirPinAdmin(function () {
+      fetch("/api/ef7/snapshots/" + snapshotId + "/restore", { method: "POST" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (resp) {
+          if (resp && resp.ok) {
+            window.alert(
+              "✅ Copia del " + fechaTexto + " restaurada en el servidor (" + resp.restauradas.length + " clave(s)).\n\n" +
+              "Cada dispositivo la recibirá solo en su próximo ciclo de sincronización (unos segundos) — recarga la página para verlo reflejado aquí."
+            );
+          } else {
+            window.alert("⚠️ No se pudo restaurar esta copia.");
+          }
+        })
+        .catch(function () { window.alert("⚠️ No se pudo contactar con el servidor."); });
+    }, "🔒 Restaurar copia automática", "Solo el administrador puede restaurar una copia del servidor.");
+  }
+
   // ---------- Delegación de eventos ----------
 
   // Casilla OBLIGATORIA "Activar Prórroga y Penaltis" (ver
@@ -8655,6 +8740,12 @@
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest(".match-card-btn");
     if (btn) { abrirPreviaPartido(btn.dataset.partidoId); return; }
+
+    var btnRestaurarSnapshot = ev.target.closest && ev.target.closest('[data-accion="restaurar-snapshot"]');
+    if (btnRestaurarSnapshot) {
+      restaurarSnapshotPrompt(btnRestaurarSnapshot.dataset.snapshotId, btnRestaurarSnapshot.dataset.snapshotFecha);
+      return;
+    }
 
     // Reiniciar un partido ya jugado (pruebas) — EXCLUSIVO del
     // administrador (PIN) + confirmación EXPLÍCITA que nombra el partido
@@ -8988,6 +9079,7 @@
     renderizarAdminEstadios: renderizarAdminEstadios,
     renderizarAdminBalones: renderizarAdminBalones,
     renderizarAdminEspacio: renderizarAdminEspacio,
+    renderizarAdminSnapshots: renderizarAdminSnapshots,
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
     detectarModoPartido: detectarModoPartido,

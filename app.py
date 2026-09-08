@@ -250,6 +250,28 @@ class GlobalState(db.Model):
     valor_json = db.Column(db.Text, nullable=False, default="{}")
     updated_at = db.Column(db.String(50), nullable=True)
 
+
+# Copias de seguridad AUTOMÁTICAS de todas las claves "ef7_*" — ver la
+# sección "Snapshots automáticos ef7" más abajo (junto a las rutas
+# /api/ef7/*). Tabla PROPIA, deliberadamente separada de `GlobalState`:
+# la validación de claves de `/api/ef7/state` (`_ef7_key_is_valid`) y el
+# filtro `GlobalState.clave.like("ef7_%")` de `api_ef7_state_get`
+# interpretan el "_" del patrón SQL LIKE como comodín de UN CARÁCTER
+# (no como guion bajo literal) — cualquier clave que empezara por "ef7"
+# + cualquier 4º carácter (p. ej. "ef7snap_...") colaría por ese filtro y
+# se devolvería a los clientes como si fuera una clave normal de club,
+# contaminando su localStorage con el volcado completo de un snapshot.
+# Una tabla aparte hace ese solapamiento IMPOSIBLE por construcción, en
+# vez de depender de elegir un nombre de clave que no choque hoy.
+class Ef7Snapshot(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.String(50), nullable=False)
+    # Volcado {clave: valor_json_crudo} de TODAS las filas "ef7_%" en el
+    # instante del snapshot — cada valor es el string YA serializado tal
+    # cual vive en GlobalState.valor_json (nunca se re-serializa al
+    # restaurar, para no arriesgar ninguna mutación de contenido).
+    payload_json = db.Column(db.Text, nullable=False)
+
 # --- PROBABILIDADES ---
 BASE = {
     "portero": 0.001,
@@ -6090,6 +6112,120 @@ def _ef7_es_regresion_grave(existing_row_value, incoming_value):
     return len(incoming_text) < len(existing_text) * 0.5
 
 
+# ── Snapshots automáticos ef7 (reporte usuario 2026-09-08: "ha
+#    desaparecido todo... en menos de 10 horas") ──
+# El guard de arriba (regresión) protege el PUSH cuando el valor entrante
+# es MUCHO más pobre que el ya guardado — pero se descubrió que la vía
+# real de esta pérdida fue "Importar progreso" con un backup viejo desde
+# UN dispositivo: esa importación puede reemplazar una clave por otra
+# solo ALGO más pobre (no menos de la mitad), lo bastante para no
+# disparar el guard, y aun así perder horas/días de ediciones reales. Un
+# guard por tamaño nunca puede cubrir el 100% de los casos posibles — la
+# red que sí cubre cualquier caso es poder DESHACER, así que el servidor
+# se guarda a sí mismo una copia completa de todas las claves "ef7_*" de
+# forma periódica, independiente de que el cliente haga las cosas bien o
+# mal. Combinado con la exportación diaria manual que ya hace el usuario,
+# esto da 2 redes independientes: una automática de grano fino (varias
+# veces al día) y otra manual fuera del propio servidor.
+_EF7_SNAPSHOT_INTERVALO_S = 4 * 60 * 60  # cada 4 horas como mucho
+_EF7_SNAPSHOT_MAX = 30  # ~5 días de historial con el intervalo de arriba
+
+
+def _ef7_tomar_snapshot_si_toca():
+    """Si ha pasado suficiente tiempo desde el último snapshot (o no hay
+    ninguno todavía), vuelca TODAS las filas "ef7_%" actuales en una fila
+    nueva de Ef7Snapshot y poda las más antiguas por encima del tope.
+
+    Se llama desde el tráfico normal de /api/ef7/state (GET y POST) — no
+    hay un scheduler/cron real en este despliegue (gunicorn sin worker de
+    fondo aparte), así que el disparo es "perezoso": ocurre en el primer
+    request que ve pasado el intervalo, no a una hora fija. Barato en el
+    caso común (una sola query `ORDER BY id DESC LIMIT 1` para comprobar
+    la fecha) — el volcado completo solo corre unas pocas veces al día.
+    Cualquier fallo aquí (BD ocupada, lo que sea) se traga: esto NUNCA
+    debe romper la sincronización normal de calendarios/plantillas.
+    """
+    try:
+        ultimo = Ef7Snapshot.query.order_by(Ef7Snapshot.id.desc()).first()
+        if ultimo is not None:
+            try:
+                creado = datetime.fromisoformat(ultimo.created_at.replace("Z", "+00:00"))
+                edad_s = (datetime.now(timezone.utc) - creado).total_seconds()
+            except (TypeError, ValueError):
+                edad_s = _EF7_SNAPSHOT_INTERVALO_S  # fecha ilegible: mejor tomar uno nuevo que ninguno
+            if edad_s < _EF7_SNAPSHOT_INTERVALO_S:
+                return
+        filas = GlobalState.query.filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
+        # El LIKE de arriba también cuela cualquier clave "ef7" + 1
+        # carácter cualquiera (ver el comentario de Ef7Snapshot) — se
+        # filtra aquí con el prefijo LITERAL exacto para no guardar nada
+        # que no sea una clave ef7_* real dentro del propio snapshot.
+        volcado = {f.clave: f.valor_json for f in filas if f.clave.startswith(_EF7_KEY_PREFIX)}
+        if not volcado:
+            return  # nada que proteger todavía (despliegue nuevo, sin datos)
+        db.session.add(Ef7Snapshot(created_at=utc_now_iso(), payload_json=json.dumps(volcado, ensure_ascii=False)))
+        db.session.flush()
+        viejos = Ef7Snapshot.query.order_by(Ef7Snapshot.id.desc()).offset(_EF7_SNAPSHOT_MAX).all()
+        for v in viejos:
+            db.session.delete(v)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"[ftbol] snapshot ef7 fallido (no crítico): {e}", flush=True)
+
+
+@app.route("/api/ef7/snapshots", methods=["GET"])
+def api_ef7_snapshots_list():
+    """Lista los snapshots disponibles (fecha + nº de claves + peso) —
+    NUNCA el contenido completo, para que listar sea barato y ligero."""
+    filas = Ef7Snapshot.query.order_by(Ef7Snapshot.id.desc()).all()
+    out = []
+    for f in filas:
+        try:
+            n_claves = len(json.loads(f.payload_json))
+        except Exception:
+            n_claves = None
+        out.append({
+            "id": f.id,
+            "created_at": f.created_at,
+            "n_claves": n_claves,
+            "bytes": len((f.payload_json or "").encode("utf-8")),
+        })
+    return jsonify({"ok": True, "snapshots": out})
+
+
+@app.route("/api/ef7/snapshots/<int:snapshot_id>/restore", methods=["POST"])
+def api_ef7_snapshot_restore(snapshot_id):
+    """Restaura TODAS las claves "ef7_*" de un snapshot al estado actual
+    del servidor: sobreescribe cada clave presente en el snapshot con su
+    valor de aquel momento. NUNCA borra una clave que exista ahora y no
+    estuviera en el snapshot — una competición/club añadido DESPUÉS de
+    tomarlo no desaparece por restaurar uno anterior."""
+    fila = db.session.get(Ef7Snapshot, snapshot_id)
+    if not fila:
+        return jsonify({"ok": False, "error": "snapshot no encontrado"}), 404
+    try:
+        volcado = json.loads(fila.payload_json)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "snapshot corrupto"}), 500
+    if not isinstance(volcado, dict):
+        return jsonify({"ok": False, "error": "snapshot corrupto"}), 500
+    now = utc_now_iso()
+    restauradas = []
+    for key, valor_json in volcado.items():
+        if not _ef7_key_is_valid(key) or not isinstance(valor_json, str):
+            continue
+        row = GlobalState.query.filter_by(clave=key).first()
+        if row:
+            row.valor_json = valor_json
+            row.updated_at = now
+        else:
+            db.session.add(GlobalState(clave=key, valor_json=valor_json, updated_at=now))
+        restauradas.append(key)
+    db.session.commit()
+    return jsonify({"ok": True, "restauradas": restauradas, "created_at": fila.created_at})
+
+
 @app.route("/api/ef7/state", methods=["GET"])
 def api_ef7_state_get():
     filas = GlobalState.query.filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
@@ -6101,6 +6237,10 @@ def api_ef7_state_get():
         except Exception:
             continue
         actualizados[f.clave] = f.updated_at or ""
+    # El GET es el tráfico MÁS frecuente (cada dispositivo abierto lo pide
+    # cada 10 s, haya o no cambios que subir) — es el punto más fiable
+    # para disparar el snapshot perezoso, ver _ef7_tomar_snapshot_si_toca.
+    _ef7_tomar_snapshot_si_toca()
     resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp

@@ -7,9 +7,7 @@
 (function () {
   "use strict";
 
-  function descargarCopiaSeguridadLiga() {
-    if (!window.Estado) return;
-    var estado = window.Estado.exportarEstadoCrudo();
+  function _descargarBlobEstado(estado) {
     var blob = new Blob([JSON.stringify(estado, null, 2)], { type: "application/json" });
     var url = URL.createObjectURL(blob);
     var fecha = new Date().toISOString().slice(0, 10);
@@ -21,6 +19,22 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // Fusiona con el servidor ANTES de descargar (ver
+  // Estado.exportarEstadoCrudoFusionado) — así la copia diaria captura
+  // la foto más completa disponible, no solo lo que este móvil concreto
+  // tenga en su propio localStorage. Si no hay red, exporta igual (solo
+  // lo local) en vez de bloquear el botón.
+  function descargarCopiaSeguridadLiga() {
+    if (!window.Estado) return;
+    if (!window.Estado.exportarEstadoCrudoFusionado) {
+      _descargarBlobEstado(window.Estado.exportarEstadoCrudo());
+      return;
+    }
+    window.Estado.exportarEstadoCrudoFusionado(function (estado) {
+      _descargarBlobEstado(estado);
+    });
   }
 
   function importarProgreso(file, onDone) {

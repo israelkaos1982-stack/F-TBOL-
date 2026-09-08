@@ -1119,6 +1119,10 @@
     espacio: {
       titulo: "💾 Espacio del navegador",
       render: function (id) { window.Renderizadores.renderizarAdminEspacio(id); }
+    },
+    snapshots: {
+      titulo: "🛟 Copias automáticas del servidor",
+      render: function (id) { window.Renderizadores.renderizarAdminSnapshots(id); }
     }
   };
 

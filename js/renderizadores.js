@@ -8272,10 +8272,10 @@
         // "El mejor jugador en estos apartados" (petición usuario, debajo
         // de los totales) — Pichichi/MVP/Tarjetero de ESTA plantilla. 0 KB
         // nuevos: es un máximo sobre los MISMOS `stats` ya cargados arriba
-        // para pintar cada fila, ninguna consulta ni dato extra. Reutiliza
-        // el mismo markup .plantilla-jugador de siempre (0 KB de CSS
-        // nuevo) — solo las filas SIN el modificador "--total" (ese verde
-        // se reserva para la SUMA; aquí es informativo, no un total).
+        // para pintar cada fila, ninguna consulta ni dato extra. Formato
+        // pedido explícitamente por el usuario ("lo quiero asi"): líneas de
+        // texto simples "emoji Etiqueta: Nombre: valor", NO la fila-grid de
+        // .plantilla-jugador con columnas separadas.
         function _liderPor(valorFn) {
           var mejor = null, mejorValor = 0;
           jugadores.forEach(function (j) {
@@ -8290,31 +8290,30 @@
         // separamos en 2 líderes, es un único jugador el más sancionado.
         var liderTarjetero = _liderPor(function (s) { return s.amarillas + s.rojas; });
 
-        function _filaLider(etiqueta, lider, colGoles, colMvp, colAmarillas, colRojas) {
-          var fila = document.createElement("div");
-          fila.className = "plantilla-jugador";
-          fila.innerHTML =
-            '<span class="plantilla-dorsal">🏅</span>' +
-            '<span class="plantilla-nombre">' + etiqueta + ": " + (lider ? escapeHTML(lider.jugador.nombre) : "—") + "</span>" +
-            '<span class="plantilla-stat">' + colGoles + "</span>" +
-            '<span class="plantilla-stat">' + colMvp + "</span>" +
-            '<span class="plantilla-stat">' + colAmarillas + "</span>" +
-            '<span class="plantilla-stat">' + colRojas + "</span>";
-          return fila;
+        function _lineaLider(emoji, etiqueta, lider, valorTexto) {
+          var linea = document.createElement("div");
+          linea.className = "plantilla-lider-linea";
+          linea.innerHTML =
+            '<span class="plantilla-lider-emoji">' + emoji + "</span>" +
+            etiqueta + ": " +
+            (lider ? '<span class="plantilla-lider-nombre">' + escapeHTML(lider.jugador.nombre) + "</span>" : "—") +
+            ": " + valorTexto;
+          return linea;
         }
 
         var grupoLideres = document.createElement("div");
-        grupoLideres.className = "plantilla-grupo plantilla-grupo--total";
+        grupoLideres.className = "plantilla-grupo plantilla-grupo--total plantilla-grupo--lideres";
         var tituloLideres = document.createElement("div");
         tituloLideres.className = "plantilla-grupo-titulo";
         tituloLideres.innerHTML = '<span class="plantilla-grupo-nombre">El mejor jugador en estos apartados</span>';
         grupoLideres.appendChild(tituloLideres);
-        grupoLideres.appendChild(_filaLider("Pichichi", liderPichichi, liderPichichi ? liderPichichi.valor : "", "", "", ""));
-        grupoLideres.appendChild(_filaLider("MVP", liderMvp, "", liderMvp ? liderMvp.valor : "", "", ""));
-        grupoLideres.appendChild(_filaLider(
-          "Tarjetero", liderTarjetero, "", "",
-          liderTarjetero ? statsDe(liderTarjetero.jugador).amarillas : "",
-          liderTarjetero ? statsDe(liderTarjetero.jugador).rojas : ""
+        grupoLideres.appendChild(_lineaLider("⚽️", "Pichichi", liderPichichi, liderPichichi ? liderPichichi.valor : 0));
+        grupoLideres.appendChild(_lineaLider("⭐️", "MVP", liderMvp, liderMvp ? liderMvp.valor : 0));
+        grupoLideres.appendChild(_lineaLider(
+          "🟨", "Tarjetero", liderTarjetero,
+          liderTarjetero
+            ? (statsDe(liderTarjetero.jugador).amarillas + "-" + statsDe(liderTarjetero.jugador).rojas)
+            : "0-0"
         ));
         frag.appendChild(grupoLideres);
 

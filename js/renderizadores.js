@@ -1905,6 +1905,10 @@
       var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
       if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
 
+      // % = victorias/PJ, siempre derivado (petición usuario, "en menos de
+      // 1kb al final de cada clasificación pon el % de victorias").
+      var pct = f.pj > 0 ? Math.round((pg / f.pj) * 100) : 0;
+
       var tr = document.createElement("tr");
       tr.className = claseFila;
       tr.innerHTML =
@@ -1914,7 +1918,8 @@
         '<td class="clasificacion-pts">' + f.pts + "</td>" +
         "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
         "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
-        "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+        "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>" +
+        '<td class="clasificacion-pct">' + pct + "%</td>";
       tbody.appendChild(tr);
     });
     return tbody;
@@ -1952,7 +1957,7 @@
         tablaEl.className = "clasificacion-tabla liga1ref-tabla";
         tablaEl.innerHTML =
           "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-          "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
         tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, zonaFn));
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
@@ -3949,7 +3954,7 @@
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
         "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+        "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
       tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, _championsZona));
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
@@ -4644,7 +4649,7 @@
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
         "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+        "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
       tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, _uelZona));
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
@@ -5342,7 +5347,7 @@
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
         "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+        "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
       tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, _ueclZona));
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
@@ -5802,13 +5807,14 @@
       tablaEl.className = "clasificacion-tabla liga1ref-tabla";
       tablaEl.innerHTML =
         "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+        "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var pos = i + 1;
         var dg = f.gf - f.gc;
         var zona = _superligaZona(pos, filas.length);
         var esTuyo = f.equipo.id === idClubActivo;
+        var pct = f.pj > 0 ? Math.round((f.pg / f.pj) * 100) : 0;
         var tr = document.createElement("tr");
         tr.className = "clasificacion-fila" + (zona ? " superliga-zona-" + zona : "") + (esTuyo ? " clasificacion-fila--activo" : "");
         tr.innerHTML =
@@ -5818,7 +5824,8 @@
           '<td class="clasificacion-pts">' + f.pts + "</td>" +
           "<td>" + f.pj + "</td><td>" + f.pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
           "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
-          "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+          "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>" +
+          '<td class="clasificacion-pct">' + pct + "%</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);

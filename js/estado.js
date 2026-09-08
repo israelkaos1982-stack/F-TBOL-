@@ -2464,6 +2464,52 @@
     _clavesDeLaApp().forEach(function (k) { claves[k] = localStorage.getItem(k); });
     return { formato: FORMATO_BACKUP_COMPLETO, claves: claves };
   }
+
+  // Como `exportarEstadoCrudo`, pero FUSIONADA con lo que el servidor
+  // tenga en ese instante — para que la exportación manual diaria (el
+  // usuario la hace "diariamente a última hora" como red extra, tras la
+  // pérdida de datos de 2026-09-08) capture SIEMPRE la foto MÁS COMPLETA
+  // posible, no solo lo que ESTE dispositivo concreto tenga en su propio
+  // localStorage (que puede llevar un rato sin sincronizar, o nunca haber
+  // visto el calendario que se pegó desde OTRO móvil). Mismo criterio de
+  // "no aceptar una regresión grave" que ya usa `importarEstadoCrudo` —
+  // aplicado aquí al revés: si el servidor trae algo MUCHO más pobre que
+  // lo que este dispositivo ya tiene para esa clave, se exporta la copia
+  // LOCAL (más rica), nunca la del servidor. `onDone(estado, offline)` —
+  // `offline` es true si no se pudo contactar el servidor a tiempo (sin
+  // red, servidor caído): en ese caso `estado` es igual al de
+  // `exportarEstadoCrudo()` sin fusionar nada, para que exportar SIGA
+  // funcionando sin conexión.
+  function exportarEstadoCrudoFusionado(onDone) {
+    var local = exportarEstadoCrudo();
+    if (typeof fetch !== "function") { onDone(local, true); return; }
+    var controlador = (typeof AbortController === "function") ? new AbortController() : null;
+    var vigia = window.setTimeout(function () { if (controlador) controlador.abort(); }, 8000);
+    fetch("/api/ef7/state", controlador ? { signal: controlador.signal } : undefined)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resp) {
+        window.clearTimeout(vigia);
+        if (!resp || !resp.ok || !resp.claves) { onDone(local, true); return; }
+        Object.keys(resp.claves).forEach(function (key) {
+          if (key.indexOf(PREFIJO_CLAVES) !== 0) return;
+          var valorServidor = resp.claves[key];
+          if (typeof valorServidor !== "string") return; // esta app solo guarda strings
+          var valorLocal = local.claves[key];
+          if (valorLocal === undefined || !_importSeriaRegresionGrave(valorLocal, valorServidor)) {
+            local.claves[key] = valorServidor;
+          }
+          // Si SÍ sería una regresión grave, se deja la copia LOCAL tal
+          // cual está en `local.claves[key]` — nunca se sobreescribe con
+          // algo mucho más pobre.
+        });
+        onDone(local, false);
+      })
+      .catch(function () {
+        window.clearTimeout(vigia);
+        onDone(local, true);
+      });
+  }
+
   function importarEstadoCrudo(obj) {
     if (!obj || typeof obj !== "object") throw new Error("Copia de seguridad inválida");
 
@@ -2535,6 +2581,7 @@
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,
     exportarEstadoCrudo: exportarEstadoCrudo,
+    exportarEstadoCrudoFusionado: exportarEstadoCrudoFusionado,
     importarEstadoCrudo: importarEstadoCrudo,
     borrarTodo: borrarTodo,
     calcularEspacioTotal: calcularEspacioTotal,

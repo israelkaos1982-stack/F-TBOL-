@@ -412,5 +412,21 @@
     });
   });
 
-  window.Sync = { forzarCiclo: _ciclo };
+  // Expuesto para que pantallas como el Calendario (ver
+  // js/renderizadores.js::generarCalendarioLateralDerecho) puedan
+  // distinguir "no hay NADA de verdad" de "todavía no ha llegado el
+  // primer pull con éxito" — sin esto, justo después de borrar datos de
+  // navegación (localStorage vacío, sin respaldo local) y con el
+  // servidor gratuito de Render "dormido" (arranque en frío lento), la
+  // pantalla mostraba el mensaje definitivo de "sin partidos" mientras
+  // la sync de fondo seguía reintentando en silencio cada 10 s — daba la
+  // falsa impresión de que los datos se habían perdido, cuando en
+  // realidad solo hacía falta esperar a que el primer pull tuviera éxito
+  // (reporte usuario: "cuando borro datos... no aparece en mi móvil,
+  // pero si otro humano abre el suyo, ya me funciona a mí" — coincidencia
+  // de tiempos: el servidor ya estaba despierto para entonces, no que el
+  // otro móvil hiciera nada especial).
+  function estaSincronizado() { return _primerCicloHecho; }
+
+  window.Sync = { forzarCiclo: _ciclo, estaSincronizado: estaSincronizado };
 })();

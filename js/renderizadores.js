@@ -7046,7 +7046,23 @@
         });
 
         if (!partidosDelClub.length) {
-          contenedor.appendChild(nodoEstado("🗓️", "Este equipo todavía no tiene partidos programados."));
+          // Sin partidos locales Y la sincronización con el servidor
+          // TODAVÍA no ha completado su primer tirón con éxito (recién
+          // borrados datos de navegación + servidor "dormido" con
+          // arranque lento, ver js/sync.js::estaSincronizado) — esto NO
+          // es un calendario vacío de verdad, solo hace falta esperar
+          // unos segundos a que la sync traiga lo que ya hay guardado.
+          // window.Sync.forzarCiclo() reintenta ya mismo en vez de
+          // esperar los 10 s del siguiente ciclo automático; en cuanto
+          // tenga éxito, js/main.js repinta esta misma pantalla sola
+          // (evento "ef7-sync-actualizado").
+          var sincronizado = !window.Sync || window.Sync.estaSincronizado();
+          if (!sincronizado) {
+            contenedor.appendChild(nodoEstado("🔄", "Sincronizando con el servidor… si ya tenías partidos guardados, aparecerán en unos segundos."));
+            if (window.Sync) window.Sync.forzarCiclo();
+          } else {
+            contenedor.appendChild(nodoEstado("🗓️", "Este equipo todavía no tiene partidos programados."));
+          }
           return;
         }
 

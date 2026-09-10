@@ -179,7 +179,21 @@
 
   function _clavesLocales() {
     var backup = window.Estado.exportarEstadoCrudo();
-    return (backup && backup.claves) || {};
+    var claves = (backup && backup.claves) || {};
+    // ef7_estado_liga_v1 se lee de MEMORIA, no de localStorage (ver
+    // js/estado.js::estadoLigaCrudoEnMemoria) — si el guardado local
+    // reventó por cuota llena, `_estado` en memoria YA tiene el partido
+    // recién confirmado aunque el disco se quedara con la copia vieja;
+    // sin esto, el sync nunca se enteraba de que había algo nuevo que
+    // subir y el resultado se perdía al recargar la página (reporte
+    // usuario: "se borra todo el rato" — coincide con los mismos
+    // partidos que la propia sesión SÍ mostraba como FINALIZADO segundos
+    // antes de recargar/cerrar la app).
+    if (window.Estado.estadoLigaCrudoEnMemoria) {
+      var enMemoria = window.Estado.estadoLigaCrudoEnMemoria();
+      if (typeof enMemoria === "string") claves[CLAVE_RESULTADOS] = enMemoria;
+    }
+    return claves;
   }
 
   function _marcarUiActualizada() {

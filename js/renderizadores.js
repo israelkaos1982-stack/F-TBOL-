@@ -8279,6 +8279,13 @@
         // (ya agrega base + Calendario extra + generados), solo se
         // recorre aquí — no se guarda nada adicional.
         var totalesEquipo = { pj: 0, pg: 0 };
+        // Mayor Goleada / Mayor Derrota (petición usuario) — el partido con
+        // el MARGEN de goles más grande a favor/en contra del equipo, en el
+        // MISMO barrido de arriba (excluyendo Superliga igual que 👤/%).
+        // 0 KB nuevos: solo se guarda el partido con mayor |margen| de cada
+        // lado, nunca una lista aparte.
+        var mejorGoleada = null; // { p, margen } — margen > 0 (victoria)
+        var mayorDerrota = null; // { p, margen } — margen < 0 (derrota)
         if (window.Estado) {
           window.Estado.listarPartidosResueltos(datos).forEach(function (p) {
             if (p.competicion === "superliga" || !p.jugado || !p.resultado) return;
@@ -8288,9 +8295,30 @@
             var golesPropios = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
             var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
             if (golesPropios > golesRival) totalesEquipo.pg++;
+            var margen = golesPropios - golesRival;
+            if (margen > 0 && (!mejorGoleada || margen > mejorGoleada.margen)) mejorGoleada = { p: p, margen: margen };
+            if (margen < 0 && (!mayorDerrota || margen < mayorDerrota.margen)) mayorDerrota = { p: p, margen: margen };
           });
         }
         var pctVictorias = totalesEquipo.pj > 0 ? Math.round((totalesEquipo.pg / totalesEquipo.pj) * 100) : 0;
+
+        // Texto "Liga · 12ªJ - Liverpool 5 - 0 Real Sociedad B" — cabecera de
+        // competición (COMP_LABEL) + jornada/ronda tal como se ven en el
+        // calendario, más el marcador con el nombre de cada lado (icono del
+        // mánager incluido si es un club humano, vía buscarEquipoPorId — el
+        // MISMO resolutor que usa el resto de pantallas).
+        function _textoMayorPartido(entry) {
+          if (!entry) return null;
+          var p = entry.p;
+          var compLabel = COMP_LABEL[p.competicion] || p.competicion;
+          var rondaLabel = (typeof p.jornada === "number") ? (p.jornada + "ªJ") : (p.ronda || "");
+          var cabecera = compLabel + (rondaLabel ? " · " + rondaLabel : "");
+          var eqLocal = buscarEquipoPorId(p.local, datos);
+          var eqVisitante = buscarEquipoPorId(p.visitante, datos);
+          var nombreLocal = eqLocal ? ((eqLocal.misterEmoji || "") + escapeHTML(eqLocal.nombre)) : escapeHTML(String(p.local));
+          var nombreVisitante = eqVisitante ? ((eqVisitante.misterEmoji || "") + escapeHTML(eqVisitante.nombre)) : escapeHTML(String(p.visitante));
+          return escapeHTML(cabecera) + " - " + nombreLocal + " " + p.resultado.golesLocal + " - " + p.resultado.golesVisitante + " " + nombreVisitante;
+        }
 
         var grupoTotal = document.createElement("div");
         grupoTotal.className = "plantilla-grupo plantilla-grupo--total";
@@ -8307,13 +8335,30 @@
           '<span class="plantilla-dorsal"></span>' +
           '<span class="plantilla-nombre">TOTAL</span>' +
           '<span class="plantilla-stat">' + totalesEquipo.pj + "</span>" +
-          '<span class="plantilla-stat">' + pctVictorias + "%</span>" +
+          '<span class="plantilla-stat">' + pctVictorias + "</span>" +
           '<span class="plantilla-stat">' + totales.goles + "</span>" +
           '<span class="plantilla-stat">' + totales.mvp + "</span>" +
           '<span class="plantilla-stat">' + totales.amarillas + "</span>" +
           '<span class="plantilla-stat">' + totales.rojas + "</span>";
         grupoTotal.appendChild(filaTotal);
         frag.appendChild(grupoTotal);
+
+        // Mayor Goleada / Mayor Derrota (petición usuario, debajo de
+        // TOTALES con su propio espacio — mismo margin-bottom de
+        // .plantilla-grupo que separa el resto de bloques de esta pantalla).
+        function _lineaMayorPartido(etiqueta, entry) {
+          var linea = document.createElement("div");
+          linea.className = "plantilla-mayor-linea";
+          linea.innerHTML =
+            '<span class="plantilla-mayor-etiqueta">' + etiqueta + ":</span>" +
+            '<span class="plantilla-mayor-valor">' + (_textoMayorPartido(entry) || "—") + "</span>";
+          return linea;
+        }
+        var grupoMayor = document.createElement("div");
+        grupoMayor.className = "plantilla-grupo plantilla-grupo--mayor";
+        grupoMayor.appendChild(_lineaMayorPartido("Mayor Goleada", mejorGoleada));
+        grupoMayor.appendChild(_lineaMayorPartido("Mayor Derrota", mayorDerrota));
+        frag.appendChild(grupoMayor);
 
         // "El mejor jugador en estos apartados" (petición usuario, debajo
         // de los totales) — Pichichi/MVP/Tarjetero de ESTA plantilla. 0 KB

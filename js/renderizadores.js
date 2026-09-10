@@ -7298,19 +7298,23 @@
   // icono fijo de _FORMA_POR_CLUB para el club gestionado, el mismo
   // esté quien esté al otro lado — petición usuario: deja de depender
   // de si el rival es humano o IA).
-  // `partido` es opcional (solo lo necesita la excepción de Superliga,
-  // "🔋 Estado ambos🎲" fijo para los 2 lados — petición usuario). El
-  // resto de competiciones ignoran el parámetro, igual que antes.
+  // `partido` es opcional (lo necesitan la excepción de Superliga —
+  // "🔋 Estado ambos🎲" fijo para los 2 lados — y la de las FINALES de
+  // torneo — "⏱️ 10 min" + "🔋 Tu⬆️-⬆️Rival" fijos, ver
+  // _esFinalDeTorneo más abajo — ambas peticiones usuario). El resto de
+  // competiciones ignoran el parámetro, igual que antes.
   function _calcularMetaPartido(local, visitante, datos, contexto, partido) {
     var par = _resolverGestionadoYRival(local, visitante, contexto);
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
     var esSuperliga = !!partido && partido.competicion === "superliga";
+    var esFinal = !!partido && _esFinalDeTorneo(partido);
     var forma = _FORMA_POR_CLUB[par.managed.id];
-    var formaIconoRival = esSuperliga ? "🎲" : (forma ? forma.icono : "➡️");
+    var formaIconoRival = esSuperliga ? "🎲" : (esFinal ? "⬆️" : (forma ? forma.icono : "➡️"));
+    var formaIconoTu = esFinal ? "⬆️" : "🎲";
     return {
-      tiempo: "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
+      tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
       nivel: "🤖 " + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
-      forma: "🔋 Tu🎲-" + formaIconoRival + "Rival"
+      forma: "🔋 Tu" + formaIconoTu + "-" + formaIconoRival + "Rival"
     };
   }
 
@@ -7346,6 +7350,27 @@
     if (!partido.competicion || !EUROPA_FASE_GRUPOS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
     var rondaNorm = _normNombre(partido.ronda || "");
     return !/dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
+  }
+
+  // FINALES de torneo (petición usuario): Copa del Rey, Champions League,
+  // Europa League, Conference League, Recopa de Europa, Supercopa de
+  // España, Supercopa de Europa, Intercontinental, Mundialito de Clubes y
+  // torneos de Verano — su FINAL (partido único, nunca ida/vuelta, ver
+  // comentario de EUROPA_FASE_GRUPOS_COMPS más arriba: "la Final a partido
+  // único en campo neutral") va SIEMPRE a 10 min, con Prórroga y Penaltis
+  // ya activada (sin que el admin tenga que marcar la casilla) y los 2
+  // equipos en estado de forma ⬆️ — ver _renderFormatoBoxPrevia y
+  // _calcularMetaPartido más abajo, y js/acta.js::iniciarPartidoEnVivo
+  // (fuerza `prorroga:true` igual que ya hace con la vuelta decisiva de
+  // una eliminatoria a doble partido).
+  var FINALES_ACTIVADAS_COMPS = {
+    copa: true, supercopa: true, champions: true, uel: true, uecl: true,
+    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true
+  };
+  function _esFinalDeTorneo(partido) {
+    if (!partido.competicion || !FINALES_ACTIVADAS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
+    if (_faseIdaVuelta(partido)) return false; // la Final nunca es ida/vuelta — defensivo
+    return /\bfinal\b/.test(_normNombre(partido.ronda || ""));
   }
 
   // Modo de la eliminatoria, deducido del texto libre que el admin
@@ -7453,7 +7478,14 @@
       '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ El gol marcado fuera cuenta doble en caso de empate global.</p>';
     var avisoProrrogaSiempre =
       '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta.</p>';
-    if (modo === "eliminatoria-unica") {
+    if (modo === "eliminatoria-unica" && _esFinalDeTorneo(partido)) {
+      // FINAL de torneo (Copa/Champions/UEL/UECL/Recopa/Supercopa España/
+      // Supercopa Europa/Intercontinental/Mundialito/Verano) — Prórroga y
+      // Penaltis van SIEMPRE activados, sin casilla que tocar (petición
+      // usuario). js/acta.js::iniciarPartidoEnVivo fuerza `prorroga:true`
+      // para este caso, igual que ya hace con la vuelta decisiva.
+      box.innerHTML = avisoProrrogaSiempre;
+    } else if (modo === "eliminatoria-unica") {
       var esAmistoso = _resolverCompKeyBalon(partido.competicion) === "amistosos";
       box.innerHTML = esAmistoso ? checkboxHtml : checkboxObligatorioHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
@@ -9315,6 +9347,7 @@
     cerrarPreviaPartido: cerrarPreviaPartido,
     detectarModoPartido: detectarModoPartido,
     faseIdaVuelta: _faseIdaVuelta,
+    esFinalDeTorneo: _esFinalDeTorneo,
     cargarTodo: cargarTodo,
     buscarEquipoPorId: buscarEquipoPorId,
     crearEscudoHTML: crearEscudoHTML,

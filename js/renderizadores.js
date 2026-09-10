@@ -8336,11 +8336,12 @@
         }
         var pctVictorias = totalesEquipo.pj > 0 ? Math.round((totalesEquipo.pg / totalesEquipo.pj) * 100) : 0;
 
-        // Texto "Liga · 12ªJ - Liverpool 5 - 0 Real Sociedad B" — cabecera de
-        // competición (COMP_LABEL) + jornada/ronda tal como se ven en el
-        // calendario, más el marcador con el nombre de cada lado (icono del
-        // mánager incluido si es un club humano, vía buscarEquipoPorId — el
-        // MISMO resolutor que usa el resto de pantallas).
+        // Cabecera "Liga · 12ªJ" + línea de marcador "Liverpool 5 - 0 Real
+        // Sociedad B" — SEPARADAS (petición usuario: antes iban en una
+        // sola línea unidas por " - ", ahora cada una en su propia línea
+        // dentro de .plantilla-mayor-linea). Icono del mánager incluido
+        // si es un club humano, vía buscarEquipoPorId — el MISMO
+        // resolutor que usa el resto de pantallas.
         function _textoMayorPartido(entry) {
           if (!entry) return null;
           var p = entry.p;
@@ -8351,7 +8352,10 @@
           var eqVisitante = buscarEquipoPorId(p.visitante, datos);
           var nombreLocal = eqLocal ? ((eqLocal.misterEmoji || "") + escapeHTML(eqLocal.nombre)) : escapeHTML(String(p.local));
           var nombreVisitante = eqVisitante ? ((eqVisitante.misterEmoji || "") + escapeHTML(eqVisitante.nombre)) : escapeHTML(String(p.visitante));
-          return escapeHTML(cabecera) + " - " + nombreLocal + " " + p.resultado.golesLocal + " - " + p.resultado.golesVisitante + " " + nombreVisitante;
+          return {
+            cabecera: escapeHTML(cabecera),
+            marcador: nombreLocal + " " + p.resultado.golesLocal + " - " + p.resultado.golesVisitante + " " + nombreVisitante
+          };
         }
 
         var grupoTotal = document.createElement("div");
@@ -8383,9 +8387,13 @@
         function _lineaMayorPartido(etiqueta, entry) {
           var linea = document.createElement("div");
           linea.className = "plantilla-mayor-linea";
+          var datosPartido = _textoMayorPartido(entry);
           linea.innerHTML =
             '<span class="plantilla-mayor-etiqueta">' + etiqueta + ":</span>" +
-            '<span class="plantilla-mayor-valor">' + (_textoMayorPartido(entry) || "—") + "</span>";
+            (datosPartido
+              ? '<span class="plantilla-mayor-comp">' + datosPartido.cabecera + "</span>" +
+                '<span class="plantilla-mayor-valor">' + datosPartido.marcador + "</span>"
+              : '<span class="plantilla-mayor-valor">—</span>');
           return linea;
         }
         var grupoMayor = document.createElement("div");

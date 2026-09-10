@@ -6763,10 +6763,39 @@
   // cancelarPospuestoPartido y la exclusión en generarCalendarioLateralDerecho
   // (un partido pospuesto ya no puede ser "el próximo" — libera el 📌/borde
   // azul para el siguiente pendiente real).
+  // Texto legible "Liverpool vs Sabadell (2-1) — Liga · J10" de un
+  // partido — lo usan el reinicio individual Y el masivo para que la
+  // papelera (Estado.listarPapeleraPartidos) muestre algo identificable
+  // sin tener que guardar los nombres de equipo en estado.js (que no
+  // tiene acceso a data/equipos*.json).
+  function _descripcionCortaPartido(partido, datos) {
+    if (!partido) return "este partido";
+    var eqLocal = buscarEquipoPorId(partido.local, datos);
+    var eqVisitante = buscarEquipoPorId(partido.visitante, datos);
+    var nomLocal = (eqLocal && eqLocal.nombre) || "?";
+    var nomVisitante = (eqVisitante && eqVisitante.nombre) || "?";
+    var marcadorDesc = partido.resultado
+      ? " (" + partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + ")"
+      : "";
+    var etiquetaComp = COMP_LABEL[partido.competicion] || partido.competicion;
+    return nomLocal + " vs " + nomVisitante + marcadorDesc +
+      (partido.ronda ? " — " + etiquetaComp + " · " + partido.ronda : "");
+  }
+
   function _pospuestoIconoHTML(partido) {
     return partido.pospuesto
       ? '<button type="button" class="match-card-pospuesto-btn match-card-pospuesto-btn--activo" data-accion="cancelar-pospuesto" data-partido-id="' + partido.id + '" title="Pospuesto — pulsa para reactivarlo">⏳</button>'
       : '<button type="button" class="match-card-pospuesto-btn" data-accion="posponer-partido" data-partido-id="' + partido.id + '" title="Aún no podéis coincidir para jugarlo — pulsa para posponerlo">⏳</button>';
+  }
+
+  // ↺ Reiniciar partido — icono PROPIO, pequeño y apagado, en la esquina
+  // inferior derecha de la card (ver css/estilos.css .match-card-reset-btn
+  // para el porqué de separarlo del marcador). Solo se pinta en partidos
+  // YA jugados (mostrarResetBtn, ver más abajo). Gateado por confirm()
+  // nombrando el partido + PIN admin, igual que siempre — ver la
+  // delegación de eventos de "reiniciar-partido".
+  function _resetPartidoIconoHTML(partido) {
+    return '<button type="button" class="match-card-reset-btn" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">↺</button>';
   }
 
   // RESULTADO RÁPIDO — clubes que NO juegan sus partidos EN VIVO dentro de
@@ -6913,18 +6942,22 @@
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
     // icono, para que quepa siempre entre los 2 bloques de equipo), más
     // el separador "vs" debajo, entre medias de los 2 nombres. El
-    // marcador de un partido YA jugado es TAMBIÉN un botón — pulsarlo
-    // reinicia el partido (vuelve a "sin jugar", para poder repetirlo
-    // en pruebas), pero SOLO el administrador puede hacerlo (PIN, ver
-    // la delegación de eventos más abajo) — petición usuario.
+    // marcador YA NO es un botón (ver _resetPartidoIconoHTML más abajo:
+    // el reinicio tiene su PROPIO icono pequeño, en una esquina de la
+    // card — antes el marcador ENTERO era el botón de reinicio, justo en
+    // el centro donde el dedo tiende a caer al desplazarse o al intentar
+    // ver el acta, y un toque + el PIN tecleado por costumbre bastaba
+    // para borrar un resultado real sin querer, pese al confirm()).
     var centroTop;
+    var mostrarResetBtn = false;
     if (partido.jugado && partido.resultado) {
+      mostrarResetBtn = true;
       // Resultado rápido (ver RESULTADO_RAPIDO_POR_CLUB/registrarResultadoRapido):
       // el marcador guardado es un PLACEHOLDER (1-0/0-0/0-1), nunca un
       // resultado real — mostrar "1 - 0" sería engañoso, así que se pinta
       // la etiqueta del resultado (mismo criterio golesActivo/golesRival
       // de arriba, coherente con el color --gano/--empate/--perdio de la
-      // card). Sigue siendo el mismo botón de reinicio (PIN admin).
+      // card).
       var etiquetaCentro = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
       // Marcador decidido en la tanda de penaltis (penL/penV ya
       // calculados arriba, distintos entre sí): sin esto, una card ya en
@@ -6945,9 +6978,9 @@
         etiquetaCentro = claseResultado === " match-card--gano" ? "✅ GANADO"
           : (claseResultado === " match-card--empate" ? "➖ EMPATE" : "❌ PERDIDO");
       }
-      centroTop = '<button type="button" class="match-card-marcador' +
+      centroTop = '<span class="match-card-marcador' +
         (partido.resultadoRapido ? " match-card-marcador--rapido" : (huboTanda ? " match-card-marcador--tanda" : "")) +
-        '" data-accion="reiniciar-partido" data-partido-id="' + partido.id + '" title="Reiniciar partido (solo admin)">' + etiquetaCentro + "</button>";
+        '">' + etiquetaCentro + "</span>";
     } else if (esEliminado) {
       centroTop = '<span class="match-card-eliminado" title="El club ya quedó eliminado de esta competición">Eliminado</span>';
     } else if (esBloqueado) {
@@ -6979,6 +7012,7 @@
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
       (mostrarPospuestoBtn ? _pospuestoIconoHTML(partido) : "") +
+      (mostrarResetBtn ? _resetPartidoIconoHTML(partido) : "") +
       '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
       equiposHTML;
 
@@ -7208,7 +7242,7 @@
         if (partidosPorId[id].competicion === "superliga") return;
         if (!partidosPorId[id].jugado) return;
         n++;
-        window.Estado.reiniciarResultadoPartido(id);
+        window.Estado.reiniciarResultadoPartido(id, _descripcionCortaPartido(partidosPorId[id], _ultimoContexto.datos));
       });
     }
     n += window.Estado.reiniciarCalendarioExtraJugados(clubId);
@@ -8773,6 +8807,46 @@
     nota.className = "admin-nota";
     nota.textContent = "Los navegadores modernos permiten varios MB por sitio — muy por encima de lo que este progreso puede llegar a pesar.";
     contenedor.appendChild(nota);
+
+    // 🗑️ Papelera de partidos — red de seguridad de "reiniciar-partido"
+    // (individual o el "🔄 Reiniciar" masivo del club). Cada reinicio
+    // guarda el resultado real aquí ANTES de convertirlo en tumba (ver
+    // Estado.reiniciarResultadoPartido) — un toque accidental, o un PIN
+    // tecleado por costumbre sin leer el aviso, ya no significa perder
+    // el partido para siempre.
+    var papelera = window.Estado && window.Estado.listarPapeleraPartidos
+      ? window.Estado.listarPapeleraPartidos()
+      : [];
+    var tituloPapelera = document.createElement("h4");
+    tituloPapelera.className = "admin-subtitulo";
+    tituloPapelera.textContent = "🗑️ Papelera de partidos";
+    contenedor.appendChild(tituloPapelera);
+
+    if (!papelera.length) {
+      contenedor.appendChild(nodoEstado("🗑️", "Vacía — aquí aparecerá cualquier partido que se reinicie, para poder deshacerlo."));
+    } else {
+      var fragPapelera = document.createDocumentFragment();
+      papelera.forEach(function (entrada) {
+        var fila = document.createElement("div");
+        fila.className = "admin-list-item";
+        var desc = entrada.descripcion || ("Partido " + entrada.partidoId);
+        fila.innerHTML =
+          '<div class="admin-list-item-main">' +
+          '<span class="admin-list-item-title">' + escapeHTML(desc) + "</span>" +
+          '<span class="admin-list-item-sub">Reiniciado el ' + escapeHTML(_fmtFechaSnapshot(new Date(entrada.borradoEn).toISOString())) + "</span>" +
+          "</div>" +
+          '<div class="admin-list-item-actions">' +
+          '<button type="button" class="admin-list-item-btn" data-accion="restaurar-papelera-partido" data-papelera-id="' + escapeHTML(entrada.id) + '" data-papelera-desc="' + escapeHTML(desc) + '" aria-label="Restaurar este partido">↩️</button>' +
+          "</div>";
+        fragPapelera.appendChild(fila);
+      });
+      contenedor.appendChild(fragPapelera);
+
+      var notaPapelera = document.createElement("p");
+      notaPapelera.className = "admin-nota";
+      notaPapelera.textContent = "Restaurar devuelve el resultado, el acta y las estadísticas exactamente como estaban antes del reinicio.";
+      contenedor.appendChild(notaPapelera);
+    }
   }
 
   // ---------- Copias automáticas del servidor (snapshots) ----------
@@ -8886,6 +8960,27 @@
       return;
     }
 
+    // ↩️ Restaurar un partido desde la 🗑️ Papelera (ver
+    // Estado.restaurarPartidoDesdePapelera) — deshace un
+    // "reiniciar-partido" accidental o de prueba. Abierto sin PIN a
+    // propósito: restaurar NUNCA borra nada, solo devuelve un resultado
+    // que ya existía.
+    var btnRestaurarPapelera = ev.target.closest && ev.target.closest('[data-accion="restaurar-papelera-partido"]');
+    if (btnRestaurarPapelera) {
+      var papeleraId = btnRestaurarPapelera.dataset.papeleraId;
+      if (papeleraId && window.Estado && window.Estado.restaurarPartidoDesdePapelera) {
+        var okRestaurar = window.Estado.restaurarPartidoDesdePapelera(papeleraId);
+        if (okRestaurar) {
+          window.alert("✅ Partido restaurado: " + (btnRestaurarPapelera.dataset.papeleraDesc || ""));
+          if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
+          if (window.Main && window.Main.repintarVistaAdminActual) window.Main.repintarVistaAdminActual();
+        } else {
+          window.alert("⚠️ No se pudo restaurar — puede que ya se haya restaurado desde otro sitio.");
+        }
+      }
+      return;
+    }
+
     // Reiniciar un partido ya jugado (pruebas) — EXCLUSIVO del
     // administrador (PIN) + confirmación EXPLÍCITA que nombra el partido
     // concreto (rivales + marcador). Antes solo pedía el PIN, sin decir
@@ -8905,27 +9000,16 @@
       var idReiniciar = btnReiniciar.dataset.partidoId;
       if (idReiniciar && window.Estado && window.Main && _ultimoContexto) {
         var partidoAReiniciar = _ultimoContexto.partidosPorId[idReiniciar];
-        var descPartido = "este partido";
-        if (partidoAReiniciar) {
-          var eqLocal = buscarEquipoPorId(partidoAReiniciar.local, _ultimoContexto.datos);
-          var eqVisitante = buscarEquipoPorId(partidoAReiniciar.visitante, _ultimoContexto.datos);
-          var nomLocal = (eqLocal && eqLocal.nombre) || "?";
-          var nomVisitante = (eqVisitante && eqVisitante.nombre) || "?";
-          var marcadorDesc = partidoAReiniciar.resultado
-            ? " (" + partidoAReiniciar.resultado.golesLocal + " - " + partidoAReiniciar.resultado.golesVisitante + ")"
-            : "";
-          var etiquetaComp = COMP_LABEL[partidoAReiniciar.competicion] || partidoAReiniciar.competicion;
-          descPartido = nomLocal + " vs " + nomVisitante + marcadorDesc +
-            (partidoAReiniciar.ronda ? " — " + etiquetaComp + " · " + partidoAReiniciar.ronda : "");
-        }
+        var descPartido = _descripcionCortaPartido(partidoAReiniciar, _ultimoContexto.datos);
         var ok = window.confirm(
           "⚠️ Vas a reiniciar a CERO este partido ya jugado:\n\n" + descPartido +
-          "\n\nEl resultado, el acta y las estadísticas que aporta se BORRAN. Esta acción NO se puede deshacer.\n\n" +
+          "\n\nEl resultado, el acta y las estadísticas que aporta se BORRAN de la clasificación.\n\n" +
+          "Si te equivocas, puedes deshacerlo desde Panel Admin → 🗑️ Papelera de partidos.\n\n" +
           "¿Seguro que quieres continuar?"
         );
         if (!ok) return;
         window.Main.pedirPinAdmin(function () {
-          window.Estado.reiniciarResultadoPartido(idReiniciar);
+          window.Estado.reiniciarResultadoPartido(idReiniciar, descPartido);
           if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
         }, "🔒 Reiniciar partido", "Solo el administrador puede reiniciar un partido ya jugado.");
       }

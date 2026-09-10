@@ -693,6 +693,15 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 0 12px;
 }
 
+.admin-subtitulo {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-hi);
+  margin: 18px 0 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
 /* ---------- Calendario de COMPETICIONES — roadmap SIN fecha, editable ----------
    No es el calendario de partidos (con fecha real, vive en cada club).
    Es una lista de texto libre pegada por el admin — orden de jornadas/
@@ -2554,6 +2563,36 @@ button { font-family: inherit; cursor: pointer; }
   gap: 1px;
   line-height: 1.1;
 }
+/* ↺ Reiniciar partido — icono PROPIO, separado del marcador (antes el
+   marcador ENTERO era el botón de reinicio: el centro de la card, justo
+   donde el dedo tiende a caer al desplazarse o al intentar ver el acta,
+   así que un toque + el PIN tecleado por costumbre bastaba para borrar un
+   resultado real — reportes usuario, varios partidos vueltos a PREVIA sin
+   querer. Ver js/renderizadores.js). Pequeño y apagado a propósito
+   (opacity baja, esquina inferior derecha, lejos del centro): sigue
+   disponible para quien de verdad quiera reiniciar, pero deja de ser el
+   objetivo natural del dedo. */
+.match-card-reset-btn {
+  position: absolute;
+  bottom: -8px;
+  right: -6px;
+  font-size: 13px;
+  line-height: 1;
+  z-index: 2;
+  background: rgba(23, 24, 29, 0.9);
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.15s ease;
+}
+.match-card-reset-btn:hover { opacity: 0.85; }
 .match-card-marcador-pen {
   font-size: 10px;
   font-weight: 700;

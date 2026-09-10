@@ -244,14 +244,78 @@
     return e.resultados[partidoId] || null;
   }
 
+  // PAPELERA — red de seguridad para "reiniciar-partido" (individual o el
+  // botón masivo "🔄 Reiniciar" del club, que llama a esta MISMA función
+  // partido a partido). Antes, reiniciar tiraba el resultado real
+  // directamente a la tumba sin dejar copia — un reinicio por error
+  // (dedo torpe + PIN tecleado por costumbre, o simplemente pulsado a
+  // destiempo) obligaba a re-jugar el partido de memoria o perderlo del
+  // todo. Guarda las últimas 30 (más que de sobra: 30 reinicios seguidos
+  // sin que nadie mire la papelera sería un patrón de uso muy raro) en su
+  // propia clave, capadas por tamaño — nunca crece sin límite.
+  var PAPELERA_KEY = "ef7_papelera_partidos_v1";
+  var PAPELERA_MAX = 30;
+  function _cargarPapelera() {
+    try {
+      var raw = localStorage.getItem(PAPELERA_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (err) {
+      return [];
+    }
+  }
+  function _guardarPapelera(arr) {
+    try {
+      localStorage.setItem(PAPELERA_KEY, JSON.stringify(arr));
+    } catch (err) { /* no crítico — la papelera es solo una red extra, no el dato real */ }
+  }
+  // Lista más reciente primero. Cada entrada: { id, partidoId, resultado,
+  // descripcion, borradoEn }. `descripcion` (opcional) es el texto legible
+  // ya construido por el caller ("Liverpool vs Sabadell (2-1) — Liga · J10")
+  // — este archivo no tiene acceso a los nombres de equipo (viven en
+  // data/equipos*.json, que solo carga js/renderizadores.js).
+  function listarPapeleraPartidos() {
+    return _cargarPapelera();
+  }
+  // Restaura la entrada de papelera `entradaId` de vuelta a e.resultados —
+  // con un `_actualizadoEn` FRESCO para que gane cualquier fusión (server
+  // o local) frente a la tumba que la reemplazó. La quita de la papelera
+  // al restaurarla (si el admin necesita repetirlo, es un reinicio nuevo).
+  function restaurarPartidoDesdePapelera(entradaId) {
+    var papelera = _cargarPapelera();
+    var idx = papelera.findIndex(function (p) { return p.id === entradaId; });
+    if (idx === -1) return false;
+    var entrada = papelera[idx];
+    var e = cargarEstado();
+    var restaurado = {};
+    for (var k in entrada.resultado) if (entrada.resultado.hasOwnProperty(k)) restaurado[k] = entrada.resultado[k];
+    restaurado._actualizadoEn = Date.now();
+    e.resultados[entrada.partidoId] = restaurado;
+    papelera.splice(idx, 1);
+    _guardarPapelera(papelera);
+    return guardarEstado();
+  }
+
   // "Borra" (deja como TUMBA, ver más abajo) el resultado guardado de un
   // partido — vuelve a "sin jugar" para poder repetirlo (pruebas).
   // Acción destructiva: la UI que la dispara la gatea SIEMPRE detrás del
   // PIN de administrador (ver js/renderizadores.js, window.Main.pedirPinAdmin).
-  function reiniciarResultadoPartido(partidoId) {
+  // `descripcion` (opcional, string) es solo para que la papelera se
+  // pueda leer sin adivinar de qué partido se trataba.
+  function reiniciarResultadoPartido(partidoId, descripcion) {
     var e = cargarEstado();
     var actual = e.resultados[partidoId];
     if (!actual || actual.jugado === false) return false; // no había nada que reiniciar (o ya lo estaba)
+    var papelera = _cargarPapelera();
+    papelera.unshift({
+      id: partidoId + "::" + Date.now(),
+      partidoId: partidoId,
+      resultado: actual,
+      descripcion: descripcion || null,
+      borradoEn: Date.now()
+    });
+    if (papelera.length > PAPELERA_MAX) papelera.length = PAPELERA_MAX;
+    _guardarPapelera(papelera);
     e.resultados[partidoId] = _tumbaDeResultado(actual);
     return guardarEstado();
   }
@@ -2602,6 +2666,8 @@
     registrarResultadoRapido: registrarResultadoRapido,
     obtenerResultadoOverride: obtenerResultadoOverride,
     reiniciarResultadoPartido: reiniciarResultadoPartido,
+    listarPapeleraPartidos: listarPapeleraPartidos,
+    restaurarPartidoDesdePapelera: restaurarPartidoDesdePapelera,
     reiniciarResultadosDeClub: reiniciarResultadosDeClub,
     marcarPartidoPospuesto: marcarPartidoPospuesto,
     cancelarPospuestoPartido: cancelarPospuestoPartido,

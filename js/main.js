@@ -1100,7 +1100,14 @@
       titulo || "🔒 Acción de administrador",
       subtitulo || "Introduce la contraseña de administrador para continuar.");
   }
-  window.Main = { pedirPinAdmin: pedirPinAdmin, pintarTituloModalInfo: _pintarTituloModalInfo };
+  window.Main = {
+    pedirPinAdmin: pedirPinAdmin,
+    pintarTituloModalInfo: _pintarTituloModalInfo,
+    // Expuesta para que otros módulos (renderizadores.js: restaurar desde
+    // la 🗑️ Papelera de partidos) puedan re-pintar la vista admin abierta
+    // sin conocer el id real de su contenedor ("admin-detalle-contenido").
+    repintarVistaAdminActual: function () { repintarVistaAdminActual(); }
+  };
 
   // ---------- Pantalla 2: Panel Admin ----------
   var ADMIN_VISTAS = {

@@ -6257,7 +6257,24 @@ def api_ef7_state_post():
     for key, value in entrantes.items():
         if not _ef7_key_is_valid(key):
             continue
-        row = GlobalState.query.filter_by(clave=key).first()
+        # `with_for_update()` — BLOQUEA la fila mientras se lee, fusiona y
+        # escribe esta clave. Sin esto (reporte usuario: "jugó 5 partidos...
+        # esta mañana no estaba nada guardado, incluso partidos de otros
+        # días"): con gunicorn a 2 workers reales (render.yaml) y los 6
+        # mánagers pudiendo confirmar partidos casi a la vez, `ef7_estado_
+        # liga_v1` es UNA SOLA clave compartida por los 6 clubes — 2 POST
+        # concurrentes pueden leer el MISMO `row.valor_json` antes de que
+        # ninguno lo actualice, fusionar cada uno por su lado, y el que
+        # confirme el commit MÁS TARDE pisa entera la fusión del otro,
+        # perdiendo en silencio los partidos que solo estaban ahí (incluidos
+        # partidos de días anteriores, si la fusión perdedora era la única
+        # copia que los tenía). Con el lock, la 2ª petición ESPERA a que la
+        # 1ª haga commit y relee YA con sus cambios dentro, así su propia
+        # fusión parte de la versión más reciente en vez de una foto vieja.
+        # Postgres lo respeta de verdad (bloqueo de fila real); en SQLite el
+        # dialecto ignora la pista sin fallar — el propio motor de SQLite ya
+        # serializa sus escrituras a nivel de archivo.
+        row = GlobalState.query.filter_by(clave=key).with_for_update().first()
         value_a_guardar = value
         # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
         # que este POST la sobreescriba entera — ver _ef7_merge_resultados

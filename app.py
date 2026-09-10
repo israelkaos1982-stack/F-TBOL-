@@ -10,6 +10,10 @@ import unicodedata
 import uuid
 import socket
 import ipaddress
+try:
+    import fcntl  # POSIX only (Linux/Render) — ver _ef7_state_lock()
+except ImportError:
+    fcntl = None
 import html as html_lib
 import urllib.request
 import urllib.parse
@@ -5934,6 +5938,55 @@ def _new_sim_static(subdir, filename):
 _EF7_KEY_PREFIX = "ef7_"
 _EF7_ESTADO_LIGA_KEY = "ef7_estado_liga_v1"
 
+# CANDADO DE ARCHIVO — serializa TODOS los POST a /api/ef7/state entre los
+# 2 procesos reales de gunicorn (render.yaml, --workers 2), sea Postgres o
+# SQLite el motor real. Por qué NO basta con with_for_update() (que ya
+# vive en api_ef7_state_post): en Postgres SÍ bloquea la fila de verdad;
+# en SQLite (el motor real de este despliegue salvo que DATABASE_URL esté
+# configurada a mano en el panel de Render — render.yaml no la trae) el
+# dialecto de SQLAlchemy IGNORA la pista sin avisar (no existe "SELECT ...
+# FOR UPDATE" en SQLite). Y aunque SQLite serializa sus ESCRITURAS a nivel
+# de archivo, eso NO cierra la ventana del bug: 2 peticiones pueden hacer
+# el SELECT (bloqueo compartido, compatible entre sí) casi a la vez, leer
+# el MISMO valor viejo, y solo al escribir se turnan — la 2ª sigue
+# fusionando sobre la foto vieja que ya había leído, así que pisa la
+# fusión de la 1ª igual (lost update), aunque SQLite nunca corrompa el
+# archivo. Un fcntl.flock() de archivo SÍ cierra esa ventana: solo un
+# worker entra a leer+fusionar+escribir a la vez, en CUALQUIER motor,
+# porque ambos procesos comparten el mismo disco (un solo servicio web).
+# Si algún día se escala a VARIAS instancias/máquinas, este lock deja de
+# alcanzar (no cruza red) — ahí SÍ haría falta Postgres + FOR UPDATE de
+# verdad (o un lock distribuido). Con un solo host, este candado basta.
+_EF7_STATE_LOCK_PATH = os.path.join(instance_dir, ".ef7_state_lock")
+
+
+def _ef7_state_lock_acquire():
+    """Abre + bloquea (LOCK_EX, bloqueante) el candado de archivo del
+    estado ef7. Devuelve el file handle (cerrarlo libera el lock) o None
+    si fcntl no está disponible en esta plataforma (Windows) — en ese
+    caso se sigue confiando solo en with_for_update()."""
+    if fcntl is None:
+        return None
+    try:
+        fh = open(_EF7_STATE_LOCK_PATH, "a+")
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        return fh
+    except OSError:
+        return None
+
+
+def _ef7_state_lock_release(fh):
+    if fh is None:
+        return
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    try:
+        fh.close()
+    except OSError:
+        pass
+
 
 def _ef7_merge_resultados(existing_row_value, incoming_value):
     """Fusiona `resultados` de ef7_estado_liga_v1 PARTIDO A PARTIDO.
@@ -6254,52 +6307,46 @@ def api_ef7_state_post():
         return jsonify({"ok": False, "error": "falta `claves`"}), 400
     now = utc_now_iso()
     guardadas = []
-    for key, value in entrantes.items():
-        if not _ef7_key_is_valid(key):
-            continue
-        # `with_for_update()` — BLOQUEA la fila mientras se lee, fusiona y
-        # escribe esta clave. Sin esto (reporte usuario: "jugó 5 partidos...
-        # esta mañana no estaba nada guardado, incluso partidos de otros
-        # días"): con gunicorn a 2 workers reales (render.yaml) y los 6
-        # mánagers pudiendo confirmar partidos casi a la vez, `ef7_estado_
-        # liga_v1` es UNA SOLA clave compartida por los 6 clubes — 2 POST
-        # concurrentes pueden leer el MISMO `row.valor_json` antes de que
-        # ninguno lo actualice, fusionar cada uno por su lado, y el que
-        # confirme el commit MÁS TARDE pisa entera la fusión del otro,
-        # perdiendo en silencio los partidos que solo estaban ahí (incluidos
-        # partidos de días anteriores, si la fusión perdedora era la única
-        # copia que los tenía). Con el lock, la 2ª petición ESPERA a que la
-        # 1ª haga commit y relee YA con sus cambios dentro, así su propia
-        # fusión parte de la versión más reciente en vez de una foto vieja.
-        # Postgres lo respeta de verdad (bloqueo de fila real); en SQLite el
-        # dialecto ignora la pista sin fallar — el propio motor de SQLite ya
-        # serializa sus escrituras a nivel de archivo.
-        row = GlobalState.query.filter_by(clave=key).with_for_update().first()
-        value_a_guardar = value
-        # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
-        # que este POST la sobreescriba entera — ver _ef7_merge_resultados
-        # y el comentario "EXCEPCIÓN" más arriba.
-        if key == _EF7_ESTADO_LIGA_KEY and row is not None:
-            value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
-        elif row is not None and _ef7_es_regresion_grave(row.valor_json, value):
-            # Ver "GUARD DE REGRESIÓN" más arriba — el resto de claves NO
-            # llegan a este punto (row=None es la 1ª vez que se guardan, y
-            # ahí no hay nada que proteger todavía).
-            continue
-        try:
-            payload = json.dumps(value_a_guardar, ensure_ascii=False)
-        except (TypeError, ValueError):
-            continue
-        if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
-            continue
-        if row:
-            row.valor_json = payload
-            row.updated_at = now
-        else:
-            db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
-        guardadas.append(key)
-    if guardadas:
-        db.session.commit()
+    # Candado de archivo (ver _ef7_state_lock_acquire) + with_for_update()
+    # abajo: doble protección contra el "lost update" cuando 2 mánagers
+    # confirman partidos casi a la vez (reporte usuario: "jugó 5 partidos...
+    # esta mañana no estaba nada guardado, incluso partidos de otros días").
+    # El flock es el que de verdad cierra la ventana en el motor real de
+    # este despliegue (SQLite); with_for_update() añade protección de fila
+    # real si algún día se pasa a Postgres.
+    lock_fh = _ef7_state_lock_acquire()
+    try:
+        for key, value in entrantes.items():
+            if not _ef7_key_is_valid(key):
+                continue
+            row = GlobalState.query.filter_by(clave=key).with_for_update().first()
+            value_a_guardar = value
+            # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
+            # que este POST la sobreescriba entera — ver _ef7_merge_resultados
+            # y el comentario "EXCEPCIÓN" más arriba.
+            if key == _EF7_ESTADO_LIGA_KEY and row is not None:
+                value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
+            elif row is not None and _ef7_es_regresion_grave(row.valor_json, value):
+                # Ver "GUARD DE REGRESIÓN" más arriba — el resto de claves NO
+                # llegan a este punto (row=None es la 1ª vez que se guardan, y
+                # ahí no hay nada que proteger todavía).
+                continue
+            try:
+                payload = json.dumps(value_a_guardar, ensure_ascii=False)
+            except (TypeError, ValueError):
+                continue
+            if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
+                continue
+            if row:
+                row.valor_json = payload
+                row.updated_at = now
+            else:
+                db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
+            guardadas.append(key)
+        if guardadas:
+            db.session.commit()
+    finally:
+        _ef7_state_lock_release(lock_fh)
     return jsonify({"ok": True, "guardadas": guardadas, "updated_at": now})
 
 

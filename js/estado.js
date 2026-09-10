@@ -94,6 +94,33 @@
     }
   }
 
+  // Copia cruda de `ef7_estado_liga_v1` desde MEMORIA (nunca desde
+  // localStorage) — la usa js/sync.js para saber qué empujar al
+  // servidor. Por qué existe: si `guardarEstado()` revienta por cuota
+  // llena (localStorage sin espacio, frecuente en un solo dispositivo
+  // tras una temporada larga con calendarios/actas de los 6 clubes),
+  // `_estado` YA quedó mutado en memoria con el partido recién
+  // confirmado — la UI de ESTA sesión lo muestra bien (todo pasa por
+  // cargarEstado(), que devuelve el `_estado` cacheado) — pero
+  // `exportarEstadoCrudo()` lee `localStorage.getItem` DIRECTO, así que
+  // seguía viendo la copia VIEJA (la que sí cupo la última vez) y el
+  // partido nunca se marcaba "pendiente de subir": el sync ni se
+  // entera de que hay algo nuevo, nunca lo empuja, y si la página se
+  // recarga (cierre del navegador, la app en 2º plano y el sistema la
+  // mata) `_estado` se pierde y `cargarEstado()` vuelve a leer esa
+  // copia vieja del disco — el partido "se borra" sin que nadie lo
+  // haya tocado. Con esta copia en memoria, el sync SIEMPRE ve el
+  // último resultado confirmado y lo sube al servidor aunque el
+  // guardado LOCAL siga fallando — el servidor (sin límite de cuota)
+  // queda como red de seguridad real, no solo el propio dispositivo.
+  function estadoLigaCrudoEnMemoria() {
+    try {
+      return JSON.stringify(cargarEstado());
+    } catch (err) {
+      return null;
+    }
+  }
+
   // `contextoPartido` (opcional) = { partido, datos } — el partido REAL
   // (con .competicion/.ronda/.local/.visitante) y el `datos` global en el
   // instante de confirmar. Con ellos se sella una "identidad de reserva"
@@ -2570,6 +2597,7 @@
     cargarEstado: cargarEstado,
     invalidarCache: invalidarCache,
     guardarEstado: guardarEstado,
+    estadoLigaCrudoEnMemoria: estadoLigaCrudoEnMemoria,
     registrarResultadoPartido: registrarResultadoPartido,
     registrarResultadoRapido: registrarResultadoRapido,
     obtenerResultadoOverride: obtenerResultadoOverride,

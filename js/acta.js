@@ -521,11 +521,19 @@
     // sin que el admin tenga que acordarse de marcarla. Misma detección
     // de fase (`faseIdaVuelta`) que usa la previa para decidir si pinta
     // el aviso — así nunca pueden discrepar.
+    // Las FINALES de torneo (Copa/Champions/UEL/UECL/Recopa/Supercopa
+    // España/Supercopa Europa/Intercontinental/Mundialito/Verano) son el
+    // OTRO caso sin casilla — la previa las pinta con el mismo aviso
+    // "SIEMPRE disponible" (ver
+    // js/renderizadores.js::_renderFormatoBoxPrevia/esFinalDeTorneo), así
+    // que aquí también se fuerza sin leer ningún checkbox (petición
+    // usuario: la Final va siempre con prórroga y penaltis activada).
     var esVueltaDecisiva = modo === "ida-vuelta" && R.faseIdaVuelta && R.faseIdaVuelta(partido) === "vuelta";
+    var esFinalDeTorneo = !!(R.esFinalDeTorneo && R.esFinalDeTorneo(partido));
     var prorrogaChk = document.getElementById("live-prorroga-toggle");
     _partidoActivo = {
       partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo,
-      prorroga: esVueltaDecisiva ? true : !!(prorrogaChk && prorrogaChk.checked)
+      prorroga: (esVueltaDecisiva || esFinalDeTorneo) ? true : !!(prorrogaChk && prorrogaChk.checked)
     };
 
     document.getElementById("live-comp").textContent =

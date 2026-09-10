@@ -8272,19 +8272,42 @@
           totales.amarillas += s.amarillas;
           totales.rojas += s.rojas;
         });
+        // 👤/% — partidos jugados y % de victorias del EQUIPO (no de la
+        // plantilla) en TODAS las competiciones del calendario, EXCEPTO
+        // Superliga (tiene su propio calendario aparte — petición
+        // usuario). 0 KB nuevos: reutiliza Estado.listarPartidosResueltos
+        // (ya agrega base + Calendario extra + generados), solo se
+        // recorre aquí — no se guarda nada adicional.
+        var totalesEquipo = { pj: 0, pg: 0 };
+        if (window.Estado) {
+          window.Estado.listarPartidosResueltos(datos).forEach(function (p) {
+            if (p.competicion === "superliga" || !p.jugado || !p.resultado) return;
+            var esLocal = p.local === idEquipoHumanoActivo;
+            if (!esLocal && p.visitante !== idEquipoHumanoActivo) return;
+            totalesEquipo.pj++;
+            var golesPropios = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+            var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+            if (golesPropios > golesRival) totalesEquipo.pg++;
+          });
+        }
+        var pctVictorias = totalesEquipo.pj > 0 ? Math.round((totalesEquipo.pg / totalesEquipo.pj) * 100) : 0;
+
         var grupoTotal = document.createElement("div");
         grupoTotal.className = "plantilla-grupo plantilla-grupo--total";
         var tituloTotal = document.createElement("div");
         tituloTotal.className = "plantilla-grupo-titulo";
         tituloTotal.innerHTML =
-          '<span class="plantilla-grupo-nombre">Totales de la plantilla</span>' +
-          '<span class="plantilla-grupo-iconos"><span>⚽</span><span>⭐</span><span>🟨</span><span>🟥</span></span>';
+          '<span class="plantilla-grupo-nombre">Totales</span>' +
+          '<span class="plantilla-grupo-iconos plantilla-grupo-iconos--6">' +
+          "<span>👤</span><span>%</span><span>⚽</span><span>⭐</span><span>🟨</span><span>🟥</span></span>";
         grupoTotal.appendChild(tituloTotal);
         var filaTotal = document.createElement("div");
-        filaTotal.className = "plantilla-jugador plantilla-jugador--total";
+        filaTotal.className = "plantilla-jugador plantilla-jugador--total plantilla-jugador--6";
         filaTotal.innerHTML =
           '<span class="plantilla-dorsal"></span>' +
           '<span class="plantilla-nombre">TOTAL</span>' +
+          '<span class="plantilla-stat">' + totalesEquipo.pj + "</span>" +
+          '<span class="plantilla-stat">' + pctVictorias + "%</span>" +
           '<span class="plantilla-stat">' + totales.goles + "</span>" +
           '<span class="plantilla-stat">' + totales.mvp + "</span>" +
           '<span class="plantilla-stat">' + totales.amarillas + "</span>" +

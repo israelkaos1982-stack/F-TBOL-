@@ -7838,11 +7838,54 @@
   // partido anterior, creando confusión").
   var _capturaScreenshotToken = 0;
 
+  // Envía la captura por la vía MÁS FIABLE que el navegador soporte
+  // (petición usuario: "sigue habiendo errores al enviar la captura del
+  // inicio de partido"). El camino de siempre —copiar al portapapeles y
+  // dejar que el usuario pegue dentro del Grupo WhatsApp LIGA, ya abierto
+  // en una pestaña nueva desde el toque original— depende de 2 cosas que
+  // pueden fallar SIN avisar: (1) `navigator.clipboard.write` con
+  // imágenes necesita la "activación" del toque todavía viva cuando
+  // html2canvas termina de renderizar — en Safari/iOS esa ventana es
+  // corta y un móvil lento puede perderla, con lo que el write se
+  // rechaza en silencio (el `.catch(function(){})` de siempre) y el
+  // portapapeles queda vacío; (2) el enlace de invitación del grupo
+  // puede quedar inválido si algún día se regenera desde WhatsApp.
+  // La Web Share API (`navigator.share` con un `File`, soportada en la
+  // inmensa mayoría de móviles) resuelve AMBOS de un plumazo: abre la
+  // bandeja NATIVA para elegir con quién compartir (WhatsApp incluido,
+  // directo al chat/grupo que el usuario toque) — no necesita ningún
+  // enlace de invitación ni permiso de portapapeles. Se intenta PRIMERO;
+  // solo si el navegador no la soporta (sobre todo escritorio, donde
+  // WhatsApp Web sigue siendo la vía natural) cae al copiado de siempre.
+  // NUNCA lanza ni bloquea: un fallo de cualquier tipo —incluido que el
+  // usuario cierre la bandeja de compartir sin elegir nada, que dispara
+  // `AbortError`— se ignora en silencio; el partido arranca igual.
+  function _enviarCapturaPorLaViaMasFiable(blob) {
+    var compartida = false;
+    try {
+      var archivo = new File([blob], "previa.png", { type: "image/png" });
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
+        navigator.share({ files: [archivo] }).catch(function () {});
+        compartida = true;
+      }
+    } catch (e) {}
+    if (compartida) return;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        navigator.clipboard
+          .write([new window.ClipboardItem({ "image/png": blob })])
+          .catch(function () {});
+      }
+    } catch (e) {}
+  }
+
   // Captura `el` (la previa/pantalla en vivo TAL CUAL se ve, con
   // html2canvas cargado por CDN en index.html) a un <canvas> en memoria
-  // y copia el resultado al portapapeles del dispositivo (Clipboard
-  // API) — nada se guarda en disco ni se envía a ningún servidor, solo
-  // unas decenas de KB efímeros. DEBE llamarse con `el` todavía VISIBLE
+  // y la envía por la vía más fiable del dispositivo (ver
+  // _enviarCapturaPorLaViaMasFiable: Web Share API si está disponible,
+  // si no copia al portapapeles) — nada se guarda en disco ni se envía a
+  // ningún servidor, solo unas decenas de KB efímeros. DEBE llamarse con
+  // `el` todavía VISIBLE
   // (antes de cerrar la previa): html2canvas no puede fotografiar un
   // nodo ya oculto (display:none no tiene layout que capturar).
   //
@@ -7862,15 +7905,16 @@
   // descanso → Continuar) mientras esa captura de FINALIZAR del
   // partido ANTERIOR sigue en vuelo (html2canvas puede tardar bastante
   // en un móvil lento, con muchos escudos/degradados que sustituir),
-  // las 2 escrituras al portapapeles pueden resolver en CUALQUIER
-  // orden — si la del partido VIEJO gana la carrera por llegar la
-  // última, pisa la del partido NUEVO ya correcta, y el usuario acaba
-  // pegando en WhatsApp la captura equivocada sin darse cuenta. Cada
-  // llamada se sella con un token creciente; solo la captura MÁS
-  // RECIENTE puede llegar a escribir en el portapapeles — cualquier
-  // captura más vieja que resuelva tarde se descarta en silencio (sigue
-  // llamando a `cb()` con normalidad, solo se salta el paso de
-  // clipboard) en vez de arriesgarse a pisar una más nueva.
+  // los 2 envíos (bandeja de compartir o portapapeles) pueden resolver
+  // en CUALQUIER orden — si el del partido VIEJO gana la carrera por
+  // llegar la última, pisa el del partido NUEVO ya correcta, y el
+  // usuario acaba compartiendo/pegando en WhatsApp la captura
+  // equivocada sin darse cuenta. Cada llamada se sella con un token
+  // creciente; solo la captura MÁS RECIENTE puede llegar a enviarse —
+  // cualquier captura más vieja que resuelva tarde se descarta en
+  // silencio (sigue llamando a `cb()` con normalidad, solo se salta el
+  // paso de compartir/portapapeles) en vez de arriesgarse a pisar una
+  // más nueva.
   function _capturarYCompartirPreviaWhatsapp(el, cb) {
     if (!el || typeof window.html2canvas !== "function") {
       cb();
@@ -7909,10 +7953,8 @@
           }
           try {
             canvas.toBlob(function (blob) {
-              if (miToken === _capturaScreenshotToken && blob && navigator.clipboard && window.ClipboardItem) {
-                navigator.clipboard
-                  .write([new window.ClipboardItem({ "image/png": blob })])
-                  .catch(function () {});
+              if (miToken === _capturaScreenshotToken && blob) {
+                _enviarCapturaPorLaViaMasFiable(blob);
               }
               terminar();
             }, "image/png");

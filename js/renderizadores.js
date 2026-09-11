@@ -658,6 +658,76 @@
   var _ultimoContexto = null; // { datos, equipo, totalJornadas, partidosPorId }
   var _previaPartidoActual = null; // partido cuya previa está abierta ahora mismo (para Lesionados/Sancionados con rango, ver abrirPreviaPartido)
 
+  // "Próximo partido" (idSiguiente, ver más abajo) recordado por club —
+  // solo para poder avisar cuando CAMBIA a raíz de una sincronización de
+  // fondo (otro mánager aplazó/reactivó algo desde su propio dispositivo),
+  // en vez de un click directo de este mismo usuario. Ver
+  // _avisarSiCambioProximoPartido / el evento "ef7-sync-actualizado" en
+  // js/main.js.
+  var _ultimoIdSiguientePorClub = {};
+
+  // El 📌/borde azul del "próximo partido" puede saltar de una card a otra
+  // sin que el usuario haya tocado nada, cuando OTRO mánager humano
+  // aplaza/reactiva un Humano-vs-Humano desde su propio móvil y esa
+  // sincronización llega en segundo plano (ciclo de 10 s de js/sync.js) —
+  // el usuario lo describía como "entra en bucle... de forma aleatoria"
+  // porque no había NINGÚN indicio de que el cambio viniera de fuera. La
+  // lógica de selección ya es determinista (ver el bucle de idSiguiente
+  // más abajo); lo que faltaba era CONTAR al usuario por qué se movió. Un
+  // aviso flotante breve, no bloqueante, que se autodestruye solo.
+  function _avisarSiCambioProximoPartido(idEquipoHumanoActivo, idSiguienteNuevo, partidosPorId, datos, esSync) {
+    var idAnterior = _ultimoIdSiguientePorClub[idEquipoHumanoActivo];
+    // `undefined` = primer pintado de esta sesión para este club, nunca hay
+    // "cambio" que anunciar todavía. Sin cambio real, tampoco hay nada que
+    // avisar (aunque esAnterior === undefined en un club recién visto).
+    var huboCambio = idAnterior !== undefined && idAnterior !== idSiguienteNuevo;
+    _ultimoIdSiguientePorClub[idEquipoHumanoActivo] = idSiguienteNuevo;
+    if (!huboCambio || !esSync) return;
+
+    var pAnterior = partidosPorId[idAnterior];
+    var pNuevo = idSiguienteNuevo ? partidosPorId[idSiguienteNuevo] : null;
+    var motivo = pAnterior && pAnterior.pospuesto
+      ? "se aplazó"
+      : (pAnterior && pAnterior.jugado ? "ya se jugó (desde otro dispositivo)" : "cambió");
+
+    // Sin escapeHTML: _mostrarAvisoFlotante inserta el texto vía
+    // .textContent (no innerHTML), así que escapar aquí solo mostraría
+    // entidades literales ("&amp;") en vez del carácter real.
+    var etiquetaNuevo = "";
+    if (pNuevo) {
+      var rivalIdNuevo = pNuevo.local === idEquipoHumanoActivo ? pNuevo.visitante : pNuevo.local;
+      var eqRivalNuevo = buscarEquipoPorId(rivalIdNuevo, datos);
+      var compLabelNuevo = COMP_LABEL[pNuevo.competicion] || pNuevo.competicion;
+      var rondaLabelNuevo = (typeof pNuevo.jornada === "number") ? (" · " + pNuevo.jornada + "ªJ") : (pNuevo.ronda ? " · " + pNuevo.ronda : "");
+      etiquetaNuevo = " — ahora toca " + compLabelNuevo + rondaLabelNuevo +
+        (eqRivalNuevo ? " vs " + eqRivalNuevo.nombre : "");
+    }
+
+    _mostrarAvisoFlotante("📌 El partido pendiente " + motivo + etiquetaNuevo + ".");
+  }
+
+  var _avisoFlotanteTimeoutId = null;
+  function _mostrarAvisoFlotante(texto) {
+    var nodo = document.getElementById("aviso-sync-toast");
+    if (!nodo) {
+      nodo = document.createElement("div");
+      nodo.id = "aviso-sync-toast";
+      nodo.className = "aviso-sync-toast";
+      document.body.appendChild(nodo);
+    }
+    nodo.textContent = texto;
+    // Reinicia la animación aunque ya estuviera visible por un aviso previo.
+    nodo.classList.remove("aviso-sync-toast--visible");
+    // Fuerza un reflow antes de re-añadir la clase, o la transición no se
+    // reproduce dos veces seguidas con el nodo ya en el DOM.
+    void nodo.offsetWidth;
+    nodo.classList.add("aviso-sync-toast--visible");
+    if (_avisoFlotanteTimeoutId) clearTimeout(_avisoFlotanteTimeoutId);
+    _avisoFlotanteTimeoutId = setTimeout(function () {
+      nodo.classList.remove("aviso-sync-toast--visible");
+    }, 5000);
+  }
+
   // Escapa texto ESCRITO POR EL ADMIN (nombre de estadio/balón/jugador vía
   // prompt()) antes de interpolarlo en innerHTML — evita que un nombre con
   // "<"/">" rompa el markup o inyecte HTML.
@@ -7019,7 +7089,7 @@
     return card;
   }
 
-  function generarCalendarioLateralDerecho(idEquipoHumanoActivo) {
+  function generarCalendarioLateralDerecho(idEquipoHumanoActivo, esActualizacionDeSync) {
     var contenedor = document.getElementById("calendar-content");
     var badge = document.getElementById("calendar-liga-badge");
     if (!contenedor) return;
@@ -7175,6 +7245,8 @@
           var rapidoPp = _usaResultadoRapido(idEquipoHumanoActivo, _resolverCompKeyBalon(pp.competicion));
           if (!pp.jugado && !pp.pospuesto && !idsEliminados[pp.id] && !idsBloqueados[pp.id] && (rapidoPp || !_rivalDesconocido(pp, idEquipoHumanoActivo, datos))) { idSiguiente = pp.id; break; }
         }
+
+        _avisarSiCambioProximoPartido(idEquipoHumanoActivo, idSiguiente, partidosPorId, datos, !!esActualizacionDeSync);
 
         var frag = document.createDocumentFragment();
         partidosDelClub.forEach(function (p) {

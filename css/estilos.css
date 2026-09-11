@@ -2803,6 +2803,37 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: var(--pospuesto-glow);
 }
 
+/* Aviso flotante — el 📌/borde azul del "próximo partido" (arriba) se
+   movió por una sincronización de FONDO (otro mánager aplazó/reactivó un
+   Humano-vs-Humano desde su propio móvil), no por un click de este
+   usuario. Sin este aviso el salto se sentía como un bucle aleatorio (ver
+   js/renderizadores.js::_avisarSiCambioProximoPartido). Breve, no
+   bloqueante (pointer-events:none), se autodestruye sola. */
+.aviso-sync-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 250;
+  max-width: min(92vw, 380px);
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--info);
+  box-shadow: var(--info-glow);
+  border-radius: var(--radius-m);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-hi);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.aviso-sync-toast.aviso-sync-toast--visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */
 .previa-overlay {
   position: fixed;

@@ -1590,7 +1590,11 @@
     document.addEventListener("ef7-sync-actualizado", function () {
       var screenClub = document.getElementById("screen-club");
       if (screenClub && !screenClub.hidden && window._idManagerActivo && window.Renderizadores) {
-        window.Renderizadores.generarCalendarioLateralDerecho(window._idManagerActivo);
+        // 2º argumento `true`: este repintado lo dispara una sync de
+        // fondo, no un click directo del usuario — si el "próximo
+        // partido" cambia aquí, generarCalendarioLateralDerecho avisa con
+        // un toast (otro mánager aplazó/reactivó algo desde su móvil).
+        window.Renderizadores.generarCalendarioLateralDerecho(window._idManagerActivo, true);
         window.Renderizadores.renderizarMenuClub(window._idManagerActivo, "club-menu");
       }
     });

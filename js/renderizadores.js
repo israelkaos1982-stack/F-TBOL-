@@ -658,6 +658,12 @@
   var _ultimoContexto = null; // { datos, equipo, totalJornadas, partidosPorId }
   var _previaPartidoActual = null; // partido cuya previa está abierta ahora mismo (para Lesionados/Sancionados con rango, ver abrirPreviaPartido)
 
+  // Mapa PERSISTENTE (independiente de _ultimoContexto) de los partidos de
+  // Superliga que renderizarSuperliga va registrando — ver el porqué en el
+  // comentario de esa función. abrirPreviaPartido lo consulta como
+  // fallback cuando el partido no está en _ultimoContexto.partidosPorId.
+  var _superligaPartidosPorId = {};
+
   // "Próximo partido" (idSiguiente, ver más abajo) recordado por club —
   // solo para poder avisar cuando CAMBIA a raíz de una sincronización de
   // fondo (otro mánager aplazó/reactivó algo desde su propio dispositivo),
@@ -5933,6 +5939,22 @@
         // (caso normal — la Superliga se abre DESDE la pantalla del
         // club), reutilizamos ese mismo contexto; si no existiera aún,
         // se crea uno mínimo para este club.
+        //
+        // 2º bug (foto usuario, "no funciona el botón de PREVIA" con la
+        // Superliga ya abierta un rato): el modal de Superliga
+        // (#club-modal-overlay) se pinta ENCIMA de #screen-club sin
+        // ocultarlo — así que el listener "ef7-sync-actualizado" de
+        // js/main.js (se dispara cada vez que una sync de fondo trae
+        // cambios, ~cada 10s) sigue viendo #screen-club visible y vuelve
+        // a llamar a generarCalendarioLateralDerecho para este mismo
+        // club, que SIEMPRE crea un _ultimoContexto.partidosPorId nuevo
+        // desde cero (nunca lo fusiona con el anterior) — borrando de un
+        // plumazo las entradas de Superliga que acabábamos de registrar
+        // aquí, aunque el modal siga abierto y el club sea el mismo. El
+        // PRIMER toque en PREVIA podía funcionar; cualquiera posterior a
+        // esa sync ya no encontraba el partido. Por eso además se
+        // registra en _superligaPartidosPorId (mapa aparte, que ningún
+        // otro render toca) — abrirPreviaPartido cae ahí como fallback.
         if (!_ultimoContexto || !_ultimoContexto.equipo || _ultimoContexto.equipo.id !== idClubActivo) {
           _ultimoContexto = {
             datos: datos,
@@ -5955,6 +5977,7 @@
           grupoEl.className = "superliga-calendario-grupo";
           g.partidos.forEach(function (p) {
             _ultimoContexto.partidosPorId[p.id] = p;
+            _superligaPartidosPorId[p.id] = p;
             var clon = {};
             for (var k in p) if (p.hasOwnProperty(k)) clon[k] = p[k];
             clon.ronda = rondaTxt;
@@ -7623,7 +7646,14 @@
   // ============================================================
   function abrirPreviaPartido(partidoId) {
     if (!_ultimoContexto) return;
-    var partido = _ultimoContexto.partidosPorId[partidoId];
+    // Fallback a _superligaPartidosPorId (mapa persistente, ver
+    // renderizarSuperliga): una sync de fondo con el modal de Superliga
+    // ya abierto vuelve a llamar a generarCalendarioLateralDerecho para
+    // este mismo club, que SIEMPRE crea un partidosPorId nuevo desde
+    // cero — borrando las entradas de Superliga que ese modal había
+    // registrado. Sin este fallback, PREVIA dejaba de encontrar el
+    // partido en cuanto pasaba la primera sync (bug real, foto usuario).
+    var partido = _ultimoContexto.partidosPorId[partidoId] || _superligaPartidosPorId[partidoId];
     if (!partido) return;
     _previaPartidoActual = partido;
 

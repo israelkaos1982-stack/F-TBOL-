@@ -7942,16 +7942,17 @@
 
   // Envía la captura por la vía MÁS FIABLE que el navegador soporte
   // (petición usuario: "sigue habiendo errores al enviar la captura del
-  // inicio de partido"). El camino de siempre —copiar al portapapeles y
-  // dejar que el usuario pegue dentro del Grupo WhatsApp LIGA, ya abierto
-  // en una pestaña nueva desde el toque original— depende de 2 cosas que
-  // pueden fallar SIN avisar: (1) `navigator.clipboard.write` con
-  // imágenes necesita la "activación" del toque todavía viva cuando
-  // html2canvas termina de renderizar — en Safari/iOS esa ventana es
-  // corta y un móvil lento puede perderla, con lo que el write se
-  // rechaza en silencio (el `.catch(function(){})` de siempre) y el
-  // portapapeles queda vacío; (2) el enlace de invitación del grupo
-  // puede quedar inválido si algún día se regenera desde WhatsApp.
+  // inicio de partido" → luego "no hace la captura del inicio"). El
+  // camino de siempre —copiar al portapapeles y dejar que el usuario
+  // pegue dentro del Grupo WhatsApp LIGA, ya abierto en una pestaña
+  // nueva desde el toque original— depende de 2 cosas que pueden fallar
+  // SIN avisar: (1) `navigator.clipboard.write` con imágenes necesita la
+  // "activación" del toque todavía viva cuando html2canvas termina de
+  // renderizar — en Safari/iOS esa ventana es corta y un móvil lento
+  // puede perderla, con lo que el write se rechaza en silencio (el
+  // `.catch(function(){})` de siempre) y el portapapeles queda vacío;
+  // (2) el enlace de invitación del grupo puede quedar inválido si algún
+  // día se regenera desde WhatsApp.
   // La Web Share API (`navigator.share` con un `File`, soportada en la
   // inmensa mayoría de móviles) resuelve AMBOS de un plumazo: abre la
   // bandeja NATIVA para elegir con quién compartir (WhatsApp incluido,
@@ -7962,16 +7963,30 @@
   // NUNCA lanza ni bloquea: un fallo de cualquier tipo —incluido que el
   // usuario cierre la bandeja de compartir sin elegir nada, que dispara
   // `AbortError`— se ignora en silencio; el partido arranca igual.
+  //
+  // `window.open(WHATSAPP_GRUPO_LIGA_URL)` es EXCLUSIVO del plan B — se
+  // abre AQUÍ, justo antes de copiar al portapapeles, NUNCA antes de
+  // intentar la bandeja nativa (bug real, queja usuario: "no hace la
+  // captura del inicio"). Los 3 callers (▶ Empezar partido/▶ Continuar
+  // 2ª parte/Finalizar) antes abrían esa pestaña SIEMPRE, síncrono, ANTES
+  // de arrancar html2canvas — en un móvil eso puede cambiar de app/
+  // segundo plano justo cuando html2canvas necesita la pestaña en
+  // PRIMER plano para renderizar rápido, así que la captura tardaba de
+  // más o directamente no llegaba a tiempo de compartirse: para cuando
+  // el usuario ya estaba en WhatsApp, la bandeja nativa nunca llegó a
+  // abrirse ni el portapapeles a rellenarse. Abrir la pestaña solo en el
+  // plan B (y solo en ese punto, no al principio del toque) deja que la
+  // vía primaria (bandeja nativa) tenga la pestaña enfocada todo el
+  // tiempo que necesite.
   function _enviarCapturaPorLaViaMasFiable(blob) {
-    var compartida = false;
     try {
       var archivo = new File([blob], "previa.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
         navigator.share({ files: [archivo] }).catch(function () {});
-        compartida = true;
+        return;
       }
     } catch (e) {}
-    if (compartida) return;
+    try { window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank"); } catch (e) {}
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         navigator.clipboard
@@ -9243,15 +9258,24 @@
 
     // "▶ Empezar partido" (petición usuario 2026-09-05, automatiza el
     // aviso manual de arriba): UN SOLO toque ⇒ (1) captura la previa TAL
-    // CUAL se ve y la copia al portapapeles del dispositivo, (2) abre el
-    // Grupo WhatsApp LIGA en una pestaña NUEVA (el enlace de invitación
-    // no puede llevar la imagen adjunta — WhatsApp no ofrece ninguna vía
-    // para que una web mande un archivo dentro de un grupo concreto sin
-    // que la persona lo pegue ella misma: basta con pegarla ahí con un
-    // toque), y (3) arranca el partido en vivo en ESTA pestaña, que sigue
-    // intacta. `window.open` va SÍNCRONO con el toque (antes de esperar
-    // la captura, que es async) — si se llamara después, el navegador lo
-    // trataría como pop-up no solicitado y lo bloquearía.
+    // CUAL se ve y la comparte (bandeja nativa si el móvil la soporta, si
+    // no copiada al portapapeles + Grupo WhatsApp LIGA abierto en una
+    // pestaña nueva — ver _enviarCapturaPorLaViaMasFiable, que decide
+    // esto DESPUÉS de capturar, no aquí) y (2) arranca el partido en
+    // vivo en ESTA pestaña, que sigue intacta.
+    //
+    // `window.open(WHATSAPP_GRUPO_LIGA_URL)` YA NO se llama aquí, antes
+    // de capturar (bug real, queja usuario: "no hace la captura del
+    // inicio"). Abrirlo síncrono con el toque, ANTES de que html2canvas
+    // empiece a trabajar, podía cambiar de app/pestaña justo cuando la
+    // captura necesitaba esta pestaña en PRIMER plano para renderizar —
+    // en un móvil lento la captura llegaba tarde o nunca, y para cuando
+    // el usuario ya estaba en WhatsApp ni la bandeja nativa había
+    // llegado a abrirse ni el portapapeles se había rellenado. Ahora esa
+    // pestaña solo se abre DENTRO de _enviarCapturaPorLaViaMasFiable, y
+    // solo como plan B (dispositivos sin bandeja nativa de compartir
+    // archivos) — la vía primaria no necesita ningún enlace de
+    // invitación, WhatsApp ya sale como opción en la propia bandeja.
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
       // Guard de la casilla OBLIGATORIA "Activar Prórroga y Penaltis"
@@ -9273,7 +9297,6 @@
       btnEmpezar.dataset.enCurso = "1";
       var partidoIdEmpezar = btnEmpezar.dataset.partidoId;
       var previaCardEl = document.querySelector("#previa-overlay .previa-card");
-      window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank");
       _capturarYCompartirPreviaWhatsapp(previaCardEl, function () {
         btnEmpezar.dataset.enCurso = "";
         cerrarPreviaPartido();

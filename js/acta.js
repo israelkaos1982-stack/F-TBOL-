@@ -677,17 +677,22 @@
     _partidoActivo = null;
 
     // Captura automática de ESTA pantalla (🏁 FINALIZADO, ya visible con
-    // marcador/acta/MVP/eliminatoria) + apertura del Grupo WhatsApp LIGA
-    // — mismo patrón que "▶ Empezar partido"/"▶ Continuar 2ª parte" (ver
-    // js/renderizadores.js::_capturarYCompartirPreviaWhatsapp). A
-    // diferencia de esos 2 (capturan la pantalla ANTES de pasar a la
-    // siguiente), aquí se captura DESPUÉS de mostrar el resumen — es
-    // justo lo que pedía el antiguo aviso "📸 Envía captura final del
-    // partido" (ya retirado de index.html), ahora automático.
+    // marcador/acta/MVP/eliminatoria) + envío por la vía más fiable —
+    // mismo patrón que "▶ Empezar partido"/"▶ Continuar 2ª parte" (ver
+    // js/renderizadores.js::_capturarYCompartirPreviaWhatsapp/
+    // _enviarCapturaPorLaViaMasFiable). A diferencia de esos 2 (capturan
+    // la pantalla ANTES de pasar a la siguiente), aquí se captura
+    // DESPUÉS de mostrar el resumen — es justo lo que pedía el antiguo
+    // aviso "📸 Envía captura final del partido" (ya retirado de
+    // index.html), ahora automático.
+    //
+    // Ya NO se abre el Grupo WhatsApp LIGA aquí, antes de capturar (bug
+    // real, queja usuario: "no hace la captura del inicio" — el mismo
+    // problema afectaba a esta captura final, ver el comentario largo en
+    // js/renderizadores.js junto a "▶ Empezar partido"). Esa pestaña,
+    // si hace falta, la abre _enviarCapturaPorLaViaMasFiable DESPUÉS de
+    // capturar, solo como plan B.
     if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
-      if (window.Renderizadores.whatsappGrupoLigaUrl) {
-        window.open(window.Renderizadores.whatsappGrupoLigaUrl, "_blank");
-      }
       var liveCardEl = document.querySelector("#partido-live-overlay .live-card");
       window.Renderizadores.capturarYCompartirPreviaWhatsapp(liveCardEl, function () {});
     }
@@ -711,13 +716,20 @@
     // automatismo que "▶ Empezar partido" — ver js/renderizadores.js::
     // _capturarYCompartirPreviaWhatsapp): UN SOLO toque ⇒ captura la
     // pantalla de DESCANSO tal cual se ve (escudos/marcador/nombres +
-    // el aviso 🛌 DESCANSO) y la copia al portapapeles, abre el Grupo
-    // WhatsApp LIGA en una pestaña nueva, y SOLO ENTONCES vuelve a la
-    // VISTA A (la acta —mini-eventos, escudos, marcador— sigue siendo
-    // la MISMA de siempre, arriba de ambas vistas; aquí solo se
-    // reactiva el formulario para seguir registrando eventos de la 2ª
-    // parte). La captura debe correr ANTES de ocultar la vista de
-    // DESCANSO — html2canvas no puede fotografiar un nodo ya oculto.
+    // el aviso 🛌 DESCANSO) y la comparte por la vía más fiable (bandeja
+    // nativa, o portapapeles + Grupo WhatsApp LIGA como plan B — decidido
+    // DESPUÉS de capturar, ver _enviarCapturaPorLaViaMasFiable), y SOLO
+    // ENTONCES vuelve a la VISTA A (la acta —mini-eventos, escudos,
+    // marcador— sigue siendo la MISMA de siempre, arriba de ambas
+    // vistas; aquí solo se reactiva el formulario para seguir
+    // registrando eventos de la 2ª parte). La captura debe correr ANTES
+    // de ocultar la vista de DESCANSO — html2canvas no puede fotografiar
+    // un nodo ya oculto.
+    //
+    // Ya NO se abre el Grupo WhatsApp LIGA aquí, antes de capturar (bug
+    // real, queja usuario: "no hace la captura del inicio" — ver el
+    // comentario largo en js/renderizadores.js junto a "▶ Empezar
+    // partido").
     var btnContinuar2 = ev.target.closest && ev.target.closest("#live-continuar-2parte");
     if (btnContinuar2) {
       if (btnContinuar2.dataset.enCurso) return; // evita doble-toque mientras se genera la captura
@@ -728,9 +740,6 @@
         document.getElementById("live-entrada").hidden = false;
       };
       if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
-        if (window.Renderizadores.whatsappGrupoLigaUrl) {
-          window.open(window.Renderizadores.whatsappGrupoLigaUrl, "_blank");
-        }
         var liveCardEl = document.querySelector("#partido-live-overlay .live-card");
         window.Renderizadores.capturarYCompartirPreviaWhatsapp(liveCardEl, seguirA2Parte);
       } else {

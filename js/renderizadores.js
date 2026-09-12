@@ -658,6 +658,12 @@
   var _ultimoContexto = null; // { datos, equipo, totalJornadas, partidosPorId }
   var _previaPartidoActual = null; // partido cuya previa está abierta ahora mismo (para Lesionados/Sancionados con rango, ver abrirPreviaPartido)
 
+  // Mapa PERSISTENTE (independiente de _ultimoContexto) de los partidos de
+  // Superliga que renderizarSuperliga va registrando — ver el porqué en el
+  // comentario de esa función. abrirPreviaPartido lo consulta como
+  // fallback cuando el partido no está en _ultimoContexto.partidosPorId.
+  var _superligaPartidosPorId = {};
+
   // "Próximo partido" (idSiguiente, ver más abajo) recordado por club —
   // solo para poder avisar cuando CAMBIA a raíz de una sincronización de
   // fondo (otro mánager aplazó/reactivó algo desde su propio dispositivo),
@@ -5933,6 +5939,22 @@
         // (caso normal — la Superliga se abre DESDE la pantalla del
         // club), reutilizamos ese mismo contexto; si no existiera aún,
         // se crea uno mínimo para este club.
+        //
+        // 2º bug (foto usuario, "no funciona el botón de PREVIA" con la
+        // Superliga ya abierta un rato): el modal de Superliga
+        // (#club-modal-overlay) se pinta ENCIMA de #screen-club sin
+        // ocultarlo — así que el listener "ef7-sync-actualizado" de
+        // js/main.js (se dispara cada vez que una sync de fondo trae
+        // cambios, ~cada 10s) sigue viendo #screen-club visible y vuelve
+        // a llamar a generarCalendarioLateralDerecho para este mismo
+        // club, que SIEMPRE crea un _ultimoContexto.partidosPorId nuevo
+        // desde cero (nunca lo fusiona con el anterior) — borrando de un
+        // plumazo las entradas de Superliga que acabábamos de registrar
+        // aquí, aunque el modal siga abierto y el club sea el mismo. El
+        // PRIMER toque en PREVIA podía funcionar; cualquiera posterior a
+        // esa sync ya no encontraba el partido. Por eso además se
+        // registra en _superligaPartidosPorId (mapa aparte, que ningún
+        // otro render toca) — abrirPreviaPartido cae ahí como fallback.
         if (!_ultimoContexto || !_ultimoContexto.equipo || _ultimoContexto.equipo.id !== idClubActivo) {
           _ultimoContexto = {
             datos: datos,
@@ -5955,6 +5977,7 @@
           grupoEl.className = "superliga-calendario-grupo";
           g.partidos.forEach(function (p) {
             _ultimoContexto.partidosPorId[p.id] = p;
+            _superligaPartidosPorId[p.id] = p;
             var clon = {};
             for (var k in p) if (p.hasOwnProperty(k)) clon[k] = p[k];
             clon.ronda = rondaTxt;
@@ -7623,7 +7646,14 @@
   // ============================================================
   function abrirPreviaPartido(partidoId) {
     if (!_ultimoContexto) return;
-    var partido = _ultimoContexto.partidosPorId[partidoId];
+    // Fallback a _superligaPartidosPorId (mapa persistente, ver
+    // renderizarSuperliga): una sync de fondo con el modal de Superliga
+    // ya abierto vuelve a llamar a generarCalendarioLateralDerecho para
+    // este mismo club, que SIEMPRE crea un partidosPorId nuevo desde
+    // cero — borrando las entradas de Superliga que ese modal había
+    // registrado. Sin este fallback, PREVIA dejaba de encontrar el
+    // partido en cuanto pasaba la primera sync (bug real, foto usuario).
+    var partido = _ultimoContexto.partidosPorId[partidoId] || _superligaPartidosPorId[partidoId];
     if (!partido) return;
     _previaPartidoActual = partido;
 
@@ -7912,16 +7942,17 @@
 
   // Envía la captura por la vía MÁS FIABLE que el navegador soporte
   // (petición usuario: "sigue habiendo errores al enviar la captura del
-  // inicio de partido"). El camino de siempre —copiar al portapapeles y
-  // dejar que el usuario pegue dentro del Grupo WhatsApp LIGA, ya abierto
-  // en una pestaña nueva desde el toque original— depende de 2 cosas que
-  // pueden fallar SIN avisar: (1) `navigator.clipboard.write` con
-  // imágenes necesita la "activación" del toque todavía viva cuando
-  // html2canvas termina de renderizar — en Safari/iOS esa ventana es
-  // corta y un móvil lento puede perderla, con lo que el write se
-  // rechaza en silencio (el `.catch(function(){})` de siempre) y el
-  // portapapeles queda vacío; (2) el enlace de invitación del grupo
-  // puede quedar inválido si algún día se regenera desde WhatsApp.
+  // inicio de partido" → luego "no hace la captura del inicio"). El
+  // camino de siempre —copiar al portapapeles y dejar que el usuario
+  // pegue dentro del Grupo WhatsApp LIGA, ya abierto en una pestaña
+  // nueva desde el toque original— depende de 2 cosas que pueden fallar
+  // SIN avisar: (1) `navigator.clipboard.write` con imágenes necesita la
+  // "activación" del toque todavía viva cuando html2canvas termina de
+  // renderizar — en Safari/iOS esa ventana es corta y un móvil lento
+  // puede perderla, con lo que el write se rechaza en silencio (el
+  // `.catch(function(){})` de siempre) y el portapapeles queda vacío;
+  // (2) el enlace de invitación del grupo puede quedar inválido si algún
+  // día se regenera desde WhatsApp.
   // La Web Share API (`navigator.share` con un `File`, soportada en la
   // inmensa mayoría de móviles) resuelve AMBOS de un plumazo: abre la
   // bandeja NATIVA para elegir con quién compartir (WhatsApp incluido,
@@ -7932,16 +7963,30 @@
   // NUNCA lanza ni bloquea: un fallo de cualquier tipo —incluido que el
   // usuario cierre la bandeja de compartir sin elegir nada, que dispara
   // `AbortError`— se ignora en silencio; el partido arranca igual.
+  //
+  // `window.open(WHATSAPP_GRUPO_LIGA_URL)` es EXCLUSIVO del plan B — se
+  // abre AQUÍ, justo antes de copiar al portapapeles, NUNCA antes de
+  // intentar la bandeja nativa (bug real, queja usuario: "no hace la
+  // captura del inicio"). Los 3 callers (▶ Empezar partido/▶ Continuar
+  // 2ª parte/Finalizar) antes abrían esa pestaña SIEMPRE, síncrono, ANTES
+  // de arrancar html2canvas — en un móvil eso puede cambiar de app/
+  // segundo plano justo cuando html2canvas necesita la pestaña en
+  // PRIMER plano para renderizar rápido, así que la captura tardaba de
+  // más o directamente no llegaba a tiempo de compartirse: para cuando
+  // el usuario ya estaba en WhatsApp, la bandeja nativa nunca llegó a
+  // abrirse ni el portapapeles a rellenarse. Abrir la pestaña solo en el
+  // plan B (y solo en ese punto, no al principio del toque) deja que la
+  // vía primaria (bandeja nativa) tenga la pestaña enfocada todo el
+  // tiempo que necesite.
   function _enviarCapturaPorLaViaMasFiable(blob) {
-    var compartida = false;
     try {
       var archivo = new File([blob], "previa.png", { type: "image/png" });
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
         navigator.share({ files: [archivo] }).catch(function () {});
-        compartida = true;
+        return;
       }
     } catch (e) {}
-    if (compartida) return;
+    try { window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank"); } catch (e) {}
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         navigator.clipboard
@@ -9213,15 +9258,24 @@
 
     // "▶ Empezar partido" (petición usuario 2026-09-05, automatiza el
     // aviso manual de arriba): UN SOLO toque ⇒ (1) captura la previa TAL
-    // CUAL se ve y la copia al portapapeles del dispositivo, (2) abre el
-    // Grupo WhatsApp LIGA en una pestaña NUEVA (el enlace de invitación
-    // no puede llevar la imagen adjunta — WhatsApp no ofrece ninguna vía
-    // para que una web mande un archivo dentro de un grupo concreto sin
-    // que la persona lo pegue ella misma: basta con pegarla ahí con un
-    // toque), y (3) arranca el partido en vivo en ESTA pestaña, que sigue
-    // intacta. `window.open` va SÍNCRONO con el toque (antes de esperar
-    // la captura, que es async) — si se llamara después, el navegador lo
-    // trataría como pop-up no solicitado y lo bloquearía.
+    // CUAL se ve y la comparte (bandeja nativa si el móvil la soporta, si
+    // no copiada al portapapeles + Grupo WhatsApp LIGA abierto en una
+    // pestaña nueva — ver _enviarCapturaPorLaViaMasFiable, que decide
+    // esto DESPUÉS de capturar, no aquí) y (2) arranca el partido en
+    // vivo en ESTA pestaña, que sigue intacta.
+    //
+    // `window.open(WHATSAPP_GRUPO_LIGA_URL)` YA NO se llama aquí, antes
+    // de capturar (bug real, queja usuario: "no hace la captura del
+    // inicio"). Abrirlo síncrono con el toque, ANTES de que html2canvas
+    // empiece a trabajar, podía cambiar de app/pestaña justo cuando la
+    // captura necesitaba esta pestaña en PRIMER plano para renderizar —
+    // en un móvil lento la captura llegaba tarde o nunca, y para cuando
+    // el usuario ya estaba en WhatsApp ni la bandeja nativa había
+    // llegado a abrirse ni el portapapeles se había rellenado. Ahora esa
+    // pestaña solo se abre DENTRO de _enviarCapturaPorLaViaMasFiable, y
+    // solo como plan B (dispositivos sin bandeja nativa de compartir
+    // archivos) — la vía primaria no necesita ningún enlace de
+    // invitación, WhatsApp ya sale como opción en la propia bandeja.
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
       // Guard de la casilla OBLIGATORIA "Activar Prórroga y Penaltis"
@@ -9243,7 +9297,6 @@
       btnEmpezar.dataset.enCurso = "1";
       var partidoIdEmpezar = btnEmpezar.dataset.partidoId;
       var previaCardEl = document.querySelector("#previa-overlay .previa-card");
-      window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank");
       _capturarYCompartirPreviaWhatsapp(previaCardEl, function () {
         btnEmpezar.dataset.enCurso = "";
         cerrarPreviaPartido();

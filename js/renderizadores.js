@@ -7641,19 +7641,35 @@
     );
   }
 
+  // Resuelve un partido por id: primero en el contexto general
+  // (contexto.partidosPorId — el que rellena generarCalendarioLateralDerecho
+  // para el calendario GENERAL), si no lo encuentra ahí cae al mapa
+  // PERSISTENTE de Superliga (_superligaPartidosPorId, ver el porqué en
+  // el comentario de renderizarSuperliga: una sync de fondo con el modal
+  // de Superliga abierto vuelve a llamar a generarCalendarioLateralDerecho
+  // para el mismo club, que SIEMPRE crea un partidosPorId nuevo desde
+  // cero — borrando las entradas de Superliga que ese modal había
+  // registrado). Punto ÚNICO de esta resolución — abrirPreviaPartido
+  // (aquí abajo) Y js/acta.js::iniciarPartidoEnVivo lo usan, para que
+  // NUNCA puedan discrepar (bug real, foto usuario: "no me deja pasar de
+  // la Previa" — abrirPreviaPartido ya tenía este fallback, pero
+  // iniciarPartidoEnVivo lo resolvía por su cuenta sin él, así que
+  // "▶ Empezar partido" cerraba la previa y no llegaba a abrir el
+  // partido en vivo en cuanto pasaba una sync de fondo). Expuesto en
+  // window.Renderizadores para que acta.js lo consuma sin duplicar
+  // _superligaPartidosPorId (que se queda privado a este archivo).
+  function _resolverPartidoPorId(partidoId, contexto) {
+    var ctx = contexto || _ultimoContexto;
+    if (!ctx) return null;
+    return ctx.partidosPorId[partidoId] || _superligaPartidosPorId[partidoId] || null;
+  }
+
   // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
   function abrirPreviaPartido(partidoId) {
     if (!_ultimoContexto) return;
-    // Fallback a _superligaPartidosPorId (mapa persistente, ver
-    // renderizarSuperliga): una sync de fondo con el modal de Superliga
-    // ya abierto vuelve a llamar a generarCalendarioLateralDerecho para
-    // este mismo club, que SIEMPRE crea un partidosPorId nuevo desde
-    // cero — borrando las entradas de Superliga que ese modal había
-    // registrado. Sin este fallback, PREVIA dejaba de encontrar el
-    // partido en cuanto pasaba la primera sync (bug real, foto usuario).
-    var partido = _ultimoContexto.partidosPorId[partidoId] || _superligaPartidosPorId[partidoId];
+    var partido = _resolverPartidoPorId(partidoId, _ultimoContexto);
     if (!partido) return;
     _previaPartidoActual = partido;
 
@@ -9512,6 +9528,7 @@
     renderizarAdminSnapshots: renderizarAdminSnapshots,
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
+    resolverPartidoPorId: _resolverPartidoPorId,
     detectarModoPartido: detectarModoPartido,
     faseIdaVuelta: _faseIdaVuelta,
     esFinalDeTorneo: _esFinalDeTorneo,

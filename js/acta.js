@@ -498,7 +498,18 @@
   }
 
   function iniciarPartidoEnVivo(partidoId, ultimoContexto) {
-    var partido = ultimoContexto.partidosPorId[partidoId];
+    // Resuelve por window.Renderizadores.resolverPartidoPorId (fallback al
+    // mapa persistente de Superliga incluido) en vez de leer
+    // ultimoContexto.partidosPorId directo — sin este fallback, "▶ Empezar
+    // partido" en un partido de Superliga cerraba la previa y se quedaba
+    // sin abrir el partido en vivo en cuanto una sync de fondo volvía a
+    // llamar a generarCalendarioLateralDerecho mientras la previa seguía
+    // abierta (bug real, foto usuario: "no me deja pasar de la Previa").
+    // Ver el comentario completo junto a _resolverPartidoPorId en
+    // js/renderizadores.js.
+    var partido = window.Renderizadores && window.Renderizadores.resolverPartidoPorId
+      ? window.Renderizadores.resolverPartidoPorId(partidoId, ultimoContexto)
+      : ultimoContexto.partidosPorId[partidoId];
     if (!partido) return;
     var datos = ultimoContexto.datos;
     var local = window.Renderizadores.buscarEquipoPorId(partido.local, datos);

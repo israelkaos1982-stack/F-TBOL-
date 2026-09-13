@@ -639,16 +639,40 @@
   // de equipos EXACTO (normalizado) \u2014 una correcci\u00f3n de rival distinta a
   // un simple acento/may\u00fascula (p.ej. "AD Merida" -> "AD M\u00e9rida CF") no
   // encuentra reserva; es un caso mucho m\u00e1s raro que renombrar la ronda.
-  function _legDeRondaExtra(ronda) {
+  // BUG REAL (reporte usuario 2026-09-13, "se finaliza un partido y al
+  // volver a abrirlo aparece como no jugado" / "los partidos que juegan
+  // otros humanos no se guardan"): colapsar CUALQUIER ronda sin "ida"/
+  // "vuelta" a la MISMA cadena vacía es correcto para una eliminatoria
+  // de partido único (donde 2 clubes SOLO pueden cruzarse una vez por
+  // ronda), pero LIGA es la ÚNICA competición donde el MISMO par de
+  // equipos se enfrenta 2 VECES REALES en la temporada — ida (p.ej.
+  // "Jornada 5") y vuelta (p.ej. "Jornada 23") — SIN que la ronda lleve
+  // la palabra "ida"/"vuelta". Colapsando ambas a "" (como si fueran la
+  // MISMA ronda de una eliminatoria), la identidad de reserva de la
+  // Jornada 5 y la de la Jornada 23 de vuelta salían IDÉNTICAS: en
+  // cuanto se confirmaba una de las dos, `listarPartidosResueltos`
+  // encontraba esa MISMA identidad para la OTRA (aún sin jugar en la
+  // vida real) y le "prestaba" su marcador — y, en cuanto un tercer
+  // resultado llegaba a ocupar ese hueco de identidad (p.ej. al re-
+  // sincronizar desde otro móvil), el que se veía ANTES podía quedar
+  // sin marcador que reclamar, mostrándose "sin jugar" de un momento a
+  // otro. Para LIGA se preserva el texto COMPLETO de la ronda — cada
+  // jornada numerada mantiene su propia identidad — y solo el resto de
+  // competiciones (todas de eliminatoria: Copa, Champions/Europa/
+  // Conference, Recopa, Supercopa de Europa, Intercontinental, Previa
+  // Champions…) siguen tolerando que se renombre la ronda (p.ej.
+  // "1/64" -> "1ª Ronda") sin perder el resultado ya confirmado.
+  function _legDeRondaExtra(ronda, competicion) {
     var n = _normTxtExtra(ronda || "");
     if (/\bida\b/.test(n)) return "ida";
     if (/\bvuelta\b/.test(n)) return "vuelta";
+    if (_normTxtExtra(competicion) === "liga") return n;
     return "";
   }
   function _identidadFallbackKey(competicion, ronda, nombreA, nombreB) {
     if (!competicion || !nombreA || !nombreB) return null;
     var par = [_normTxtExtra(nombreA), _normTxtExtra(nombreB)].sort().join("|");
-    return _normTxtExtra(competicion) + "::" + _legDeRondaExtra(ronda) + "::" + par;
+    return _normTxtExtra(competicion) + "::" + _legDeRondaExtra(ronda, competicion) + "::" + par;
   }
   // `R` = window.Renderizadores (se pasa expl\u00edcito, nunca se lee de
   // window aqu\u00ed dentro, para poder testear esta funci\u00f3n en aislado).
@@ -685,7 +709,23 @@
     // (e.resultados[p.id], en listarPartidosResueltos), esto solo evita
     // que colisione con partidos completamente distintos.
     if (eqA.desconocido || eqB.desconocido) return null;
-    return _identidadFallbackKey(partido.competicion, partido.ronda, eqA.nombre, eqB.nombre);
+    // Resuelve la competición a su clave CANÓNICA (mismo alias que ya usa
+    // el balón/color de la card — `_BALON_COMP_ALIAS` en renderizadores.js)
+    // ANTES de construir la identidad. Motivo: en un partido HUMANO VS
+    // HUMANO, cada uno de los 2 mánagers teclea SU PROPIA línea en SU
+    // PROPIO Calendario extra (son 2 textos libres independientes
+    // describiendo el MISMO cruce real) — si uno escribe "Copa" y el otro
+    // "Copa del Rey" (o "Liga" / "Liga EA Sports"), sin este alias sus 2
+    // identidades de reserva NUNCA coincidían: el resultado que un
+    // mánager confirmaba en vivo se veía "sin jugar" para siempre en el
+    // calendario del rival, aunque ambos describieran el mismo partido.
+    // Reporte usuario 2026-09-13: "los partidos que juegan otros humanos
+    // no se guardan" / "se finaliza un partido y al volver a abrirlo
+    // aparece como no jugado" — sin relación alguna con ningún botón de
+    // reiniciar, es la propia naturaleza de 2 calendarios de texto libre
+    // independientes describiendo un mismo hecho con palabras distintas.
+    var compKey = (R.resolverCompKeyPartido ? R.resolverCompKeyPartido(partido.competicion) : partido.competicion) || partido.competicion;
+    return _identidadFallbackKey(compKey, partido.ronda, eqA.nombre, eqB.nombre);
   }
   // \u00cdndice { claveIdentidad -> entrada de e.resultados } \u2014 el PRIMERO que
   // aparezca gana en el rar\u00edsimo caso de colisi\u00f3n (2 resultados
@@ -767,6 +807,17 @@
   // partido que el usuario ya jugó, o "revertiría" a sin jugar; (2) el
   // que ya traiga marcador escrito a mano en el propio texto; (3) el
   // primero que aparezca.
+  //
+  // La clave usa la MISMA reducción de ronda que `_identidadFallbackKey`
+  // (`_legDeRondaExtra`, arriba) — no el texto exacto de la ronda a
+  // pelo. Antes exigía coincidencia EXACTA: si Club A tecleaba
+  // "Dieciseisavos" y Club B (para el MISMO cruce real) tecleaba "1/16",
+  // las 2 líneas NUNCA colapsaban en una — sobrevivían como 2 partidos
+  // "distintos" en listarPartidosResueltos(), duplicando el partido en
+  // el calendario Y en cualquier agregador que lea esa misma lista
+  // (clasificación, Pichichi, Plantilla). Para LIGA, `_legDeRondaExtra`
+  // sigue devolviendo el texto COMPLETO de la ronda (cada jornada
+  // numerada es un partido real distinto, nunca se colapsan entre sí).
   function _deduplicarExtraHumanoVsHumano(items, resultadosEnVivo) {
     function prioridad(p) {
       if (resultadosEnVivo[p.id]) return 2;
@@ -777,7 +828,7 @@
     var out = [];
     items.forEach(function (p) {
       var par = [p.local, p.visitante].slice().sort().join("|");
-      var clave = _normTxtExtra(p.competicion) + "|" + _normTxtExtra(p.ronda) + "|" + par;
+      var clave = _normTxtExtra(p.competicion) + "|" + _legDeRondaExtra(p.ronda, p.competicion) + "|" + par;
       var registro = vistoPorClave[clave];
       if (!registro) {
         registro = { partido: p, clubes: {} };

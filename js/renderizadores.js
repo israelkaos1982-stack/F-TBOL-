@@ -7595,6 +7595,19 @@
   // queda BLOQUEADO (sin alert, solo una sacudida visual) mientras esta
   // casilla obligatoria siga sin marcar — ver el guard en el click
   // delegado de #previa-empezar.
+  //
+  // Petición usuario 2026-09-13: la VUELTA de cualquier eliminatoria a
+  // doble partido (de CUALQUIER competición) es la que puede decidir el
+  // global — antes solo se avisaba con texto plano ("SIEMPRE
+  // disponibles"), sin que el admin tuviera que confirmar nada. Ahora
+  // también pinta la casilla OBLIGATORIA (mismo `data-obligatoria`, pero
+  // con valor `"vuelta"` para distinguirla de la de eliminatoria a
+  // partido único): mientras no se marque, "▶ Empezar partido" queda
+  // BLOQUEADO **y además** muestra un `alert()` — a diferencia de la de
+  // partido único, aquí el usuario SÍ pidió mensaje de alerta explícito,
+  // no solo la sacudida visual (ver el guard en el click delegado de
+  // #previa-empezar). Una vez marcada, "▶ Empezar partido" pasa a la
+  // card del partido con total normalidad — el mismo flujo de siempre.
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
@@ -7605,6 +7618,9 @@
     var checkboxObligatorioHtml =
       '<label class="live-checkbox-row live-checkbox-row--fuego"><input type="checkbox" id="live-prorroga-toggle" data-obligatoria="1">' +
       '<span>Activar Prórroga y Penaltis</span></label>';
+    var checkboxObligatorioVueltaHtml =
+      '<label class="live-checkbox-row live-checkbox-row--fuego"><input type="checkbox" id="live-prorroga-toggle" data-obligatoria="vuelta">' +
+      '<span>⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta — actívalo para continuar</span></label>';
     // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =
@@ -7622,7 +7638,7 @@
       var esAmistoso = _resolverCompKeyBalon(partido.competicion) === "amistosos";
       box.innerHTML = esAmistoso ? checkboxHtml : checkboxObligatorioHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
-      box.innerHTML = avisoGolVisitante + avisoProrrogaSiempre;
+      box.innerHTML = avisoGolVisitante + checkboxObligatorioVueltaHtml;
     } else if (modo === "ida-vuelta") {
       box.innerHTML = avisoGolVisitante;
     } else {
@@ -7994,62 +8010,44 @@
   // partido anterior, creando confusión").
   var _capturaScreenshotToken = 0;
 
-  // Envía la captura por la vía MÁS FIABLE que el navegador soporte
-  // (petición usuario: "sigue habiendo errores al enviar la captura del
-  // inicio de partido" → luego "no hace la captura del inicio" → luego
-  // "al compartir captura siempre destino [el link del Grupo]"). El
-  // camino de siempre —copiar al portapapeles y dejar que el usuario
-  // pegue dentro del Grupo WhatsApp LIGA, ya abierto en una pestaña
-  // nueva desde el toque original— depende de 2 cosas que pueden fallar
-  // SIN avisar: (1) `navigator.clipboard.write` con imágenes necesita la
+  // Envía la captura SIEMPRE directo al Grupo WhatsApp LIGA (petición
+  // usuario, repetida sin cambios desde el diseño original — "sigue sin
+  // salir directo el grupo"): copia la imagen al portapapeles y abre el
+  // enlace de invitación del grupo en una pestaña nueva, para que el
+  // usuario solo tenga que pegar con un toque.
+  //
+  // Historial de esta función — por qué NO usa `navigator.share`:
+  // en un intento anterior se probó la Web Share API (`navigator.share`
+  // con un `File`) como vía PRIMARIA, pensando que resolvía los fallos
+  // silenciosos del portapapeles. El usuario mandó una captura de su
+  // propia bandeja de compartir: SÍ funcionaba (bandeja nativa "1
+  // imagen" con "Copiar imagen" + iconos de contactos de WhatsApp
+  // sueltos) — pero la Web Share API **no puede** apuntar a un chat o
+  // grupo CONCRETO, solo deja elegir de una lista de apps/contactos
+  // (PSG, un contacto suelto, otro contacto suelto…). Es una limitación
+  // de la propia API — nunca hay forma de decirle "manda esto AL GRUPO
+  // LIGA" —, así que aunque "funcionara" técnicamente, nunca podía
+  // cumplir lo que el usuario pedía desde el principio: aterrizar
+  // DIRECTO en el grupo, sin tener que elegir nada. Se retiró por
+  // completo esa vía — vuelve a ser SIEMPRE portapapeles + enlace del
+  // grupo, la única forma de llegar directo a un chat concreto desde
+  // una web.
+  //
+  // El `navigator.clipboard.write` con imágenes puede fallar SIN avisar
+  // por 2 motivos, ambos con guard propio abajo: (1) necesita la
   // "activación" del toque todavía viva cuando html2canvas termina de
   // renderizar — en Safari/iOS esa ventana es corta y un móvil lento
-  // puede perderla, con lo que el write se rechaza en silencio (el
-  // `.catch(function(){})` de siempre) y el portapapeles queda vacío;
-  // (2) el enlace de invitación del grupo puede quedar inválido si algún
-  // día se regenera desde WhatsApp.
-  // La Web Share API (`navigator.share` con un `File`, soportada en la
-  // inmensa mayoría de móviles) resuelve AMBOS de un plumazo: abre la
-  // bandeja NATIVA para elegir con quién compartir (WhatsApp incluido,
-  // directo al chat/grupo que el usuario toque) — no necesita ningún
-  // enlace de invitación ni permiso de portapapeles. Se intenta PRIMERO;
-  // solo si el navegador no la soporta (sobre todo escritorio, donde
-  // WhatsApp Web sigue siendo la vía natural) cae al copiado de siempre.
-  // NUNCA lanza ni bloquea: un fallo de cualquier tipo —incluido que el
-  // usuario cierre la bandeja de compartir sin elegir nada, que dispara
-  // `AbortError`— se ignora en silencio; el partido arranca igual.
-  //
-  // Queja usuario ("siempre destino [el Grupo WhatsApp]"): en algunos
-  // navegadores/dispositivos `navigator.canShare({files:[...]})` nunca
-  // devuelve `true` para imágenes (Web Share de ARCHIVOS tiene soporte
-  // más desigual que el de texto/URL) — ahí SIEMPRE se cae al plan B, es
-  // esperado y no hay forma de "arreglarlo" desde aquí (es el propio
-  // navegador el que no ofrece la bandeja nativa). Lo que SÍ era un bug
-  // real en ese plan B: `window.open(...)` se llamaba ANTES del
-  // `navigator.clipboard.write(...)` — pero abrir una pestaña/cambiar de
-  // app puede quitarle el FOCO al documento actual, y
-  // `clipboard.write()` con imágenes EXIGE que el documento siga
-  // enfocado en el momento de la llamada (si no, Chrome la rechaza con
-  // `NotAllowedError: Document is not focused`, silenciado por el
-  // `.catch(function(){})` de siempre). Si `window.open` gana esa
-  // carrera y quita el foco antes de que el `write` llegue a
-  // ejecutarse, el portapapeles se queda vacío — coincide exactamente
-  // con "a veces las capturas... no funcionaban" (no es determinista:
-  // depende de qué tan rápido el navegador mueva el foco a la pestaña
-  // nueva). Fix: el ORDEN se invierte — primero `clipboard.write()`
-  // (con el documento TODAVÍA enfocado, nada le ha quitado el foco
-  // antes), y SOLO DESPUÉS `window.open` para llevar al usuario a
-  // WhatsApp — para cuando el foco cambie, la escritura ya se ha
-  // disparado (lo que importa es el momento de la LLAMADA, no cuándo
-  // resuelve la promesa).
+  // puede perderla; (2) EXIGE que el documento siga ENFOCADO en el
+  // momento exacto de la llamada (si no, Chrome la rechaza con
+  // `NotAllowedError: Document is not focused`) — por eso se llama
+  // SIEMPRE ANTES de `window.open`, nunca después: abrir una pestaña
+  // nueva puede quitarle el foco al documento actual, y si eso pasara
+  // ANTES del `write`, el portapapeles se quedaría vacío en silencio
+  // (bug real, queja usuario: "a veces las capturas... no funcionaban").
+  // Lo que importa es el momento de la LLAMADA, no cuándo resuelve la
+  // promesa — así que basta con disparar el `write` primero, sin
+  // esperar a que termine, antes de `window.open`.
   function _enviarCapturaPorLaViaMasFiable(blob) {
-    try {
-      var archivo = new File([blob], "previa.png", { type: "image/png" });
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [archivo] })) {
-        navigator.share({ files: [archivo] }).catch(function () {});
-        return;
-      }
-    } catch (e) {}
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         navigator.clipboard
@@ -8062,9 +8060,9 @@
 
   // Captura `el` (la previa/pantalla en vivo TAL CUAL se ve, con
   // html2canvas cargado por CDN en index.html) a un <canvas> en memoria
-  // y la envía por la vía más fiable del dispositivo (ver
-  // _enviarCapturaPorLaViaMasFiable: Web Share API si está disponible,
-  // si no copia al portapapeles) — nada se guarda en disco ni se envía a
+  // y la envía SIEMPRE directo al Grupo WhatsApp LIGA (ver
+  // _enviarCapturaPorLaViaMasFiable: copia al portapapeles + abre el
+  // enlace de invitación) — nada se guarda en disco ni se envía a
   // ningún servidor, solo unas decenas de KB efímeros. DEBE llamarse con
   // `el` todavía VISIBLE
   // (antes de cerrar la previa): html2canvas no puede fotografiar un
@@ -9322,8 +9320,8 @@
 
     // "▶ Empezar partido" (petición usuario 2026-09-05, automatiza el
     // aviso manual de arriba): UN SOLO toque ⇒ (1) captura la previa TAL
-    // CUAL se ve y la comparte (bandeja nativa si el móvil la soporta, si
-    // no copiada al portapapeles + Grupo WhatsApp LIGA abierto en una
+    // CUAL se ve y la envía SIEMPRE directo al Grupo WhatsApp LIGA
+    // (copiada al portapapeles + el enlace de invitación abierto en una
     // pestaña nueva — ver _enviarCapturaPorLaViaMasFiable, que decide
     // esto DESPUÉS de capturar, no aquí) y (2) arranca el partido en
     // vivo en ESTA pestaña, que sigue intacta.
@@ -9334,12 +9332,11 @@
     // empiece a trabajar, podía cambiar de app/pestaña justo cuando la
     // captura necesitaba esta pestaña en PRIMER plano para renderizar —
     // en un móvil lento la captura llegaba tarde o nunca, y para cuando
-    // el usuario ya estaba en WhatsApp ni la bandeja nativa había
+    // el usuario ya estaba en WhatsApp ni la pestaña del grupo había
     // llegado a abrirse ni el portapapeles se había rellenado. Ahora esa
-    // pestaña solo se abre DENTRO de _enviarCapturaPorLaViaMasFiable, y
-    // solo como plan B (dispositivos sin bandeja nativa de compartir
-    // archivos) — la vía primaria no necesita ningún enlace de
-    // invitación, WhatsApp ya sale como opción en la propia bandeja.
+    // pestaña se abre DENTRO de _enviarCapturaPorLaViaMasFiable, DESPUÉS
+    // de disparar la copia al portapapeles (nunca antes — ver el
+    // comentario largo junto a esa función).
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
       // Guard de la casilla OBLIGATORIA "Activar Prórroga y Penaltis"
@@ -9347,6 +9344,13 @@
       // _renderFormatoBoxPrevia): mientras siga SIN marcar, el partido
       // NO arranca — solo se sacude la fila para llamar la atención, sin
       // ningún alert que bloquee la pantalla.
+      //
+      // La variante de VUELTA (`data-obligatoria="vuelta"`, petición
+      // usuario 2026-09-13) SÍ añade un `alert()` explícito además de la
+      // sacudida — a diferencia de la de partido único, aquí el usuario
+      // pidió expresamente el mensaje. Una vez marcada, este mismo guard
+      // se salta (`chkObligatorio.checked` es true) y "▶ Empezar
+      // partido" sigue su flujo normal hasta la card del partido.
       var chkObligatorio = document.querySelector("#live-prorroga-toggle[data-obligatoria]");
       if (chkObligatorio && !chkObligatorio.checked) {
         var filaObligatoria = chkObligatorio.closest(".live-checkbox-row");
@@ -9354,6 +9358,12 @@
           filaObligatoria.classList.remove("live-checkbox-row--sacude");
           void filaObligatoria.offsetWidth; // reflow: permite re-disparar la animación
           filaObligatoria.classList.add("live-checkbox-row--sacude");
+        }
+        if (chkObligatorio.dataset.obligatoria === "vuelta") {
+          window.alert(
+            "⏱️ Antes de empezar, activa la casilla «Prórroga y penaltis SIEMPRE disponibles» — " +
+            "este partido de VUELTA puede decidir la eliminatoria si hay empate global."
+          );
         }
         return;
       }

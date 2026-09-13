@@ -877,9 +877,22 @@
       if (!override) return p;
 
       if (override.eventos !== undefined) {
-        var compacto = _compactarEventosPartido(override.eventos, override._clubes || [], p.local, p.visitante);
+        // `override._clubes` puede faltar en un resultado MUY viejo,
+        // guardado antes de que ese campo existiera (ver comentario en
+        // registrarResultadoPartido) — sin este fallback, un partido así
+        // migraba con `clubesHumanos=[]` y perdía TODAS las filas `jug`
+        // de sus jugadores humanos aunque el acta las tuviera. Se deriva
+        // fresco desde `p`/`datos` (los clubes humanos son un roster fijo
+        // de 6, no algo que cambie con el tiempo) y de paso se rellena
+        // `override._clubes` para que reiniciarResultadosDeClub también
+        // pueda reclamarlo en el futuro.
+        var clubesParaMigrar = (override._clubes && override._clubes.length)
+          ? override._clubes
+          : _clubesHumanosDePartido(p, datos);
+        var compacto = _compactarEventosPartido(override.eventos, clubesParaMigrar, p.local, p.visitante);
         delete override.eventos;
         override.etJugada = compacto.etJugada;
+        if (!override._clubes || !override._clubes.length) override._clubes = clubesParaMigrar;
         if (compacto.penL || compacto.penV) { override.penL = compacto.penL; override.penV = compacto.penV; }
         if (compacto.jug) override.jug = compacto.jug;
         huboMigracion = true;

@@ -513,6 +513,19 @@
   // `excluirComps` (por defecto solo "superliga") respeta la exclusión
   // YA intencional del barrido normal: Superliga tiene su propio ciclo/
   // reset aparte, este botón general nunca debe tocarla de rebote.
+  //
+  // PROTECCIÓN OBLIGATORIA — un partido con MÁS DE UN club humano en
+  // `_clubes` (HvH, en CUALQUIER competición — Copa del Rey con sorteo
+  // real, Liga si el calendario cruza a 2 de los 6, no solo Superliga)
+  // NUNCA se toca aquí, sea cual sea `excluirComps`. Este botón es "reinicia
+  // MI temporada" de UN club — si el partido también pertenece a otro
+  // mánager humano, reiniciarlo de rebote le borra a ÉL un resultado que
+  // nunca pidió tocar (reporte usuario: "los partidos que juegan otros
+  // humanos no se guardan" — la causa real era esta: cualquier admin que
+  // reiniciara SU club de paso borraba los partidos HvH compartidos con
+  // cualquier otro). El reinicio de un partido HvH concreto sigue siendo
+  // posible, pero SOLO uno a uno desde el botón individual (↺ por partido,
+  // con su propio PIN+confirm) — nunca en el barrido masivo.
   function reiniciarResultadosDeClub(clubId, excluirComps) {
     if (!clubId) return 0;
     var excluir = excluirComps || ["superliga"];
@@ -526,6 +539,7 @@
       // vacía (jugado:false, sin pospuesto) no necesita otro reinicio.
       if (r.jugado !== true && !r.pospuesto) return;
       if (!Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
+      if (r._clubes.length > 1) return; // HvH — nunca en el barrido masivo, ver comentario de arriba
       if (r._competicion && excluir.indexOf(r._competicion) !== -1) return;
       e.resultados[id] = _tumbaDeResultado(r);
       n++;
@@ -1720,16 +1734,32 @@
   // cuenta de forma independiente (petición usuario) — el desglose de
   // Isra contra Álvaro no tiene por qué coincidir número a número con el
   // de Álvaro contra Isra, son 2 registros separados a propósito.
-  // Actualizado 2026 desde "Estadisticas_Derbys.xlsx" (petición usuario,
-  // "actualización de los derbys, actualiza cada caja de derbys de cada
-  // equipo") — cada bloque del Excel trae, POR MÁNAGER, su desglose
-  // PJ/PG/PE/PP/G+/G- contra cada uno de los otros 5 (el Excel guarda
-  // G- en negativo; aquí se transcribe en positivo, mismo formato que
-  // ya usaba esta tabla). Transcrito TAL CUAL viene en el Excel, sin
-  // "corregir" descuadres puntuales entre el registro de un mánager y
-  // el de su rival (p.ej. Toñín vs Acsa) — cada uno lleva su PROPIA
+  //
+  // ⚠️ ESTE BLOQUE NO SE "GUARDA SOLO" — es el catálogo de FÁBRICA, se
+  // transcribe A MANO cada vez que el usuario manda una versión nueva del
+  // Excel (o edita los números en el chat). El desglose de los derbys NO
+  // se recalcula desde los partidos jugados en la app — es un registro
+  // histórico aparte, igual que Títulos. Si el admin quiere que un
+  // partido jugado EN LA APP sume aquí automáticamente, hace falta pedirlo
+  // como una función nueva; hoy la única forma de actualizarlo es (a)
+  // editar los números a mano desde la propia pantalla Derbys (candado
+  // 646, sin tocar código), o (b) mandar los números/Excel actualizados
+  // para que se transcriban aquí. Ninguna de las 2 vías implica ningún
+  // "fallo de guardado" — es intencionalmente un dato de mantenimiento
+  // manual, no en vivo.
+  //
+  // Actualizado 2026-09-13 desde "Estadisticas_Derbys.xlsx" (2ª entrega
+  // del usuario, tras la 1ª transcripción) — cada bloque del Excel trae,
+  // POR MÁNAGER, su desglose PJ/PG/PE/PP/G+/G- contra cada uno de los
+  // otros 5 (el Excel guarda G- en negativo; aquí se transcribe en
+  // positivo, mismo formato que ya usaba esta tabla). Transcrito TAL CUAL
+  // viene en el Excel, sin "corregir" descuadres puntuales entre el
+  // registro de un mánager y el de su rival — cada uno lleva su PROPIA
   // cuenta de forma independiente, por diseño (ver comentario de más
-  // arriba).
+  // arriba). Único cambio real frente a la entrega anterior: Toñín vs
+  // Acsa (y su espejo Acsa vs Toñín) — 2 derbys más jugados desde
+  // entonces. El resto de los 30 registros (6 mánagers × 5 rivales) sale
+  // IDÉNTICO en esta 2ª entrega del Excel, comprobado celda a celda.
   var DERBYS_DEFAULT_TEXTO = {
     "atletico-madrid": [ // ISRA ✏️
       "Álvaro 🐭: PJ 10 PG 7 PE 1 PP 2 G+ 30 G- 21",
@@ -1747,7 +1777,7 @@
     ].join("\n"),
     "real-madrid": [ // ACSA 🔨
       "Álvaro 🐭: PJ 8 PG 6 PE 0 PP 2 G+ 27 G- 15",
-      "Toñín 💡: PJ 10 PG 5 PE 1 PP 4 G+ 15 G- 17",
+      "Toñín 💡: PJ 12 PG 7 PE 1 PP 4 G+ 26 G- 19",
       "Ángel 😈: PJ 8 PG 2 PE 1 PP 5 G+ 19 G- 25",
       "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
       "Isra ✏️: PJ 8 PG 1 PE 0 PP 7 G+ 9 G- 37"
@@ -1768,7 +1798,7 @@
     ].join("\n"),
     liverpool: [ // TOÑÍN 💡
       "Álvaro 🐭: PJ 11 PG 1 PE 1 PP 9 G+ 8 G- 27",
-      "Acsa 🔨: PJ 10 PG 4 PE 1 PP 6 G+ 17 G- 15",
+      "Acsa 🔨: PJ 12 PG 4 PE 1 PP 7 G+ 19 G- 26",
       "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
       "Izan 🦆: PJ 3 PG 1 PE 0 PP 2 G+ 3 G- 6",
       "Isra ✏️: PJ 14 PG 2 PE 1 PP 11 G+ 23 G- 65"

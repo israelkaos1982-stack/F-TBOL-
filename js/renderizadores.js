@@ -1156,21 +1156,27 @@
     });
   }
 
-  // Nombre a mostrar de una fila compacta de jugador propia del club
+  // Nombre AUTORITATIVO de una fila compacta de jugador propia del club
   // (`fila` = {j,e,g,m,a,r,n?,en?} de js/estado.js::_compactarEventosPartido).
-  // 1) resuelve por dorsal desde la plantilla ACTUAL del club (lo normal);
-  // 2) si no resuelve (el dorsal se reeditó en el editor de plantilla
-  //    DESPUÉS de jugarse el partido, así que jugador_id=clubId+"-"+dorsal
-  //    ya no existe en el roster de hoy), cae al nombre persistido en la
-  //    propia fila (`fila.n`, guardado siempre desde el fix de 2026-09);
-  // 3) si NINGUNO de los 2 resuelve (fila histórica anterior a ese fix,
-  //    sin `fila.n` guardado) NUNCA se descarta la fila — cae a un
-  //    marcador con el dorsal para que el gol/tarjeta/MVP siga sumando en
-  //    el ranking en vez de desaparecer en silencio (bug real: Pichichi/
-  //    tarjetas por debajo de lo que muestra cada acta jugada).
+  // El NOMBRE es lo válido, no el id derivado del dorsal (jugador_id =
+  // clubId + "-" + dorsal) — un mismo jugador puede terminar con más de
+  // un id a lo largo de la temporada por motivos ajenos a que el admin
+  // "cambie un dorsal a mano" (resolución del picker en el momento de
+  // jugar, remaneos internos, etc.), y agrupar por id partía sus
+  // estadísticas en 2+ filas → Pichichi/MVP/tarjetas por debajo de lo
+  // que muestra cada acta jugada.
+  // 1) `fila.n` (el nombre que se guardó EN EL MOMENTO del partido,
+  //    siempre desde el fix de 2026-09) es SIEMPRE la fuente preferida;
+  // 2) si falta (fila histórica anterior a ese fix, sin `fila.n`
+  //    guardado) cae al nombre resuelto por dorsal desde la plantilla
+  //    ACTUAL del club — mejor que nada, pero puede desalinearse si el
+  //    roster cambió desde entonces;
+  // 3) si NINGUNO de los 2 resuelve, NUNCA se descarta la fila — cae a
+  //    un marcador con el dorsal para que el gol/tarjeta/MVP siga
+  //    sumando en el ranking en vez de desaparecer en silencio.
   function _nombreFilaJugadorConFallback(nombresPorId, fila) {
-    if (nombresPorId[fila.j]) return nombresPorId[fila.j];
     if (fila.n) return fila.n;
+    if (nombresPorId[fila.j]) return nombresPorId[fila.j];
     var partes = String(fila.j).split("-");
     var dorsal = partes[partes.length - 1];
     return /^\d+$/.test(dorsal) ? ("Jugador dorsal " + dorsal) : "Jugador desconocido";
@@ -1415,19 +1421,26 @@
   function calcularLiga1RefStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
     // `fila` = resumen compacto por jugador de UN partido (ver
     // js/estado.js::_compactarEventosPartido: {j,e,g,m,a,r,n,en} — ya NO
     // hay eventos minuto a minuto que recorrer, el tipo ya está sumado).
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _liga1RefEquiposHumanos(datos).forEach(function (e) {
@@ -1453,12 +1466,12 @@
             // Fila de ESTE club — un partido humano-vs-humano trae fila
             // de AMBOS lados; cada club solo suma la suya.
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
             // Rival IA de ESTE partido concreto (nunca otro humano — ese
             // caso ya lo cubre su propia iteración de arriba). Nombre y
             // equipo del rival IA viajan en la propia fila.
-            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
 
@@ -2309,16 +2322,23 @@
   function calcularCopaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _copaEquiposHumanos(datos).forEach(function (e) {
@@ -2331,9 +2351,9 @@
           if (!fila.j) return;
           if (fila.e === e.id) {
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
       });
@@ -2934,16 +2954,23 @@
   function calcularRecopaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _recopaEquiposHumanos(datos).forEach(function (e) {
@@ -2956,9 +2983,9 @@
           if (!fila.j) return;
           if (fila.e === e.id) {
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
       });
@@ -3509,16 +3536,23 @@
   function calcularChampionsStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _championsEquiposHumanos(datos).forEach(function (e) {
@@ -3533,9 +3567,9 @@
             if (!fila.j) return;
             if (fila.e === e.id) {
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -4414,16 +4448,23 @@
   function calcularUelStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _uelEquiposHumanos(datos).forEach(function (e) {
@@ -4438,9 +4479,9 @@
             if (!fila.j) return;
             if (fila.e === e.id) {
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -5109,16 +5150,23 @@
   function calcularUeclStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
-    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
     _ueclEquiposHumanos(datos).forEach(function (e) {
@@ -5133,9 +5181,9 @@
             if (!fila.j) return;
             if (fila.e === e.id) {
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -5754,10 +5802,17 @@
   function calcularSuperligaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+    function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
-      if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad += n;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
     }
 
     _superligaEquiposHumanos(datos).forEach(function (e) {
@@ -5770,10 +5825,10 @@
         (p.jug || []).forEach(function (fila) {
           if (!fila.j || fila.e !== e.id) return;
           var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-          sumar(acumulado.pichichi, fila.j, nombreJ, e.nombre, e.id, fila.g);
-          sumar(acumulado.mvp, fila.j, nombreJ, e.nombre, e.id, fila.m);
-          sumar(acumulado.amarillas, fila.j, nombreJ, e.nombre, e.id, fila.a);
-          sumar(acumulado.rojas, fila.j, nombreJ, e.nombre, e.id, fila.r);
+          sumar(acumulado.pichichi, nombreJ, e.nombre, e.id, fila.g);
+          sumar(acumulado.mvp, nombreJ, e.nombre, e.id, fila.m);
+          sumar(acumulado.amarillas, nombreJ, e.nombre, e.id, fila.a);
+          sumar(acumulado.rojas, nombreJ, e.nombre, e.id, fila.r);
         });
 
         if (!portero || !p.resultado) return;
@@ -8376,32 +8431,17 @@
   // concreto sin añadir un evento manual nuevo) — mismo criterio que la
   // Zamora de Liga 1ª REF.
   function calcularStatsRosterClub(clubId, datos) {
-    var stats = {};
-    // Reatribución por NOMBRE cuando el dorsal ya no coincide con el
-    // roster actual (se reeditó en el editor de plantilla DESPUÉS de
-    // jugarse el partido, así que jugador_id=clubId+"-"+dorsal ya no
-    // existe en el roster de hoy): sin esto, el jugador afectado
-    // mostraría 0 en todo lo jugado antes del cambio de dorsal,
-    // indistinguible de "no ha jugado nada" — mismo bug de fondo que el
-    // de los rankings (Pichichi/tarjetas, ver
-    // _nombreFilaJugadorConFallback), aquí aplicado a la ficha propia
-    // del jugador dentro de la Plantilla. Solo puede reatribuirse si la
-    // fila trae `row.n` (siempre desde el fix de 2026-09 en
-    // js/estado.js::_compactarEventosPartido); una fila histórica
-    // anterior a ese fix, sin nombre guardado, queda huérfana igual que
-    // antes — no hay forma de saber a qué jugador de hoy pertenece.
-    var idsActuales = {}, idPorNombreActual = {};
-    obtenerJugadoresClub(clubId).forEach(function (j) {
-      idsActuales[j.id] = true;
-      idPorNombreActual[_normNombre(j.nombre)] = j.id;
-    });
-    function idDestino(row) {
-      if (idsActuales[row.j]) return row.j;
-      return (row.n && idPorNombreActual[_normNombre(row.n)]) || row.j;
-    }
-    function fila(id) {
-      if (!stats[id]) {
-        stats[id] = {
+    // Se acumula por NOMBRE normalizado, no por jugador_id derivado del
+    // dorsal — es el criterio válido de identidad de un jugador (mismo
+    // motivo que _nombreFilaJugadorConFallback/sumar): un jugador puede
+    // llegar aquí con más de un jugador_id a lo largo de la temporada,
+    // y acumular por id partía sus estadísticas en 2 fichas distintas
+    // dentro de la Plantilla (invisibles la una para la otra).
+    var porNombre = {};
+    function filaPorNombre(nombre) {
+      var key = _normNombre(nombre);
+      if (!porNombre[key]) {
+        porNombre[key] = {
           goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0,
           // Contadores POR PARTIDO (no total de tarjetas) — alimentan el
           // bloqueo de color de la Plantilla: cuántos partidos distintos
@@ -8412,8 +8452,11 @@
           partidosRojaDirecta: 0
         };
       }
-      return stats[id];
+      return porNombre[key];
     }
+    var nombresPorId = {};
+    obtenerJugadoresClub(clubId).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
     // La Superliga NUNCA suma aquí (petición usuario): sus partidos solo
     // cuentan para la clasificación/Pichichi-MVP DE LA PROPIA Superliga
     // (calcularSuperliga/SUPERLIGA_STATS), nunca a la ficha del jugador
@@ -8429,7 +8472,7 @@
       // aparte: `row.a >= 2` ya ES "2+ amarillas en este partido".
       (p.jug || []).forEach(function (row) {
         if (!row.j || row.e !== clubId) return;
-        var f = fila(idDestino(row));
+        var f = filaPorNombre(_nombreFilaJugadorConFallback(nombresPorId, row));
         f.goles += row.g || 0;
         f.mvp += row.m || 0;
         f.amarillas += row.a || 0;
@@ -8441,7 +8484,7 @@
 
     var portero = _porteroPrincipalClub(clubId);
     if (portero) {
-      var f2 = fila(portero.id);
+      var f2 = filaPorNombre(portero.nombre);
       partidos.forEach(function (p) {
         if (!p.resultado) return;
         var encajados = p.local === clubId ? p.resultado.golesVisitante
@@ -8450,6 +8493,17 @@
       });
     }
 
+    // Contrato externo sin cambios: la pantalla Plantilla busca por el id
+    // ACTUAL de cada jugador de la lista (`stats[j.id]`, ver
+    // renderizarPlantillaClub) — se re-expone aquí por ese id, resuelto
+    // por nombre. Un dato histórico que no case con NINGÚN nombre actual
+    // (jugador que ya no está en la plantilla) queda fuera de este mapa
+    // — no hay ninguna fila de la Plantilla donde mostrarlo.
+    var stats = {};
+    obtenerJugadoresClub(clubId).forEach(function (j) {
+      var key = _normNombre(j.nombre);
+      if (porNombre[key]) stats[j.id] = porNombre[key];
+    });
     return stats;
   }
 

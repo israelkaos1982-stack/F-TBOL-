@@ -5947,27 +5947,46 @@ _EF7_ESTADO_LIGA_KEY = "ef7_estado_liga_v1"
 # ningún de los partidos de anoche" (4 partidos de Liga/Superliga, cada uno
 # confirmado con captura de FINALIZADO, ninguno sobrevivió). Causa raíz:
 # `ef7_estado_liga_v1` acumula TODO el historial de actas de la temporada
-# (sin archivado automático — ver el comentario junto a
-# _ef7_tomar_snapshot_si_toca) y, tras muchas jornadas, puede superar
-# `_KV_MAX_BYTES` (2 MB, el tope GENÉRICO compartido con la app antigua —
-# ver CLAUDE.md, "Límites de almacenamiento por carpeta"). Al superarlo, el
-# POST se rechaza EN SILENCIO (`continue` en api_ef7_state_post, sin log ni
-# aviso al cliente) — el partido recién confirmado JAMÁS llega a guardarse
-# en el servidor. Combinado con el auto-abandono de js/sync.js (tras varios
-# ciclos rechazada, el dispositivo deja de insistir y adopta la copia MÁS
-# POBRE del servidor), el partido acababa BORRADO también del dispositivo
-# que lo jugó — la única copia que existía.
+# y, tras suficientes partidos, puede superar `_KV_MAX_BYTES` (2 MB, el
+# tope GENÉRICO compartido con la app antigua — ver CLAUDE.md, "Límites de
+# almacenamiento por carpeta"). Al superarlo, el POST se rechazaba EN
+# SILENCIO (`continue` en api_ef7_state_post, sin log ni aviso al
+# cliente) — el partido recién confirmado JAMÁS llegaba a guardarse en el
+# servidor. Combinado con el auto-abandono de js/sync.js (tras varios
+# ciclos rechazada, el dispositivo dejaba de insistir y adoptaba la copia
+# MÁS POBRE del servidor), el partido acababa BORRADO también del
+# dispositivo que lo jugó — la única copia que existía.
+#
 # Este `_EF7_ESTADO_LIGA_KEY` es la clave MÁS CRÍTICA de todo el simulador
 # (el histórico de actas es irrecuperable si se pierde) y su fusión
 # PARTIDO A PARTIDO (`_ef7_merge_resultados`) ya la hace estructuralmente
-# distinta del resto de claves `ef7_*`/legacy — merece su PROPIO tope,
-# mucho más generoso, en vez de compartir el genérico de 2 MB pensado para
-# blobs de texto libre (calendarios/plantillas). 10 MB da margen para miles
-# de partidos con acta completa sin bloquear el guardado durante el resto
-# de la temporada — no es una solución permanente (el archivado automático
-# de temporadas antiguas sigue pendiente), pero corta de raíz esta pérdida
-# concreta de datos mientras tanto.
-_EF7_ESTADO_LIGA_MAX_BYTES = 10 * 1024 * 1024  # 10 MB, solo para esta clave
+# distinta del resto de claves `ef7_*`/legacy — merece su PROPIO tope, en
+# vez de compartir el genérico de 2 MB pensado para blobs de texto libre
+# (calendarios/plantillas).
+#
+# Petición usuario 2026-09-13 (esta es la 1ª temporada, sin históricas que
+# archivar, "no puedo estar vigilando esto cada partido que juguemos"): NO
+# hay ningún límite real de infraestructura detrás de 2 MB — ni Postgres
+# ni SQLite tienen problema con una columna TEXT de decenas de MB, y no hay
+# `MAX_CONTENT_LENGTH` configurado en Flask que lo impida. El tope de 2 MB
+# era una elección de diseño para proteger blobs de texto libre editados a
+# mano (donde "mucho más grande de golpe" suele ser una señal de error),
+# no una limitación técnica — así que para ESTA clave, que solo crece por
+# partidos confirmados uno a uno, se sube a 50 MB: medido con un partido
+# real de 12 eventos (goles/tarjetas con nombre de jugador incluido), un
+# acta completa pesa ~2.8 KB — a ese ritmo, 50 MB cubren ~18.000 partidos.
+# Con 6 clubes humanos jugando TODAS las competiciones de una temporada
+# (Liga 38J + Copa + Supercopa + Superliga + continentales...) el total
+# real ronda unos pocos cientos de partidos — ninguna sesión de
+# simulación, por intensa que sea, se acerca ni de lejos a 18.000 en una
+# sola temporada. Combinado
+# con el guard de js/sync.js que ya NUNCA deja perder un partido conocido
+# (por id, no por tamaño — ver _esRegresionResultados), esto deja de ser
+# algo que monitorizar: si algún día SÍ llegara a superarse (temporada muy
+# larga, o varias acumuladas sin limpiar), el rechazo queda registrado en
+# los logs del servidor y el cliente avisa una sola vez sin borrar nunca
+# nada — nunca vuelve a ser un fallo silencioso.
+_EF7_ESTADO_LIGA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB, solo para esta clave
 
 # CANDADO DE ARCHIVO — serializa TODOS los POST a /api/ef7/state entre los
 # 2 procesos reales de gunicorn (render.yaml, --workers 2), sea Postgres o

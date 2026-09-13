@@ -5807,7 +5807,6 @@ def api_debug():
     # base de datos aunque hoy ya no se puedan volver a escribir así).
     biggest_rows = []
     try:
-        near_limit = int(_KV_MAX_BYTES * 0.5)
         rows_all = GlobalState.query.with_entities(
             GlobalState.clave, GlobalState.valor_json, GlobalState.updated_at
         ).all()
@@ -5820,8 +5819,14 @@ def api_debug():
             sized.append((nbytes, clave, updated_at))
         sized.sort(key=lambda t: t[0], reverse=True)
         for nbytes, clave, updated_at in sized[:25]:
-            flag = "🔴 SUPERA el límite de guardado (2 MB)" if nbytes > _KV_MAX_BYTES else (
-                "⚠️ cerca del límite" if nbytes > near_limit else ""
+            # `ef7_estado_liga_v1` tiene su propio tope, mucho más generoso
+            # (ver _EF7_ESTADO_LIGA_MAX_BYTES) — sin esta excepción el
+            # diagnóstico la marcaba "🔴 SUPERA el límite" con el genérico
+            # de 2 MB aunque estuviera perfectamente a salvo de rechazarse.
+            limite_fila = _EF7_ESTADO_LIGA_MAX_BYTES if clave == _EF7_ESTADO_LIGA_KEY else _KV_MAX_BYTES
+            near_limit_fila = int(limite_fila * 0.5)
+            flag = f"🔴 SUPERA el límite de guardado ({round(limite_fila / 1048576)} MB)" if nbytes > limite_fila else (
+                "⚠️ cerca del límite" if nbytes > near_limit_fila else ""
             )
             biggest_rows.append({
                 "clave": clave,
@@ -5937,6 +5942,51 @@ def _new_sim_static(subdir, filename):
 # de tratarla como un bloque opaco.
 _EF7_KEY_PREFIX = "ef7_"
 _EF7_ESTADO_LIGA_KEY = "ef7_estado_liga_v1"
+
+# TOPE DE TAMAÑO DEDICADO — reporte usuario 2026-09-13: "no se ha guardado
+# ningún de los partidos de anoche" (4 partidos de Liga/Superliga, cada uno
+# confirmado con captura de FINALIZADO, ninguno sobrevivió). Causa raíz:
+# `ef7_estado_liga_v1` acumula TODO el historial de actas de la temporada
+# y, tras suficientes partidos, puede superar `_KV_MAX_BYTES` (2 MB, el
+# tope GENÉRICO compartido con la app antigua — ver CLAUDE.md, "Límites de
+# almacenamiento por carpeta"). Al superarlo, el POST se rechazaba EN
+# SILENCIO (`continue` en api_ef7_state_post, sin log ni aviso al
+# cliente) — el partido recién confirmado JAMÁS llegaba a guardarse en el
+# servidor. Combinado con el auto-abandono de js/sync.js (tras varios
+# ciclos rechazada, el dispositivo dejaba de insistir y adoptaba la copia
+# MÁS POBRE del servidor), el partido acababa BORRADO también del
+# dispositivo que lo jugó — la única copia que existía.
+#
+# Este `_EF7_ESTADO_LIGA_KEY` es la clave MÁS CRÍTICA de todo el simulador
+# (el histórico de actas es irrecuperable si se pierde) y su fusión
+# PARTIDO A PARTIDO (`_ef7_merge_resultados`) ya la hace estructuralmente
+# distinta del resto de claves `ef7_*`/legacy — merece su PROPIO tope, en
+# vez de compartir el genérico de 2 MB pensado para blobs de texto libre
+# (calendarios/plantillas).
+#
+# Petición usuario 2026-09-13 (esta es la 1ª temporada, sin históricas que
+# archivar, "no puedo estar vigilando esto cada partido que juguemos"): NO
+# hay ningún límite real de infraestructura detrás de 2 MB — ni Postgres
+# ni SQLite tienen problema con una columna TEXT de decenas de MB, y no hay
+# `MAX_CONTENT_LENGTH` configurado en Flask que lo impida. El tope de 2 MB
+# era una elección de diseño para proteger blobs de texto libre editados a
+# mano (donde "mucho más grande de golpe" suele ser una señal de error),
+# no una limitación técnica — así que para ESTA clave, que solo crece por
+# partidos confirmados uno a uno, se sube a 50 MB: medido con un partido
+# real de 12 eventos (goles/tarjetas con nombre de jugador incluido), un
+# acta completa pesa ~2.8 KB — a ese ritmo, 50 MB cubren ~18.000 partidos.
+# Con 6 clubes humanos jugando TODAS las competiciones de una temporada
+# (Liga 38J + Copa + Supercopa + Superliga + continentales...) el total
+# real ronda unos pocos cientos de partidos — ninguna sesión de
+# simulación, por intensa que sea, se acerca ni de lejos a 18.000 en una
+# sola temporada. Combinado
+# con el guard de js/sync.js que ya NUNCA deja perder un partido conocido
+# (por id, no por tamaño — ver _esRegresionResultados), esto deja de ser
+# algo que monitorizar: si algún día SÍ llegara a superarse (temporada muy
+# larga, o varias acumuladas sin limpiar), el rechazo queda registrado en
+# los logs del servidor y el cliente avisa una sola vez sin borrar nunca
+# nada — nunca vuelve a ser un fallo silencioso.
+_EF7_ESTADO_LIGA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB, solo para esta clave
 
 # CANDADO DE ARCHIVO — serializa TODOS los POST a /api/ef7/state entre los
 # 2 procesos reales de gunicorn (render.yaml, --workers 2), sea Postgres o
@@ -6335,7 +6385,23 @@ def api_ef7_state_post():
                 payload = json.dumps(value_a_guardar, ensure_ascii=False)
             except (TypeError, ValueError):
                 continue
-            if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
+            # `ef7_estado_liga_v1` tiene su PROPIO tope, mucho más generoso
+            # (ver _EF7_ESTADO_LIGA_MAX_BYTES) — es la clave más crítica del
+            # simulador y perderla en silencio por exceder el genérico de
+            # 2 MB ya costó una pérdida real de partidos (2026-09-13).
+            limite = _EF7_ESTADO_LIGA_MAX_BYTES if key == _EF7_ESTADO_LIGA_KEY else _KV_MAX_BYTES
+            payload_bytes = len(payload.encode("utf-8"))
+            if payload_bytes > limite:
+                # Nunca debe pasar en silencio: si algún día SÍ se supera
+                # (temporada muy larga sin archivado todavío), que quede
+                # rastro en los logs del servidor en vez de perderse sin
+                # ninguna pista — es exactamente lo que faltaba la vez que
+                # esto causó la pérdida real de partidos.
+                print(
+                    f"[ftbol] POST /api/ef7/state RECHAZADO por tamaño: clave={key} "
+                    f"bytes={payload_bytes} limite={limite}",
+                    flush=True,
+                )
                 continue
             if row:
                 row.valor_json = payload

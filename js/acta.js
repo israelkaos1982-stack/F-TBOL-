@@ -192,24 +192,28 @@
       ? window.Estado.calcularClasificacion(ctx.datos, ctx.partido.liga)
       : null;
 
-    // C) Fichas de jugadores humanos: mismo principio. Se ignoran los
-    //    eventos de la IA (es_humano:false) por diseño — sus jugadores
-    //    genéricos no tienen ficha ni historial persistido (0 KB extra).
-    //    Renderizadores.calcularStatsRosterClub() ya solo cuenta
-    //    es_humano:true al leer los eventos que acabamos de guardar en
-    //    el paso A — la Plantilla y Liga 1ª REF quedan al día solas.
+    // C) Fichas de jugadores humanos: el paso A ya compactó el acta a un
+    //    resumen por jugador (ver Estado.registrarResultadoPartido /
+    //    _compactarEventosPartido) — Renderizadores.calcularStatsRosterClub()
+    //    lee ESE resumen (nunca el acta completa, que ya no se guarda) al
+    //    leer los partidos ya jugados — la Plantilla y Liga 1ª REF quedan
+    //    al día solas.
 
-    // D) Vaciar RAM — el acta temporal queda a cero para el siguiente partido.
-    var actaCerrada = actaTemporal.slice();
+    // D) Vaciar RAM — el acta temporal queda a cero para el siguiente
+    //    partido. Nunca se persiste completa: solo vivió en memoria
+    //    mientras el partido estaba en juego.
     actaTemporal = [];
 
     // 3. Eliminatorias de Copa/Promoción: si este partido era una vuelta
     //    o un tercer partido de desempate, decide (o hace avanzar) la
-    //    eliminatoria.
+    //    eliminatoria. `evaluarTrasConfirmar` solo necesita saber a qué
+    //    eliminatoria pertenece este partido (`ctx.partido.eliminatoria`)
+    //    — el marcador/prórroga/tanda ya los resuelve directamente desde
+    //    lo que acaba de persistir el paso A, vía
+    //    Estado.listarPartidosResueltos.
     var partidoConfirmado = Object.assign({}, ctx.partido, {
       jugado: true,
-      resultado: { golesLocal: golesL, golesVisitante: golesV },
-      eventos: actaCerrada
+      resultado: { golesLocal: golesL, golesVisitante: golesV }
     });
     var resultadoEliminatoria = window.SistemaTemporadas
       ? window.SistemaTemporadas.evaluarTrasConfirmar(partidoConfirmado, ctx.datos)

@@ -1394,17 +1394,20 @@
   // a 0 del equipo, atribuidas a su portero principal.
   function calcularLiga1RefStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    // `fila` = resumen compacto por jugador de UN partido (ver
+    // js/estado.js::_compactarEventosPartido: {j,e,g,m,a,r,n,en} — ya NO
+    // hay eventos minuto a minuto que recorrer, el tipo ya está sumado).
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _liga1RefEquiposHumanos(datos).forEach(function (e) {
@@ -1424,20 +1427,19 @@
 
       partidos.forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
-        (p.eventos || []).forEach(function (ev) {
-          if (!ev.jugador_id) return;
-          if (ev.equipo_id === e.id) {
-            // Eventos de ESTE club — un partido humano-vs-humano trae
-            // eventos de AMBOS lados; cada club solo suma los suyos.
-            if (!ev.es_humano) return;
-            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            // Fila de ESTE club — un partido humano-vs-humano trae fila
+            // de AMBOS lados; cada club solo suma la suya.
+            var nombreJ = nombresPorId[fila.j] || fila.n;
             if (!nombreJ) return;
-            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
+            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
             // Rival IA de ESTE partido concreto (nunca otro humano — ese
-            // caso ya lo cubre su propia iteración de arriba).
-            if (!ev.jugador_nombre) return;
-            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+            // caso ya lo cubre su propia iteración de arriba). Nombre y
+            // equipo del rival IA viajan en la propia fila.
+            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
 
@@ -2287,17 +2289,17 @@
   // 1ª REF, ver calcularLiga1RefStatsHumanos más arriba).
   function calcularCopaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _copaEquiposHumanos(datos).forEach(function (e) {
@@ -2306,16 +2308,14 @@
 
       _copaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
-        (p.eventos || []).forEach(function (ev) {
-          if (!ev.jugador_id) return;
-          if (ev.equipo_id === e.id) {
-            if (!ev.es_humano) return;
-            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = nombresPorId[fila.j] || fila.n;
             if (!nombreJ) return;
-            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
-            if (!ev.jugador_nombre) return;
-            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
       });
@@ -2915,17 +2915,17 @@
   // comparte contador con Copa del Rey ni con ninguna otra competición).
   function calcularRecopaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _recopaEquiposHumanos(datos).forEach(function (e) {
@@ -2934,16 +2934,14 @@
 
       _recopaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
-        (p.eventos || []).forEach(function (ev) {
-          if (!ev.jugador_id) return;
-          if (ev.equipo_id === e.id) {
-            if (!ev.es_humano) return;
-            var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = nombresPorId[fila.j] || fila.n;
             if (!nombreJ) return;
-            sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-          } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
-            if (!ev.jugador_nombre) return;
-            sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+            sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
       });
@@ -3493,17 +3491,17 @@
   // (es_humano:false) — mismo criterio EXACTO que calcularCopaStatsHumanos.
   function calcularChampionsStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _championsEquiposHumanos(datos).forEach(function (e) {
@@ -3514,16 +3512,14 @@
         .filter(function (p) { return p.jugado && p.competicion === "champions" && (p.local === e.id || p.visitante === e.id); })
         .forEach(function (p) {
           var oponenteId = p.local === e.id ? p.visitante : p.local;
-          (p.eventos || []).forEach(function (ev) {
-            if (!ev.jugador_id) return;
-            if (ev.equipo_id === e.id) {
-              if (!ev.es_humano) return;
-              var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = nombresPorId[fila.j] || fila.n;
               if (!nombreJ) return;
-              sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-            } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
-              if (!ev.jugador_nombre) return;
-              sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -4401,17 +4397,17 @@
   // competicion==="uel".
   function calcularUelStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _uelEquiposHumanos(datos).forEach(function (e) {
@@ -4422,16 +4418,14 @@
         .filter(function (p) { return p.jugado && p.competicion === "uel" && (p.local === e.id || p.visitante === e.id); })
         .forEach(function (p) {
           var oponenteId = p.local === e.id ? p.visitante : p.local;
-          (p.eventos || []).forEach(function (ev) {
-            if (!ev.jugador_id) return;
-            if (ev.equipo_id === e.id) {
-              if (!ev.es_humano) return;
-              var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = nombresPorId[fila.j] || fila.n;
               if (!nombreJ) return;
-              sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-            } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
-              if (!ev.jugador_nombre) return;
-              sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -5099,17 +5093,17 @@
   // competicion==="uecl".
   function calcularUeclStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
-    function sumarPorTipo(ev, jugadorId, nombre, equipo, equipoId) {
-      if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "MVP") sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId);
-      else if (ev.tipo === "ROJA") sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId);
+    function sumarFila(fila, jugadorId, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, jugadorId, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, jugadorId, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, jugadorId, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, jugadorId, nombre, equipo, equipoId, fila.r);
     }
 
     _ueclEquiposHumanos(datos).forEach(function (e) {
@@ -5120,16 +5114,14 @@
         .filter(function (p) { return p.jugado && p.competicion === "uecl" && (p.local === e.id || p.visitante === e.id); })
         .forEach(function (p) {
           var oponenteId = p.local === e.id ? p.visitante : p.local;
-          (p.eventos || []).forEach(function (ev) {
-            if (!ev.jugador_id) return;
-            if (ev.equipo_id === e.id) {
-              if (!ev.es_humano) return;
-              var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = nombresPorId[fila.j] || fila.n;
               if (!nombreJ) return;
-              sumarPorTipo(ev, ev.jugador_id, nombreJ, e.nombre, e.id);
-            } else if (ev.equipo_id === oponenteId && !ev.es_humano) {
-              if (!ev.jugador_nombre) return;
-              sumarPorTipo(ev, ev.jugador_id, ev.jugador_nombre, ev.equipo_nombre || "Rival IA", oponenteId);
+              sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
             }
           });
         });
@@ -5747,11 +5739,11 @@
   // calcularLiga1RefStatsHumanos/calcularCopaStatsHumanos.
   function calcularSuperligaStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
 
-    function sumar(bucket, jugadorId, nombre, equipo, equipoId) {
+    function sumar(bucket, jugadorId, nombre, equipo, equipoId, n) {
+      if (!n) return;
       if (!bucket[jugadorId]) bucket[jugadorId] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[jugadorId].cantidad++;
+      bucket[jugadorId].cantidad += n;
     }
 
     _superligaEquiposHumanos(datos).forEach(function (e) {
@@ -5761,14 +5753,14 @@
       var zamoraEncajados = 0, zamoraPartidos = 0;
 
       _superligaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
-        (p.eventos || []).forEach(function (ev) {
-          if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== e.id) return;
-          var nombreJ = nombresPorId[ev.jugador_id] || ev.jugador_nombre;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j || fila.e !== e.id) return;
+          var nombreJ = nombresPorId[fila.j] || fila.n;
           if (!nombreJ) return;
-          if (ES_GOL[ev.tipo]) sumar(acumulado.pichichi, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "MVP") sumar(acumulado.mvp, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "AMARILLA") sumar(acumulado.amarillas, ev.jugador_id, nombreJ, e.nombre, e.id);
-          else if (ev.tipo === "ROJA") sumar(acumulado.rojas, ev.jugador_id, nombreJ, e.nombre, e.id);
+          sumar(acumulado.pichichi, fila.j, nombreJ, e.nombre, e.id, fila.g);
+          sumar(acumulado.mvp, fila.j, nombreJ, e.nombre, e.id, fila.m);
+          sumar(acumulado.amarillas, fila.j, nombreJ, e.nombre, e.id, fila.a);
+          sumar(acumulado.rojas, fila.j, nombreJ, e.nombre, e.id, fila.r);
         });
 
         if (!portero || !p.resultado) return;
@@ -6976,11 +6968,11 @@
     // primer pendiente del calendario, calculado una vez en
     // generarCalendarioLateralDerecho y pasado aquí como flag).
     var claseResultado = "";
-    // Goles de la TANDA de penaltis (mismo sentinel de minuto "TANDA" que
-    // js/acta.js/js/sistema-temporadas.js), null mientras no haga falta
-    // mirarlos — solo se calculan si el marcador real quedó empatado.
-    // Estos eventos viven en el acta persistida (partido.eventos, ver
-    // Estado.listarPartidosResueltos), nunca en golesLocal/golesVisitante.
+    // Goles de la TANDA de penaltis, null mientras no haga falta mirarlos
+    // — solo se calculan si el marcador real quedó empatado. Este conteo
+    // viaja compacto en partido.penL/penV (ver
+    // Estado.listarPartidosResueltos / js/estado.js::_compactarEventosPartido
+    // — el acta completa ya NO se persiste), nunca en golesLocal/golesVisitante.
     var penL = null, penV = null;
     if (partido.jugado && partido.resultado) {
       var golesActivo = esLocal ? partido.resultado.golesLocal : partido.resultado.golesVisitante;
@@ -6991,12 +6983,8 @@
         // partido único (petición usuario, foto: "Levante 0-0 Atlético
         // Madrid" resuelto 6-4 en penaltis seguía saliendo en gris, como
         // si hubiera sido empate).
-        penL = 0; penV = 0;
-        (partido.eventos || []).forEach(function (ev) {
-          if (ev.tipo !== "PENALTI_GOL" || ev.minuto !== "TANDA") return;
-          if (ev.equipo_id === partido.local) penL++;
-          else if (ev.equipo_id === partido.visitante) penV++;
-        });
+        penL = partido.penL || 0;
+        penV = partido.penV || 0;
         if (penL === penV) {
           claseResultado = " match-card--empate";
         } else {
@@ -8367,12 +8355,13 @@
   // Estadísticas de CADA jugador de la plantilla, sumadas de TODOS los
   // partidos ya jugados de CUALQUIER competición (Liga + Copa + lo que
   // sea) — no por separado. Misma fuente que Liga 1ª REF
-  // (window.Estado.listarPartidosResueltos), filtrada a los eventos
-  // es_humano:true de ESTE club — un partido HvH trae eventos de ambos
-  // lados, cada club solo suma los suyos (equipo_id). Las porterías
-  // imbatidas se atribuyen SIEMPRE al portero principal del club (no hay
-  // forma de saber quién jugó cada partido concreto sin añadir un evento
-  // manual nuevo) — mismo criterio que la Zamora de Liga 1ª REF.
+  // (window.Estado.listarPartidosResueltos), leyendo la fila compacta
+  // (`p.jug`, ver js/estado.js::_compactarEventosPartido) de ESTE club —
+  // un partido HvH trae fila de ambos lados, cada club solo suma la suya
+  // (equipo_id). Las porterías imbatidas se atribuyen SIEMPRE al portero
+  // principal del club (no hay forma de saber quién jugó cada partido
+  // concreto sin añadir un evento manual nuevo) — mismo criterio que la
+  // Zamora de Liga 1ª REF.
   function calcularStatsRosterClub(clubId, datos) {
     var stats = {};
     function fila(id) {
@@ -8390,7 +8379,6 @@
       }
       return stats[id];
     }
-    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
     // La Superliga NUNCA suma aquí (petición usuario): sus partidos solo
     // cuentan para la clasificación/Pichichi-MVP DE LA PROPIA Superliga
     // (calcularSuperliga/SUPERLIGA_STATS), nunca a la ficha del jugador
@@ -8401,26 +8389,18 @@
     });
 
     partidos.forEach(function (p) {
-      var amarillasEnEstePartido = {}; // jugador_id -> nº de AMARILLA en ESTE partido
-      var hayRojaEnEstePartido = {}; // jugador_id -> true si tuvo alguna ROJA en ESTE partido
-      (p.eventos || []).forEach(function (ev) {
-        if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== clubId) return;
-        var f = fila(ev.jugador_id);
-        if (ES_GOL[ev.tipo]) f.goles++;
-        else if (ev.tipo === "MVP") f.mvp++;
-        else if (ev.tipo === "AMARILLA") {
-          f.amarillas++;
-          amarillasEnEstePartido[ev.jugador_id] = (amarillasEnEstePartido[ev.jugador_id] || 0) + 1;
-        } else if (ev.tipo === "ROJA") {
-          f.rojas++;
-          hayRojaEnEstePartido[ev.jugador_id] = true;
-        }
-      });
-      Object.keys(amarillasEnEstePartido).forEach(function (jid) {
-        if (amarillasEnEstePartido[jid] >= 2) fila(jid).partidosDobleAmarilla++;
-      });
-      Object.keys(hayRojaEnEstePartido).forEach(function (jid) {
-        fila(jid).partidosRojaDirecta++;
+      // La fila compacta ya viene agrupada por jugador DENTRO de este
+      // partido (ver _compactarEventosPartido) — nada que agregar
+      // aparte: `row.a >= 2` ya ES "2+ amarillas en este partido".
+      (p.jug || []).forEach(function (row) {
+        if (!row.j || row.e !== clubId) return;
+        var f = fila(row.j);
+        f.goles += row.g || 0;
+        f.mvp += row.m || 0;
+        f.amarillas += row.a || 0;
+        f.rojas += row.r || 0;
+        if ((row.a || 0) >= 2) f.partidosDobleAmarilla++;
+        if ((row.r || 0) >= 1) f.partidosRojaDirecta++;
       });
     });
 

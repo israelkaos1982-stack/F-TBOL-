@@ -527,9 +527,15 @@
     // La VUELTA de una eliminatoria a doble partido es la ÚNICA que
     // puede decidir el global (empate + gol de visitante también
     // empatado -> prórroga de ESTE MISMO partido, ver
-    // js/sistema-temporadas.js) — por eso la previa NO le pinta una
-    // casilla opcional, la prórroga+penaltis está SIEMPRE disponible ahí,
-    // sin que el admin tenga que acordarse de marcarla. Misma detección
+    // js/sistema-temporadas.js) — por eso aquí SIEMPRE se fuerza a
+    // `true` sin leer el checkbox, pase lo que pase con su `.checked`.
+    // La previa SÍ le pinta una casilla OBLIGATORIA (petición usuario
+    // 2026-09-13, `data-obligatoria="vuelta"` — antes era solo un aviso
+    // de texto plano) para que el admin confirme que lo sabe antes de
+    // arrancar, pero es una confirmación de cara al USUARIO, no una
+    // condición real del motor: el `.checked` de esa casilla NUNCA
+    // decide nada aquí, porque para la vuelta decisiva la prórroga+
+    // penaltis está SIEMPRE disponible sin excepción. Misma detección
     // de fase (`faseIdaVuelta`) que usa la previa para decidir si pinta
     // el aviso — así nunca pueden discrepar.
     // Las FINALES de torneo (Copa/Champions/UEL/UECL/Recopa/Supercopa
@@ -688,9 +694,9 @@
     _partidoActivo = null;
 
     // Captura automática de ESTA pantalla (🏁 FINALIZADO, ya visible con
-    // marcador/acta/MVP/eliminatoria) + envío por la vía más fiable —
-    // mismo patrón que "▶ Empezar partido"/"▶ Continuar 2ª parte" (ver
-    // js/renderizadores.js::_capturarYCompartirPreviaWhatsapp/
+    // marcador/acta/MVP/eliminatoria) + envío SIEMPRE directo al Grupo
+    // WhatsApp LIGA — mismo patrón que "▶ Empezar partido"/"▶ Continuar
+    // 2ª parte" (ver js/renderizadores.js::_capturarYCompartirPreviaWhatsapp/
     // _enviarCapturaPorLaViaMasFiable). A diferencia de esos 2 (capturan
     // la pantalla ANTES de pasar a la siguiente), aquí se captura
     // DESPUÉS de mostrar el resumen — es justo lo que pedía el antiguo
@@ -700,9 +706,9 @@
     // Ya NO se abre el Grupo WhatsApp LIGA aquí, antes de capturar (bug
     // real, queja usuario: "no hace la captura del inicio" — el mismo
     // problema afectaba a esta captura final, ver el comentario largo en
-    // js/renderizadores.js junto a "▶ Empezar partido"). Esa pestaña,
-    // si hace falta, la abre _enviarCapturaPorLaViaMasFiable DESPUÉS de
-    // capturar, solo como plan B.
+    // js/renderizadores.js junto a "▶ Empezar partido"). Esa pestaña la
+    // abre _enviarCapturaPorLaViaMasFiable DESPUÉS de capturar, y
+    // DESPUÉS de disparar la copia al portapapeles (nunca antes).
     if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
       var liveCardEl = document.querySelector("#partido-live-overlay .live-card");
       window.Renderizadores.capturarYCompartirPreviaWhatsapp(liveCardEl, function () {});
@@ -727,15 +733,14 @@
     // automatismo que "▶ Empezar partido" — ver js/renderizadores.js::
     // _capturarYCompartirPreviaWhatsapp): UN SOLO toque ⇒ captura la
     // pantalla de DESCANSO tal cual se ve (escudos/marcador/nombres +
-    // el aviso 🛌 DESCANSO) y la comparte por la vía más fiable (bandeja
-    // nativa, o portapapeles + Grupo WhatsApp LIGA como plan B — decidido
-    // DESPUÉS de capturar, ver _enviarCapturaPorLaViaMasFiable), y SOLO
-    // ENTONCES vuelve a la VISTA A (la acta —mini-eventos, escudos,
-    // marcador— sigue siendo la MISMA de siempre, arriba de ambas
-    // vistas; aquí solo se reactiva el formulario para seguir
-    // registrando eventos de la 2ª parte). La captura debe correr ANTES
-    // de ocultar la vista de DESCANSO — html2canvas no puede fotografiar
-    // un nodo ya oculto.
+    // el aviso 🛌 DESCANSO) y la envía SIEMPRE directo al Grupo WhatsApp
+    // LIGA (portapapeles + enlace de invitación, decidido DESPUÉS de
+    // capturar — ver _enviarCapturaPorLaViaMasFiable), y SOLO ENTONCES
+    // vuelve a la VISTA A (la acta —mini-eventos, escudos, marcador—
+    // sigue siendo la MISMA de siempre, arriba de ambas vistas; aquí
+    // solo se reactiva el formulario para seguir registrando eventos de
+    // la 2ª parte). La captura debe correr ANTES de ocultar la vista de
+    // DESCANSO — html2canvas no puede fotografiar un nodo ya oculto.
     //
     // Ya NO se abre el Grupo WhatsApp LIGA aquí, antes de capturar (bug
     // real, queja usuario: "no hace la captura del inicio" — ver el

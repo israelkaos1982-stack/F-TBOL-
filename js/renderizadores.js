@@ -1156,6 +1156,26 @@
     });
   }
 
+  // Nombre a mostrar de una fila compacta de jugador propia del club
+  // (`fila` = {j,e,g,m,a,r,n?,en?} de js/estado.js::_compactarEventosPartido).
+  // 1) resuelve por dorsal desde la plantilla ACTUAL del club (lo normal);
+  // 2) si no resuelve (el dorsal se reeditó en el editor de plantilla
+  //    DESPUÉS de jugarse el partido, así que jugador_id=clubId+"-"+dorsal
+  //    ya no existe en el roster de hoy), cae al nombre persistido en la
+  //    propia fila (`fila.n`, guardado siempre desde el fix de 2026-09);
+  // 3) si NINGUNO de los 2 resuelve (fila histórica anterior a ese fix,
+  //    sin `fila.n` guardado) NUNCA se descarta la fila — cae a un
+  //    marcador con el dorsal para que el gol/tarjeta/MVP siga sumando en
+  //    el ranking en vez de desaparecer en silencio (bug real: Pichichi/
+  //    tarjetas por debajo de lo que muestra cada acta jugada).
+  function _nombreFilaJugadorConFallback(nombresPorId, fila) {
+    if (nombresPorId[fila.j]) return nombresPorId[fila.j];
+    if (fila.n) return fila.n;
+    var partes = String(fila.j).split("-");
+    var dorsal = partes[partes.length - 1];
+    return /^\d+$/.test(dorsal) ? ("Jugador dorsal " + dorsal) : "Jugador desconocido";
+  }
+
   // Comparación tolerante de 2 nombres libres (normalizado + substring,
   // con un mínimo de 3 letras para el substring — evita que "CD" o "FC"
   // sueltos empaten con cualquier cosa). Único criterio de "¿es el mismo
@@ -1432,8 +1452,7 @@
           if (fila.e === e.id) {
             // Fila de ESTE club — un partido humano-vs-humano trae fila
             // de AMBOS lados; cada club solo suma la suya.
-            var nombreJ = nombresPorId[fila.j] || fila.n;
-            if (!nombreJ) return;
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
             // Rival IA de ESTE partido concreto (nunca otro humano — ese
@@ -2311,8 +2330,7 @@
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;
           if (fila.e === e.id) {
-            var nombreJ = nombresPorId[fila.j] || fila.n;
-            if (!nombreJ) return;
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
             sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
@@ -2937,8 +2955,7 @@
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;
           if (fila.e === e.id) {
-            var nombreJ = nombresPorId[fila.j] || fila.n;
-            if (!nombreJ) return;
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
             sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
@@ -3515,8 +3532,7 @@
           (p.jug || []).forEach(function (fila) {
             if (!fila.j) return;
             if (fila.e === e.id) {
-              var nombreJ = nombresPorId[fila.j] || fila.n;
-              if (!nombreJ) return;
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
               sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
@@ -4421,8 +4437,7 @@
           (p.jug || []).forEach(function (fila) {
             if (!fila.j) return;
             if (fila.e === e.id) {
-              var nombreJ = nombresPorId[fila.j] || fila.n;
-              if (!nombreJ) return;
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
               sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
@@ -5117,8 +5132,7 @@
           (p.jug || []).forEach(function (fila) {
             if (!fila.j) return;
             if (fila.e === e.id) {
-              var nombreJ = nombresPorId[fila.j] || fila.n;
-              if (!nombreJ) return;
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, fila.j, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
               sumarFila(fila, fila.j, fila.n, fila.en || "Rival IA", oponenteId);
@@ -5755,8 +5769,7 @@
       _superligaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
         (p.jug || []).forEach(function (fila) {
           if (!fila.j || fila.e !== e.id) return;
-          var nombreJ = nombresPorId[fila.j] || fila.n;
-          if (!nombreJ) return;
+          var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
           sumar(acumulado.pichichi, fila.j, nombreJ, e.nombre, e.id, fila.g);
           sumar(acumulado.mvp, fila.j, nombreJ, e.nombre, e.id, fila.m);
           sumar(acumulado.amarillas, fila.j, nombreJ, e.nombre, e.id, fila.a);
@@ -8364,6 +8377,28 @@
   // Zamora de Liga 1ª REF.
   function calcularStatsRosterClub(clubId, datos) {
     var stats = {};
+    // Reatribución por NOMBRE cuando el dorsal ya no coincide con el
+    // roster actual (se reeditó en el editor de plantilla DESPUÉS de
+    // jugarse el partido, así que jugador_id=clubId+"-"+dorsal ya no
+    // existe en el roster de hoy): sin esto, el jugador afectado
+    // mostraría 0 en todo lo jugado antes del cambio de dorsal,
+    // indistinguible de "no ha jugado nada" — mismo bug de fondo que el
+    // de los rankings (Pichichi/tarjetas, ver
+    // _nombreFilaJugadorConFallback), aquí aplicado a la ficha propia
+    // del jugador dentro de la Plantilla. Solo puede reatribuirse si la
+    // fila trae `row.n` (siempre desde el fix de 2026-09 en
+    // js/estado.js::_compactarEventosPartido); una fila histórica
+    // anterior a ese fix, sin nombre guardado, queda huérfana igual que
+    // antes — no hay forma de saber a qué jugador de hoy pertenece.
+    var idsActuales = {}, idPorNombreActual = {};
+    obtenerJugadoresClub(clubId).forEach(function (j) {
+      idsActuales[j.id] = true;
+      idPorNombreActual[_normNombre(j.nombre)] = j.id;
+    });
+    function idDestino(row) {
+      if (idsActuales[row.j]) return row.j;
+      return (row.n && idPorNombreActual[_normNombre(row.n)]) || row.j;
+    }
     function fila(id) {
       if (!stats[id]) {
         stats[id] = {
@@ -8394,7 +8429,7 @@
       // aparte: `row.a >= 2` ya ES "2+ amarillas en este partido".
       (p.jug || []).forEach(function (row) {
         if (!row.j || row.e !== clubId) return;
-        var f = fila(row.j);
+        var f = fila(idDestino(row));
         f.goles += row.g || 0;
         f.mvp += row.m || 0;
         f.amarillas += row.a || 0;

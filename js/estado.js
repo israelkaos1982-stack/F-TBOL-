@@ -170,9 +170,17 @@
   //     estadísticas de los equipos humanos y [las de] los equipos IA
   //     que juegan su partido vs humano") — nombre y equipo del
   //     jugador IA viajan en la propia fila (`n`/`en`) porque no viven
-  //     en ningún roster persistido; los de un jugador HUMANO nunca se
-  //     guardan — se resuelven en caliente por dorsal desde la
-  //     plantilla ACTUAL del club (jugador_id = clubId + "-" + dorsal).
+  //     en ningún roster persistido. El nombre de un jugador HUMANO
+  //     SÍ se guarda también (`n`, sin `en` — su club humano ya se
+  //     conoce por otra vía) como RESPALDO: se sigue resolviendo en
+  //     caliente por dorsal desde la plantilla ACTUAL
+  //     (jugador_id = clubId + "-" + dorsal) cuando es posible, pero si
+  //     el dorsal se reedita después en el editor de plantilla, ese id
+  //     deja de existir en el roster actual — sin el nombre de respaldo
+  //     ya persistido, sus goles/tarjetas/MVP quedarían huérfanos e
+  //     invisibles para siempre en Pichichi/tarjetas/MVP (bug real
+  //     reportado 2026-09, Sørloth/Hancko con recuentos por debajo de
+  //     lo jugado partido a partido).
   // Autogol y penalti fallado no generan fila — ya no aportaban nada a
   // ningún ranking (ver TIPOS_EVENTO en js/acta.js), igual que antes.
   var _ES_GOL_COMPACTO = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
@@ -211,10 +219,14 @@
       var f = filas[ev.jugador_id];
       if (!f) {
         f = { j: ev.jugador_id, e: ev.equipo_id, g: 0, m: 0, a: 0, r: 0 };
-        if (!esDeClubHumano) {
-          if (ev.jugador_nombre) f.n = ev.jugador_nombre;
-          if (ev.equipo_nombre) f.en = ev.equipo_nombre;
-        }
+        // El nombre se guarda SIEMPRE (también para jugadores del club
+        // humano), no solo para el rival: si el dorsal del jugador se
+        // reedita más tarde en la plantilla, jugador_id (clubId+dorsal)
+        // deja de resolver contra el roster actual — sin este nombre de
+        // respaldo, los goles/tarjetas/MVP ya compactados de ese jugador
+        // se volverían invisibles para siempre en los rankings.
+        if (ev.jugador_nombre) f.n = ev.jugador_nombre;
+        if (!esDeClubHumano && ev.equipo_nombre) f.en = ev.equipo_nombre;
         filas[ev.jugador_id] = f;
       }
       f[campo]++;

@@ -7375,6 +7375,20 @@
     return (datos.equipos.equipos || []).some(function (e) { return e.id === id; });
   }
 
+  // Verdadero cuando AMBOS lados de un partido son clubes HUMANOS —
+  // cualquier competición, no solo Superliga (que siempre lo es, al
+  // enfrentar solo a los 6 clubes humanos entre sí): en Liga/Copa del
+  // Rey/Champions/etc. también ocurre cuando el sorteo/calendario
+  // enfrenta a 2 de los 6. Fuente ÚNICA para las 2 reglas de la Previa
+  // que dependen de esto (petición usuario, "repito solo en partidos
+  // humano vs humano de cualquier competición"): el icono de Forma
+  // (Tu⬆️-⬆️Rival en vez del patrón fijo por club/el 🎲 de siempre) y
+  // ocultar la sección 🚑 Lesionados —
+  // _actualizarVisibilidadLesionadosPrevia más abajo.
+  function _esPartidoHvH(local, visitante, datos) {
+    return !!(local && visitante && _esClubHumano(local.id, datos) && _esClubHumano(visitante.id, datos));
+  }
+
   // Determina qué lado del partido es "el equipo gestionado" (la caja
   // humana cuyo calendario está abierto) y cuál es "el rival" — Tiempo,
   // Nivel y Forma se calculan SIEMPRE en función del gestionado, sea
@@ -7393,19 +7407,26 @@
   // icono fijo de _FORMA_POR_CLUB para el club gestionado, el mismo
   // esté quien esté al otro lado — petición usuario: deja de depender
   // de si el rival es humano o IA).
-  // `partido` es opcional (lo necesitan la excepción de Superliga —
-  // "🔋 Estado ambos🎲" fijo para los 2 lados — y la de las FINALES de
-  // torneo — "⏱️ 10 min" + "🔋 Tu⬆️-⬆️Rival" fijos, ver
-  // _esFinalDeTorneo más abajo — ambas peticiones usuario). El resto de
-  // competiciones ignoran el parámetro, igual que antes.
+  // Excepción — partido HUMANO vs HUMANO, en CUALQUIER competición
+  // (petición usuario, "repito solo en partidos humano vs humano de
+  // cualquier competición"): ambos lados muestran ⬆️ fijo
+  // ("Tu⬆️-⬆️Rival") en vez del 🎲/patrón por club de siempre — el
+  // mismo icono, y por el mismo motivo, que ya usan las FINALES de
+  // torneo (`_esFinalDeTorneo`). Esto SUPERSEDE la vieja regla
+  // "Superliga siempre Tu🎲-🎲Rival": Superliga es HvH SIEMPRE (solo
+  // enfrenta a los 6 clubes humanos entre sí), así que ya queda cubierta
+  // por esta regla general sin necesitar su propio caso especial.
+  // `partido` es opcional (solo lo necesita la excepción de las FINALES
+  // de torneo — "⏱️ 10 min" fijo, ver _esFinalDeTorneo más abajo). El
+  // resto de competiciones ignoran el parámetro, igual que antes.
   function _calcularMetaPartido(local, visitante, datos, contexto, partido) {
     var par = _resolverGestionadoYRival(local, visitante, contexto);
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
-    var esSuperliga = !!partido && partido.competicion === "superliga";
+    var esHvH = _esPartidoHvH(local, visitante, datos);
     var esFinal = !!partido && _esFinalDeTorneo(partido);
     var forma = _FORMA_POR_CLUB[par.managed.id];
-    var formaIconoRival = esSuperliga ? "🎲" : (esFinal ? "⬆️" : (forma ? forma.icono : "➡️"));
-    var formaIconoTu = esFinal ? "⬆️" : "🎲";
+    var formaIconoRival = (esHvH || esFinal) ? "⬆️" : (forma ? forma.icono : "➡️");
+    var formaIconoTu = (esHvH || esFinal) ? "⬆️" : "🎲";
     return {
       tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
       nivel: "🤖 " + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
@@ -7514,9 +7535,26 @@
       ? lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("")
       : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
   }
+  // Oculta la sección 🚑 Lesionados ENTERA (bloque + botón ➕ Añadir, no
+  // solo "sin lesionados registrados") en un partido Humano vs Humano —
+  // ver _esPartidoHvH. 🟨 Sancionados se mantiene SIEMPRE visible, sea
+  // cual sea el partido. Se resuelve desde `_previaPartidoActual` (la
+  // previa ya abierta) en vez de recibir parámetros — así CUALQUIER
+  // caller de renderListasJugadores (abrirPreviaPartido y los 2 tras
+  // añadir/quitar un jugador de una lista) hereda la regla sin tener
+  // que pasarle nada.
+  function _actualizarVisibilidadLesionadosPrevia() {
+    var bloque = document.getElementById("previa-lesionados-block");
+    if (!bloque || !_previaPartidoActual || !_ultimoContexto) return;
+    var datos = _ultimoContexto.datos;
+    var local = buscarEquipoPorId(_previaPartidoActual.local, datos);
+    var visitante = buscarEquipoPorId(_previaPartidoActual.visitante, datos);
+    bloque.hidden = _esPartidoHvH(local, visitante, datos);
+  }
   function renderListasJugadores() {
     _renderListaJugadores("lesionados", "previa-lesionados-lista", "Sin lesionados registrados.");
     _renderListaJugadores("sancionados", "previa-sancionados-lista", "Sin sancionados registrados.");
+    _actualizarVisibilidadLesionadosPrevia();
   }
 
   // Casilla "Activar Prórroga y Penaltis": SOLO en modo "eliminatoria-
@@ -7958,7 +7996,8 @@
 
   // Envía la captura por la vía MÁS FIABLE que el navegador soporte
   // (petición usuario: "sigue habiendo errores al enviar la captura del
-  // inicio de partido" → luego "no hace la captura del inicio"). El
+  // inicio de partido" → luego "no hace la captura del inicio" → luego
+  // "al compartir captura siempre destino [el link del Grupo]"). El
   // camino de siempre —copiar al portapapeles y dejar que el usuario
   // pegue dentro del Grupo WhatsApp LIGA, ya abierto en una pestaña
   // nueva desde el toque original— depende de 2 cosas que pueden fallar
@@ -7980,20 +8019,29 @@
   // usuario cierre la bandeja de compartir sin elegir nada, que dispara
   // `AbortError`— se ignora en silencio; el partido arranca igual.
   //
-  // `window.open(WHATSAPP_GRUPO_LIGA_URL)` es EXCLUSIVO del plan B — se
-  // abre AQUÍ, justo antes de copiar al portapapeles, NUNCA antes de
-  // intentar la bandeja nativa (bug real, queja usuario: "no hace la
-  // captura del inicio"). Los 3 callers (▶ Empezar partido/▶ Continuar
-  // 2ª parte/Finalizar) antes abrían esa pestaña SIEMPRE, síncrono, ANTES
-  // de arrancar html2canvas — en un móvil eso puede cambiar de app/
-  // segundo plano justo cuando html2canvas necesita la pestaña en
-  // PRIMER plano para renderizar rápido, así que la captura tardaba de
-  // más o directamente no llegaba a tiempo de compartirse: para cuando
-  // el usuario ya estaba en WhatsApp, la bandeja nativa nunca llegó a
-  // abrirse ni el portapapeles a rellenarse. Abrir la pestaña solo en el
-  // plan B (y solo en ese punto, no al principio del toque) deja que la
-  // vía primaria (bandeja nativa) tenga la pestaña enfocada todo el
-  // tiempo que necesite.
+  // Queja usuario ("siempre destino [el Grupo WhatsApp]"): en algunos
+  // navegadores/dispositivos `navigator.canShare({files:[...]})` nunca
+  // devuelve `true` para imágenes (Web Share de ARCHIVOS tiene soporte
+  // más desigual que el de texto/URL) — ahí SIEMPRE se cae al plan B, es
+  // esperado y no hay forma de "arreglarlo" desde aquí (es el propio
+  // navegador el que no ofrece la bandeja nativa). Lo que SÍ era un bug
+  // real en ese plan B: `window.open(...)` se llamaba ANTES del
+  // `navigator.clipboard.write(...)` — pero abrir una pestaña/cambiar de
+  // app puede quitarle el FOCO al documento actual, y
+  // `clipboard.write()` con imágenes EXIGE que el documento siga
+  // enfocado en el momento de la llamada (si no, Chrome la rechaza con
+  // `NotAllowedError: Document is not focused`, silenciado por el
+  // `.catch(function(){})` de siempre). Si `window.open` gana esa
+  // carrera y quita el foco antes de que el `write` llegue a
+  // ejecutarse, el portapapeles se queda vacío — coincide exactamente
+  // con "a veces las capturas... no funcionaban" (no es determinista:
+  // depende de qué tan rápido el navegador mueva el foco a la pestaña
+  // nueva). Fix: el ORDEN se invierte — primero `clipboard.write()`
+  // (con el documento TODAVÍA enfocado, nada le ha quitado el foco
+  // antes), y SOLO DESPUÉS `window.open` para llevar al usuario a
+  // WhatsApp — para cuando el foco cambie, la escritura ya se ha
+  // disparado (lo que importa es el momento de la LLAMADA, no cuándo
+  // resuelve la promesa).
   function _enviarCapturaPorLaViaMasFiable(blob) {
     try {
       var archivo = new File([blob], "previa.png", { type: "image/png" });
@@ -8002,7 +8050,6 @@
         return;
       }
     } catch (e) {}
-    try { window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank"); } catch (e) {}
     try {
       if (navigator.clipboard && window.ClipboardItem) {
         navigator.clipboard
@@ -8010,6 +8057,7 @@
           .catch(function () {});
       }
     } catch (e) {}
+    try { window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank"); } catch (e) {}
   }
 
   // Captura `el` (la previa/pantalla en vivo TAL CUAL se ve, con

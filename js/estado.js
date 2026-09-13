@@ -16,7 +16,9 @@
   function estadoPorDefecto() {
     return {
       version: 1,
-      // partidoId -> { jugado, golesLocal, golesVisitante, eventos: [...] }
+      // partidoId -> { jugado, golesLocal, golesVisitante, etJugada,
+      // penL?, penV?, jug?: [...] } — resumen COMPACTO, nunca el acta
+      // completa (ver registrarResultadoPartido/_compactarEventosPartido).
       resultados: {},
       // partidoId -> objeto de partido completo (terceros partidos de
       // desempate inyectados en caliente por js/sistema-temporadas.js)
@@ -148,23 +150,103 @@
     return Object.keys(vistos);
   }
 
+  // ---------- Compactar el acta ANTES de persistir (NUNCA se guarda) ----------
+  // El acta minuto a minuto (goles/tarjetas/MVP con su hora y su
+  // jugador exacto) vive SOLO en memoria mientras se juega el partido
+  // (js/acta.js::actaTemporal) — jamás se escribe en localStorage/
+  // servidor. Lo que sobrevive por partido es un resumen mínimo:
+  //   - etJugada + penL/penV: lo justo para que
+  //     js/sistema-temporadas.js resuelva eliminatorias a doble
+  //     partido (gol de oro / tanda de penaltis) y para que la
+  //     match-card pinte "ganado/perdido/empate" cuando el marcador
+  //     quedó empatado y se decidió en los penaltis — ver
+  //     js/renderizadores.js.
+  //   - jug: una fila por JUGADOR con algún evento relevante
+  //     (gol/MVP/amarilla/roja) — SOLO si el partido tiene algún club
+  //     humano implicado (`clubesHumanos` no vacío). Un partido 100%
+  //     IA-vs-IA no guarda ni una fila, 0 bytes extra. Para el rival
+  //     IA de un partido humano-vs-IA SÍ se guardan sus filas
+  //     (decisión explícita del usuario: "se guardan solo las
+  //     estadísticas de los equipos humanos y [las de] los equipos IA
+  //     que juegan su partido vs humano") — nombre y equipo del
+  //     jugador IA viajan en la propia fila (`n`/`en`) porque no viven
+  //     en ningún roster persistido; los de un jugador HUMANO nunca se
+  //     guardan — se resuelven en caliente por dorsal desde la
+  //     plantilla ACTUAL del club (jugador_id = clubId + "-" + dorsal).
+  // Autogol y penalti fallado no generan fila — ya no aportaban nada a
+  // ningún ranking (ver TIPOS_EVENTO en js/acta.js), igual que antes.
+  var _ES_GOL_COMPACTO = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+  function _compactarEventosPartido(eventos, clubesHumanos, idLocal, idVisitante) {
+    var etJugada = false, penL = 0, penV = 0;
+    var clubesSet = {};
+    (clubesHumanos || []).forEach(function (c) { clubesSet[c] = true; });
+    var conHumano = !!(clubesHumanos && clubesHumanos.length);
+    var filas = {};
+    (eventos || []).forEach(function (ev) {
+      if (typeof ev.minuto === "number" && ev.minuto > 95) etJugada = true;
+      if (ev.minuto === "TANDA") {
+        etJugada = true;
+        if (ev.tipo === "PENALTI_GOL") {
+          if (ev.equipo_id === idLocal) penL++;
+          else if (ev.equipo_id === idVisitante) penV++;
+        }
+      }
+      if (!conHumano || !ev.jugador_id) return;
+      var esDeClubHumano = !!clubesSet[ev.equipo_id];
+      // Fila del propio club humano: solo sus eventos es_humano:true.
+      // Fila del rival: solo si NO es un club humano (HvIA) y viene
+      // marcado es_humano:false — nunca mezclar ambos casos (un HvH
+      // ya cubre a los 2 lados por su propia iteración, cada club
+      // sumando solo lo suyo).
+      if (esDeClubHumano && !ev.es_humano) return;
+      if (!esDeClubHumano && ev.es_humano) return;
+      // Solo cuentan 4 tipos (gol/MVP/amarilla/roja) — autogol y penalti
+      // fallado no crean fila (no aportan a ningún ranking, ver arriba).
+      var campo = _ES_GOL_COMPACTO[ev.tipo] ? "g"
+        : ev.tipo === "MVP" ? "m"
+        : ev.tipo === "AMARILLA" ? "a"
+        : ev.tipo === "ROJA" ? "r"
+        : null;
+      if (!campo) return;
+      var f = filas[ev.jugador_id];
+      if (!f) {
+        f = { j: ev.jugador_id, e: ev.equipo_id, g: 0, m: 0, a: 0, r: 0 };
+        if (!esDeClubHumano) {
+          if (ev.jugador_nombre) f.n = ev.jugador_nombre;
+          if (ev.equipo_nombre) f.en = ev.equipo_nombre;
+        }
+        filas[ev.jugador_id] = f;
+      }
+      f[campo]++;
+    });
+    var jug = Object.keys(filas).map(function (k) { return filas[k]; });
+    var out = { etJugada: etJugada };
+    if (penL || penV) { out.penL = penL; out.penV = penV; }
+    if (jug.length) out.jug = jug;
+    return out;
+  }
+
   function registrarResultadoPartido(partidoId, golesLocal, golesVisitante, eventos, contextoPartido) {
     var e = cargarEstado();
     var identidad = null;
     var clubes = [];
     var competicion = null;
+    var idLocal = null, idVisitante = null;
     try {
       if (contextoPartido && contextoPartido.partido && contextoPartido.datos) {
         identidad = _identidadFallbackDePartido(contextoPartido.partido, contextoPartido.datos, window.Renderizadores);
         clubes = _clubesHumanosDePartido(contextoPartido.partido, contextoPartido.datos);
         competicion = contextoPartido.partido.competicion || null;
+        idLocal = contextoPartido.partido.local || null;
+        idVisitante = contextoPartido.partido.visitante || null;
       }
     } catch (err) { identidad = null; clubes = []; competicion = null; }
-    e.resultados[partidoId] = {
+    var compacto = _compactarEventosPartido(eventos, clubes, idLocal, idVisitante);
+    var registro = {
       jugado: true,
       golesLocal: golesLocal,
       golesVisitante: golesVisitante,
-      eventos: (eventos || []).slice(),
+      etJugada: compacto.etJugada,
       _identidad: identidad,
       // `_clubes`/`_competicion`: solo para reiniciarResultadosDeClub (fin
       // de temporada) — permiten "reclamar y borrar" este resultado por
@@ -188,6 +270,9 @@
       // vuelven a perder los partidos de copa del rey" (2026-09-04).
       _actualizadoEn: Date.now()
     };
+    if (compacto.penL || compacto.penV) { registro.penL = compacto.penL; registro.penV = compacto.penV; }
+    if (compacto.jug) registro.jug = compacto.jug;
+    e.resultados[partidoId] = registro;
     return guardarEstado();
   }
 
@@ -201,7 +286,7 @@
   // partido correctamente. El marcador NO es real — `resultadoRapido:true`
   // le dice al calendario que pinte "✅ GANADO"/"➖ EMPATE"/"❌ PERDIDO" en
   // vez de un marcador numérico, y a cualquier futura caja de goleadores
-  // que NO son datos reales de gol (aquí `eventos` siempre queda vacío).
+  // que NO son datos reales de gol (aquí no se guarda ninguna fila `jug`).
   function registrarResultadoRapido(partidoId, resultadoTipo, idClubActivo, contextoPartido) {
     var e = cargarEstado();
     var partido = contextoPartido && contextoPartido.partido;
@@ -224,7 +309,6 @@
       jugado: true,
       golesLocal: esLocalActivo ? golesActivo : golesRival,
       golesVisitante: esLocalActivo ? golesRival : golesActivo,
-      eventos: [],
       resultadoRapido: true,
       _identidad: identidad,
       _clubes: clubes,
@@ -768,8 +852,19 @@
 
     var R = window.Renderizadores;
     var overridesPorIdentidad = _indexarResultadosPorIdentidad(e.resultados);
+    // MIGRACIÓN LAZY, en la PRIMERA lectura tras este cambio: un
+    // resultado guardado ANTES de compactar el acta (ver
+    // registrarResultadoPartido/_compactarEventosPartido más arriba)
+    // todavía trae `eventos` completo — se compacta aquí mismo, con el
+    // mismo criterio exacto, y se persiste de vuelta ya compacto. Así el
+    // ahorro de espacio alcanza también a los partidos ya jugados esta
+    // temporada, no solo a los que se jueguen a partir de ahora — sin
+    // que el admin tenga que hacer nada ("no puedo estar vigilando esto
+    // cada partido"). No se toca `_actualizadoEn` (la migración no
+    // cambia ningún dato real del partido, solo su representación).
+    var huboMigracion = false;
 
-    return todos.map(function (p) {
+    var resultado = todos.map(function (p) {
       var override = e.resultados[p.id];
       // Id exacto sin match: puede ser el MISMO partido con la ronda
       // recién corregida (ver _identidadFallbackDePartido) — sin esto, un
@@ -780,11 +875,26 @@
         if (clave && overridesPorIdentidad[clave]) override = overridesPorIdentidad[clave];
       }
       if (!override) return p;
+
+      if (override.eventos !== undefined) {
+        var compacto = _compactarEventosPartido(override.eventos, override._clubes || [], p.local, p.visitante);
+        delete override.eventos;
+        override.etJugada = compacto.etJugada;
+        if (compacto.penL || compacto.penV) { override.penL = compacto.penL; override.penV = compacto.penV; }
+        if (compacto.jug) override.jug = compacto.jug;
+        huboMigracion = true;
+      }
+
       var copia = {};
       for (var k in p) if (p.hasOwnProperty(k)) copia[k] = p[k];
       copia.jugado = override.jugado;
       copia.resultado = { golesLocal: override.golesLocal, golesVisitante: override.golesVisitante };
-      copia.eventos = override.eventos;
+      // Resumen compacto del acta (ver _compactarEventosPartido) — NUNCA
+      // el acta completa, que no se persiste desde este cambio.
+      copia.jug = override.jug || [];
+      copia.etJugada = !!override.etJugada;
+      copia.penL = override.penL || 0;
+      copia.penV = override.penV || 0;
       // Pospuesto (ver marcarPartidoPospuesto): sigue "sin jugar" para
       // todo lo demás (clasificación, próximo partido...), pero el
       // calendario necesita saberlo para pintar el aviso ⏳ y excluirlo
@@ -796,6 +906,9 @@
       copia.resultadoRapido = !!override.resultadoRapido;
       return copia;
     });
+
+    if (huboMigracion) guardarEstado();
+    return resultado;
   }
 
   // ---------- Clasificación (calculada en caliente) ----------
@@ -832,11 +945,13 @@
   }
 
   // Nota: las estadísticas por jugador (goles/amarillas/rojas/MVP) NUNCA
-  // se guardan aparte — se recalculan en caliente escaneando los eventos
-  // ya persistidos de listarPartidosResueltos(). Los eventos de la IA
-  // (es_humano:false) se ignoran a propósito — sus jugadores genéricos no
-  // tienen ficha ni histórico persistido (0 KB extra, regla de Fase 1).
-  // Ver js/renderizadores.js::calcularStatsRosterClub (Plantilla) y
+  // se guardan aparte — se recalculan en caliente sumando las filas `jug`
+  // (ver _compactarEventosPartido más arriba) ya persistidas de
+  // listarPartidosResueltos(). Un jugador de la IA solo tiene fila cuando
+  // su equipo jugó ESE partido concreto contra un club humano (decisión
+  // explícita del usuario) — un IA-vs-IA nunca aporta ninguna fila, así
+  // que su histórico nunca se guarda (0 KB extra). Ver
+  // js/renderizadores.js::calcularStatsRosterClub (Plantilla) y
   // ::calcularLiga1RefStatsHumanos (ranking Liga 1ª REF) — los 2
   // agregadores reales de este dato, ambos leyendo la MISMA fuente.
 

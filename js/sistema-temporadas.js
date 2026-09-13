@@ -21,8 +21,6 @@
 (function () {
   "use strict";
 
-  var MINUTO_TANDA = "TANDA"; // mismo sentinel que js/acta.js — penaltis de la tanda, no cuentan como gol real
-
   // ---------- Global + gol de visitante doble ----------
   // equipoA fue LOCAL en la ida y VISITANTE en la vuelta.
   // equipoB fue VISITANTE en la ida y LOCAL en la vuelta.
@@ -39,26 +37,32 @@
     return { golesA: golesA, golesB: golesB, foraA: foraA, foraB: foraB };
   }
 
-  // ¿Se llegó a jugar la prórroga en este partido? (minutos 100'-120' o
-  // la tanda de penaltis) — distingue "el global sigue empatado porque
-  // la vuelta se confirmó a los 90' sin activar la prórroga" (hace falta
-  // reiniciar y repetir esa vuelta con la casilla activada) de "se jugó
-  // la prórroga entera 0-0 y toca resolver por penaltis".
-  function _huboProrroga(eventos) {
-    return (eventos || []).some(function (e) {
-      return e.minuto === MINUTO_TANDA || (typeof e.minuto === "number" && e.minuto > 95);
-    });
+  // ¿Se llegó a jugar la prórroga en este partido? — antes se detectaba
+  // escaneando el acta minuto a minuto (minutos 100'-120' o la tanda de
+  // penaltis); el acta completa ya NO se persiste (ver
+  // js/estado.js::_compactarEventosPartido), así que el partido de
+  // `listarPartidosResueltos` trae directamente `etJugada` (calculado
+  // UNA vez, al confirmar el partido, con el mismo criterio de siempre).
+  // Distingue "el global sigue empatado porque la vuelta se confirmó a
+  // los 90' sin activar la prórroga" (hace falta reiniciar y repetir esa
+  // vuelta con la casilla activada) de "se jugó la prórroga entera 0-0 y
+  // toca resolver por penaltis".
+  function _huboProrroga(partidoVuelta) {
+    return !!(partidoVuelta && partidoVuelta.etJugada);
   }
 
   // Penaltis de la TANDA (no los goles de penalti metidos en juego, que
-  // ya suman al marcador normal) marcados por cada equipo en el partido.
-  function _tandaPenaltis(eventos, equipoA, equipoB) {
-    var penA = 0, penB = 0;
-    (eventos || []).forEach(function (e) {
-      if (e.tipo !== "PENALTI_GOL" || e.minuto !== MINUTO_TANDA) return;
-      if (e.equipo_id === equipoA) penA++;
-      else if (e.equipo_id === equipoB) penB++;
-    });
+  // ya suman al marcador normal) marcados por cada equipo — `penL`/`penV`
+  // ya vienen resueltos por LOCAL/VISITANTE de la propia vuelta (ver
+  // _compactarEventosPartido); aquí solo se remapean a equipoA/equipoB
+  // según quién de los 2 jugó de local en ESTE partido concreto (la
+  // vuelta) — equipoA es visitante en la vuelta, equipoB es local (ver
+  // comentario de calcularGlobal).
+  function _tandaPenaltis(partidoVuelta, equipoA, equipoB) {
+    var penDeLocal = (partidoVuelta && partidoVuelta.penL) || 0;
+    var penDeVisitante = (partidoVuelta && partidoVuelta.penV) || 0;
+    var penA = partidoVuelta.local === equipoA ? penDeLocal : (partidoVuelta.visitante === equipoA ? penDeVisitante : 0);
+    var penB = partidoVuelta.local === equipoB ? penDeLocal : (partidoVuelta.visitante === equipoB ? penDeVisitante : 0);
     return { penA: penA, penB: penB };
   }
 
@@ -79,7 +83,7 @@
 
     var equipoA = ida.local, equipoB = ida.visitante;
     var g = calcularGlobal(ida, vuelta);
-    var huboProrroga = _huboProrroga(vuelta.eventos);
+    var huboProrroga = _huboProrroga(vuelta);
 
     if (g.golesA !== g.golesB) {
       return {
@@ -103,7 +107,7 @@
     if (!huboProrroga) {
       return { pendiente: true, motivo: "empate-sin-prorroga" };
     }
-    var pen = _tandaPenaltis(vuelta.eventos, equipoA, equipoB);
+    var pen = _tandaPenaltis(vuelta, equipoA, equipoB);
     if (pen.penA === pen.penB) {
       return { pendiente: true, motivo: "penaltis-sin-resolver" };
     }

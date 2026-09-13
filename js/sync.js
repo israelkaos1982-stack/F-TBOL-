@@ -121,14 +121,26 @@
     _avisoSyncMostrado = true;
     try {
       window.setTimeout(function () {
+        // "ef7_estado_liga_v1" (los resultados/actas) NUNCA se abandona
+        // ni se adopta la copia del servidor (ver el comentario junto a
+        // CLAVE_RESULTADOS en _empujarPendientes) — el aviso debe decir
+        // la verdad: sigue intentándose, no que "se va a adoptar ahora".
+        var esResultados = clave === CLAVE_RESULTADOS;
         window.alert(
-          "⚠️ La copia de \"" + clave + "\" de ESTE dispositivo no se pudo subir al servidor " +
-          "tras varios intentos — probablemente porque el servidor ya tiene una versión más " +
-          "completa (p. ej. si aquí se importó una copia de seguridad antigua) y la protege para " +
-          "que no se pierda por accidente.\n\n" +
-          "Este dispositivo va a adoptar AHORA la versión del servidor — si de verdad querías " +
-          "guardar un cambio grande aquí, vuelve a hacerlo tras comprobar que el resto de " +
-          "dispositivos ya lo reflejan."
+          esResultados
+            ? ("⚠️ Los resultados/actas confirmados en ESTE dispositivo no se han podido subir " +
+               "al servidor tras varios intentos — probablemente porque el historial completo de " +
+               "la temporada ya pesa demasiado para guardarse de una vez.\n\n" +
+               "NO se pierde nada: se sigue reintentando en segundo plano y este dispositivo " +
+               "conserva su copia. Si el problema persiste, avisa para revisar el tamaño del " +
+               "historial guardado.")
+            : ("⚠️ La copia de \"" + clave + "\" de ESTE dispositivo no se pudo subir al servidor " +
+               "tras varios intentos — probablemente porque el servidor ya tiene una versión más " +
+               "completa (p. ej. si aquí se importó una copia de seguridad antigua) y la protege para " +
+               "que no se pierda por accidente.\n\n" +
+               "Este dispositivo va a adoptar AHORA la versión del servidor — si de verdad querías " +
+               "guardar un cambio grande aquí, vuelve a hacerlo tras comprobar que el resto de " +
+               "dispositivos ya lo reflejan.")
         );
       }, 0);
     } catch (err2) { /* nada más que hacer si ni alert está disponible */ }
@@ -149,6 +161,40 @@
   function _esRegresionGrave(valorLocal, valorServidor) {
     if (typeof valorLocal !== "string" || valorLocal.length < _REGRESION_LEN_MINIMO) return false;
     return valorServidor.length < valorLocal.length * 0.5;
+  }
+
+  // ---------- Guard DEDICADO para ef7_estado_liga_v1 (reporte usuario
+  // 2026-09-13: "no se ha guardado ningún de los partidos de anoche") ----------
+  // `_esRegresionGrave` de arriba solo protege si el servidor pierde MÁS
+  // DE LA MITAD del contenido — funciona bien para texto libre, pero es
+  // completamente ciego a "el servidor le falta SOLO los 4 partidos de
+  // anoche" cuando el blob entero acumula toda una temporada: esos 4
+  // partidos pueden ser un porcentaje minúsculo del total, así que nunca
+  // cruzan el umbral del 50% y el pull de abajo los ADOPTABA igualmente,
+  // borrando en este mismo dispositivo la única copia que existía de
+  // ellos. Para esta clave concreta el criterio correcto NO es tamaño —
+  // es "¿el servidor tiene TODOS los partidos que yo ya tengo?": basta con
+  // que le falte UN SOLO id de partido que este dispositivo sí conoce para
+  // que sea una regresión real, sea cual sea el tamaño relativo del resto
+  // del blob.
+  function _idsResultados(valorStr) {
+    try {
+      var obj = JSON.parse(valorStr);
+      var res = obj && obj.resultados;
+      return res && typeof res === "object" ? Object.keys(res) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+  function _esRegresionResultados(valorLocal, valorServidor) {
+    var idsLocal = _idsResultados(valorLocal);
+    if (!idsLocal.length) return false; // nada local que proteger todavía
+    var idsServidorSet = {};
+    _idsResultados(valorServidor).forEach(function (id) { idsServidorSet[id] = true; });
+    for (var i = 0; i < idsLocal.length; i++) {
+      if (!idsServidorSet[idsLocal[i]]) return true; // le falta un partido que YA tenemos aquí
+    }
+    return false;
   }
 
   // Única EXCEPCIÓN al guard de arriba: "🗑️ Borrar TODO" (ver
@@ -242,7 +288,7 @@
         });
         // Una clave que se mandó pero el servidor NO devolvió en
         // `guardadas` fue RECHAZADA en silencio (formato inválido, límite
-        // de 2 MB, o el guard de regresión de app.py — ver
+        // de tamaño, o el guard de regresión de app.py — ver
         // _avisarSyncAtascado más arriba). Sigue en `_pendientes` para
         // reintentarse unos ciclos, por si el rechazo fuera transitorio,
         // pero tras varios seguidos sin éxito NO se deja atascada para
@@ -254,11 +300,31 @@
         // siempre, sin enterarse nunca de que el resto tiene la buena
         // (el guard del servidor protege a los DEMÁS, pero por sí solo no
         // arregla la vista de ESTE dispositivo).
+        //
+        // `CLAVE_RESULTADOS` (ef7_estado_liga_v1) es la ÚNICA excepción —
+        // reporte usuario 2026-09-13, "no se ha guardado ningún de los
+        // partidos de anoche": esta clave es el historial de actas
+        // COMPLETO, irrecuperable si se pierde. El auto-abandono de
+        // arriba asume que la copia LOCAL es "vieja/pobre" cuando falla
+        // repetidas veces — pero para esta clave concreta lo normal es
+        // justo lo contrario: SIEMPRE tiene TODOS los partidos que este
+        // dispositivo confirmó, así que un rechazo repetido casi siempre
+        // significa que el blob entero superó el tope de guardado (ver
+        // _EF7_ESTADO_LIGA_MAX_BYTES en app.py), NUNCA que la copia local
+        // esté equivocada. Abandonarla dejaría que el pull de justo
+        // después adoptara la copia MÁS POBRE del servidor — exactamente
+        // la pérdida que motivó este fix. Se avisa igual (una sola vez),
+        // pero se sigue reintentando el push para siempre y NUNCA se
+        // adopta el servidor por esta vía (el guard dedicado
+        // `_esRegresionResultados` del pull, más abajo, es la 2ª capa de
+        // protección independiente por si esta exención cambiara algún
+        // día).
         claves.forEach(function (k) {
           if (confirmadasSet[k]) return;
           _intentosFallidos[k] = (_intentosFallidos[k] || 0) + 1;
           if (_intentosFallidos[k] >= UMBRAL_AVISO_SYNC_ATASCADO) {
             _avisarSyncAtascado(k);
+            if (k === CLAVE_RESULTADOS) return; // nunca se abandona — se sigue reintentando
             // Se limpia YA (no en el próximo ciclo): en la rama normal
             // (no primer ciclo) el pull de este mismo _ciclo() corre
             // justo después de este .then, así que la clave abandonada
@@ -312,18 +378,30 @@
             huboSnapshotNuevo = true;
             return;
           }
-          // El servidor tiene una copia MUCHO más pobre que la de este
-          // dispositivo (ver _esRegresionGrave arriba) — no se adopta,
-          // SALVO que sea un "🗑️ Borrar TODO" legítimo más reciente
-          // (ver _esReseteoGlobalLegitimo) — ese SÍ debe pisar aunque
-          // este dispositivo tenga partidos jugados en local, o el
+          // El servidor tiene una copia peor que la de este dispositivo —
+          // no se adopta, SALVO que sea un "🗑️ Borrar TODO" legítimo más
+          // reciente (ver _esReseteoGlobalLegitimo) — ese SÍ debe pisar
+          // aunque este dispositivo tenga partidos jugados en local, o el
           // reseteo nunca llegaría a los otros 5 móviles. Cuando no lo
           // es, se marca PENDIENTE para que el próximo push suba la
           // copia buena de este dispositivo y la "cure" en el servidor
           // (el guard de app.py deja pasar ese push porque va a MEJOR,
           // nunca a peor) — así el dispositivo con la copia rica es el
           // que gana, sea cual sea el orden en que cada uno sincronizó.
-          if (_esRegresionGrave(actuales[k], valorServidor) && !_esReseteoGlobalLegitimo(k, actuales[k], valorServidor)) {
+          //
+          // `CLAVE_RESULTADOS` usa un criterio DEDICADO
+          // (`_esRegresionResultados`, por id de partido) en vez del
+          // genérico por longitud (`_esRegresionGrave`) — perder los
+          // partidos de anoche era una fracción minúscula de un historial
+          // de temporada entera, así que nunca cruzaba el umbral del 50%
+          // y esta app los adoptaba/perdía igualmente (reporte usuario
+          // 2026-09-13). Basta con que falte UN SOLO id de partido ya
+          // conocido aquí para bloquear la adopción, sea cual sea el
+          // tamaño relativo del resto del blob.
+          var esRegresion = k === CLAVE_RESULTADOS
+            ? _esRegresionResultados(actuales[k], valorServidor)
+            : _esRegresionGrave(actuales[k], valorServidor);
+          if (esRegresion && !_esReseteoGlobalLegitimo(k, actuales[k], valorServidor)) {
             _pendientes[k] = true;
             return;
           }

@@ -5807,7 +5807,6 @@ def api_debug():
     # base de datos aunque hoy ya no se puedan volver a escribir así).
     biggest_rows = []
     try:
-        near_limit = int(_KV_MAX_BYTES * 0.5)
         rows_all = GlobalState.query.with_entities(
             GlobalState.clave, GlobalState.valor_json, GlobalState.updated_at
         ).all()
@@ -5820,8 +5819,14 @@ def api_debug():
             sized.append((nbytes, clave, updated_at))
         sized.sort(key=lambda t: t[0], reverse=True)
         for nbytes, clave, updated_at in sized[:25]:
-            flag = "🔴 SUPERA el límite de guardado (2 MB)" if nbytes > _KV_MAX_BYTES else (
-                "⚠️ cerca del límite" if nbytes > near_limit else ""
+            # `ef7_estado_liga_v1` tiene su propio tope, mucho más generoso
+            # (ver _EF7_ESTADO_LIGA_MAX_BYTES) — sin esta excepción el
+            # diagnóstico la marcaba "🔴 SUPERA el límite" con el genérico
+            # de 2 MB aunque estuviera perfectamente a salvo de rechazarse.
+            limite_fila = _EF7_ESTADO_LIGA_MAX_BYTES if clave == _EF7_ESTADO_LIGA_KEY else _KV_MAX_BYTES
+            near_limit_fila = int(limite_fila * 0.5)
+            flag = f"🔴 SUPERA el límite de guardado ({round(limite_fila / 1048576)} MB)" if nbytes > limite_fila else (
+                "⚠️ cerca del límite" if nbytes > near_limit_fila else ""
             )
             biggest_rows.append({
                 "clave": clave,
@@ -5937,6 +5942,47 @@ def _new_sim_static(subdir, filename):
 # de tratarla como un bloque opaco.
 _EF7_KEY_PREFIX = "ef7_"
 _EF7_ESTADO_LIGA_KEY = "ef7_estado_liga_v1"
+
+# TOPE DE TAMAÑO DEDICADO — reporte usuario 2026-09-13: "no se ha guardado
+# ningún de los partidos de anoche" (4 partidos de Liga/Superliga, cada uno
+# confirmado con captura de FINALIZADO, ninguno sobrevivió). Causa raíz:
+# `ef7_estado_liga_v1` acumulaba el ACTA COMPLETA (goles/tarjetas/MVP
+# minuto a minuto) de CADA partido, para siempre, y tras suficientes
+# partidos podía superar `_KV_MAX_BYTES` (2 MB). Al superarlo, el POST se
+# rechazaba EN SILENCIO (`continue` en api_ef7_state_post, sin log ni
+# aviso al cliente) — el partido recién confirmado JAMÁS llegaba a
+# guardarse en el servidor. Combinado con el auto-abandono de js/sync.js
+# (tras varios ciclos rechazada, el dispositivo dejaba de insistir y
+# adoptaba la copia MÁS POBRE del servidor), el partido acababa BORRADO
+# también del dispositivo que lo jugó — la única copia que existía.
+#
+# ⚠️ CORRECCIÓN 2026-09-13 (mismo día) — la 1ª respuesta a este bug subió
+# este tope a 50 MB ("si el acta pesa, que quepa más acta"). El usuario lo
+# rechazó explícitamente y con razón, citando un precedente real de este
+# mismo repo: "recuerda que el peso máximo de la web son 2MB / La otra web
+# murió por tener 6.5MB" — la app legacy de este repo (templates/partials,
+# CLAUDE.md) reventó de verdad al superar unos pocos MB en un solo blob.
+# Subir el tope no arregla nada — solo pospone la MISMA caída a un tamaño
+# mayor. La causa real no era "el límite es demasiado bajo", era "el dato
+# que se guarda no debería crecer sin límite en primer lugar".
+#
+# FIX DE VERDAD: `Estado.registrarResultadoPartido` (js/estado.js) ya NO
+# persiste el acta minuto a minuto — la compacta a un resumen mínimo por
+# jugador (goles/MVP/amarillas/rojas de ESE partido, ver
+# `_compactarEventosPartido`) y SOLO para los clubes humanos implicados y
+# el equipo IA que jugó ESE partido concreto contra un humano (nunca para
+# partidos 100% IA-vs-IA). Un partido normal pasa de ~1-3 KB (acta
+# completa) a bajo 0.5 KB (resumen). `listarPartidosResueltos` además
+# migra en caliente, la primera vez que lee cada uno, cualquier partido ya
+# guardado ANTES de este cambio con el formato viejo — así que el ahorro
+# alcanza también a lo ya jugado esta temporada, no solo a lo nuevo. Con
+# esto, el tope vuelve a ser el mismo genérico de 2 MB (`_KV_MAX_BYTES`)
+# que el resto del proyecto — nunca más grande, sea cual sea el volumen de
+# partidos. Esta clave conserva su fusión PARTIDO A PARTIDO
+# (`_ef7_merge_resultados`, estructuralmente distinta del resto de claves
+# `ef7_*`) y su límite dedicado por claridad — pero el VALOR es el mismo
+# tope de 2 MB, no uno mayor.
+_EF7_ESTADO_LIGA_MAX_BYTES = _KV_MAX_BYTES  # mismo tope genérico — el dato ya se guarda pequeño de por sí
 
 # CANDADO DE ARCHIVO — serializa TODOS los POST a /api/ef7/state entre los
 # 2 procesos reales de gunicorn (render.yaml, --workers 2), sea Postgres o
@@ -6335,7 +6381,23 @@ def api_ef7_state_post():
                 payload = json.dumps(value_a_guardar, ensure_ascii=False)
             except (TypeError, ValueError):
                 continue
-            if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
+            # `ef7_estado_liga_v1` tiene su PROPIO tope, mucho más generoso
+            # (ver _EF7_ESTADO_LIGA_MAX_BYTES) — es la clave más crítica del
+            # simulador y perderla en silencio por exceder el genérico de
+            # 2 MB ya costó una pérdida real de partidos (2026-09-13).
+            limite = _EF7_ESTADO_LIGA_MAX_BYTES if key == _EF7_ESTADO_LIGA_KEY else _KV_MAX_BYTES
+            payload_bytes = len(payload.encode("utf-8"))
+            if payload_bytes > limite:
+                # Nunca debe pasar en silencio: si algún día SÍ se supera
+                # (temporada muy larga sin archivado todavío), que quede
+                # rastro en los logs del servidor en vez de perderse sin
+                # ninguna pista — es exactamente lo que faltaba la vez que
+                # esto causó la pérdida real de partidos.
+                print(
+                    f"[ftbol] POST /api/ef7/state RECHAZADO por tamaño: clave={key} "
+                    f"bytes={payload_bytes} limite={limite}",
+                    flush=True,
+                )
                 continue
             if row:
                 row.valor_json = payload

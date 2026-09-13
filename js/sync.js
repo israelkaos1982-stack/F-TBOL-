@@ -177,22 +177,44 @@
   // que le falte UN SOLO id de partido que este dispositivo sí conoce para
   // que sea una regresión real, sea cual sea el tamaño relativo del resto
   // del blob.
-  function _idsResultados(valorStr) {
+  function _resultadosDeObj(valorStr) {
     try {
       var obj = JSON.parse(valorStr);
       var res = obj && obj.resultados;
-      return res && typeof res === "object" ? Object.keys(res) : [];
+      return res && typeof res === "object" ? res : {};
     } catch (err) {
-      return [];
+      return {};
     }
   }
+  // Firma EXACTA de un reinicio deliberado — la misma que producen
+  // js/estado.js::_tumbaDeResultado (`_borrado:true`) y
+  // ::marcarPartidoPospuesto (`pospuesto:true`). Espejo del guard
+  // servidor de app.py::_ef7_merge_resultados (ver comentario ahí).
+  function _esTumbaReconocible(entry) {
+    return !!(entry && (entry._borrado === true || entry.pospuesto === true));
+  }
   function _esRegresionResultados(valorLocal, valorServidor) {
-    var idsLocal = _idsResultados(valorLocal);
+    var resLocal = _resultadosDeObj(valorLocal);
+    var idsLocal = Object.keys(resLocal);
     if (!idsLocal.length) return false; // nada local que proteger todavía
-    var idsServidorSet = {};
-    _idsResultados(valorServidor).forEach(function (id) { idsServidorSet[id] = true; });
+    var resServidor = _resultadosDeObj(valorServidor);
     for (var i = 0; i < idsLocal.length; i++) {
-      if (!idsServidorSet[idsLocal[i]]) return true; // le falta un partido que YA tenemos aquí
+      var id = idsLocal[i];
+      var entryServidor = resServidor[id];
+      if (!entryServidor) return true; // le falta un partido que YA tenemos aquí
+      var entryLocal = resLocal[id];
+      // Un partido que este dispositivo YA tiene CONFIRMADO como jugado
+      // y que el servidor devuelve como no-jugado SOLO se acepta si trae
+      // una tumba/pospuesto reconocible — cualquier otra forma se trata
+      // como regresión (aunque el resto del blob del servidor sea más
+      // reciente), y el pull de abajo la descarta + re-empuja esta copia
+      // local para "curar" al servidor. Protege contra "se finaliza un
+      // partido y al volver a abrirlo aparece como no jugado" causado
+      // por CUALQUIER ruta que produzca una entrada mal formada, no solo
+      // las ya identificadas (reinicio masivo de HvH).
+      if (entryLocal && entryLocal.jugado === true && !(entryServidor && entryServidor.jugado === true) && !_esTumbaReconocible(entryServidor)) {
+        return true;
+      }
     }
     return false;
   }

@@ -6068,6 +6068,20 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     conserva en el documento fusionado para que un dispositivo con una
     copia AÚN MÁS vieja (sin este campo, o con uno anterior) nunca
     pueda resucitar partidos de antes del reset.
+
+    GUARD "jugado:true -> false SOLO con tumba reconocible" (reporte
+    usuario 2026-09-13: "se finaliza un partido y al volver a abrirlo
+    aparece como no jugado"): dentro del bucle de fusión, un `match_id`
+    que YA estaba `jugado:true` solo puede pasar a no-jugado si el
+    entrante trae la firma exacta de un reinicio deliberado
+    (`_borrado:true`, de `js/estado.js::_tumbaDeResultado`, o
+    `pospuesto:true`, de `marcarPartidoPospuesto`). Cualquier otro
+    entrante con `jugado` falsy para ese id se descarta sin más,
+    aunque su `_actualizadoEn` sea mayor — evita que un entrante
+    malformado (de una ruta con un bug no identificado, o una copia
+    stale de otro dispositivo) pueda "des-jugar" en silencio, con solo
+    tener un reloj más nuevo, un resultado que un mánager humano ya
+    confirmó.
     """
     try:
         incoming = json.loads(incoming_value) if incoming_value else None
@@ -6130,6 +6144,34 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
         ts_ex = existing_entry.get("_actualizadoEn")
         ts_in = ts_in if isinstance(ts_in, (int, float)) else 0
         ts_ex = ts_ex if isinstance(ts_ex, (int, float)) else 0
+
+        # GUARD "jugado:true -> false SOLO con tumba reconocible" (reporte
+        # usuario 2026-09-13: "se finaliza un partido y al volver a abrirlo
+        # aparece como no jugado"). Hasta aquí, un `match_id` YA confirmado
+        # como jugado se podía sustituir por CUALQUIER entrante con
+        # `_actualizadoEn` mayor o igual, sin importar su forma — un
+        # entrante malformado/incompleto de una ruta con un bug no
+        # identificado (o una copia stale de otro dispositivo) ganaría la
+        # fusión con solo tener un reloj "más nuevo", revirtiendo en
+        # silencio un resultado que un mánager humano ya confirmó. Ahora,
+        # si `existing_entry` está jugado y el entrante NO lo está, solo se
+        # acepta si el entrante es una tumba/pospuesto RECONOCIBLE — la
+        # firma exacta que producen `_tumbaDeResultado`/
+        # `marcarPartidoPospuesto` en js/estado.js (`_borrado: true` o
+        # `pospuesto: true`). Un reinicio deliberado (individual o el
+        # barrido masivo ya protegido contra HvH) SIEMPRE lleva esa firma,
+        # así que este guard nunca bloquea ningún flujo legítimo — solo
+        # descarta entrantes que "des-juegan" un partido sin decir por qué.
+        if existing_entry.get("jugado") is True and not (
+            isinstance(incoming_entry, dict) and incoming_entry.get("jugado") is True
+        ):
+            es_tumba_reconocible = isinstance(incoming_entry, dict) and (
+                incoming_entry.get("_borrado") is True or incoming_entry.get("pospuesto") is True
+            )
+            if not es_tumba_reconocible:
+                merged_res[match_id] = existing_entry
+                continue
+
         merged_res[match_id] = incoming_entry if ts_in >= ts_ex else existing_entry
 
     merged = dict(incoming)  # version/partidosGenerados/etc. del entrante mandan tal cual

@@ -7390,10 +7390,20 @@
     if (_ultimoContexto && _ultimoContexto.equipo && _ultimoContexto.equipo.id === clubId) {
       var partidosPorId = _ultimoContexto.partidosPorId || {};
       Object.keys(partidosPorId).forEach(function (id) {
-        if (partidosPorId[id].competicion === "superliga") return;
-        if (!partidosPorId[id].jugado) return;
+        var p = partidosPorId[id];
+        if (p.competicion === "superliga") return;
+        if (!p.jugado) return;
+        // NUNCA reiniciar de rebote un partido HvH (Copa del Rey con
+        // sorteo real, Liga si el calendario cruza a 2 de los 6…) desde
+        // este botón "reinicia MI temporada" — el rival humano de ese
+        // partido no ha pedido tocar nada suyo. Espejo de la misma
+        // protección en Estado.reiniciarResultadosDeClub (ver ahí el
+        // porqué: reporte usuario "los partidos que juegan otros humanos
+        // no se guardan").
+        var rivalId = p.local === clubId ? p.visitante : p.local;
+        if (_esClubHumano(rivalId, _ultimoContexto.datos)) return;
         n++;
-        window.Estado.reiniciarResultadoPartido(id, _descripcionCortaPartido(partidosPorId[id], _ultimoContexto.datos));
+        window.Estado.reiniciarResultadoPartido(id, _descripcionCortaPartido(p, _ultimoContexto.datos));
       });
     }
     n += window.Estado.reiniciarCalendarioExtraJugados(clubId);

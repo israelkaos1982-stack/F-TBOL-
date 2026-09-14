@@ -1503,22 +1503,51 @@
     return salida;
   }
 
-  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
-  // top 15 por cantidad (empate -> alfabético, mismo criterio que el
-  // resto de tablas de este archivo). Zamora es la ÚNICA que ordena
-  // ascendente (menos goles de media es mejor) — ver LIGA1REF_STATS.
-  function calcularLiga1RefStatsCombinado(datos, categoria) {
-    var equiposHumanos = _liga1RefEquiposHumanos(datos);
-    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
+  // Fusiona el texto libre pegado por el admin con el auto-cálculo de una
+  // categoría de estadística (Pichichi/MVP/Amarillas/Rojas/Zamora, en
+  // cualquier competición): si el NOMBRE de una línea pegada coincide
+  // (normalizado, ver _normNombre) con un jugador que la app YA calcula
+  // sola —sea de un club humano o un rival IA con ficha real— esa línea
+  // CORRIGE el valor automático en vez de descartarse. Antes, cualquier
+  // línea cuyo "equipo" fuera un club humano se tiraba en silencio (el
+  // admin no tenía ninguna forma de arreglar un cálculo automático
+  // incompleto/desactualizado); petición usuario: poder editar TODOS los
+  // jugadores, no solo la Plantilla. Un jugador SIN coincidencia (IA sin
+  // ficha en la app, o humano que hoy está a 0 en esta categoría) se
+  // añade tal cual, exactamente igual que antes.
+  function _fusionarStatFilasConOverride(filasTexto, filasAuto) {
+    var porNombre = {};
+    filasAuto.forEach(function (it) { porNombre[_normNombre(it.nombre)] = it; });
+    var corregidos = {};
     var filas = [];
-
-    var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
-      filas.push(it);
+    filasTexto.forEach(function (it) {
+      var key = _normNombre(it.nombre);
+      var auto = porNombre[key];
+      if (auto) {
+        filas.push({ nombre: auto.nombre, equipo: it.equipo || auto.equipo, equipoId: auto.equipoId, cantidad: it.cantidad });
+        corregidos[key] = true;
+      } else {
+        filas.push(it);
+      }
     });
+    filasAuto.forEach(function (it) {
+      if (!corregidos[_normNombre(it.nombre)]) filas.push(it);
+    });
+    return filas;
+  }
 
-    (calcularLiga1RefStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+  // Ranking final de una categoría: texto pegado (IA + correcciones
+  // manuales de humanos) + auto-suma humana, top 15 por cantidad
+  // (empate -> alfabético, mismo criterio que el resto de tablas de este
+  // archivo). Zamora es la ÚNICA que ordena ascendente (menos goles de
+  // media es mejor) — ver LIGA1REF_STATS.
+  function calcularLiga1RefStatsCombinado(datos, categoria) {
+    var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
+    var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularLiga1RefStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
@@ -2238,7 +2267,10 @@
     nota.textContent = ligaId === "1ref"
       ? ("Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
         "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
-        "humanas se suman SOLOS al añadir eventos en un partido — no hace falta escribirlos aquí.")
+        "humanas se suman SOLOS al añadir eventos en un partido — no hace falta escribirlos aquí, " +
+        "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+        "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese " +
+        "número en vez de sumarse aparte.")
       : ("Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
         "» (el Nº inicial es opcional, se recalcula solo). 100% texto libre.");
     contenedor.appendChild(nota);
@@ -2371,16 +2403,11 @@
   // top 15 — mismo criterio que calcularLiga1RefStatsCombinado pero sobre
   // el almacén propio de Copa (Estado.obtenerCopaStatTexto).
   function calcularCopaStatsCombinado(datos, categoria) {
-    var equiposHumanos = _copaEquiposHumanos(datos);
-    var filas = [];
-
     var texto = window.Estado ? window.Estado.obtenerCopaStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
-      filas.push(it);
-    });
-
-    (calcularCopaStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularCopaStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 15);
@@ -2851,7 +2878,10 @@
     nota.textContent =
       "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
       "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
-      "humanas se suman SOLOS al añadir eventos en un partido de Copa — no hace falta escribirlos aquí.";
+      "humanas se suman SOLOS al añadir eventos en un partido de Copa — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -3003,16 +3033,11 @@
   // top 15 — mismo criterio que calcularCopaStatsCombinado, sobre el
   // almacén propio de Recopa (Estado.obtenerRecopaStatTexto).
   function calcularRecopaStatsCombinado(datos, categoria) {
-    var equiposHumanos = _recopaEquiposHumanos(datos);
-    var filas = [];
-
     var texto = window.Estado ? window.Estado.obtenerRecopaStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return; // esa fila la aporta la auto-suma
-      filas.push(it);
-    });
-
-    (calcularRecopaStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRecopaStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 15);
@@ -3335,7 +3360,10 @@
     nota.textContent =
       "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
       "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
-      "humanas se suman SOLOS al añadir eventos en un partido de Recopa — no hace falta escribirlos aquí.";
+      "humanas se suman SOLOS al añadir eventos en un partido de Recopa — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -3586,16 +3614,11 @@
   // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
   // top 15 — mismo criterio que calcularCopaStatsCombinado.
   function calcularChampionsStatsCombinado(datos, categoria) {
-    var equiposHumanos = _championsEquiposHumanos(datos);
-    var filas = [];
-
     var texto = window.Estado ? window.Estado.obtenerChampionsStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return;
-      filas.push(it);
-    });
-
-    (calcularChampionsStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularChampionsStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 15);
@@ -4237,7 +4260,10 @@
     nota.textContent =
       "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
       "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
-      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Champions.";
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Champions " +
+      "— salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -4496,16 +4522,11 @@
   }
 
   function calcularUelStatsCombinado(datos, categoria) {
-    var equiposHumanos = _uelEquiposHumanos(datos);
-    var filas = [];
-
     var texto = window.Estado ? window.Estado.obtenerUelStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return;
-      filas.push(it);
-    });
-
-    (calcularUelStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularUelStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 15);
@@ -4933,7 +4954,10 @@
     nota.textContent =
       "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
       "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
-      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Europa League.";
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Europa " +
+      "League — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -5198,16 +5222,11 @@
   }
 
   function calcularUeclStatsCombinado(datos, categoria) {
-    var equiposHumanos = _ueclEquiposHumanos(datos);
-    var filas = [];
-
     var texto = window.Estado ? window.Estado.obtenerUeclStatTexto(categoria) : "";
-    parsearLiga1RefStatTexto(texto).forEach(function (it) {
-      if (_liga1RefEsNombreHumano(it.equipo, equiposHumanos)) return;
-      filas.push(it);
-    });
-
-    (calcularUeclStatsHumanos(datos)[categoria] || []).forEach(function (it) { filas.push(it); });
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularUeclStatsHumanos(datos)[categoria] || []
+    );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 15);
@@ -5635,7 +5654,10 @@
     nota.textContent =
       "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
       "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
-      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Conference League.";
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Conference " +
+      "League — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -8953,9 +8975,9 @@
       "Corrección MANUAL, para cuando el cálculo automático (suma de los partidos " +
       "ya registrados en esta app) no cuadre con la realidad. Una línea por " +
       "jugador: «Nombre - Goles MVP Amarillas Rojas» (los 4 números SIEMPRE en " +
-      "ese orden). Ya viene rellena con lo que la Plantilla muestra ahora — " +
-      "ajusta solo lo que necesite corrección. Borra la línea entera de un " +
-      "jugador (o todo el texto) para que vuelva a ser 100% automático.";
+      "ese orden). Se rellena con TODA la plantilla (también los que hoy están a " +
+      "0 0 0 0) — ajusta solo lo que necesite corrección. Borra la línea entera de " +
+      "un jugador (o todo el texto) para que vuelva a ser 100% automático.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -8971,9 +8993,8 @@
     } else if (datos) {
       var statsAuto = calcularStatsRosterClub(idClubActivo, datos);
       textarea.value = jugadoresEd
-        .filter(function (j) { return !!statsAuto[j.id]; })
         .map(function (j) {
-          var s = statsAuto[j.id];
+          var s = statsAuto[j.id] || { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
           return j.nombre + " - " + s.goles + " " + s.mvp + " " + s.amarillas + " " + s.rojas;
         })
         .join("\n");

@@ -8706,19 +8706,20 @@
             var esLesionado = !!lesionadoSet[j.nombre];
             var tarjeta = esLesionado ? null : _tarjetaActivaPara(s, flags[j.id] || {});
             var fila = document.createElement("div");
-            fila.className = "plantilla-jugador" + (esLesionado ? " plantilla-jugador--lesion" : (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : "")) +
-              (s._manual ? " plantilla-jugador--manual" : "");
-            // 📌 delante del nombre = estadísticas corregidas A MANO (ver
-            // parsearStatsOverrideTexto) — no viene de sumar partidos reales.
-            var prefijoManual = s._manual ? '<span class="plantilla-manual-marca" title="Estadísticas corregidas a mano">📌</span>' : "";
+            // Nota: `s._manual` (corrección a mano vía 📌, ver
+            // parsearStatsOverrideTexto) NO se marca visualmente en esta
+            // fila — se probó un icono delante del nombre y quedaba mal
+            // (petición usuario), así que un jugador corregido a mano se
+            // ve IGUAL que uno 100% automático.
+            fila.className = "plantilla-jugador" + (esLesionado ? " plantilla-jugador--lesion" : (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : ""));
             var nombreTag = esLesionado
-              ? '<span class="plantilla-nombre" title="🚑 Lesionado — se quita desde LESIONADOS en la previa de un partido (PIN admin).">' + prefijoManual + escapeHTML(j.nombre) + "</span>"
+              ? '<span class="plantilla-nombre" title="🚑 Lesionado — se quita desde LESIONADOS en la previa de un partido (PIN admin).">' + escapeHTML(j.nombre) + "</span>"
               : (tarjeta
                 ? '<span class="plantilla-nombre plantilla-nombre--flag" data-accion="quitar-flag-tarjeta"' +
                   ' data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" data-jugador-id="' + escapeHTML(j.id) + '"' +
                   ' data-tipo-flag="' + tarjeta.tipo + '" data-flag-valor="' + tarjeta.valor + '"' +
-                  ' title="' + escapeHTML(tarjeta.titulo) + '">' + prefijoManual + escapeHTML(j.nombre) + "</span>"
-                : '<span class="plantilla-nombre">' + prefijoManual + escapeHTML(j.nombre) + "</span>");
+                  ' title="' + escapeHTML(tarjeta.titulo) + '">' + escapeHTML(j.nombre) + "</span>"
+                : '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>");
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
               nombreTag +

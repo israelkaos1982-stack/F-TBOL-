@@ -607,6 +607,66 @@
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
   }
 
+  // ---------- ✏️ Corrección rápida de UNA fila del ranking (icono por
+  // fila, Liga 1ª REF/Copa del Rey/Recopa/Champions/UEL/UECL) — petición
+  // usuario: editar un solo jugador directamente desde la tabla bonita en
+  // vez de abrir el editor de texto libre grande y buscar su línea entre
+  // todas las demás. Las 6 pantallas comparten el mismo mini diálogo
+  // estático (#stat-fila-overlay, index.html) y el mismo mecanismo de
+  // guardado (Renderizadores.guardarStatFilaOverride, que corrige/añade
+  // SOLO la línea de ese jugador dentro del mismo almacén de texto libre
+  // que ya usa el editor grande — "tu corrección gana sobre el cálculo
+  // automático" sigue aplicando igual).
+  var _statFilaCtx = null;
+  var _STAT_FILA_RERENDER = {
+    "1ref": function (clubId, categoria, ligaId) { window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId); },
+    copa: function (clubId, categoria) { window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria); },
+    recopa: function (clubId, categoria) { window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria); },
+    champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
+    uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
+    uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); }
+  };
+  // `d` es el dataset del propio botón ✏️ pintado en la fila (comp/
+  // ligaId/clubId/categoria/nombre/equipo/cantidad/decimales/label) — se
+  // pasa tal cual en vez de desglosarlo en 9 parámetros posicionales.
+  function editarStatFilaInline(d) {
+    if (!window.Renderizadores || !d || !d.comp) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      _statFilaCtx = {
+        comp: d.comp, ligaId: d.ligaId || "", categoria: d.categoria, clubId: d.clubId || "",
+        nombre: d.nombre, equipo: d.equipo || "", decimales: d.decimales === "1"
+      };
+      var ov = document.getElementById("stat-fila-overlay");
+      var titulo = document.getElementById("stat-fila-titulo");
+      var sub = document.getElementById("stat-fila-sub");
+      var input = document.getElementById("stat-fila-input");
+      if (!ov || !input) return;
+      if (titulo) titulo.textContent = "Editar " + (d.label || "") + " de " + d.nombre;
+      if (sub) sub.textContent = d.equipo || "";
+      input.step = _statFilaCtx.decimales ? "0.01" : "1";
+      input.value = _statFilaCtx.decimales ? Number(d.cantidad).toFixed(2) : d.cantidad;
+      ov.hidden = false;
+      input.focus();
+      input.select();
+    }, "🔒 Corregir estadística", "Introduce el PIN de administrador.");
+  }
+  function cerrarStatFilaOverlay() {
+    var ov = document.getElementById("stat-fila-overlay");
+    if (ov) ov.hidden = true;
+    _statFilaCtx = null;
+  }
+  function guardarStatFilaInline() {
+    var input = document.getElementById("stat-fila-input");
+    var ctx = _statFilaCtx;
+    if (!input || !ctx || !window.Renderizadores) { cerrarStatFilaOverlay(); return; }
+    var valor = Number(String(input.value).replace(",", "."));
+    if (isNaN(valor)) { cerrarStatFilaOverlay(); return; }
+    window.Renderizadores.guardarStatFilaOverride(ctx.comp, ctx.ligaId, ctx.categoria, ctx.nombre, ctx.equipo, valor, ctx.decimales);
+    cerrarStatFilaOverlay();
+    var rerender = _STAT_FILA_RERENDER[ctx.comp];
+    if (rerender) rerender(ctx.clubId, ctx.categoria, ctx.ligaId);
+  }
+
   // ---------- Copa del Rey — 👥️ Humanos (cuadro por club) + ⛓️ Eliminatorias
   // (cuadro único desde Dieciseisavos, editable con PIN) + Pichichi/MVP/
   // Amarillas/Rojas (compartidas por las 2 pestañas), mismo contenedor
@@ -1491,6 +1551,21 @@
       });
     }
 
+    var btnStatFilaClose = document.getElementById("stat-fila-close");
+    if (btnStatFilaClose) btnStatFilaClose.addEventListener("click", cerrarStatFilaOverlay);
+    var statFilaOv = document.getElementById("stat-fila-overlay");
+    if (statFilaOv) {
+      statFilaOv.addEventListener("click", function (ev) {
+        if (ev.target === statFilaOv) cerrarStatFilaOverlay();
+      });
+    }
+    var statFilaInput = document.getElementById("stat-fila-input");
+    if (statFilaInput) {
+      statFilaInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") guardarStatFilaInline();
+      });
+    }
+
     document.addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "admin-detalle-close") {
         cerrarVistaAdmin();
@@ -1539,6 +1614,9 @@
         case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria, d.ligaId); break;
         case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
         case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria, d.ligaId); break;
+        case "editar-stat-fila": editarStatFilaInline(d); break;
+        case "cancelar-stat-fila": cerrarStatFilaOverlay(); break;
+        case "guardar-stat-fila": guardarStatFilaInline(); break;
         case "liga-nav-ir": irLigaNav(d.clubId, d.ligaId); break;
         case "fijar-division-club": fijarDivisionClub(d.clubId, d.ligaId); break;
         case "info-liga-formato": mostrarInfoLigaFormato(d.ligaId); break;

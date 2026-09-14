@@ -819,6 +819,19 @@ button { font-family: inherit; cursor: pointer; }
 .password-error { color: var(--accent-2); font-size: 12px; font-weight: 700; margin: -2px 0 10px; }
 .password-error[hidden] { display: none; }
 
+/* ---------- 5b-bis. MODAL — corrección rápida de UNA fila (✏️ por fila,
+   Liga 1ª REF/Copa/Recopa/Champions/UEL/UECL) — reutiliza .password-title/
+   .password-sub tal cual; el input es un número normal (sin el
+   letter-spacing de 6px del PIN). */
+.stat-fila-card { max-width: 320px; text-align: center; }
+.stat-fila-input {
+  width: 100%;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
 /* ---------- 6. CLUB ACTIVO — cabecera + tabs Plantilla/Calendario ---------- */
 .club-header-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .club-escudo-slot { display: flex; }
@@ -1348,6 +1361,27 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 11px;
   flex-shrink: 0;
 }
+/* ✏️ por FILA del ranking (Liga 1ª REF/Copa/Recopa/Champions/UEL/UECL) —
+   corrige un solo jugador sin abrir el editor de texto libre grande de
+   arriba (petición usuario). Mismo estilo circular que .liga1ref-editar-btn
+   pero más pequeño para caber dentro de una celda de tabla. */
+.stat-fila-editar-td { padding: 6px 4px !important; text-align: center; width: 28px; }
+.stat-fila-editar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text-hi);
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  font-size: 10px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.stat-fila-editar-btn:active { border-color: var(--neon-soft); }
 /* Más llamativo que un .btn-ghost normal + texto ~5% más grande
    (petición usuario: "siempre por error le doy a X y me salgo al menú
    principal" — confundía este ← Volver, que solo retrocede un paso

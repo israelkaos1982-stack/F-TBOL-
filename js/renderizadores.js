@@ -7604,13 +7604,19 @@
   // código (nunca desde la UI) — mismo criterio que estadio/balón fijo.
   // ============================================================
   var _NIVEL_LEYENDA_ID = "atletico-madrid"; // único club humano en nivel "Leyenda"
+  // Actualización de estados de forma del RIVAL IA (petición usuario):
+  // Liverpool/Arsenal/FC Barcelona/PSG pasan (o se mantienen) en
+  // "Irregular" ↘️; Atlético Madrid es el único que sigue con rival
+  // "Impredecible" 🎲 (a juego con su nivel "Leyenda", el único club
+  // humano que no es "Crack" — ver _NIVEL_LEYENDA_ID). Real Madrid no se
+  // tocó en esta petición — se mantiene su valor previo ("Impredecible" 🎲).
   var _FORMA_POR_CLUB = {
-    liverpool: { icono: "⬇️", label: "En bajón" },
+    liverpool: { icono: "↘️", label: "Irregular" },
     arsenal: { icono: "↘️", label: "Irregular" },
     "real-madrid": { icono: "🎲", label: "Impredecible" },
     "atletico-madrid": { icono: "🎲", label: "Impredecible" },
     "fc-barcelona": { icono: "↘️", label: "Irregular" },
-    psg: { icono: "➡️", label: "Estable" }
+    psg: { icono: "↘️", label: "Irregular" }
   };
   function _esClubHumano(id, datos) {
     return (datos.equipos.equipos || []).some(function (e) { return e.id === id; });

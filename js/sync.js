@@ -215,6 +215,31 @@
       if (entryLocal && entryLocal.jugado === true && !(entryServidor && entryServidor.jugado === true) && !_esTumbaReconocible(entryServidor)) {
         return true;
       }
+      // NUEVO (reporte usuario 2026-09-14, «Has duplicado dos veces el
+      // resultado de 10-5 / Es una vez 10-5 y una vez 4-1»): el guard de
+      // arriba solo cubre "jugado:true -> false". Una Superliga es
+      // Humano vs Humano — el MISMO match_id puede confirmarse desde
+      // CUALQUIERA de los 2 dispositivos de los clubes implicados, así
+      // que el servidor puede traer este partido TAMBIÉN jugado:true
+      // pero con un marcador DISTINTO (otro mánager confirmó lo mismo
+      // desde su móvil). Sin este chequeo, ese "jugado:true" bastaba
+      // para no considerarlo regresión y se adoptaba sin más — pisando
+      // en este dispositivo un acta real (goles/tarjetas/MVP, `jug` no
+      // vacío) con un marcador más pobre/erróneo que no la trae. Se
+      // protege SOLO en ese caso concreto (acta real aquí, nada
+      // equivalente en el servidor) — si ambas copias tienen acta, o
+      // ninguna, no hay ninguna señal objetiva para preferir una sobre
+      // otra y se deja el criterio de siempre (recencia/servidor manda).
+      // Espejo exacto de app.py::_ef7_merge_resultados, que cierra el
+      // mismo hueco en la fusión del propio servidor.
+      if (
+        entryLocal && entryLocal.jugado === true && entryServidor.jugado === true &&
+        (entryLocal.golesLocal !== entryServidor.golesLocal || entryLocal.golesVisitante !== entryServidor.golesVisitante) &&
+        Array.isArray(entryLocal.jug) && entryLocal.jug.length > 0 &&
+        !(Array.isArray(entryServidor.jug) && entryServidor.jug.length > 0)
+      ) {
+        return true;
+      }
     }
     return false;
   }

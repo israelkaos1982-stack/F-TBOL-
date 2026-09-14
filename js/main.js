@@ -298,6 +298,7 @@
       '<button type="button" class="editor-club-tab is-active" data-accion="editor-club-tab" data-tab="menu" data-club-id="' + clubId + '">📋 Menú</button>' +
       '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="calendario" data-club-id="' + clubId + '">🗓️ Calendario extra</button>' +
       '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="plantilla" data-club-id="' + clubId + '">👕 Plantilla</button>' +
+      '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="ajustes" data-club-id="' + clubId + '">⚙️ Ajustes</button>' +
       "</div>" +
       '<div id="editor-club-contenido"></div>';
     ov.hidden = false;
@@ -313,6 +314,7 @@
     if (!contenido || !window.Renderizadores) return;
     if (tab === "calendario") window.Renderizadores.pintarEditorCalendarioExtraClub(clubId, contenido);
     else if (tab === "plantilla") window.Renderizadores.pintarEditorPlantillaClub(clubId, contenido);
+    else if (tab === "ajustes") window.Renderizadores.pintarEditorAjustesClub(clubId, contenido);
     else window.Renderizadores.pintarEditorMenuClub(clubId, contenido);
   }
 
@@ -1322,15 +1324,20 @@
   }
 
   // ---------- Reiniciar TODOS los partidos del club activo (solo admin) ----------
-  // Botón "🔄 Reiniciar" de la cabecera del calendario — vuelve a "sin
-  // jugar" cada partido ya jugado de la caja abierta (Liga + Copa +
-  // cualquier otra competición en paralelo), conservando el resto del
-  // calendario (rivales, fechas, competiciones) intacto. Gateado por PIN
-  // + confirmación explícita: es destructivo y afecta a todos los
-  // partidos jugados del club, no a uno solo (ver el marcador-botón de
-  // cada partido para reiniciarlos de uno en uno).
-  function reiniciarTodosPartidosClub() {
-    var clubId = window._idManagerActivo;
+  // Botón "🔄 Reiniciar temporada de este club" — vive en la pestaña
+  // "⚙️ Ajustes" del editor del club (candado 646, ver abrirEditorClub),
+  // NO en la cabecera del calendario (petición usuario: un botón siempre
+  // visible ahí es demasiado fácil de rozar sin querer — se quita de la
+  // vista y se esconde detrás de la pantalla que YA exige PIN solo para
+  // abrirla). Vuelve a "sin jugar" cada partido ya jugado de la caja
+  // abierta (Liga + Copa + cualquier otra competición en paralelo),
+  // conservando el resto del calendario (rivales, fechas, competiciones)
+  // intacto. Gateado por PIN + confirmación explícita — DOBLE gate,
+  // encima del PIN que ya pidió abrir el editor: es destructivo y afecta
+  // a todos los partidos jugados del club, no a uno solo (ver el icono ↺
+  // de cada partido para reiniciarlos de uno en uno).
+  function reiniciarTodosPartidosClub(clubIdParam) {
+    var clubId = clubIdParam || window._idManagerActivo;
     if (!clubId || !window.Renderizadores) return;
     pedirPinAdmin(function () {
       var ok = window.confirm(
@@ -1361,8 +1368,10 @@
     var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
-    var btnResetPartidos = document.getElementById("calendar-reset-btn");
-    if (btnResetPartidos) btnResetPartidos.addEventListener("click", reiniciarTodosPartidosClub);
+    // "🔄 Reiniciar temporada" ya no es un botón estático de la cabecera
+    // del calendario — vive en la pestaña "⚙️ Ajustes" del editor del
+    // club (data-accion="reiniciar-temporada-club", ver el delegado
+    // document.addEventListener("click", ...) más abajo).
 
     var grid = document.getElementById("team-select-grid");
     if (grid) {
@@ -1476,6 +1485,7 @@
         case "cancelar-calendario-comp": cancelarEditorCalendarioComp(); break;
         case "guardar-calendario-comp": guardarCalendarioComp(); break;
         case "editor-club-tab": cambiarTabEditorClub(d.clubId, d.tab, accionBtn); break;
+        case "reiniciar-temporada-club": reiniciarTodosPartidosClub(d.clubId); break;
         case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
         case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
         case "editar-tarjeta-menu-club": editarTarjetaMenuClubPrompt(d.clubId, d.id, d.icono, d.etiqueta); break;

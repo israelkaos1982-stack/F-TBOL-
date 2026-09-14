@@ -262,7 +262,8 @@
   // para que el balón asignado a esa competición SIEMPRE se resuelva, no
   // solo cuando el admin teclea la clave interna a pelo.
   var _BALON_COMP_ALIAS = {
-    liga: "liga", "ligue 1": "liga",
+    liga: "liga", "ligue 1": "liga", "liga ea sports": "liga", "liga ea": "liga",
+    "la liga": "liga", "primera division": "liga",
     copa: "copa", "copa del rey": "copa", coupe: "copa", "coupe de france": "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
     promocion: "promocion", "promocion de ascenso": "promocion", "promocion de descenso": "promocion",
@@ -7380,8 +7381,9 @@
   // partidosPorId también puede llevar mezclados los partidos de
   // Superliga (renderizarSuperliga los registra ahí para que su propio
   // botón PREVIA los encuentre — ver esa función) — este botón general
-  // los IGNORA a propósito: "Reiniciar" vive en la cabecera del
-  // calendario GENERAL, que nunca muestra Superliga, así que no debe
+  // los IGNORA a propósito: "Reiniciar" vive en la pestaña "⚙️ Ajustes"
+  // del editor del club (ver pintarEditorAjustesClub, más abajo), que
+  // opera sobre el calendario GENERAL, nunca sobre Superliga — no debe
   // borrar de rebote partidos de una competición que ni siquiera se ve
   // ahí.
   function reiniciarTodosPartidosClub(clubId) {
@@ -7421,6 +7423,49 @@
     }
     generarCalendarioLateralDerecho(clubId);
     return n;
+  }
+
+  // Pestaña "⚙️ Ajustes" del editor del club (candado 646, ver
+  // js/main.js::abrirEditorClub) — único contenido hoy: el botón de
+  // reinicio de temporada de ESTE club. Petición usuario: "quita el
+  // boton de reiniciar y ocultado dentro de los ajustes individuales de
+  // cada jugador humano" — el botón sigue siendo EXACTAMENTE el mismo
+  // (mismo doble gate PIN+confirm, mismo alcance), solo cambia DÓNDE
+  // vive: antes era un botón fijo en la cabecera del calendario, siempre
+  // a la vista de cualquiera que abriera la caja del club; ahora hace
+  // falta entrar primero al editor (que YA pide PIN solo para abrirse)
+  // y elegir esta pestaña a propósito.
+  function pintarEditorAjustesClub(clubId, contenedor) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Reinicia a CERO todos los partidos ya jugados de este club (Liga, Copa y " +
+      "cualquier otra competición en curso). El calendario en sí (rivales, fechas, " +
+      "competiciones) no se toca — solo se borran los resultados. Un partido " +
+      "compartido con OTRO club humano (Copa del Rey con sorteo real, o un cruce " +
+      "de Liga entre 2 de los 6) nunca se toca aquí, aunque el rival no lo haya " +
+      "reiniciado — solo se puede reiniciar uno a uno con el icono ↺ de esa card.";
+    contenedor.appendChild(nota);
+
+    var btnReset = document.createElement("button");
+    btnReset.type = "button";
+    btnReset.className = "admin-danger-btn";
+    btnReset.dataset.accion = "reiniciar-temporada-club";
+    btnReset.dataset.clubId = clubId;
+    btnReset.textContent = "🔄 Reiniciar temporada de este club";
+    contenedor.appendChild(btnReset);
+
+    var notaPartido = document.createElement("p");
+    notaPartido.className = "admin-nota";
+    notaPartido.textContent =
+      "¿Solo quieres reiniciar UN partido concreto, sin tocar el resto de la " +
+      "temporada? Ciérra este editor y toca el icono ↺ que hay junto al " +
+      "marcador de ESE partido en el calendario — pide el mismo PIN y su propia " +
+      "confirmación, y queda guardado en 🗑️ Papelera de partidos (Panel Admin → " +
+      "💾 Espacio del navegador) por si te equivocas.";
+    contenedor.appendChild(notaPartido);
   }
 
   // ============================================================
@@ -9582,6 +9627,7 @@
     renderizarMenuClub: renderizarMenuClub,
     pintarEditorMenuClub: pintarEditorMenuClub,
     pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,
+    pintarEditorAjustesClub: pintarEditorAjustesClub,
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,

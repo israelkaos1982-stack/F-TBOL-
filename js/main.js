@@ -396,6 +396,34 @@
     cerrarModalClub();
   }
 
+  // ---------- 📌 Corrección MANUAL de estadísticas de la Plantilla
+  // (candado 646) ----------
+  // Mismo patrón exacto que editarLiga1RefInline/guardarLiga1Ref/
+  // cancelarLiga1Ref: se abre ✏️ DENTRO de la propia pantalla (aquí,
+  // Plantilla) — Guardar/Cancelar vuelven a la MISMA vista, en el mismo
+  // contenedor, sin cerrar el modal. A diferencia de esos, este editor
+  // necesita `datos` (cargarTodo) para poder prellenar el textarea con
+  // los valores automáticos actuales — se resuelve async ANTES de pintar.
+  function editarStatsPlantillaInline(clubId) {
+    if (!clubId || !window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("plantilla-content");
+      if (!cont) return;
+      window.Renderizadores.cargarTodo().then(function (datos) {
+        window.Renderizadores.pintarEditorStatsPlantilla(cont, clubId, datos);
+      });
+    }, "🔒 Corregir estadísticas", "Introduce el PIN de administrador.");
+  }
+  function guardarStatsPlantilla(clubId) {
+    var ta = document.getElementById("stats-plantilla-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarStatsOverrideTexto(clubId, ta.value);
+    window.Renderizadores.renderizarPlantillaClub(clubId);
+  }
+  function cancelarStatsPlantilla(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(clubId);
+  }
+
   // ---------- Liga 1ª REF / 2ª REF / Hypermotion / Ea Sports — clasificación
   // (edición INLINE, PIN 646) ----------
   // Las 4 divisiones comparten UNA pantalla (el mismo contenedor
@@ -1495,6 +1523,9 @@
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
+        case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;
+        case "guardar-stats-plantilla": guardarStatsPlantilla(d.clubId); break;
+        case "cancelar-stats-plantilla": cancelarStatsPlantilla(d.clubId); break;
         case "editar-formato-info": _infoOverlayAbrirEditor(); break;
         case "guardar-formato-info": _infoOverlayGuardar(); break;
         case "cancelar-formato-info": _infoOverlayCancelarEdicion(); break;

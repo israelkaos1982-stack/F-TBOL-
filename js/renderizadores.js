@@ -8455,6 +8455,33 @@
     return items;
   }
 
+  // Corrección MANUAL de estadísticas (📌, candado 646) — texto libre,
+  // una línea por jugador que el admin quiere CORREGIR a mano: «Nombre -
+  // Goles MVP Amarillas Rojas», los 4 números SIEMPRE en ese orden (el
+  // mismo orden que las 4 columnas visibles de la Plantilla: ⚽/⭐/🟨/🟥).
+  // Se agrupa por NOMBRE normalizado — mismo criterio de identidad que
+  // calcularStatsRosterClub — para que la corrección "se pegue" al
+  // jugador aunque cambie de dorsal. Una línea que no case con el
+  // formato (falta el "-", o no hay EXACTAMENTE 4 números al final) se
+  // ignora en silencio, igual que el resto de parsers de texto libre de
+  // esta app.
+  function parsearStatsOverrideTexto(texto) {
+    var out = {};
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var partes = l.split(/\s-\s/);
+      if (partes.length < 2) return;
+      var nombre = partes.slice(0, -1).join(" - ").trim();
+      var numeros = partes[partes.length - 1].trim().split(/\s+/).map(Number);
+      if (!nombre || numeros.length !== 4 || numeros.some(isNaN)) return;
+      var key = _normNombre(nombre);
+      if (!key) return;
+      out[key] = { goles: numeros[0], mvp: numeros[1], amarillas: numeros[2], rojas: numeros[3] };
+    });
+    return out;
+  }
+
   // Plantilla REAL de un club — fuente ÚNICA para la pantalla "Plantilla"
   // (solo lectura), el editor (candado 646), el selector de jugador del
   // acta en vivo (js/acta.js) y el picker de Lesionados/Sancionados de
@@ -8548,6 +8575,15 @@
       });
     }
 
+    // Corrección MANUAL (📌, candado 646) — ver parsearStatsOverrideTexto.
+    // Se aplica DESPUÉS de sumar todo lo automático y SOLO sustituye las 4
+    // columnas visibles (Goles/MVP/Amarillas/Rojas) del jugador corregido;
+    // porteriaImbatida y los contadores internos de sanción
+    // (partidosDobleAmarilla/partidosRojaDirecta) siguen viniendo SIEMPRE
+    // de los partidos reales — el admin corrige lo que VE, no reescribe
+    // el motor de sanciones.
+    var overrides = window.Estado ? parsearStatsOverrideTexto(window.Estado.obtenerStatsOverrideTexto(clubId)) : {};
+
     // Contrato externo sin cambios: la pantalla Plantilla busca por el id
     // ACTUAL de cada jugador de la lista (`stats[j.id]`, ver
     // renderizarPlantillaClub) — se re-expone aquí por ese id, resuelto
@@ -8557,7 +8593,19 @@
     var stats = {};
     obtenerJugadoresClub(clubId).forEach(function (j) {
       var key = _normNombre(j.nombre);
-      if (porNombre[key]) stats[j.id] = porNombre[key];
+      var ov = overrides[key];
+      if (ov) {
+        var base = porNombre[key] || {};
+        stats[j.id] = {
+          goles: ov.goles, mvp: ov.mvp, amarillas: ov.amarillas, rojas: ov.rojas,
+          porteriaImbatida: base.porteriaImbatida || 0,
+          partidosDobleAmarilla: base.partidosDobleAmarilla || 0,
+          partidosRojaDirecta: base.partidosRojaDirecta || 0,
+          _manual: true
+        };
+      } else if (porNombre[key]) {
+        stats[j.id] = porNombre[key];
+      }
     });
     return stats;
   }
@@ -8608,6 +8656,18 @@
           return;
         }
 
+        // 📌 Corrección MANUAL de estadísticas (candado 646) — arriba a la
+        // derecha de la Plantilla, petición usuario: "donde puedo editar
+        // manualmente cada estadística de cada jugador" para cuando el
+        // cálculo automático no cuadra con partidos que se registraron mal
+        // (o antes de existir la app). Ver parsearStatsOverrideTexto.
+        var pinWrap = document.createElement("div");
+        pinWrap.className = "plantilla-header-acciones";
+        pinWrap.innerHTML =
+          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-stats-plantilla-inline" ' +
+          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Corregir estadísticas a mano">📌</button>';
+        contenedor.appendChild(pinWrap);
+
         var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
         function statsDe(j) {
           return stats[j.id] || { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0, partidosDobleAmarilla: 0, partidosRojaDirecta: 0 };
@@ -8646,15 +8706,19 @@
             var esLesionado = !!lesionadoSet[j.nombre];
             var tarjeta = esLesionado ? null : _tarjetaActivaPara(s, flags[j.id] || {});
             var fila = document.createElement("div");
-            fila.className = "plantilla-jugador" + (esLesionado ? " plantilla-jugador--lesion" : (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : ""));
+            fila.className = "plantilla-jugador" + (esLesionado ? " plantilla-jugador--lesion" : (tarjeta ? " plantilla-jugador--" + tarjeta.tipo : "")) +
+              (s._manual ? " plantilla-jugador--manual" : "");
+            // 📌 delante del nombre = estadísticas corregidas A MANO (ver
+            // parsearStatsOverrideTexto) — no viene de sumar partidos reales.
+            var prefijoManual = s._manual ? '<span class="plantilla-manual-marca" title="Estadísticas corregidas a mano">📌</span>' : "";
             var nombreTag = esLesionado
-              ? '<span class="plantilla-nombre" title="🚑 Lesionado — se quita desde LESIONADOS en la previa de un partido (PIN admin).">' + escapeHTML(j.nombre) + "</span>"
+              ? '<span class="plantilla-nombre" title="🚑 Lesionado — se quita desde LESIONADOS en la previa de un partido (PIN admin).">' + prefijoManual + escapeHTML(j.nombre) + "</span>"
               : (tarjeta
                 ? '<span class="plantilla-nombre plantilla-nombre--flag" data-accion="quitar-flag-tarjeta"' +
                   ' data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" data-jugador-id="' + escapeHTML(j.id) + '"' +
                   ' data-tipo-flag="' + tarjeta.tipo + '" data-flag-valor="' + tarjeta.valor + '"' +
-                  ' title="' + escapeHTML(tarjeta.titulo) + '">' + escapeHTML(j.nombre) + "</span>"
-                : '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>");
+                  ' title="' + escapeHTML(tarjeta.titulo) + '">' + prefijoManual + escapeHTML(j.nombre) + "</span>"
+                : '<span class="plantilla-nombre">' + prefijoManual + escapeHTML(j.nombre) + "</span>");
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
               nombreTag +
@@ -8867,6 +8931,59 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-plantilla-club" data-club-id="' + clubId + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-plantilla-club" data-club-id="' + clubId + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de la corrección MANUAL de estadísticas (📌, PIN 646) —
+  // mismo patrón exacto que pintarEditorLiga1Ref: pinta DENTRO del mismo
+  // contenedor que la Plantilla, así Guardar/Cancelar vuelven a la vista
+  // normal sin cerrar el modal. `datos` ya viene cargado por el caller
+  // (js/main.js::editarStatsPlantillaInline, vía cargarTodo()) para poder
+  // prellenar el textarea con lo que la Plantilla está mostrando AHORA
+  // MISMO — el admin solo tiene que tocar los números que estén mal, en
+  // vez de partir de un texto en blanco y tener que retipear toda la
+  // plantilla de memoria.
+  function pintarEditorStatsPlantilla(contenedor, idClubActivo, datos) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Corrección MANUAL, para cuando el cálculo automático (suma de los partidos " +
+      "ya registrados en esta app) no cuadre con la realidad. Una línea por " +
+      "jugador: «Nombre - Goles MVP Amarillas Rojas» (los 4 números SIEMPRE en " +
+      "ese orden). Ya viene rellena con lo que la Plantilla muestra ahora — " +
+      "ajusta solo lo que necesite corrección. Borra la línea entera de un " +
+      "jugador (o todo el texto) para que vuelva a ser 100% automático.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "stats-plantilla-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    var jugadoresEd = obtenerJugadoresClub(idClubActivo);
+    textarea.rows = Math.max(10, jugadoresEd.length + 2);
+    textarea.placeholder = "A. Sørloth - 24 5 2 0";
+
+    var textoGuardado = window.Estado ? window.Estado.obtenerStatsOverrideTexto(idClubActivo) : "";
+    if (textoGuardado.trim()) {
+      textarea.value = textoGuardado;
+    } else if (datos) {
+      var statsAuto = calcularStatsRosterClub(idClubActivo, datos);
+      textarea.value = jugadoresEd
+        .filter(function (j) { return !!statsAuto[j.id]; })
+        .map(function (j) {
+          var s = statsAuto[j.id];
+          return j.nombre + " - " + s.goles + " " + s.mvp + " " + s.amarillas + " " + s.rojas;
+        })
+        .join("\n");
+    }
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-stats-plantilla" data-club-id="' + idClubActivo + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-stats-plantilla" data-club-id="' + idClubActivo + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -9635,7 +9752,9 @@
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,
     calcularStatsRosterClub: calcularStatsRosterClub,
+    parsearStatsOverrideTexto: parsearStatsOverrideTexto,
     pintarEditorPlantillaClub: pintarEditorPlantillaClub,
+    pintarEditorStatsPlantilla: pintarEditorStatsPlantilla,
     renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,

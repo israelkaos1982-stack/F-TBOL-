@@ -6082,6 +6082,18 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     stale de otro dispositivo) pueda "des-jugar" en silencio, con solo
     tener un reloj más nuevo, un resultado que un mánager humano ya
     confirmó.
+
+    GUARD "jugado:true (marcador A) -> jugado:true (marcador B)"
+    (reporte usuario 2026-09-14: "Has duplicado dos veces el resultado
+    de 10-5 / Es una vez 10-5 y una vez 4-1"): el guard de arriba solo
+    cubre jugado->no-jugado. Un `match_id` de Superliga (Humano vs
+    Humano) puede confirmarse desde el dispositivo de CUALQUIERA de los
+    2 clubes implicados — si ambos lados llegan `jugado:true` pero con
+    un marcador REALMENTE distinto, ya no basta con el reloj: se
+    prefiere el lado con acta real (`jug` no vacío) sobre el que no la
+    tenga, sin mirar `_actualizadoEn`; si ambos o ninguno la tienen, se
+    conserva el criterio de siempre. El marcador descartado se guarda en
+    `_conflictoDescartado` sobre el que gana — nunca se destruye.
     """
     try:
         incoming = json.loads(incoming_value) if incoming_value else None
@@ -6171,6 +6183,60 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
             if not es_tumba_reconocible:
                 merged_res[match_id] = existing_entry
                 continue
+
+        # GUARD "jugado:true (marcador A) -> jugado:true (marcador B)"
+        # (reporte usuario 2026-09-14: "Has duplicado dos veces el
+        # resultado de 10-5 / Es una vez 10-5 y una vez 4-1"). El guard de
+        # arriba solo protege "jugado:true -> false" — un `match_id` con
+        # marcador YA confirmado podía sustituirse por OTRO marcador
+        # jugado:true distinto con solo tener un `_actualizadoEn` mayor o
+        # igual, sin ninguna otra comprobación. En Superliga (Humano vs
+        # Humano, ver js/renderizadores.js::_partidosSuperliga) el MISMO
+        # match_id puede confirmarse desde el dispositivo de CUALQUIERA de
+        # los 2 clubes implicados — si uno confirma un partido real con
+        # acta completa (goles/tarjetas/MVP, `jug` no vacío) y el otro,
+        # más tarde, confirma un marcador distinto para ese mismo
+        # match_id (una re-confirmación por una vista desactualizada, o
+        # dos mánagers jugándolo cada uno por su lado sin saberlo), el
+        # segundo ganaba SIEMPRE por reloj, borrando en silencio el acta
+        # real. Cuando ambos lados están jugados con un marcador
+        # REALMENTE distinto, se prefiere el que tenga acta real (`jug`
+        # no vacío) sobre el que no la tenga, SIN mirar el timestamp; si
+        # ambos o ninguno la tienen, no hay ninguna señal objetiva para
+        # preferir uno — se conserva el criterio de siempre (reloj más
+        # alto). El marcador descartado NUNCA se destruye: viaja en
+        # `_conflictoDescartado` sobre el que sí se guarda, por si algún
+        # día hace falta revisarlo.
+        if (
+            isinstance(incoming_entry, dict)
+            and incoming_entry.get("jugado") is True
+            and existing_entry.get("jugado") is True
+            and (
+                existing_entry.get("golesLocal") != incoming_entry.get("golesLocal")
+                or existing_entry.get("golesVisitante") != incoming_entry.get("golesVisitante")
+            )
+        ):
+            jug_existing = existing_entry.get("jug")
+            jug_incoming = incoming_entry.get("jug")
+            tiene_acta_existing = isinstance(jug_existing, list) and len(jug_existing) > 0
+            tiene_acta_incoming = isinstance(jug_incoming, list) and len(jug_incoming) > 0
+            if tiene_acta_existing and not tiene_acta_incoming:
+                ganador, perdedor = existing_entry, incoming_entry
+            elif tiene_acta_incoming and not tiene_acta_existing:
+                ganador, perdedor = incoming_entry, existing_entry
+            else:
+                ganador, perdedor = (
+                    (incoming_entry, existing_entry) if ts_in >= ts_ex else (existing_entry, incoming_entry)
+                )
+            ganador = dict(ganador)
+            ganador["_conflictoDescartado"] = {
+                "golesLocal": perdedor.get("golesLocal"),
+                "golesVisitante": perdedor.get("golesVisitante"),
+                "jug": perdedor.get("jug"),
+                "_actualizadoEn": perdedor.get("_actualizadoEn"),
+            }
+            merged_res[match_id] = ganador
+            continue
 
         merged_res[match_id] = incoming_entry if ts_in >= ts_ex else existing_entry
 

@@ -240,6 +240,25 @@
 
   function registrarResultadoPartido(partidoId, golesLocal, golesVisitante, eventos, contextoPartido) {
     var e = cargarEstado();
+    // RED DE SEGURIDAD — un partido YA confirmado con marcador real
+    // (jugado:true) NUNCA debe sustituirse en silencio por OTRO marcador
+    // distinto (reporte usuario 2026-09-14, «Has duplicado dos veces el
+    // resultado de 10-5 / Es una vez 10-5 y una vez 4-1»: una Superliga
+    // se juega Humano vs Humano — CUALQUIERA de los 2 clubes puede abrir
+    // y confirmar el MISMO partido desde su propio dispositivo, así que
+    // una re-confirmación con un marcador distinto es posible aunque el
+    // calendario ya lo pintara como jugado en el momento del toque —
+    // ver también app.py::_ef7_merge_resultados y
+    // js/sync.js::_esRegresionResultados, que cierran el mismo hueco en
+    // la fusión entre dispositivos). Antes de pisarlo, el resultado
+    // anterior se archiva en la MISMA papelera que ya usa
+    // reiniciarResultadoPartido — el admin lo recupera con el mismo ↩️,
+    // sin perder nada para siempre.
+    var _anterior = e.resultados[partidoId];
+    if (_anterior && _anterior.jugado === true &&
+        (_anterior.golesLocal !== golesLocal || _anterior.golesVisitante !== golesVisitante)) {
+      _archivarEnPapelera(partidoId, _anterior, null);
+    }
     var identidad = null;
     var clubes = [];
     var competicion = null;
@@ -365,6 +384,23 @@
       localStorage.setItem(PAPELERA_KEY, JSON.stringify(arr));
     } catch (err) { /* no crítico — la papelera es solo una red extra, no el dato real */ }
   }
+  // Punto ÚNICO de archivado — lo usan tanto reiniciarResultadoPartido
+  // (reinicio manual, con descripción) como la red de seguridad de
+  // registrarResultadoPartido (sustitución silenciosa de un marcador ya
+  // confirmado, sin descripción — este archivo no conoce nombres de
+  // equipo, ver comentario en listarPartidosResueltos).
+  function _archivarEnPapelera(partidoId, resultado, descripcion) {
+    var papelera = _cargarPapelera();
+    papelera.unshift({
+      id: partidoId + "::" + Date.now(),
+      partidoId: partidoId,
+      resultado: resultado,
+      descripcion: descripcion || null,
+      borradoEn: Date.now()
+    });
+    if (papelera.length > PAPELERA_MAX) papelera.length = PAPELERA_MAX;
+    _guardarPapelera(papelera);
+  }
   // Lista más reciente primero. Cada entrada: { id, partidoId, resultado,
   // descripcion, borradoEn }. `descripcion` (opcional) es el texto legible
   // ya construido por el caller ("Liverpool vs Sabadell (2-1) — Liga · J10")
@@ -402,16 +438,7 @@
     var e = cargarEstado();
     var actual = e.resultados[partidoId];
     if (!actual || actual.jugado === false) return false; // no había nada que reiniciar (o ya lo estaba)
-    var papelera = _cargarPapelera();
-    papelera.unshift({
-      id: partidoId + "::" + Date.now(),
-      partidoId: partidoId,
-      resultado: actual,
-      descripcion: descripcion || null,
-      borradoEn: Date.now()
-    });
-    if (papelera.length > PAPELERA_MAX) papelera.length = PAPELERA_MAX;
-    _guardarPapelera(papelera);
+    _archivarEnPapelera(partidoId, actual, descripcion);
     e.resultados[partidoId] = _tumbaDeResultado(actual);
     return guardarEstado();
   }

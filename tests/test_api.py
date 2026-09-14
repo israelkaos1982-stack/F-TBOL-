@@ -2512,6 +2512,87 @@ class TestEf7EstadoLigaMerge:
         assert resultados["copa_1a_ronda_0"]["golesVisitante"] == 5
         assert resultados["copa_1a_ronda_0"]["_actualizadoEn"] == 5000
 
+    def test_conflicto_marcador_distinto_gana_el_que_tiene_acta_real(self, client):
+        """Reporte usuario 2026-09-14 ("Has duplicado dos veces el
+        resultado de 10-5 / Es una vez 10-5 y una vez 4-1"): Superliga es
+        Humano vs Humano — el MISMO match_id puede confirmarse desde el
+        dispositivo de CUALQUIERA de los 2 clubes implicados. Un marcador
+        real con acta completa (`jug` no vacío) confirmado ANTES no debe
+        perder la fusión frente a un marcador DISTINTO sin acta confirmado
+        DESPUÉS — el criterio ya no es solo el reloj cuando hay una señal
+        objetiva (acta real) para decidir."""
+        c = client
+        self._post(c, {
+            "superliga-2-4-2": {
+                "jugado": True,
+                "golesLocal": 4,
+                "golesVisitante": 1,
+                "jug": [{"j": "atletico-madrid-9", "e": "atletico-madrid", "g": 3}],
+                "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "superliga-2-4-2": {
+                "jugado": True,
+                "golesLocal": 10,
+                "golesVisitante": 5,
+                "_actualizadoEn": 5000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        entry = resultados["superliga-2-4-2"]
+        assert entry["golesLocal"] == 4
+        assert entry["golesVisitante"] == 1
+        assert entry["jug"]
+        # El marcador descartado (10-5) queda preservado, nunca destruido.
+        assert entry["_conflictoDescartado"]["golesLocal"] == 10
+        assert entry["_conflictoDescartado"]["golesVisitante"] == 5
+
+    def test_conflicto_marcador_distinto_sin_acta_en_ningun_lado_gana_mayor_actualizadoEn(self, client):
+        """Sin acta real en NINGUNO de los 2 lados, no hay señal objetiva
+        para preferir uno — se conserva el criterio de siempre (reloj más
+        alto), exactamente como antes de este fix."""
+        c = client
+        self._post(c, {
+            "superliga-0-1-1": {
+                "jugado": True, "golesLocal": 2, "golesVisitante": 0, "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "superliga-0-1-1": {
+                "jugado": True, "golesLocal": 3, "golesVisitante": 1, "_actualizadoEn": 5000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        entry = resultados["superliga-0-1-1"]
+        assert entry["golesLocal"] == 3
+        assert entry["golesVisitante"] == 1
+        assert "_conflictoDescartado" not in entry
+
+    def test_mismo_marcador_no_genera_conflicto(self, client):
+        """Un marcador IDÉNTICO en ambos lados no es un conflicto real —
+        no debe disparar la rama nueva ni añadir `_conflictoDescartado`."""
+        c = client
+        self._post(c, {
+            "superliga-1-3-1": {
+                "jugado": True, "golesLocal": 4, "golesVisitante": 1,
+                "jug": [{"j": "x", "e": "y", "g": 1}], "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "superliga-1-3-1": {
+                "jugado": True, "golesLocal": 4, "golesVisitante": 1, "_actualizadoEn": 5000,
+            }
+        })
+
+        resultados = self._get_resultados(c)
+        entry = resultados["superliga-1-3-1"]
+        assert entry["golesLocal"] == 4
+        assert entry["golesVisitante"] == 1
+        assert "_conflictoDescartado" not in entry
+
     def test_tombstone_mas_reciente_gana_sobre_confirmado(self, client):
         """El botón "🔄 Reiniciar" (reset de temporada) escribe una tumba
         (`jugado:false, _borrado:true`) con un sello FRESCO — debe poder

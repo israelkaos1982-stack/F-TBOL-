@@ -1905,6 +1905,45 @@
     }
   }
 
+  // ---------- Corrección MANUAL de estadísticas de la Plantilla (📌, candado 646) ----------
+  // calcularStatsRosterClub (js/renderizadores.js) suma SOLO/SIEMPRE desde
+  // los partidos ya jugados dentro de la app — si un partido antiguo se
+  // quedó sin registrar bien (identidad de un Calendario extra colisionada,
+  // un resultado cargado con "resultado rápido" sin plantilla detallada,
+  // datos de antes de que existiera esta app...), esos goles/MVP/tarjetas
+  // reales NUNCA aparecerán solos, por bien que funcione el cálculo
+  // automático de aquí en adelante — no hay ninguna "máquina del tiempo"
+  // que reconstruya eventos que nunca se guardaron. Petición usuario
+  // (2026-09, «Sorloth solo en Liga lleva 21 goles y en toda la temporada
+  // 24... arriba a la derecha de cada plantilla un 📌 donde puedo editar
+  // manualmente cada estadística»): un texto libre, UNA línea por jugador
+  // que el admin quiera CORREGIR a mano — mismo patrón que el resto de
+  // esta app (Calendario extra/Roster/Liga1Ref). Un jugador que NO
+  // aparece en este texto sigue 100% automático; uno que SÍ aparece
+  // reemplaza sus 4 columnas visibles (Goles/MVP/Amarillas/Rojas) por lo
+  // que el admin tecleó, sin tocar el resto de campos internos (porterías
+  // imbatidas, bloqueo de tarjetas por sanción) — esos siguen derivándose
+  // de los partidos reales, nunca de esta corrección.
+  function _statsOverrideKey(clubId) { return "ef7_plantilla_stats_override_v1_" + clubId; }
+  function obtenerStatsOverrideTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_statsOverrideKey(clubId));
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarStatsOverrideTexto(clubId, texto) {
+    try {
+      localStorage.setItem(_statsOverrideKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la corrección manual de estadísticas:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Liga 1ª REF — tabla BASE de los equipos IA, pegada en texto (candado 646) ----------
   // Este simulador NO simula los partidos IA-vs-IA — el admin lleva esos
   // resultados fuera de la web y pega aquí el snapshot agregado de cada
@@ -2939,6 +2978,8 @@
     guardarDerbysTexto: guardarDerbysTexto,
     obtenerRosterTexto: obtenerRosterTexto,
     guardarRosterTexto: guardarRosterTexto,
+    obtenerStatsOverrideTexto: obtenerStatsOverrideTexto,
+    guardarStatsOverrideTexto: guardarStatsOverrideTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,

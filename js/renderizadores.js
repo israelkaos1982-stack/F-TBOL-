@@ -5877,12 +5877,21 @@
     return salida;
   }
 
-  // Ranking final de una categoría — top 15, sin texto pegado que
-  // fusionar (100% auto-suma). Zamora ordena ascendente (menos goles de
-  // media es mejor), igual que Liga 1ª REF.
+  // Ranking final de una categoría: auto-suma de los 6 humanos +
+  // corrección MANUAL opcional (mismo mecanismo que Liga 1ª REF/Copa/
+  // Recopa/Champions/UEL/UECL, ver _fusionarStatFilasConOverride — aquí
+  // nunca hay líneas de rivales IA que pegar, Superliga es 100% entre
+  // los 6 humanos, así que el texto libre SOLO sirve para corregir un
+  // auto-cálculo que no cuadre). Top 15, empate -> alfabético. Zamora
+  // ordena ascendente (menos goles de media es mejor), igual que Liga
+  // 1ª REF.
   function calcularSuperligaStatsCombinado(datos, categoria) {
     var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
-    var filas = (calcularSuperligaStatsHumanos(datos)[categoria] || []).slice();
+    var texto = window.Estado ? window.Estado.obtenerSuperligaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularSuperligaStatsHumanos(datos)[categoria] || []
+    );
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
@@ -6106,7 +6115,9 @@
       header.className = "liga1ref-header";
       header.innerHTML =
         '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-superliga" data-club-id="' +
-        (idClubActivo || "") + '">← Volver</button>';
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-superliga-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
       contenedor.appendChild(header);
 
       var titulo = document.createElement("p");
@@ -6116,7 +6127,7 @@
 
       var filas = calcularSuperligaStatsCombinado(datos, categoria);
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos — se suman solos al añadir eventos en un partido de Superliga."));
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para corregirlos a mano, o se suman solos al añadir eventos en un partido de Superliga."));
         return;
       }
 
@@ -6143,6 +6154,45 @@
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
     });
+  }
+
+  // Editor inline de UNA categoría de Superliga (PIN 646) — mismo patrón
+  // exacto que pintarEditorCopaStat: aquí no hay ningún rival IA que
+  // pegar (Superliga es SOLO entre los 6 humanos), así que el texto
+  // libre sirve EXCLUSIVAMENTE para corregir el auto-cálculo cuando no
+  // cuadre — escribir el nombre EXACTO de un jugador ya calculado
+  // sustituye su número, sin duplicar la fila (ver
+  // _fusionarStatFilasConOverride).
+  function pintarEditorSuperligaStat(contenedor, idClubActivo, categoria) {
+    var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Se suma SOLO al añadir eventos en un partido de Superliga — no hace falta " +
+      "pegar nada aquí normalmente. Úsalo SOLO para corregir: una línea por " +
+      "jugador, «Nombre Jugador - Equipo  " + meta.columna + "» (el Nº inicial es " +
+      "opcional, se recalcula solo). Si el nombre coincide EXACTO con un jugador " +
+      "que la app ya calcula sola, tu línea CORRIGE ese número en vez de sumarse " +
+      "aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "superliga-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "A. Sørloth - Atlético Madrid  1";
+    textarea.value = window.Estado ? window.Estado.obtenerSuperligaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-superliga-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-superliga-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
   }
 
   // ============================================================
@@ -9830,6 +9880,7 @@
     calcularUeclPlayoffTodasLasRondas: calcularUeclPlayoffTodasLasRondas,
     renderizarSuperliga: renderizarSuperliga,
     renderizarSuperligaStatDetalle: renderizarSuperligaStatDetalle,
+    pintarEditorSuperligaStat: pintarEditorSuperligaStat,
     calcularSuperliga: calcularSuperliga,
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,

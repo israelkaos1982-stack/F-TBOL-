@@ -895,13 +895,31 @@
   }
 
   // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
-  // Zamora (mismo contenedor "superliga-content"). Sin editor/PIN: es
-  // 100% humano-vs-humano, se auto-calcula todo (0 texto que pegar).
+  // Zamora (mismo contenedor "superliga-content"). 100% humano-vs-humano,
+  // se auto-calcula todo — el editor ✏️ (PIN 646) es SOLO para corregir
+  // el auto-cálculo cuando no cuadre (mismo patrón EXACTO que Copa del
+  // Rey/Recopa/etc.).
   function verSuperligaStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarSuperligaStatDetalle("superliga-content", clubId, categoria);
   }
   function volverSuperliga(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
+  }
+  function editarSuperligaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("superliga-content");
+      if (cont) window.Renderizadores.pintarEditorSuperligaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarSuperligaStat(clubId, categoria) {
+    var ta = document.getElementById("superliga-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarSuperligaStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarSuperligaStatDetalle("superliga-content", clubId, categoria);
+  }
+  function cancelarSuperligaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperligaStatDetalle("superliga-content", clubId, categoria);
   }
 
   // ---------- Sala de Títulos ----------
@@ -1602,6 +1620,9 @@
         case "info-uecl-formato": mostrarInfoUecl(); break;
         case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
         case "volver-superliga": volverSuperliga(d.clubId); break;
+        case "editar-superliga-stat-inline": editarSuperligaStatInline(d.clubId, d.categoria); break;
+        case "guardar-superliga-stat": guardarSuperligaStat(d.clubId, d.categoria); break;
+        case "cancelar-superliga-stat": cancelarSuperligaStat(d.clubId, d.categoria); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;

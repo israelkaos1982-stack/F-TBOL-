@@ -2218,6 +2218,38 @@
     }
   }
 
+  // ---------- Superliga — corrección MANUAL de Pichichi/MVP/Amarillas/
+  // Rojas/Zamora (candado 646) ----------
+  // A diferencia de las demás competiciones, Superliga es 100% auto-suma
+  // (los 6 humanos, todos contra todos, sin ningún rival IA que pegar a
+  // mano — nunca tuvo editor). Se añade este mismo mecanismo EXACTO que
+  // Copa/Recopa/Champions/UEL/UECL para que el admin pueda CORREGIR el
+  // auto-cálculo cuando no cuadre con la realidad — nunca sustituye la
+  // auto-suma por completo, solo la línea del jugador que se pegue aquí
+  // con su nombre EXACTO (ver
+  // js/renderizadores.js::_fusionarStatFilasConOverride/
+  // calcularSuperligaStatsCombinado).
+  function _superligaStatKey(categoria) {
+    return "ef7_superliga_stat_" + categoria + "_v1";
+  }
+  function obtenerSuperligaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_superligaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSuperligaStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_superligaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Superliga:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -2998,6 +3030,8 @@
     guardarRecopaStatTexto: guardarRecopaStatTexto,
     obtenerRecopaPlayoffTexto: obtenerRecopaPlayoffTexto,
     guardarRecopaPlayoffTexto: guardarRecopaPlayoffTexto,
+    obtenerSuperligaStatTexto: obtenerSuperligaStatTexto,
+    guardarSuperligaStatTexto: guardarSuperligaStatTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

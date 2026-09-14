@@ -5764,19 +5764,35 @@
     return datos.equipos.equipos || [];
   }
 
+  // Un partido de Superliga DE VERDAD es SIEMPRE uno de los generados por
+  // Estado._partidosSuperliga — id 100% estable "superliga-<i>-<j>-<leg>"
+  // (índices dentro de datos.equipos.equipos). "superliga" también vive en
+  // _BALON_COMP_ALIAS (para que el balón/color de card lo reconozcan si
+  // aparece escrito en cualquier lado) — así que si el admin teclea por
+  // error/costumbre una línea "Superliga - ..." en el "Calendario extra"
+  // GENERAL de su club (el mismo cuadro de texto libre que usa para Liga/
+  // Copa/Champions), esa línea TAMBIÉN resuelve `competicion==="superliga"`
+  // y, sin este filtro por id, se contaba como un partido de Superliga MÁS
+  // — inflando PJ/goles a favor/en contra de la clasificación por encima
+  // de los 15 partidos reales de cada club (3 legs × 5 rivales). Bug real
+  // reportado por el usuario (fotos Superliga con Pichichi/MVP/Amarillas/
+  // Rojas duplicados/incoherentes para Atlético Madrid y FC Barcelona).
+  var _RE_SUPERLIGA_ID = /^superliga-\d+-\d+-\d+$/;
   function _superligaPartidosDelClub(datos, clubId) {
     return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
-      return p.competicion === "superliga" && (p.local === clubId || p.visitante === clubId);
+      return p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id) &&
+        (p.local === clubId || p.visitante === clubId);
     });
   }
 
   // Clasificación de la liguilla — misma fórmula (3/1/0, DG, goles a
   // favor) que Estado.calcularClasificacion, pero sobre los partidos de
-  // Superliga de los 6 humanos (nunca hay rival IA que fusionar).
+  // Superliga de los 6 humanos (nunca hay rival IA que fusionar). Mismo
+  // filtro por id que _superligaPartidosDelClub — ver comentario ahí.
   function calcularSuperliga(datos) {
     var equipos = _superligaEquiposHumanos(datos);
     var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
-      return p.competicion === "superliga" && p.jugado && p.resultado;
+      return p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id) && p.jugado && p.resultado;
     });
 
     var tabla = {};
@@ -5877,21 +5893,17 @@
     return salida;
   }
 
-  // Ranking final de una categoría: auto-suma de los 6 humanos +
-  // corrección MANUAL opcional (mismo mecanismo que Liga 1ª REF/Copa/
-  // Recopa/Champions/UEL/UECL, ver _fusionarStatFilasConOverride — aquí
-  // nunca hay líneas de rivales IA que pegar, Superliga es 100% entre
-  // los 6 humanos, así que el texto libre SOLO sirve para corregir un
-  // auto-cálculo que no cuadre). Top 15, empate -> alfabético. Zamora
-  // ordena ascendente (menos goles de media es mejor), igual que Liga
-  // 1ª REF.
+  // Ranking final de una categoría: 100% auto-suma de los 6 humanos, SIN
+  // editor ni corrección manual — Superliga es cerrada (solo los 6
+  // humanos, ids de partido 100% estables) y su clasificación/stats
+  // deben salir SIEMPRE de los partidos realmente jugados, sin que el
+  // admin tenga que revisar/pegar nada partido a partido (petición
+  // usuario explícita: "no quiero un editor, yo quiero que lo hagas tú").
+  // Top 15, empate -> alfabético. Zamora ordena ascendente (menos goles
+  // de media es mejor), igual que Liga 1ª REF.
   function calcularSuperligaStatsCombinado(datos, categoria) {
     var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
-    var texto = window.Estado ? window.Estado.obtenerSuperligaStatTexto(categoria) : "";
-    var filas = _fusionarStatFilasConOverride(
-      parsearLiga1RefStatTexto(texto),
-      calcularSuperligaStatsHumanos(datos)[categoria] || []
-    );
+    var filas = (calcularSuperligaStatsHumanos(datos)[categoria] || []).slice();
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
@@ -6099,7 +6111,8 @@
   }
 
   // Ranking (top 15) de UNA categoría de Superliga — mismo patrón que
-  // renderizarCopaStatDetalle, sin botón ✏️ (nada que editar).
+  // renderizarCopaStatDetalle, sin botón ✏️ (nada que editar, 100%
+  // automático desde los partidos ya jugados).
   function renderizarSuperligaStatDetalle(contenedorId, idClubActivo, categoria) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -6115,9 +6128,7 @@
       header.className = "liga1ref-header";
       header.innerHTML =
         '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-superliga" data-club-id="' +
-        (idClubActivo || "") + '">← Volver</button>' +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-superliga-stat-inline" data-club-id="' +
-        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+        (idClubActivo || "") + '">← Volver</button>';
       contenedor.appendChild(header);
 
       var titulo = document.createElement("p");
@@ -6127,7 +6138,7 @@
 
       var filas = calcularSuperligaStatsCombinado(datos, categoria);
       if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para corregirlos a mano, o se suman solos al añadir eventos en un partido de Superliga."));
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Se suman solos al añadir eventos en un partido de Superliga."));
         return;
       }
 
@@ -6154,45 +6165,6 @@
       wrap.appendChild(tablaEl);
       contenedor.appendChild(wrap);
     });
-  }
-
-  // Editor inline de UNA categoría de Superliga (PIN 646) — mismo patrón
-  // exacto que pintarEditorCopaStat: aquí no hay ningún rival IA que
-  // pegar (Superliga es SOLO entre los 6 humanos), así que el texto
-  // libre sirve EXCLUSIVAMENTE para corregir el auto-cálculo cuando no
-  // cuadre — escribir el nombre EXACTO de un jugador ya calculado
-  // sustituye su número, sin duplicar la fila (ver
-  // _fusionarStatFilasConOverride).
-  function pintarEditorSuperligaStat(contenedor, idClubActivo, categoria) {
-    var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
-    if (!meta) return;
-    contenedor.innerHTML = "";
-
-    var nota = document.createElement("p");
-    nota.className = "admin-nota";
-    nota.textContent =
-      "Se suma SOLO al añadir eventos en un partido de Superliga — no hace falta " +
-      "pegar nada aquí normalmente. Úsalo SOLO para corregir: una línea por " +
-      "jugador, «Nombre Jugador - Equipo  " + meta.columna + "» (el Nº inicial es " +
-      "opcional, se recalcula solo). Si el nombre coincide EXACTO con un jugador " +
-      "que la app ya calcula sola, tu línea CORRIGE ese número en vez de sumarse " +
-      "aparte.";
-    contenedor.appendChild(nota);
-
-    var textarea = document.createElement("textarea");
-    textarea.id = "superliga-stat-textarea";
-    textarea.className = "admin-roadmap-textarea";
-    textarea.rows = 14;
-    textarea.placeholder = "A. Sørloth - Atlético Madrid  1";
-    textarea.value = window.Estado ? window.Estado.obtenerSuperligaStatTexto(categoria) : "";
-    contenedor.appendChild(textarea);
-
-    var acciones = document.createElement("div");
-    acciones.className = "admin-roadmap-editor-acciones";
-    acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-superliga-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-superliga-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
-    contenedor.appendChild(acciones);
   }
 
   // ============================================================
@@ -9880,7 +9852,6 @@
     calcularUeclPlayoffTodasLasRondas: calcularUeclPlayoffTodasLasRondas,
     renderizarSuperliga: renderizarSuperliga,
     renderizarSuperligaStatDetalle: renderizarSuperligaStatDetalle,
-    pintarEditorSuperligaStat: pintarEditorSuperligaStat,
     calcularSuperliga: calcularSuperliga,
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,

@@ -2632,7 +2632,19 @@ button { font-family: inherit; cursor: pointer; }
    querer. Ver js/renderizadores.js). Pequeño y apagado a propósito
    (opacity baja, esquina inferior derecha, lejos del centro): sigue
    disponible para quien de verdad quiera reiniciar, pero deja de ser el
-   objetivo natural del dedo. */
+   objetivo natural del dedo.
+
+   BUG REAL (reporte usuario 2026-09-14, "no sale en ningún partido"): a
+   diferencia de 📌/⏳ (emoji, con su propio color de fábrica), "↺" es un
+   glifo de TEXTO normal — sin `color` explícito heredaba el negro por
+   defecto de `<button>` (el reset global de este archivo, `button{...}`,
+   nunca fija `color`). Negro sobre el fondo casi negro del propio botón
+   (`rgba(23,24,29,.9)`), encima a opacity:.35 y con un borde casi
+   invisible (`--line` es blanco al 8%) — el icono existía en el DOM
+   (clicable, con el título correcto) pero era 100% invisible a simple
+   vista, en TODOS los partidos, no solo en Superliga. Verificado
+   renderizando la pantalla real en Chromium: color computado
+   `rgb(0,0,0)` antes de este fix. */
 .match-card-reset-btn {
   position: absolute;
   bottom: -8px;
@@ -2640,6 +2652,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
   line-height: 1;
   z-index: 2;
+  color: var(--text-hi);
   background: rgba(23, 24, 29, 0.9);
   border: 1.5px solid var(--line);
   border-radius: 50%;

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=205">
+<link rel="stylesheet" href="css/estilos.css?v=206">
 </head>
 <body>
 
@@ -183,6 +183,26 @@
         <button type="button" class="btn-ghost" data-accion="cancelar-formato-info">✕ Cancelar</button>
         <button type="button" class="admin-list-add-btn" data-accion="guardar-formato-info">💾 Guardar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL — corrección rápida de UNA fila (✏️ en el ranking
+     de Liga 1ª REF/Copa del Rey/Recopa/Champions/UEL/UECL) — mini diálogo
+     con un solo campo para ese jugador, sin abrir el editor de texto libre
+     grande (✏️ de cabecera, mismas 6 pantallas). Reutiliza .previa-overlay/
+     .previa-card/.previa-close tal cual (0 KB extra de chrome), igual que
+     el ℹ️ de arriba. Ver js/main.js::editarStatFilaInline/guardarStatFilaInline
+     y js/renderizadores.js::guardarStatFilaOverride. -->
+<div id="stat-fila-overlay" class="previa-overlay" hidden>
+  <div class="previa-card stat-fila-card">
+    <button type="button" class="previa-close" id="stat-fila-close" aria-label="Cerrar">✕</button>
+    <p class="password-title" id="stat-fila-titulo">Editar</p>
+    <p class="password-sub" id="stat-fila-sub"></p>
+    <input type="number" inputmode="decimal" id="stat-fila-input" class="live-select live-select--full stat-fila-input" placeholder="0">
+    <div class="admin-roadmap-editor-acciones">
+      <button type="button" class="btn-ghost" data-accion="cancelar-stat-fila">✕ Cancelar</button>
+      <button type="button" class="admin-list-add-btn" data-accion="guardar-stat-fila">💾 Guardar</button>
     </div>
   </div>
 </div>
@@ -397,17 +417,17 @@
      ningún servidor. Si el CDN no carga (sin red), el helper detecta que
      window.html2canvas no existe y el partido arranca igual, sin captura. -->
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
-<script src="js/estado.js?v=205" defer></script>
-<script src="js/sync.js?v=205" defer></script>
-<script src="js/renderizadores.js?v=205" defer></script>
-<script src="js/sistema-temporadas.js?v=205" defer></script>
-<script src="js/acta.js?v=205" defer></script>
-<script src="js/estadios.js?v=205" defer></script>
-<script src="js/balones.js?v=205" defer></script>
-<script src="js/escudos.js?v=205" defer></script>
-<script src="js/calendario.js?v=205" defer></script>
-<script src="js/persistencia.js?v=205" defer></script>
-<script src="js/main.js?v=205" defer></script>
+<script src="js/estado.js?v=206" defer></script>
+<script src="js/sync.js?v=206" defer></script>
+<script src="js/renderizadores.js?v=206" defer></script>
+<script src="js/sistema-temporadas.js?v=206" defer></script>
+<script src="js/acta.js?v=206" defer></script>
+<script src="js/estadios.js?v=206" defer></script>
+<script src="js/balones.js?v=206" defer></script>
+<script src="js/escudos.js?v=206" defer></script>
+<script src="js/calendario.js?v=206" defer></script>
+<script src="js/persistencia.js?v=206" defer></script>
+<script src="js/main.js?v=206" defer></script>
 
 </body>
 </html>

@@ -1536,6 +1536,86 @@
     return filas;
   }
 
+  // ============================================================
+  // ✏️ Corrección rápida de UNA fila del ranking (Liga 1ª REF/Copa del
+  // Rey/Recopa/Champions/UEL/UECL) — petición usuario: "yo quiero
+  // editarlas [las estadísticas] desde la tabla bonita", en vez de tener
+  // que abrir el editor de texto libre grande y buscar la línea de ESE
+  // jugador entre todas las demás. Reutiliza el MISMO almacén de texto
+  // libre por categoría y el MISMO parser (parsearLiga1RefStatTexto) que
+  // ese editor grande — solo cambia CÓMO se llega a escribir la línea, así
+  // "tu corrección gana sobre el cálculo automático"
+  // (_fusionarStatFilasConOverride) sigue aplicando igual venga de donde
+  // venga. `comp` es una de "1ref"/"copa"/"recopa"/"champions"/"uel"/
+  // "uecl"; `ligaId` solo importa para comp==="1ref" (resto de divisiones
+  // de Liga 1ª REF — 2ª REF/Hypermotion/Ea Sports — que son 100% texto
+  // libre sin auto-cálculo, pero comparten el mismo formato de línea).
+  // ============================================================
+  function _statTextoLeer(comp, ligaId, categoria) {
+    if (!window.Estado) return "";
+    switch (comp) {
+      case "1ref":
+        return ligaId && ligaId !== "1ref"
+          ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria)
+          : window.Estado.obtenerLiga1RefStatTexto(categoria);
+      case "copa": return window.Estado.obtenerCopaStatTexto(categoria);
+      case "recopa": return window.Estado.obtenerRecopaStatTexto(categoria);
+      case "champions": return window.Estado.obtenerChampionsStatTexto(categoria);
+      case "uel": return window.Estado.obtenerUelStatTexto(categoria);
+      case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
+      default: return "";
+    }
+  }
+  function _statTextoGuardar(comp, ligaId, categoria, texto) {
+    if (!window.Estado) return;
+    switch (comp) {
+      case "1ref":
+        if (ligaId && ligaId !== "1ref") window.Estado.guardarLigaExtraStatTexto(ligaId, categoria, texto);
+        else window.Estado.guardarLiga1RefStatTexto(categoria, texto);
+        break;
+      case "copa": window.Estado.guardarCopaStatTexto(categoria, texto); break;
+      case "recopa": window.Estado.guardarRecopaStatTexto(categoria, texto); break;
+      case "champions": window.Estado.guardarChampionsStatTexto(categoria, texto); break;
+      case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
+      case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
+    }
+  }
+
+  // Corrige (o añade) la línea de UN jugador dentro del texto libre de una
+  // categoría, sin tocar el resto de líneas ya escritas. `decimales` solo
+  // se usa para formatear el valor guardado (Zamora en Liga 1ª REF va con
+  // 2 decimales; el resto de categorías son enteras).
+  function guardarStatFilaOverride(comp, ligaId, categoria, nombre, equipo, cantidad, decimales) {
+    var items = parsearLiga1RefStatTexto(_statTextoLeer(comp, ligaId, categoria));
+    var key = _normNombre(nombre);
+    var encontrado = false;
+    items.forEach(function (it) {
+      if (_normNombre(it.nombre) === key) {
+        it.cantidad = cantidad;
+        if (equipo) it.equipo = equipo;
+        encontrado = true;
+      }
+    });
+    if (!encontrado) items.push({ nombre: nombre, equipo: equipo || "", cantidad: cantidad });
+    var texto = items.map(function (it) {
+      var val = decimales ? Number(it.cantidad).toFixed(2) : it.cantidad;
+      return it.nombre + (it.equipo ? " - " + it.equipo : "") + "  " + val;
+    }).join("\n");
+    _statTextoGuardar(comp, ligaId, categoria, texto);
+  }
+
+  // HTML del icono ✏️ que se añade a cada fila del ranking — abre el mini
+  // diálogo (ver js/main.js::editarStatFilaInline) con el valor actual de
+  // ESE jugador precargado. Los 6 render* de más abajo lo llaman igual.
+  function _statFilaEditarBtnHtml(comp, ligaId, categoria, idClubActivo, f, meta) {
+    return '<button type="button" class="stat-fila-editar-btn" data-accion="editar-stat-fila" data-comp="' + comp +
+      '" data-liga-id="' + escapeHTML(ligaId || "") + '" data-club-id="' + escapeHTML(idClubActivo || "") +
+      '" data-categoria="' + categoria + '" data-nombre="' + escapeHTML(f.nombre) + '" data-equipo="' + escapeHTML(f.equipo || "") +
+      '" data-cantidad="' + f.cantidad + '" data-decimales="' + (meta.decimales ? "1" : "0") +
+      '" data-label="' + escapeHTML(meta.label) + '" aria-label="Corregir ' + escapeHTML(meta.columna) +
+      ' de ' + escapeHTML(f.nombre) + '">✏️</button>';
+  }
+
   // Ranking final de una categoría: texto pegado (IA + correcciones
   // manuales de humanos) + auto-suma humana, top 15 por cantidad
   // (empate -> alfabético, mismo criterio que el resto de tablas de este
@@ -2174,7 +2254,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         // Fila del propio jugador humano (equipoId = el club activo) —
@@ -2191,7 +2271,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + valor + "</td>";
+          '<td class="clasificacion-pts">' + valor + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("1ref", ligaId, categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -2846,7 +2927,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -2857,7 +2938,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("copa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -3328,7 +3410,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -3339,7 +3421,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("recopa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -4203,7 +4286,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -4214,7 +4297,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("champions", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -4897,7 +4981,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -4908,7 +4992,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("uel", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -5597,7 +5682,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -5608,7 +5693,8 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>";
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("uecl", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -9803,6 +9889,7 @@
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
+    guardarStatFilaOverride: guardarStatFilaOverride,
     obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
     obtenerLigaNombreCorta: obtenerLigaNombreCorta,
     obtenerFormatoSuperligaTexto: obtenerFormatoSuperligaTexto,

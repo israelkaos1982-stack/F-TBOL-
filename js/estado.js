@@ -1256,7 +1256,18 @@
     // cualquier club que ya tuviera su menú personalizado antes de esta
     // versión. 🥈 — mismo emoji que ya usa la app para "Recopa Campeón y
     // Subcampeón" (ver renderizadores.js, leyenda de Copa del Rey).
-    { id: "recopa", icono: "🥈", etiqueta: "Recopa" }
+    { id: "recopa", icono: "🥈", etiqueta: "Recopa" },
+    // Petición usuario ("crear torneo Intercontinental, 16 equipos,
+    // eliminatorias como la copa del rey desde Octavos-Cuartos-Semifinal
+    // y final a partido único con prórroga y penaltis"): MISMO
+    // tratamiento de fábrica que "recopa" — tarjeta builtin en las 6
+    // cajas, sin exclusión de club. "intercontinental" ya era un compKey
+    // reconocido (balón/color de card/Final forzada — ver
+    // renderizadores.js: _BALON_COMP_ALIAS, COMP_LABEL, COMP_CLASE,
+    // FINALES_ACTIVADAS_COMPS), solo faltaba esta tarjeta + su motor.
+    // 🌎 — el emoji que ya usa la Leyenda del calendario para
+    // "Intercontinental" en otras pantallas de la app.
+    { id: "intercontinental", icono: "🌎", etiqueta: "Intercontinental" }
   ];
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
@@ -2275,6 +2286,61 @@
     }
   }
 
+  // ---------- Copa Intercontinental — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que Recopa de Europa (texto libre + auto-suma),
+  // con su PROPIA clave — nunca comparte contador con ninguna otra
+  // competición. Ver js/renderizadores.js::INTER_STATS/
+  // calcularInterStatsCombinado/renderizarInterStatDetalle.
+  function _interStatKey(categoria) {
+    return "ef7_inter_stat_" + categoria + "_v1";
+  }
+  function obtenerInterStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_interStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarInterStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_interStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Copa Intercontinental:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Copa Intercontinental — Eliminatorias ⛓️, texto libre por
+  // ronda (candado 646) ----------
+  // 16 equipos, 4 eliminatorias desde Octavos (8 vs 8) hasta la Final (1
+  // vs 1) — mismo mecanismo EXACTO que Recopa de Europa (ver
+  // obtenerRecopaPlayoffTexto más arriba), con su PROPIA clave. A
+  // diferencia de Recopa (64 equipos, empieza en 1/64) aquí Octavos ES la
+  // primera ronda — no hay una ronda previa "vista completa en Humanos"
+  // que recortar.
+  function _interPlayoffKey(ronda) {
+    return "ef7_inter_playoff_" + ronda + "_v1";
+  }
+  function obtenerInterPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_interPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarInterPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_interPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Copa Intercontinental:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -3055,6 +3121,10 @@
     guardarRecopaStatTexto: guardarRecopaStatTexto,
     obtenerRecopaPlayoffTexto: obtenerRecopaPlayoffTexto,
     guardarRecopaPlayoffTexto: guardarRecopaPlayoffTexto,
+    obtenerInterStatTexto: obtenerInterStatTexto,
+    guardarInterStatTexto: guardarInterStatTexto,
+    obtenerInterPlayoffTexto: obtenerInterPlayoffTexto,
+    guardarInterPlayoffTexto: guardarInterPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

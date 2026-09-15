@@ -199,6 +199,19 @@
         window.Renderizadores.obtenerFormatoRecopaTexto(), etiqueta
       );
       window.Renderizadores.irRecopaTab(clubId, "humanos");
+    } else if (vista === "intercontinental") {
+      // Mismo patrón EXACTO que "recopa" (Humanos + Eliminatorias, sin
+      // fase de grupos) — petición usuario 2026-09-15: "Quiero crear
+      // torneo llamado Intercontinental, 16 equipos jugando eliminatorias
+      // como la copa del rey desde Octavos-Cuartos-Semifinal y final a
+      // partido único con prórroga y penaltis, con editor". Sin exclusión
+      // de club (competición mundial, los 6 pueden jugarla).
+      body.innerHTML = '<div id="inter-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Copa Intercontinental", "info-intercontinental-formato", null,
+        window.Renderizadores.obtenerFormatoInterTexto(), etiqueta
+      );
+      window.Renderizadores.irInterTab(clubId, "humanos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -529,6 +542,10 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRecopaTexto(), "recopa", mostrarInfoRecopa);
   }
+  function mostrarInfoIntercontinental() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoInterTexto(), "intercontinental", mostrarInfoIntercontinental);
+  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     var editor = document.getElementById("liga-info-editor");
@@ -622,6 +639,7 @@
     "1ref": function (clubId, categoria, ligaId) { window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId); },
     copa: function (clubId, categoria) { window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria); },
     recopa: function (clubId, categoria) { window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria); },
+    intercontinental: function (clubId, categoria) { window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria); },
     champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
     uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); }
@@ -757,6 +775,50 @@
   }
   function cancelarRecopaPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarRecopa("recopa-content", clubId);
+  }
+
+  // ---------- Copa Intercontinental — 👥️ Humanos + ⛓️ Eliminatorias, mismo
+  // patrón EXACTO que Recopa de Europa (arriba), contenedor "inter-content".
+  function irInterTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irInterTab(clubId, tab);
+  }
+  function verInterStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria);
+  }
+  function volverInter(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarInter("inter-content", clubId);
+  }
+  function editarInterStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("inter-content");
+      if (cont) window.Renderizadores.pintarEditorInterStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarInterStat(clubId, categoria) {
+    var ta = document.getElementById("inter-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarInterStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria);
+  }
+  function cancelarInterStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria);
+  }
+  function editarInterPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("inter-content");
+      if (cont) window.Renderizadores.pintarEditorInterPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
+  }
+  function guardarInterPlayoff(clubId, ronda) {
+    var ta = document.getElementById("inter-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarInterPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarInter("inter-content", clubId);
+  }
+  function cancelarInterPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarInter("inter-content", clubId);
   }
 
   // ---------- Champions — Fase de Grupos (40 equipos, "batidora") +
@@ -1641,6 +1703,16 @@
         case "editar-recopa-playoff-inline": editarRecopaPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-recopa-playoff": guardarRecopaPlayoff(d.clubId, d.ronda); break;
         case "cancelar-recopa-playoff": cancelarRecopaPlayoff(d.clubId); break;
+        case "info-intercontinental-formato": mostrarInfoIntercontinental(); break;
+        case "inter-tab-ir": irInterTab(d.clubId, d.tab); break;
+        case "ver-inter-stat": verInterStat(d.clubId, d.categoria); break;
+        case "volver-inter": volverInter(d.clubId); break;
+        case "editar-inter-stat-inline": editarInterStatInline(d.clubId, d.categoria); break;
+        case "guardar-inter-stat": guardarInterStat(d.clubId, d.categoria); break;
+        case "cancelar-inter-stat": cancelarInterStat(d.clubId, d.categoria); break;
+        case "editar-inter-playoff-inline": editarInterPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-inter-playoff": guardarInterPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-inter-playoff": cancelarInterPlayoff(d.clubId); break;
         case "champions-tab-ir": irChampionsTab(d.clubId, d.tab); break;
         case "editar-champions-inline": editarChampionsInline(d.clubId); break;
         case "guardar-champions": guardarChampions(d.clubId); break;

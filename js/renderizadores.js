@@ -7872,16 +7872,19 @@
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =
       '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ El gol marcado fuera cuenta doble en caso de empate global.</p>';
-    var avisoProrrogaSiempre =
-      '<p class="live-eliminatoria live-eliminatoria--pendiente">⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta.</p>';
-    if (modo === "eliminatoria-unica" && _esFinalDeTorneo(partido)) {
+    if (modo === "eliminatoria-unica") {
       // FINAL de torneo (Copa/Champions/UEL/UECL/Recopa/Supercopa España/
-      // Supercopa Europa/Intercontinental/Mundialito/Verano) — Prórroga y
-      // Penaltis van SIEMPRE activados, sin casilla que tocar (petición
-      // usuario). js/acta.js::iniciarPartidoEnVivo fuerza `prorroga:true`
-      // para este caso, igual que ya hace con la vuelta decisiva.
-      box.innerHTML = avisoProrrogaSiempre;
-    } else if (modo === "eliminatoria-unica") {
+      // Supercopa Europa/Intercontinental/Mundialito/Verano) — petición
+      // usuario 2026-09-15: ya NO se pinta como aviso de texto plano
+      // ("SIEMPRE disponibles"), sin nada que tocar — vuelve a la MISMA
+      // casilla OBLIGATORIA que cualquier otra eliminatoria a partido
+      // único (fuego, `data-obligatoria="1"`, "Activar Prórroga y
+      // Penaltis"), así el admin la marca como confirmación explícita
+      // igual que en cualquier Final de comp. `js/acta.js::iniciarPartidoEnVivo`
+      // sigue forzando `prorroga:true` para este caso sin mirar el
+      // `.checked` (misma red de seguridad que ya tiene la vuelta
+      // decisiva) — la Final NUNCA puede quedar sin prórroga+penaltis
+      // aunque algo impida pintar/marcar la casilla.
       var esAmistoso = _resolverCompKeyBalon(partido.competicion) === "amistosos";
       box.innerHTML = esAmistoso ? checkboxHtml : checkboxObligatorioHtml;
     } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {

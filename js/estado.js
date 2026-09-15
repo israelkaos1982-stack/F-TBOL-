@@ -1267,7 +1267,17 @@
     // FINALES_ACTIVADAS_COMPS), solo faltaba esta tarjeta + su motor.
     // 🌎 — el emoji que ya usa la Leyenda del calendario para
     // "Intercontinental" en otras pantallas de la app.
-    { id: "intercontinental", icono: "🌎", etiqueta: "Intercontinental" }
+    { id: "intercontinental", icono: "🌎", etiqueta: "Intercontinental" },
+    // Petición usuario ("Creame torneo de verano, 16 equipos jugando
+    // eliminatorias como la copa del rey desde Octavos-Cuartos-
+    // Semifinal y final a partido único con prórroga y penaltis, con
+    // editor"): MISMO tratamiento de fábrica que "intercontinental" —
+    // tarjeta builtin en las 6 cajas, sin exclusión de club, sin fase
+    // de grupos. "verano" ya era un compKey reconocido (balón/Final
+    // forzada — ver renderizadores.js: _BALON_COMP_ALIAS,
+    // FINALES_ACTIVADAS_COMPS), solo faltaba esta tarjeta + su motor +
+    // su color/etiqueta de card (COMP_LABEL/COMP_CLASE/css/estilos.css).
+    { id: "verano", icono: "☀️", etiqueta: "Torneo de Verano" }
   ];
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
@@ -2341,6 +2351,60 @@
     }
   }
 
+  // ---------- Torneo de Verano — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que Copa Intercontinental (texto libre +
+  // auto-suma), con su PROPIA clave — nunca comparte contador con
+  // ninguna otra competición. Ver js/renderizadores.js::VERANO_STATS/
+  // calcularVeranoStatsCombinado/renderizarVeranoStatDetalle.
+  function _veranoStatKey(categoria) {
+    return "ef7_verano_stat_" + categoria + "_v1";
+  }
+  function obtenerVeranoStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_veranoStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarVeranoStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_veranoStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " del Torneo de Verano:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Torneo de Verano — Eliminatorias ⛓️, texto libre por ronda
+  // (candado 646) ----------
+  // 16 equipos, 4 eliminatorias desde Octavos (8 vs 8) hasta la Final (1
+  // vs 1) — mismo mecanismo EXACTO que Copa Intercontinental (ver
+  // obtenerInterPlayoffTexto más arriba), con su PROPIA clave. Octavos ES
+  // la primera ronda — no hay una ronda previa "vista completa en
+  // Humanos" que recortar.
+  function _veranoPlayoffKey(ronda) {
+    return "ef7_verano_playoff_" + ronda + "_v1";
+  }
+  function obtenerVeranoPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_veranoPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarVeranoPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_veranoPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " del Torneo de Verano:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -3125,6 +3189,10 @@
     guardarInterStatTexto: guardarInterStatTexto,
     obtenerInterPlayoffTexto: obtenerInterPlayoffTexto,
     guardarInterPlayoffTexto: guardarInterPlayoffTexto,
+    obtenerVeranoStatTexto: obtenerVeranoStatTexto,
+    guardarVeranoStatTexto: guardarVeranoStatTexto,
+    obtenerVeranoPlayoffTexto: obtenerVeranoPlayoffTexto,
+    guardarVeranoPlayoffTexto: guardarVeranoPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

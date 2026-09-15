@@ -1902,6 +1902,36 @@
     }
   }
 
+  // Migración FORZADA de UN SOLO USO (candado ef7_derbys_forzar_v1):
+  // reporte usuario 2026-09-16 — el desglose de Toñín↔Isra (y solo ese
+  // par) NO cuadraba entre las 2 cajas, aunque el catálogo de fábrica
+  // (DERBYS_DEFAULT_TEXTO) YA tenía los números correctos y simétricos.
+  // Causa: cada club guarda su override en SU PROPIA clave de
+  // localStorage (obtenerDerbysTexto la prefiere SIEMPRE sobre el valor
+  // de fábrica) — este dispositivo tenía un valor VIEJO guardado ahí
+  // desde antes de que se corrigiera el catálogo, así que actualizar
+  // solo el texto de fábrica en el código nunca llegaba a esta pantalla
+  // ya abierta. Aquí se SOBRESCRIBE (a diferencia de
+  // `_migrarAliasFabricaV1`, que solo BORRA el override) el valor
+  // guardado de los 6 clubes con el texto de fábrica actual — verificado
+  // celda a celda contra la tabla que dio el usuario en esa misma
+  // conversación. Corre UNA vez por dispositivo; cualquier edición
+  // manual POSTERIOR a esta migración (candado 646) se respeta con
+  // normalidad, igual que siempre.
+  var DERBYS_FORZAR_MIGRACION_KEY = "ef7_derbys_forzar_v1";
+  function _forzarDerbysFabricaV1() {
+    try {
+      if (localStorage.getItem(DERBYS_FORZAR_MIGRACION_KEY)) return;
+      Object.keys(DERBYS_DEFAULT_TEXTO).forEach(function (clubId) {
+        guardarDerbysTexto(clubId, DERBYS_DEFAULT_TEXTO[clubId]);
+      });
+      localStorage.setItem(DERBYS_FORZAR_MIGRACION_KEY, "1");
+    } catch (err) {
+      console.error("[estado] no se pudo forzar el catálogo de fábrica de derbys:", err);
+    }
+  }
+  _forzarDerbysFabricaV1();
+
   // ---------- Plantilla (roster real) por club ----------
   // Texto libre, una línea por jugador — mismo patrón que el calendario
   // extra o los títulos: cada mánager pega su plantilla real completa

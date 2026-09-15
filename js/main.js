@@ -224,6 +224,19 @@
         window.Renderizadores.obtenerFormatoVeranoTexto(), etiqueta
       );
       window.Renderizadores.irVeranoTab(clubId, "humanos");
+    } else if (vista === "usc") {
+      // Mismo patrón EXACTO que "verano"/"intercontinental" (Humanos +
+      // Eliminatorias, sin fase de grupos) — petición usuario
+      // 2026-09-15: "Creame Supercopa Europa, 4 equipos jugando
+      // eliminatorias como la copa del rey desde Semifinal y final a
+      // partido único con prórroga y penaltis, con editor". Sin
+      // exclusión de club; solo 2 rondas (Semifinal→Final, 4 clubes).
+      body.innerHTML = '<div id="usc-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Supercopa de Europa", "info-usc-formato", null,
+        window.Renderizadores.obtenerFormatoUscTexto(), etiqueta
+      );
+      window.Renderizadores.irUscTab(clubId, "humanos");
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
@@ -562,6 +575,10 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoVeranoTexto(), "verano", mostrarInfoVerano);
   }
+  function mostrarInfoUsc() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUscTexto(), "usc", mostrarInfoUsc);
+  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     var editor = document.getElementById("liga-info-editor");
@@ -657,6 +674,7 @@
     recopa: function (clubId, categoria) { window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria); },
     intercontinental: function (clubId, categoria) { window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria); },
     verano: function (clubId, categoria) { window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria); },
+    usc: function (clubId, categoria) { window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria); },
     champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
     uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); }
@@ -881,6 +899,51 @@
   }
   function cancelarVeranoPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarVerano("verano-content", clubId);
+  }
+
+  // ---------- Supercopa de Europa — 👥️ Humanos + ⛓️ Eliminatorias, mismo
+  // patrón EXACTO que el Torneo de Verano (arriba), contenedor
+  // "usc-content".
+  function irUscTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irUscTab(clubId, tab);
+  }
+  function verUscStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria);
+  }
+  function volverUsc(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUsc("usc-content", clubId);
+  }
+  function editarUscStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("usc-content");
+      if (cont) window.Renderizadores.pintarEditorUscStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarUscStat(clubId, categoria) {
+    var ta = document.getElementById("usc-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarUscStatTexto(categoria, ta.value);
+    window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria);
+  }
+  function cancelarUscStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria);
+  }
+  function editarUscPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("usc-content");
+      if (cont) window.Renderizadores.pintarEditorUscPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
+  }
+  function guardarUscPlayoff(clubId, ronda) {
+    var ta = document.getElementById("usc-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarUscPlayoffTexto(ronda, ta.value);
+    window.Renderizadores.renderizarUsc("usc-content", clubId);
+  }
+  function cancelarUscPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarUsc("usc-content", clubId);
   }
 
   // ---------- Champions — Fase de Grupos (40 equipos, "batidora") +
@@ -1785,6 +1848,16 @@
         case "editar-verano-playoff-inline": editarVeranoPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-verano-playoff": guardarVeranoPlayoff(d.clubId, d.ronda); break;
         case "cancelar-verano-playoff": cancelarVeranoPlayoff(d.clubId); break;
+        case "info-usc-formato": mostrarInfoUsc(); break;
+        case "usc-tab-ir": irUscTab(d.clubId, d.tab); break;
+        case "ver-usc-stat": verUscStat(d.clubId, d.categoria); break;
+        case "volver-usc": volverUsc(d.clubId); break;
+        case "editar-usc-stat-inline": editarUscStatInline(d.clubId, d.categoria); break;
+        case "guardar-usc-stat": guardarUscStat(d.clubId, d.categoria); break;
+        case "cancelar-usc-stat": cancelarUscStat(d.clubId, d.categoria); break;
+        case "editar-usc-playoff-inline": editarUscPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-usc-playoff": guardarUscPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-usc-playoff": cancelarUscPlayoff(d.clubId); break;
         case "champions-tab-ir": irChampionsTab(d.clubId, d.tab); break;
         case "editar-champions-inline": editarChampionsInline(d.clubId); break;
         case "guardar-champions": guardarChampions(d.clubId); break;

@@ -1277,7 +1277,18 @@
     // forzada — ver renderizadores.js: _BALON_COMP_ALIAS,
     // FINALES_ACTIVADAS_COMPS), solo faltaba esta tarjeta + su motor +
     // su color/etiqueta de card (COMP_LABEL/COMP_CLASE/css/estilos.css).
-    { id: "verano", icono: "☀️", etiqueta: "Torneo de Verano" }
+    { id: "verano", icono: "☀️", etiqueta: "Torneo de Verano" },
+    // Petición usuario ("Creame Supercopa Europa, 4 equipos jugando
+    // eliminatorias como la copa del rey desde Semifinal y final a
+    // partido único con prórroga y penaltis, con editor"): MISMO
+    // tratamiento de fábrica que "intercontinental"/"verano" — tarjeta
+    // builtin en las 6 cajas, sin exclusión de club, sin fase de
+    // grupos, solo 2 rondas (Semifinal→Final, 4 clubes). "usc" ya era
+    // un compKey reconocido (balón/color de card/Final forzada — ver
+    // renderizadores.js: _BALON_COMP_ALIAS, COMP_LABEL, COMP_CLASE,
+    // FINALES_ACTIVADAS_COMPS, y css/estilos.css ya tenía .comp-usc
+    // estilizado en plata), solo faltaba esta tarjeta + su motor.
+    { id: "usc", icono: "🛡️", etiqueta: "Supercopa Europa" }
   ];
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
@@ -2405,6 +2416,60 @@
     }
   }
 
+  // ---------- Supercopa de Europa — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que el Torneo de Verano (texto libre +
+  // auto-suma), con su PROPIA clave — nunca comparte contador con
+  // ninguna otra competición. Ver js/renderizadores.js::USC_STATS/
+  // calcularUscStatsCombinado/renderizarUscStatDetalle.
+  function _uscStatKey(categoria) {
+    return "ef7_usc_stat_" + categoria + "_v1";
+  }
+  function obtenerUscStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_uscStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUscStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_uscStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de la Supercopa de Europa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Supercopa de Europa — Eliminatorias ⛓️, texto libre por
+  // ronda (candado 646) ----------
+  // 4 equipos, 2 eliminatorias: Semifinales (2 vs 2) y Final (1 vs 1) —
+  // mismo mecanismo EXACTO que el Torneo de Verano (ver
+  // obtenerVeranoPlayoffTexto más arriba), con su PROPIA clave.
+  // Semifinales ES la primera ronda — no hay una ronda previa "vista
+  // completa en Humanos" que recortar.
+  function _uscPlayoffKey(ronda) {
+    return "ef7_usc_playoff_" + ronda + "_v1";
+  }
+  function obtenerUscPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_uscPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarUscPlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_uscPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de la Supercopa de Europa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -3193,6 +3258,10 @@
     guardarVeranoStatTexto: guardarVeranoStatTexto,
     obtenerVeranoPlayoffTexto: obtenerVeranoPlayoffTexto,
     guardarVeranoPlayoffTexto: guardarVeranoPlayoffTexto,
+    obtenerUscStatTexto: obtenerUscStatTexto,
+    guardarUscStatTexto: guardarUscStatTexto,
+    obtenerUscPlayoffTexto: obtenerUscPlayoffTexto,
+    guardarUscPlayoffTexto: guardarUscPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

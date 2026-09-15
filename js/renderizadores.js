@@ -567,7 +567,7 @@
   // Promoción de ascenso/descenso). Un futuro playoff que cumpla lo mismo
   // se añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder
   // un partido no elimina, y las jornadas no dependen de ganar la anterior).
-  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, verano: true };
+  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, verano: true, usc: true };
 
   // ¿Esta "ronda" es UNA de las 2 legs de una eliminatoria ida+vuelta
   // ("Ida", "Vuelta", "Ida Semifinal", "Promoción · Vuelta"...)? Y su base
@@ -1564,6 +1564,7 @@
       case "recopa": return window.Estado.obtenerRecopaStatTexto(categoria);
       case "intercontinental": return window.Estado.obtenerInterStatTexto(categoria);
       case "verano": return window.Estado.obtenerVeranoStatTexto(categoria);
+      case "usc": return window.Estado.obtenerUscStatTexto(categoria);
       case "champions": return window.Estado.obtenerChampionsStatTexto(categoria);
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
       case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
@@ -1581,6 +1582,7 @@
       case "recopa": window.Estado.guardarRecopaStatTexto(categoria, texto); break;
       case "intercontinental": window.Estado.guardarInterStatTexto(categoria, texto); break;
       case "verano": window.Estado.guardarVeranoStatTexto(categoria, texto); break;
+      case "usc": window.Estado.guardarUscStatTexto(categoria, texto); break;
       case "champions": window.Estado.guardarChampionsStatTexto(categoria, texto); break;
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
       case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
@@ -4454,6 +4456,464 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-verano-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-verano-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
+  // 3c-quinquies-quater. SUPERCOPA DE EUROPA — 👥️ Humanos + ⛓️ Eliminatorias
+  // — MISMO estilo EXACTO que la Copa Intercontinental/Torneo de Verano
+  // de arriba, pero con solo 4 clubes y 2 rondas: Semifinal (2 vs 2) →
+  // Final (1 vs 1) — petición usuario 2026-09-15: "Creame Supercopa
+  // Europa, 4 equipos jugando eliminatorias como la copa del rey desde
+  // Semifinal y final a partido único con prórroga y penaltis, con
+  // editor". Sin fase de grupos, sin exclusiones de club.
+  // ============================================================
+  function _uscEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de Supercopa de Europa de UN club, ordenados por fecha —
+  // mismo criterio EXACTO que _veranoPartidosDelClub/_interPartidosDelClub.
+  // `competicion==="usc"` ya sale normalizado de Calendario extra
+  // (_BALON_COMP_ALIAS: "Supercopa Europa"/"Supercopa de Europa" tecleado
+  // por el admin siempre cuadra con este ===).
+  function _uscPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "usc" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Supercopa de
+  // Europa ya jugados y suma goles/MVP/amarillas/rojas por jugador —
+  // mismo criterio EXACTO que calcularVeranoStatsHumanos, con su PROPIO
+  // acumulado (nunca comparte contador con ninguna otra competición).
+  function calcularUscStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _uscEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _uscPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+          }
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularVeranoStatsCombinado, sobre el
+  // almacén propio de Supercopa de Europa (Estado.obtenerUscStatTexto).
+  function calcularUscStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerUscStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularUscStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de la Supercopa de Europa" de UN club — mismo cálculo
+  // EXACTO que _veranoEstadoClub/_interEstadoClub (reutiliza el mismo
+  // _estadoRondasEliminacion, genérico por competición). Devuelve null si
+  // el club no tiene ningún partido de esta competición todavía.
+  function _uscEstadoClub(datos, e) {
+    var partidos = _uscPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
+  }
+
+  // Texto EXACTO del ℹ️ de la Supercopa de Europa — 2 rondas, TODAS a
+  // partido único con prórroga y penaltis (nunca ida+vuelta).
+  var FORMATO_USC_TEXTO = [
+    "📋FORMATO SUPERCOPA DE EUROPA:",
+    "4 clubes participan en 2 eliminatorias: Semifinales y Final.",
+    "",
+    "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "Semifinales — 2 vs 2.",
+    "Final — 1 vs 1.",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan como Local"
+  ].join("\n");
+  function obtenerFormatoUscTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("usc") : "";
+    return override || FORMATO_USC_TEXTO;
+  }
+
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
+  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
+  // criterio EXACTO que _veranoAppendStatsGrid.
+  var USC_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  function _uscAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = USC_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-usc-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
+  // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
+  var _uscTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _uscTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_uscTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="usc-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_uscTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="usc-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (Semifinal → Final) de CADA
+  // club humano, uno debajo del otro — mismo patrón EXACTO que
+  // _renderizarVeranoHumanos, reutilizando _copaBloqueClubHTML tal cual.
+  function _renderizarUscHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _uscEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _uscEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🛡️", "Todavía no hay partidos de la Supercopa de Europa. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Supercopa de Europa»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
+      });
+    }
+
+    _uscAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO de 2 rondas ----------
+  // Semifinal YA es la primera ronda del cuadro de 4 clubes — las 2
+  // rondas se ven todas aquí, igual que Intercontinental/Verano arrancan
+  // en Octavos.
+  var USC_PLAYOFF_RONDAS = [
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _veranoPlayoffHumano, filtrando competicion==="usc"
+  // y reutilizando el detector de ronda de Copa (_copaPlayoffRondaCoincide,
+  // genérico por rondaKey/rondaTexto — no depende de qué competición sea).
+  function _uscPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "usc" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de UNA ronda de la Supercopa de Europa (Semifinal o Final —
+  // AMBAS se resuelven IGUAL, ninguna depende de la anterior) — mismo
+  // criterio EXACTO que _veranoRondaDesdeTexto: cada club humano con
+  // partidos YA jugados esta ronda aporta el suyo auto-computado; el resto
+  // sale del texto libre que el admin pega para ESA ronda concreta
+  // ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
+  function _uscRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _uscEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _uscPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerUscPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 2 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
+  // admin pegó para ESA ronda.
+  function calcularUscPlayoffTodasLasRondas(datos) {
+    return {
+      semis: _uscRondaDesdeTexto(datos, "semis"),
+      final: _uscRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  function _renderizarUscEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularUscPlayoffTodasLasRondas(datos);
+
+    USC_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-usc-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key === "semis"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 2 duelos de Semifinales.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir el cruce de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _uscAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarUsc(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _uscTabsHTML(idClubActivo));
+
+      if (_uscTabActual === "eliminatorias") _renderizarUscEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarUscHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_uscTabActual`, mismo patrón que irVeranoTab.
+  function irUscTab(idClubActivo, tab) {
+    _uscTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarUsc("usc-content", idClubActivo);
+  }
+
+  // Ranking (top 15) de UNA categoría de Supercopa de Europa — mismo
+  // patrón exacto que renderizarVeranoStatDetalle.
+  function renderizarUscStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = USC_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-usc" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-usc-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularUscStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("usc", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de la Supercopa de
+  // Europa (PIN 646) — mismo patrón exacto que pintarEditorVeranoStat.
+  function pintarEditorUscStat(contenedor, idClubActivo, categoria) {
+    var meta = USC_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de Supercopa de Europa — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "usc-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
+    textarea.value = window.Estado ? window.Estado.obtenerUscStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-usc-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-usc-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorVeranoPlayoff: las 2 rondas se
+  // pegan igual, una línea por cruce, siempre marcador de partido único.
+  function pintarEditorUscPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = USC_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esSemis = rondaKey === "semis";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esSemis
+      ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
+        "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
+        "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) del cruce de la Final — vale «-» " +
+        "o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Si un club humano ya tiene su propio " +
+        "partido de Supercopa de Europa jugado en esta ronda (Calendario extra), su cruce se calcula solo y " +
+        "esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "usc-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esSemis ? 6 : 4;
+    textarea.placeholder = esSemis
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      : "Liverpool 1-0 Arsenal";
+    textarea.value = window.Estado ? window.Estado.obtenerUscPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-usc-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-usc-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -10960,6 +11420,13 @@
     pintarEditorVeranoStat: pintarEditorVeranoStat,
     pintarEditorVeranoPlayoff: pintarEditorVeranoPlayoff,
     calcularVeranoPlayoffTodasLasRondas: calcularVeranoPlayoffTodasLasRondas,
+    obtenerFormatoUscTexto: obtenerFormatoUscTexto,
+    renderizarUsc: renderizarUsc,
+    irUscTab: irUscTab,
+    renderizarUscStatDetalle: renderizarUscStatDetalle,
+    pintarEditorUscStat: pintarEditorUscStat,
+    pintarEditorUscPlayoff: pintarEditorUscPlayoff,
+    calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas,
     renderizarChampions: renderizarChampions,
     irChampionsTab: irChampionsTab,
     renderizarChampionsStatDetalle: renderizarChampionsStatDetalle,

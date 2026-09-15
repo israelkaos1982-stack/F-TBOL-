@@ -6769,13 +6769,21 @@
   // algún campo (cuenta 0), a que no lleve ":" y al orden de los campos.
   // Una línea que no case con NINGUNO de los rivales del catálogo cerrado
   // se ignora en silencio (mismo criterio que parsearTitulosTexto).
+  //
+  // Tolerante también a un "-" delante del número (p.ej. "G- -77"): la
+  // hoja de Excel que el usuario transcribe muestra G- (goles en contra)
+  // como negativo por claridad visual, pero la app SIEMPRE lo guarda como
+  // entero positivo (regla ya documentada del proyecto) — sin este "-?"
+  // opcional, copiar el número tal cual aparece en el Excel hacía que
+  // `\d+` no casara nada y el campo se quedara silenciosamente a 0 al
+  // guardar, dando la falsa impresión de "no se guarda lo que edito".
   var DERBY_CAMPO_REGEX = {
-    pj: /\bPJ\s*:?\s*(\d+)/i,
-    pg: /\bPG\s*:?\s*(\d+)/i,
-    pe: /\bPE\s*:?\s*(\d+)/i,
-    pp: /\bPP\s*:?\s*(\d+)/i,
-    gf: /\b(?:GF|G\s*\+)\s*:?\s*(\d+)/i,
-    gc: /\b(?:GC|G\s*-)\s*:?\s*(\d+)/i
+    pj: /\bPJ\s*:?\s*-?\s*(\d+)/i,
+    pg: /\bPG\s*:?\s*-?\s*(\d+)/i,
+    pe: /\bPE\s*:?\s*-?\s*(\d+)/i,
+    pp: /\bPP\s*:?\s*-?\s*(\d+)/i,
+    gf: /\b(?:GF|G\s*\+)\s*:?\s*-?\s*(\d+)/i,
+    gc: /\b(?:GC|G\s*-)\s*:?\s*-?\s*(\d+)/i
   };
   function _derbyResolverRival(nombreCrudo, rivales) {
     var norm = _normNombre(nombreCrudo);

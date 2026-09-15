@@ -1826,23 +1826,23 @@
   // "fallo de guardado" — es intencionalmente un dato de mantenimiento
   // manual, no en vivo.
   //
-  // Actualizado 2026-09-13 desde "Estadisticas_Derbys.xlsx" (2ª entrega
-  // del usuario, tras la 1ª transcripción) — cada bloque del Excel trae,
+  // Actualizado 2026-09-15 desde "Estadisticas_Derbys.xlsx" (3ª entrega
+  // del usuario, tras la 2ª transcripción) — cada bloque del Excel trae,
   // POR MÁNAGER, su desglose PJ/PG/PE/PP/G+/G- contra cada uno de los
   // otros 5 (el Excel guarda G- en negativo; aquí se transcribe en
   // positivo, mismo formato que ya usaba esta tabla). Transcrito TAL CUAL
   // viene en el Excel, sin "corregir" descuadres puntuales entre el
   // registro de un mánager y el de su rival — cada uno lleva su PROPIA
   // cuenta de forma independiente, por diseño (ver comentario de más
-  // arriba). Único cambio real frente a la entrega anterior: Toñín vs
-  // Acsa (y su espejo Acsa vs Toñín) — 2 derbys más jugados desde
+  // arriba). Único cambio real frente a la entrega anterior: Isra vs
+  // Toñín (y su espejo Toñín vs Isra) — 1 derbi más jugado desde
   // entonces. El resto de los 30 registros (6 mánagers × 5 rivales) sale
-  // IDÉNTICO en esta 2ª entrega del Excel, comprobado celda a celda.
+  // IDÉNTICO en esta 3ª entrega del Excel, comprobado celda a celda.
   var DERBYS_DEFAULT_TEXTO = {
     "atletico-madrid": [ // ISRA ✏️
       "Álvaro 🐭: PJ 10 PG 7 PE 1 PP 2 G+ 30 G- 21",
       "Acsa 🔨: PJ 8 PG 7 PE 0 PP 1 G+ 37 G- 9",
-      "Toñín 💡: PJ 14 PG 11 PE 1 PP 2 G+ 65 G- 23",
+      "Toñín 💡: PJ 15 PG 12 PE 1 PP 2 G+ 77 G- 23",
       "Ángel 😈: PJ 10 PG 8 PE 0 PP 2 G+ 40 G- 16",
       "Izan 🦆: PJ 3 PG 2 PE 0 PP 1 G+ 8 G- 4"
     ].join("\n"),
@@ -1879,7 +1879,7 @@
       "Acsa 🔨: PJ 12 PG 4 PE 1 PP 7 G+ 19 G- 26",
       "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
       "Izan 🦆: PJ 3 PG 1 PE 0 PP 2 G+ 3 G- 6",
-      "Isra ✏️: PJ 14 PG 2 PE 1 PP 11 G+ 23 G- 65"
+      "Isra ✏️: PJ 15 PG 2 PE 1 PP 12 G+ 23 G- 77"
     ].join("\n")
   };
   function _derbysKey(clubId) { return "ef7_derbys_v1_" + clubId; }

@@ -1978,7 +1978,10 @@
   // liga NUEVA de estilo "europa" añade su propia entrada aquí — nunca
   // reutilizar el reparto de otra liga sin comprobarlo primero.
   var _EUROPA_ZONA_CONFIG = {
-    easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: true, descensoN: 3 },
+    // descensoN=4 (petición usuario): con 20 equipos, 17º-20º (4) bajan
+    // directos y el 16º juega la promoción de permanencia — antes eran
+    // solo 3 descensos directos (18º-20º) con el 17º en promoción.
+    easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: true, descensoN: 4 },
     ligue1: { champions: 3, previa: 4, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 4 }
   };
   function _ligaEuropaZona(pos, total, ligaId) {

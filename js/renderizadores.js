@@ -805,7 +805,18 @@
   function _normNombre(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   }
-  function parsearPartidosExtraTexto(texto, nombreClubActivo) {
+  // `onIgnorada(lineaOriginal)` — opcional, callback informativo (NUNCA
+  // cambia qué se guarda) que se dispara con el texto ORIGINAL de cada
+  // línea no vacía que este parser descarta en silencio. Existe para que
+  // el editor (ver pintarEditorCalendarioExtraClub / main.js) pueda
+  // avisar al admin ANTES de guardar — sin este aviso, un partido mal
+  // tecleado (p.ej. "Liverpool vs Cultural Leonesa" sin el separador
+  // " - " de Competición/Ronda por delante) se pierde sin ningún rastro:
+  // el admin lo ve escrito en su propio texto pero jamás aparece en el
+  // calendario, indistinguible de "el partido ha desaparecido" (reporte
+  // usuario, 2 capturas: una línea sin numerar justo así, y 4 cards del
+  // calendario que el admin no lograba explicarse).
+  function parsearPartidosExtraTexto(texto, nombreClubActivo, onIgnorada) {
     var clubNorm = _normNombre(nombreClubActivo || "");
     var items = [];
     var idsVistos = {}; // desambigua el raro caso de 2 líneas con la MISMA competición+ronda+rival (ida/vuelta sin distinguir en el texto)
@@ -825,7 +836,7 @@
       // que nunca parte un guion SIN espacio a ningún lado (un nombre
       // compuesto real, p.ej. "F5N5000-TL"/"Beira-Rio").
       var partes = l.split(/\s+-\s*|\s*-\s+/);
-      if (partes.length < 2) return; // hace falta al menos Competición - Ronda
+      if (partes.length < 2) { if (onIgnorada) onIgnorada(l); return; } // hace falta al menos Competición - Ronda
 
       var competicion = partes[0].trim();
       var ronda = partes[1].trim();
@@ -840,7 +851,7 @@
       // todas "Competición - Ronda", sin rival, así que NINGUNA cargaba.
       var rivalCrudo = partes.length >= 3 ? partes[2].trim() : "?";
       var fecha = partes.length > 3 ? partes.slice(3).join(" - ").trim() : "";
-      if (!competicion || !ronda) return;
+      if (!competicion || !ronda) { if (onIgnorada) onIgnorada(l); return; }
 
       // Marcador ya jugado: SIEMPRE (goles del club activo - goles del
       // rival), en ese orden, sea cual sea el lado en el que jugó.
@@ -862,7 +873,7 @@
         esVisitante = /visitante/i.test(mMarca[1]);
         rivalCrudo = rivalCrudo.slice(0, mMarca.index).trim();
       }
-      if (!rivalCrudo) return;
+      if (!rivalCrudo) { if (onIgnorada) onIgnorada(l); return; }
 
       // "Equipo A vs Equipo B": el orden decide quién es local (A) y quién
       // visitante (B) — miramos cuál de los 2 es el club activo para saber
@@ -907,6 +918,18 @@
       });
     });
     return items;
+  }
+
+  // Líneas NO VACÍAS del Calendario Extra que parsearPartidosExtraTexto
+  // descartaría en silencio (sin separador " - " Competición/Ronda, o con
+  // Competición/Ronda/Rival vacíos tras limpiar marcador/resultado) — para
+  // que el editor pueda avisar al admin ANTES de guardar (ver comentario
+  // de onIgnorada en parsearPartidosExtraTexto). Nunca cambia qué se
+  // guarda: es una pasada de SOLO LECTURA sobre el mismo texto.
+  function detectarLineasIgnoradasCalendarioExtra(texto, nombreClubActivo) {
+    var ignoradas = [];
+    parsearPartidosExtraTexto(texto, nombreClubActivo, function (linea) { ignoradas.push(linea); });
+    return ignoradas;
   }
 
   var _COLORES_SINTETICOS = ["#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b"];
@@ -11372,6 +11395,7 @@
     pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,
     pintarEditorAjustesClub: pintarEditorAjustesClub,
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
+    detectarLineasIgnoradasCalendarioExtra: detectarLineasIgnoradasCalendarioExtra,
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,
     renderizarPlantillaClub: renderizarPlantillaClub,

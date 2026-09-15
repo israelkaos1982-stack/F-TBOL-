@@ -412,9 +412,28 @@
   }
 
   // ---------- Calendario EXTRA del club (candado 646) ----------
+  // Antes de guardar, se avisa de cualquier línea que
+  // parsearPartidosExtraTexto vaya a IGNORAR en silencio (sin separador
+  // " - " Competición/Ronda, o con algún campo vacío) — sin este aviso,
+  // un partido mal tecleado ("Liverpool vs Cultural Leonesa" sin el
+  // "Competición - Ronda -" delante) desaparece del calendario sin
+  // ningún rastro, indistinguible de "se ha borrado solo" (reporte
+  // usuario: "han vuelto a desaparecer partidos del Liverpool"). El
+  // admin puede seguir guardando igual (por si de verdad quiere
+  // descartar esa línea) — esto solo AVISA, nunca bloquea ni corrige
+  // nada por su cuenta.
   function guardarCalendarioExtraClub(clubId) {
     var ta = document.getElementById("calendario-extra-club-textarea");
     if (!ta || !window.Estado) return;
+    if (window.Renderizadores && window.Renderizadores.detectarLineasIgnoradasCalendarioExtra) {
+      var ignoradas = window.Renderizadores.detectarLineasIgnoradasCalendarioExtra(ta.value, null);
+      if (ignoradas.length) {
+        var aviso = "⚠️ " + ignoradas.length + " línea(s) no se van a guardar porque no tienen el " +
+          "formato «Competición - Ronda - Rival»:\n\n" + ignoradas.map(function (l) { return "· " + l; }).join("\n") +
+          "\n\n¿Guardar el resto igualmente? (pulsa Cancelar para volver a editarlas)";
+        if (!window.confirm(aviso)) return;
+      }
+    }
     window.Estado.guardarCalendarioExtraTexto(clubId, ta.value);
     cerrarModalClub();
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);

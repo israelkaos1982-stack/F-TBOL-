@@ -565,7 +565,7 @@
   // Promoción de ascenso/descenso). Un futuro playoff que cumpla lo mismo
   // se añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder
   // un partido no elimina, y las jornadas no dependen de ganar la anterior).
-  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true };
+  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true };
 
   // ¿Esta "ronda" es UNA de las 2 legs de una eliminatoria ida+vuelta
   // ("Ida", "Vuelta", "Ida Semifinal", "Promoción · Vuelta"...)? Y su base
@@ -1560,6 +1560,7 @@
           : window.Estado.obtenerLiga1RefStatTexto(categoria);
       case "copa": return window.Estado.obtenerCopaStatTexto(categoria);
       case "recopa": return window.Estado.obtenerRecopaStatTexto(categoria);
+      case "intercontinental": return window.Estado.obtenerInterStatTexto(categoria);
       case "champions": return window.Estado.obtenerChampionsStatTexto(categoria);
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
       case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
@@ -1575,6 +1576,7 @@
         break;
       case "copa": window.Estado.guardarCopaStatTexto(categoria, texto); break;
       case "recopa": window.Estado.guardarRecopaStatTexto(categoria, texto); break;
+      case "intercontinental": window.Estado.guardarInterStatTexto(categoria, texto); break;
       case "champions": window.Estado.guardarChampionsStatTexto(categoria, texto); break;
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
       case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
@@ -3505,6 +3507,484 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-recopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-recopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
+  // 3c-quinquies-bis. COPA INTERCONTINENTAL — 👥️ Humanos (cuadro completo
+  // por club, como Copa del Rey/Recopa) + ⛓️ Eliminatorias (cuadro único
+  // desde Octavos, las 4 rondas) — MISMO estilo EXACTO que Recopa de
+  // Europa (reutiliza su motor: _copaBloqueClubHTML/_estadoRondasEliminacion/
+  // _copaPlayoffRondaCoincide/parsearChampionsPlayoffTexto/
+  // _championsTieRowHTML), pero con 16 clubes y solo 4 rondas: Octavos (8
+  // vs 8) → Cuartos (4 vs 4) → Semifinal (2 vs 2) → Final (1 vs 1),
+  // TODAS a partido único con prórroga y penaltis (petición usuario
+  // 2026-09-15: "Intercontinental, 16 equipos jugando eliminatorias como
+  // la copa del rey desde Octavos-Cuartos-Semifinal y final a partido
+  // único con prórroga y penaltis, con editor"). A diferencia de Copa del
+  // Rey/Recopa, Octavos YA es la PRIMERA ronda del cuadro (no hay una
+  // ronda anterior con más cruces que excluir de ⛓️ Eliminatorias — igual
+  // que Champions arranca su cuadro compartido en Dieciseisavos) así que
+  // las 4 rondas están TODAS en la pestaña ⛓️ Eliminatorias, ninguna se
+  // ve "solo por club". Sin exclusiones de club (competición mundial,
+  // los 6 clubes humanos pueden jugarla, igual que Champions/UEL/UECL).
+  // ============================================================
+  function _interEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de Intercontinental de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _copaPartidosDelClub/_recopaPartidosDelClub.
+  // `competicion==="intercontinental"` ya sale normalizado de Calendario
+  // extra (_BALON_COMP_ALIAS: "Intercontinental"/"Copa Intercontinental"
+  // tecleado por el admin siempre cuadra con este ===).
+  function _interPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "intercontinental" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Intercontinental
+  // ya jugados y suma goles/MVP/amarillas/rojas por jugador — mismo
+  // criterio EXACTO que calcularCopaStatsHumanos/calcularRecopaStatsHumanos,
+  // con su PROPIO acumulado (nunca comparte contador con ninguna otra
+  // competición).
+  function calcularInterStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _interEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _interPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+          }
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularRecopaStatsCombinado, sobre el
+  // almacén propio de Intercontinental (Estado.obtenerInterStatTexto).
+  function calcularInterStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerInterStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularInterStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de Intercontinental" de UN club — mismo cálculo EXACTO
+  // que _copaEstadoClub/_recopaEstadoClub (reutiliza el mismo
+  // _estadoRondasEliminacion, genérico por competición). Devuelve null si
+  // el club no tiene ningún partido de Intercontinental todavía.
+  function _interEstadoClub(datos, e) {
+    var partidos = _interPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
+  }
+
+  // Texto EXACTO del ℹ️ de Copa Intercontinental — 4 rondas, TODAS a
+  // partido único con prórroga y penaltis (nunca ida+vuelta).
+  var FORMATO_INTER_TEXTO = [
+    "📋FORMATO COPA INTERCONTINENTAL:",
+    "16 clubes participan en 4 eliminatorias desde Octavos de Final hasta la final.",
+    "",
+    "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "Octavos de Final — 8 vs 8.",
+    "Cuartos de Final — 4 vs 4.",
+    "Semifinales — 2 vs 2.",
+    "Final — 1 vs 1.",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan como Local"
+  ].join("\n");
+  function obtenerFormatoInterTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("intercontinental") : "";
+    return override || FORMATO_INTER_TEXTO;
+  }
+
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
+  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
+  // criterio EXACTO que _copaAppendStatsGrid/_recopaAppendStatsGrid.
+  var INTER_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  function _interAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = INTER_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-inter-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
+  // exacto que las pestañas de Copa del Rey/Recopa ----------
+  var _interTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _interTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_interTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="inter-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_interTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="inter-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (Octavos → Final) de CADA
+  // club humano, uno debajo del otro — mismo patrón EXACTO que
+  // _renderizarCopaHumanos/_renderizarRecopaHumanos, reutilizando
+  // _copaBloqueClubHTML tal cual (genérico, no hardcodea "copa"/"recopa").
+  function _renderizarInterHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _interEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _interEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌎", "Todavía no hay partidos de la Copa Intercontinental. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Intercontinental»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
+      });
+    }
+
+    _interAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde Octavos ----------
+  // Octavos YA es la primera ronda del cuadro de 16 clubes (a diferencia de
+  // Copa del Rey/Recopa, aquí no hay una ronda anterior con más cruces que
+  // excluir) — las 4 rondas se ven todas aquí, igual que Champions arranca
+  // en Dieciseisavos.
+  var INTER_PLAYOFF_RONDAS = [
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _copaPlayoffHumano/_recopaPlayoffHumano, filtrando
+  // competicion==="intercontinental" y reutilizando el detector de ronda
+  // de Copa (_copaPlayoffRondaCoincide, genérico por rondaKey/rondaTexto —
+  // no depende de qué competición sea).
+  function _interPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "intercontinental" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de UNA ronda de Intercontinental (Octavos, Cuartos, Semis o
+  // Final — LAS 4 se resuelven IGUAL, ninguna depende de la anterior) —
+  // mismo criterio EXACTO que _copaRondaDesdeTexto/_recopaRondaDesdeTexto:
+  // cada club humano con partidos YA jugados esta ronda aporta el suyo
+  // auto-computado; el resto sale del texto libre que el admin pega para
+  // ESA ronda concreta ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
+  function _interRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _interEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _interPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerInterPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 4 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
+  // admin pegó para ESA ronda.
+  function calcularInterPlayoffTodasLasRondas(datos) {
+    return {
+      octavos: _interRondaDesdeTexto(datos, "octavos"),
+      cuartos: _interRondaDesdeTexto(datos, "cuartos"),
+      semis: _interRondaDesdeTexto(datos, "semis"),
+      final: _interRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  function _renderizarInterEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularInterPlayoffTodasLasRondas(datos);
+
+    INTER_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-inter-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key === "octavos"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 8 duelos de Octavos.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _interAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarInter(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _interTabsHTML(idClubActivo));
+
+      if (_interTabActual === "eliminatorias") _renderizarInterEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarInterHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_interTabActual`, mismo patrón que irRecopaTab.
+  function irInterTab(idClubActivo, tab) {
+    _interTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarInter("inter-content", idClubActivo);
+  }
+
+  // Ranking (top 15) de UNA categoría de Intercontinental — mismo patrón
+  // exacto que renderizarRecopaStatDetalle.
+  function renderizarInterStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = INTER_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-inter" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-inter-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularInterStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("intercontinental", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de Intercontinental
+  // (PIN 646) — mismo patrón exacto que pintarEditorRecopaStat.
+  function pintarEditorInterStat(contenedor, idClubActivo, categoria) {
+    var meta = INTER_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de Intercontinental — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "inter-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
+    textarea.value = window.Estado ? window.Estado.obtenerInterStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-inter-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-inter-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorRecopaPlayoff: las 4 rondas se
+  // pegan igual, una línea por cruce, siempre marcador de partido único.
+  function pintarEditorInterPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = INTER_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esOctavos = rondaKey === "octavos";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esOctavos
+      ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
+        "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
+        "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por " +
+        "eliminatoria — vale «-» o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Si un club " +
+        "humano ya tiene sus propios partidos de Intercontinental jugados en esta ronda (Calendario extra), su " +
+        "cruce se calcula solo y esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "inter-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esOctavos ? 10 : 8;
+    textarea.placeholder = esOctavos
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      : "Liverpool 1-0 Arsenal\nReal Madrid 2 vs 2 Villarreal";
+    textarea.value = window.Estado ? window.Estado.obtenerInterPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-inter-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-inter-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -9997,6 +10477,13 @@
     pintarEditorRecopaStat: pintarEditorRecopaStat,
     pintarEditorRecopaPlayoff: pintarEditorRecopaPlayoff,
     calcularRecopaPlayoffTodasLasRondas: calcularRecopaPlayoffTodasLasRondas,
+    obtenerFormatoInterTexto: obtenerFormatoInterTexto,
+    renderizarInter: renderizarInter,
+    irInterTab: irInterTab,
+    renderizarInterStatDetalle: renderizarInterStatDetalle,
+    pintarEditorInterStat: pintarEditorInterStat,
+    pintarEditorInterPlayoff: pintarEditorInterPlayoff,
+    calcularInterPlayoffTodasLasRondas: calcularInterPlayoffTodasLasRondas,
     renderizarChampions: renderizarChampions,
     irChampionsTab: irChampionsTab,
     renderizarChampionsStatDetalle: renderizarChampionsStatDetalle,

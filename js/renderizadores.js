@@ -7626,6 +7626,59 @@
     "fc-barcelona": { icono: "↘️", label: "Irregular" },
     psg: { icono: "↘️", label: "Irregular" }
   };
+  // Forma en partidos HUMANO vs HUMANO (petición usuario 2026-09-15) —
+  // SUPERSEDE el "Tu⬆️-⬆️Rival" fijo de cualquier HvH: cada pareja de
+  // clubes humanos tiene SU PROPIO par de iconos ("tu" = el icono del
+  // club gestionado en ESE cruce concreto, "rival" = el icono del
+  // adversario en ese mismo cruce) — NO es un valor fijo por club, varía
+  // según contra quién juegue (p.ej. Toñín es ⬆️ contra Álvaro/Isra/Acsa
+  // pero 🎲 contra Ángel/Izan). Las FINALES de torneo siguen forzando
+  // ⬆️-⬆️ por encima de esta tabla (ver _calcularMetaPartido, esFinal
+  // sigue ganando) — esa regla NO cambia con esta petición.
+  var _FORMA_HVH = {
+    liverpool: {
+      arsenal: { tu: "⬆️", rival: "↗️" },
+      "atletico-madrid": { tu: "⬆️", rival: "🎲" },
+      "real-madrid": { tu: "⬆️", rival: "↗️" },
+      "fc-barcelona": { tu: "🎲", rival: "🎲" },
+      psg: { tu: "🎲", rival: "🎲" }
+    },
+    arsenal: {
+      liverpool: { tu: "↗️", rival: "⬆️" },
+      "atletico-madrid": { tu: "↗️", rival: "🎲" },
+      "real-madrid": { tu: "🎲", rival: "🎲" },
+      "fc-barcelona": { tu: "🎲", rival: "🎲" },
+      psg: { tu: "🎲", rival: "🎲" }
+    },
+    "real-madrid": {
+      arsenal: { tu: "🎲", rival: "🎲" },
+      "atletico-madrid": { tu: "↗️", rival: "🎲" },
+      liverpool: { tu: "↗️", rival: "⬆️" },
+      "fc-barcelona": { tu: "🎲", rival: "🎲" },
+      psg: { tu: "🎲", rival: "↗️" }
+    },
+    "atletico-madrid": {
+      arsenal: { tu: "🎲", rival: "↗️" },
+      "real-madrid": { tu: "🎲", rival: "↗️" },
+      liverpool: { tu: "🎲", rival: "⬆️" },
+      "fc-barcelona": { tu: "🎲", rival: "↗️" },
+      psg: { tu: "🎲", rival: "⬆️" }
+    },
+    "fc-barcelona": {
+      arsenal: { tu: "🎲", rival: "🎲" },
+      "real-madrid": { tu: "🎲", rival: "🎲" },
+      liverpool: { tu: "🎲", rival: "🎲" },
+      "atletico-madrid": { tu: "↗️", rival: "🎲" },
+      psg: { tu: "🎲", rival: "🎲" }
+    },
+    psg: {
+      arsenal: { tu: "🎲", rival: "🎲" },
+      "atletico-madrid": { tu: "⬆️", rival: "🎲" },
+      liverpool: { tu: "🎲", rival: "🎲" },
+      "fc-barcelona": { tu: "🎲", rival: "🎲" },
+      "real-madrid": { tu: "↗️", rival: "🎲" }
+    }
+  };
   function _esClubHumano(id, datos) {
     return (datos.equipos.equipos || []).some(function (e) { return e.id === id; });
   }
@@ -7664,13 +7717,15 @@
   // de si el rival es humano o IA).
   // Excepción — partido HUMANO vs HUMANO, en CUALQUIER competición
   // (petición usuario, "repito solo en partidos humano vs humano de
-  // cualquier competición"): ambos lados muestran ⬆️ fijo
-  // ("Tu⬆️-⬆️Rival") en vez del 🎲/patrón por club de siempre — el
-  // mismo icono, y por el mismo motivo, que ya usan las FINALES de
-  // torneo (`_esFinalDeTorneo`). Esto SUPERSEDE la vieja regla
-  // "Superliga siempre Tu🎲-🎲Rival": Superliga es HvH SIEMPRE (solo
-  // enfrenta a los 6 clubes humanos entre sí), así que ya queda cubierta
-  // por esta regla general sin necesitar su propio caso especial.
+  // cualquier competición"): la Forma sale de la tabla por PAREJA
+  // `_FORMA_HVH` (cada cruce de 2 clubes humanos tiene sus 2 iconos
+  // propios) en vez del 🎲/patrón-por-club fijo de siempre. Las FINALES
+  // de torneo (`_esFinalDeTorneo`) siguen ganando por encima de esto:
+  // SIEMPRE ⬆️-⬆️, sea HvH o no — regla previa sin cambios. Esto
+  // SUPERSEDE la vieja regla "Superliga siempre Tu🎲-🎲Rival": Superliga
+  // es HvH SIEMPRE (solo enfrenta a los 6 clubes humanos entre sí), así
+  // que ya queda cubierta por esta regla general sin necesitar su propio
+  // caso especial.
   // `partido` es opcional (solo lo necesita la excepción de las FINALES
   // de torneo — "⏱️ 10 min" fijo, ver _esFinalDeTorneo más abajo). El
   // resto de competiciones ignoran el parámetro, igual que antes.
@@ -7679,9 +7734,21 @@
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
     var esHvH = _esPartidoHvH(local, visitante, datos);
     var esFinal = !!partido && _esFinalDeTorneo(partido);
+    var cruceHvH = esHvH && _FORMA_HVH[par.managed.id] && _FORMA_HVH[par.managed.id][par.rival.id];
     var forma = _FORMA_POR_CLUB[par.managed.id];
-    var formaIconoRival = (esHvH || esFinal) ? "⬆️" : (forma ? forma.icono : "➡️");
-    var formaIconoTu = (esHvH || esFinal) ? "⬆️" : "🎲";
+    var formaIconoTu, formaIconoRival;
+    if (esFinal) {
+      formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
+    } else if (cruceHvH) {
+      formaIconoTu = cruceHvH.tu; formaIconoRival = cruceHvH.rival;
+    } else if (esHvH) {
+      // Red de seguridad: un cruce HvH que por lo que sea no esté en la
+      // tabla (nunca debería pasar con los 6 clubes actuales) cae al
+      // ⬆️-⬆️ histórico en vez de quedarse sin icono.
+      formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
+    } else {
+      formaIconoTu = "🎲"; formaIconoRival = forma ? forma.icono : "➡️";
+    }
     return {
       tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
       nivel: "🤖 " + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),

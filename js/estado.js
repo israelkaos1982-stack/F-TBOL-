@@ -1994,6 +1994,57 @@
     }
   }
 
+  // Corrección de UN SOLO USO (candado ef7_fixup_atleti_oblak_dorsal_v1):
+  // reporte usuario 2026-09-16 (foto de la Plantilla del Atlético Madrid,
+  // "1 J. Musso 7 0 0 0 / 13 Jan Oblak 0 0 0 0", y foto de la caja ZAMORA
+  // de Liga 1ª REF con "J. Musso · Atlético Madrid · 0.86"): "Oblack en
+  // el dorsal 1 del Atlético Madrid / No Musso / Cambialo y cambia sus
+  // estadísticas y Zamora". El portero "titular" a efectos de porterías
+  // imbatidas Y de Zamora es SIEMPRE el de MENOR dorsal con posición POR
+  // (ver _porteroPrincipalClub en js/renderizadores.js) — no hay ningún
+  // contador aparte por jugador, se recalcula en caliente en cada render
+  // desde los partidos ya jugados. Así que basta con corregir el DORSAL
+  // en la plantilla pegada: en cuanto Jan Oblak pase a ser el de menor
+  // dorsal, las 7 porterías imbatidas y la media de Zamora que hoy se ven
+  // en "J. Musso" pasan solas a "Jan Oblak" en el próximo render — no hay
+  // ningún dato histórico de partido que reescribir.
+  var FIXUP_ATLETI_OBLAK_DORSAL_KEY = "ef7_fixup_atleti_oblak_dorsal_v1";
+  function _fixupAtletiOblakDorsalV1() {
+    try {
+      if (localStorage.getItem(FIXUP_ATLETI_OBLAK_DORSAL_KEY)) return;
+      var clubId = "atletico-madrid";
+      var texto = obtenerRosterTexto(clubId);
+      if (!texto) { localStorage.setItem(FIXUP_ATLETI_OBLAK_DORSAL_KEY, "1"); return; }
+
+      var lineas = texto.split("\n");
+      var dorsalMusso = null, dorsalOblak = null, idxMusso = -1, idxOblak = -1;
+      lineas.forEach(function (linea, i) {
+        var m = linea.match(/#\s*(\d+)\s+(.+?)\s*\(\s*(por|def|med|del)\s*\)\s*$/i);
+        if (!m) return;
+        var nombreNorm = m[2].toLowerCase();
+        if (nombreNorm.indexOf("musso") !== -1) { dorsalMusso = m[1]; idxMusso = i; }
+        else if (nombreNorm.indexOf("oblak") !== -1) { dorsalOblak = m[1]; idxOblak = i; }
+      });
+
+      // Sin las 2 fichas reales (uno de los 2 nombres no está en la
+      // plantilla pegada de este dispositivo), o si Oblak YA tiene el
+      // dorsal menor (ya está bien), no tocamos nada — nunca se inventa
+      // un cambio sin los 2 datos reales.
+      if (idxMusso === -1 || idxOblak === -1 || Number(dorsalOblak) < Number(dorsalMusso)) {
+        localStorage.setItem(FIXUP_ATLETI_OBLAK_DORSAL_KEY, "1");
+        return;
+      }
+
+      lineas[idxMusso] = lineas[idxMusso].replace(/#\s*\d+/, "#" + dorsalOblak);
+      lineas[idxOblak] = lineas[idxOblak].replace(/#\s*\d+/, "#" + dorsalMusso);
+      guardarRosterTexto(clubId, lineas.join("\n"));
+      localStorage.setItem(FIXUP_ATLETI_OBLAK_DORSAL_KEY, "1");
+    } catch (err) {
+      console.error("[estado] fixup atleti-oblak-dorsal:", err);
+    }
+  }
+  _fixupAtletiOblakDorsalV1();
+
   // ---------- Corrección MANUAL de estadísticas de la Plantilla (📌, candado 646) ----------
   // calcularStatsRosterClub (js/renderizadores.js) suma SOLO/SIEMPRE desde
   // los partidos ya jugados dentro de la app — si un partido antiguo se

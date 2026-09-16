@@ -2746,6 +2746,7 @@
   // las 4 rondas anteriores, que también lo necesitan).
   function _copaPlayoffRondaCoincide(rondaKey, rondaTexto) {
     var t = _normNombre(rondaTexto || "");
+    if (rondaKey === "r64") return /1\s*\/\s*64/.test(t);
     if (rondaKey === "dieciseisavos") return /1\s*\/\s*16/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
     if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
@@ -3064,9 +3065,9 @@
 
   // ============================================================
   // 3c-quinquies. RECOPA DE EUROPA — 👥️ Humanos (cuadro completo por
-  // club, como Copa del Rey) + ⛓️ Eliminatorias (cuadro único desde
-  // Dieciseisavos) — MISMO estilo EXACTO que Copa del Rey (reutiliza su
-  // motor: _copaBloqueClubHTML/_estadoRondasEliminacion/
+  // club, como Copa del Rey) + ⛓️ Eliminatorias (cuadro único desde 1/64)
+  // — MISMO estilo EXACTO que Copa del Rey (reutiliza su motor:
+  // _copaBloqueClubHTML/_estadoRondasEliminacion/
   // _copaPlayoffRondaCoincide/parsearChampionsPlayoffTexto/
   // _championsTieRowHTML), pero SIN exclusiones (competición europea,
   // los 6 clubes humanos pueden jugarla, igual que Champions/UEL/UECL) y
@@ -3074,8 +3075,11 @@
   // único con prórroga y penaltis (petición usuario: "1/64 - 1ª Ronda 32
   // vs 32, Dieciseisavos 16 vs 16, Octavos 8 vs 8, Cuartos 4 vs 4, Semis
   // 2 vs 2, Final 1 vs 1 — eliminatorias a partido único con prorroga y
-  // penaltis"). El "1/64" (32 cruces) no tiene cuadro compartido propio,
-  // igual que en Copa del Rey — se ve completo por club en 👥️ Humanos.
+  // penaltis"). El "1/64" (32 cruces) SÍ tiene cuadro compartido propio
+  // en ⛓️ Eliminatorias — a diferencia de Copa del Rey (petición usuario
+  // 2026-09-16: "En la recopa la primera ronda es 1/64... Falta la
+  // primera ronda" — ver RECOPA_PLAYOFF_RONDAS más abajo). Sigue viéndose
+  // completo por club en 👥️ Humanos también (no se ha quitado nada ahí).
   // ============================================================
   function _recopaEquiposHumanos(datos) {
     return datos.equipos.equipos || [];
@@ -3268,11 +3272,18 @@
     _recopaAppendStatsGrid(contenedor, idClubActivo);
   }
 
-  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde Dieciseisavos
-  // ---------- 5 rondas (Dieciseisavos→Final) — la ronda anterior "1/64"
-  // ya se ve completa en 👥️ Humanos, no se repite aquí (mismo criterio
-  // EXACTO que Copa del Rey).
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde 1/64 ----------
+  // 6 rondas (1/64→Final): la Recopa arranca en 64 equipos (32 cruces),
+  // NO en 32 (petición usuario 2026-09-16, foto del cuadro compartido
+  // empezando en "Dieciseisavos de Final": "En la recopa la primera
+  // ronda es 1/64, enfrentandose 32 vs 32 equipos / Falta la primera
+  // ronda"). Antes esta ronda solo se veía "completa" por club en la
+  // pestaña 👥️ Humanos (mismo criterio que Copa del Rey, que SÍ arranca
+  // en 32) — aquí el usuario pidió explícitamente que también aparezca
+  // en el cuadro COMPARTIDO, así que Recopa deja de seguir esa
+  // convención para su propia 1ª ronda.
   var RECOPA_PLAYOFF_RONDAS = [
+    { key: "r64", label: "1/64 · 1ª Ronda" },
     { key: "dieciseisavos", label: "Dieciseisavos de Final" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
@@ -3342,11 +3353,12 @@
     return ties;
   }
 
-  // Punto ÚNICO que calcula el cuadro ENTERO — las 5 rondas son
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 6 rondas son
   // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
   // admin pegó para ESA ronda.
   function calcularRecopaPlayoffTodasLasRondas(datos) {
     return {
+      r64: _recopaRondaDesdeTexto(datos, "r64"),
       dieciseisavos: _recopaRondaDesdeTexto(datos, "dieciseisavos"),
       octavos: _recopaRondaDesdeTexto(datos, "octavos"),
       cuartos: _recopaRondaDesdeTexto(datos, "cuartos"),
@@ -3370,7 +3382,9 @@
         "</div>";
       var cuerpo;
       if (!ties.length) {
-        cuerpo = meta.key === "dieciseisavos"
+        cuerpo = meta.key === "r64"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 32 duelos de 1/64.</p>'
+          : meta.key === "dieciseisavos"
           ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 16 duelos de Dieciseisavos.</p>'
           : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
@@ -3508,12 +3522,13 @@
   function pintarEditorRecopaPlayoff(contenedor, idClubActivo, rondaKey) {
     var meta = RECOPA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
     if (!meta) return;
+    var esR64 = rondaKey === "r64";
     var esDieciseisavos = rondaKey === "dieciseisavos";
     contenedor.innerHTML = "";
 
     var nota = document.createElement("p");
     nota.className = "admin-nota";
-    nota.textContent = esDieciseisavos
+    nota.textContent = (esR64 || esDieciseisavos)
       ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
         "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
         "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
@@ -3527,8 +3542,8 @@
     var textarea = document.createElement("textarea");
     textarea.id = "recopa-playoff-textarea";
     textarea.className = "admin-roadmap-textarea";
-    textarea.rows = esDieciseisavos ? 14 : 12;
-    textarea.placeholder = esDieciseisavos
+    textarea.rows = esR64 ? 20 : (esDieciseisavos ? 14 : 12);
+    textarea.placeholder = (esR64 || esDieciseisavos)
       ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
       : "Liverpool 1-0 Arsenal\nReal Madrid 2 vs 2 Villarreal";
     textarea.value = window.Estado ? window.Estado.obtenerRecopaPlayoffTexto(rondaKey) : "";

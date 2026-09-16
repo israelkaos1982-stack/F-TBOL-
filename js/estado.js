@@ -2281,11 +2281,15 @@
 
   // ---------- Recopa de Europa — Eliminatorias ⛓️, texto libre por ronda
   // (candado 646) ----------
-  // Dieciseisavos/Octavos/Cuartos/Semis/Final: mismo mecanismo EXACTO que
-  // Copa del Rey (ver obtenerCopaPlayoffTexto más arriba), con su PROPIA
-  // clave — la ronda "1/64" (32 vs 32) no tiene texto propio aquí, se ve
-  // completa por club en la pestaña 👥️ Humanos (misma convención que la
-  // Copa con su "1/64", ver js/renderizadores.js::_renderizarRecopaHumanos).
+  // 1/64 (32 vs 32, PRIMERA ronda) + Dieciseisavos/Octavos/Cuartos/Semis/
+  // Final: mismo mecanismo EXACTO que Copa del Rey (ver
+  // obtenerCopaPlayoffTexto más arriba), con su PROPIA clave por ronda —
+  // `ronda` es un string libre (el rondaKey de RECOPA_PLAYOFF_RONDAS en
+  // js/renderizadores.js), así que una ronda NUEVA no necesita ningún
+  // cambio aquí: "r64" ya funciona sin tocar esta función (petición
+  // usuario 2026-09-16: "En la recopa la primera ronda es 1/64...
+  // Falta la primera ronda" — antes solo se veía completa por club en
+  // la pestaña 👥️ Humanos, ahora también en el cuadro ⛓️ compartido).
   function _recopaPlayoffKey(ronda) {
     return "ef7_recopa_playoff_" + ronda + "_v1";
   }

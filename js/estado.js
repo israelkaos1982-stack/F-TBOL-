@@ -2470,6 +2470,60 @@
     }
   }
 
+  // ---------- Supercopa de España — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que la Supercopa de Europa (arriba), con su
+  // PROPIA clave — nunca comparte contador con ninguna otra competición.
+  // Ver js/renderizadores.js::SCE_STATS/calcularSceStatsCombinado/
+  // renderizarSceStatDetalle.
+  function _sceStatKey(categoria) {
+    return "ef7_sce_stat_" + categoria + "_v1";
+  }
+  function obtenerSceStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_sceStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSceStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_sceStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de la Supercopa de España:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Supercopa de España — Eliminatorias ⛓️, texto libre por
+  // ronda (candado 646) ----------
+  // 4 equipos, 2 eliminatorias: Semifinales (2 vs 2) y Final (1 vs 1) —
+  // mismo mecanismo EXACTO que la Supercopa de Europa (ver
+  // obtenerUscPlayoffTexto más arriba), con su PROPIA clave.
+  // Semifinales ES la primera ronda — no hay una ronda previa "vista
+  // completa en Humanos" que recortar.
+  function _scePlayoffKey(ronda) {
+    return "ef7_sce_playoff_" + ronda + "_v1";
+  }
+  function obtenerScePlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_scePlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarScePlayoffTexto(ronda, texto) {
+    try {
+      localStorage.setItem(_scePlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de la Supercopa de España:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Champions — clasificación de Fase de Grupos (candado 646) ----------
   // Misma "batidora" EXACTA que Liga 1ª REF: texto libre pegado para los
   // equipos IA + auto-suma de los partidos que los clubes humanos ya
@@ -3262,6 +3316,10 @@
     guardarUscStatTexto: guardarUscStatTexto,
     obtenerUscPlayoffTexto: obtenerUscPlayoffTexto,
     guardarUscPlayoffTexto: guardarUscPlayoffTexto,
+    obtenerSceStatTexto: obtenerSceStatTexto,
+    guardarSceStatTexto: guardarSceStatTexto,
+    obtenerScePlayoffTexto: obtenerScePlayoffTexto,
+    guardarScePlayoffTexto: guardarScePlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

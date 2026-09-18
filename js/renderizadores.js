@@ -8485,6 +8485,12 @@
     { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"] }
   ];
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
+  // Emoji de cada subpremio en la card GANADOR — sustituye a la etiqueta
+  // en negrita ("Pichichi:") por un emoji identificativo, mismos iconos
+  // que el tipo de premio equivalente en la Sala de Títulos por-club
+  // (ver data/titulos.json: Pichichi ⚽, MVP ⭐, Zamora 🧤) para que ambas
+  // pantallas usen el mismo lenguaje visual.
+  var TITULOS_TEMP_SUB_EMOJI = { "Pichichi": "⚽", "MVP": "⭐", "Zamora": "🧤" };
 
   // Cursor por líneas: "Campeón <Label>:" (o "<Label>:" a secas, por
   // tolerancia) abre esa competición y le atribuye TODAS las líneas
@@ -8565,21 +8571,41 @@
         var nombreCampeon = parsed.campeones[comp.key];
         var subVals = parsed.subs[comp.key] || {};
         var html = '<p class="titulos-bloque-titulo">🏆 ' + escapeHTML(comp.label) + "</p>";
+
+        var izqHtml;
         if (nombreCampeon) {
           var equipo = resolverRivalPorNombre(nombreCampeon, datos, null);
-          html +=
-            '<div class="titulos-temp-ganador">' +
+          izqHtml =
             '<span class="titulos-temp-ganador-label">GANADOR</span>' +
             crearEscudoHTML(equipo, "escudo--lg") +
-            '<span class="titulos-temp-ganador-nombre">' + escapeHTML((equipo && equipo.nombre) || nombreCampeon) + "</span>" +
+            '<span class="titulos-temp-ganador-nombre">' + escapeHTML((equipo && equipo.nombre) || nombreCampeon) + "</span>";
+        } else {
+          izqHtml = '<p class="admin-nota">Sin campeón todavía.</p>';
+        }
+
+        if (comp.sub.length) {
+          // Escudo+nombre a la izquierda, Pichichi/MVP/Zamora apilados a
+          // la derecha (mismo recuadro) — petición usuario, foto de la
+          // Liga EA Sports con el escudo centrado y los premios sueltos
+          // debajo: "podemos mover el escudo y nombre a la izquierda del
+          // todo y en ese mismo recuadro a la derecha ponemos" cada
+          // premio como "<emoji><ganador> - <equipo> - <cifra>".
+          var derHtml = comp.sub.map(function (s) {
+            var v = subVals[s];
+            var emoji = TITULOS_TEMP_SUB_EMOJI[s] || "🏅";
+            return '<p class="titulos-temp-sub-linea">' + emoji + (v ? escapeHTML(v) : "—") + "</p>";
+          }).join("");
+          html +=
+            '<div class="titulos-temp-card">' +
+            '<div class="titulos-temp-card-izq">' + izqHtml + "</div>" +
+            '<div class="titulos-temp-card-der">' + derHtml + "</div>" +
             "</div>";
         } else {
-          html += '<p class="admin-nota">Sin campeón todavía.</p>';
+          // Sin subpremios (Supercopa España/Europa) — la card centrada
+          // de siempre, sin columna derecha vacía.
+          html += '<div class="titulos-temp-ganador">' + izqHtml + "</div>";
         }
-        html += comp.sub.map(function (s) {
-          var v = subVals[s];
-          return '<p class="titulos-temp-sub"><b>' + escapeHTML(s) + ":</b> " + (v ? escapeHTML(v) : "—") + "</p>";
-        }).join("");
+
         var bloque = document.createElement("div");
         bloque.className = "titulos-bloque";
         bloque.innerHTML = html;

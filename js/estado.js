@@ -43,29 +43,51 @@
   // (QuotaExceededError — el navegador se ha quedado sin espacio, o el
   // modo privado de Safari lo bloquea del todo) sin lanzar nada que rompa
   // la ejecución: el catch de cada función atrapa el error, hace
-  // console.error y devuelve `false` — pero NINGÚN caller de este archivo
-  // ni de js/main.js comprueba ese `false` antes de esta función. El admin
-  // pega su calendario, confirma un partido, cierra el editor... y ve la
-  // pantalla "normal" de siempre, sin ningún indicio de que ese dato en
-  // concreto nunca llegó a guardarse - solo lo descubre más tarde, al
-  // recargar o sincronizar con otro dispositivo, cuando "se ha perdido"
-  // sin explicación. Un aviso VISIBLE la PRIMERA vez que esto pasa en la
-  // sesión (no uno por cada intento - sería invasivo, y el usuario ya lo
-  // sabe tras el primero) es lo mínimo para que sepa que tiene que liberar
-  // espacio (Panel Admin -> Espacio del navegador) en vez de asumir que
-  // todo se guardó bien.
-  var _avisoCuotaMostrado = false;
+  // console.error y devuelve `false`.
+  //
+  // REFUERZO (reporte usuario, 2 mensajes seguidos: "Por más que añado
+  // partidos manualmente a equipos humanos estos se borran / Refuerza
+  // guardado" + "Al editar las clasificaciones de los equipos estos datos
+  // no se guardan"): esta función SÍ avisaba, pero solo la PRIMERA vez de
+  // TODA la sesión (`_avisoCuotaMostrado` booleano, nunca se resetea). Si
+  // el admin veía ese aviso una vez por CUALQUIER clave sin importancia,
+  // TODOS los fallos posteriores en la misma sesión — incluido cada
+  // intento real de añadir un partido o pegar una clasificación —
+  // quedaban COMPLETAMENTE silenciosos: exactamente "por más que añado,
+  // se borran, sin ningún aviso". Y encima NINGÚN caller (ver
+  // js/main.js) comprobaba el `false` devuelto por `guardarXxxTexto`: la
+  // pantalla se cerraba/repintaba igual, mostrando la copia VIEJA de
+  // localStorage (la que sí cupo la última vez) como si el guardado
+  // hubiera funcionado — el admin veía sus líneas recién tecleadas
+  // desaparecer al instante, delante de sus ojos.
+  //
+  // Fix en 2 capas:
+  // 1) AQUÍ: el aviso ya no es "una vez por sesión, nunca más" — es "una
+  //    vez cada _AVISO_CUOTA_COOLDOWN_MS", así que si el problema sigue
+  //    (el admin sigue intentando guardar cosas DISTINTAS mientras el
+  //    navegador sigue sin espacio) vuelve a avisar, en vez de dejarlo
+  //    creyendo que ya "lo sabe" tras el primer aviso de hace 20 minutos.
+  // 2) js/main.js: cada `guardarXxxTexto(...)` ahora se comprueba
+  //    (`if (!window.Estado.guardarXxxTexto(...)) return;`) — si falla,
+  //    el editor NO se cierra ni se repinta con la copia vieja: el
+  //    textarea se queda EXACTAMENTE con lo que el admin tecleó, visible,
+  //    para que nada "desaparezca" aunque el guardado real haya fallado.
+  var _avisoCuotaUltimoTs = 0;
+  var _AVISO_CUOTA_COOLDOWN_MS = 20000; // no repetir en menos de 20s (evita ráfaga si fallan varias claves a la vez, p.ej. import/export), pero SÍ vuelve a avisar si el problema persiste
   function _avisarFalloGuardado(err) {
-    if (_avisoCuotaMostrado) return;
-    _avisoCuotaMostrado = true;
+    var ahora = Date.now();
+    if (ahora - _avisoCuotaUltimoTs < _AVISO_CUOTA_COOLDOWN_MS) return;
+    _avisoCuotaUltimoTs = ahora;
     try {
       window.setTimeout(function () {
         window.alert(
-          "⚠️ El navegador se ha quedado sin espacio (o bloquea el guardado local) " +
-          "y lo que acabas de editar puede NO haberse guardado.\n\n" +
+          "⚠️ El navegador se ha quedado sin espacio (o bloquea el guardado local) — " +
+          "lo que acabas de editar NO se ha guardado.\n\n" +
+          "El editor se queda abierto con tu texto tal cual lo dejaste, sin perder nada " +
+          "visible ahora mismo, pero si cierras/recargas sin arreglarlo SÍ se perderá.\n\n" +
           "Ve a Panel Admin → 📊 Espacio del navegador para liberar espacio " +
-          "(o borra datos de otras webs), y vuelve a pegar/confirmar lo último " +
-          "que hiciste para asegurarte de que se guarda de verdad."
+          "(o borra datos de otras webs), y vuelve a pulsar Guardar para asegurarte " +
+          "de que esta vez sí se guarda."
         );
       }, 0);
     } catch (err2) { /* ni el propio alert está disponible, nada más que hacer aquí */ }

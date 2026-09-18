@@ -14,6 +14,25 @@
    claro) — es solo fricción para que ninguno de los 6 amigos
    pulse "Borrar TODO" sin querer, mismo criterio que los PIN de
    3 dígitos ya usados en otras herramientas de admin del proyecto.
+
+   REFUERZO DE GUARDADO (reporte usuario: "Por más que añado partidos
+   manualmente a equipos humanos estos se borran / Refuerza guardado" +
+   "Al editar las clasificaciones de los equipos estos datos no se
+   guardan"): TODA función `guardarXxxTexto`/`guardarXxx` de
+   js/estado.js devuelve `true`/`false` (`false` si localStorage.setItem
+   revienta por cuota llena) — pero hasta ahora ningún `guardarXxx(...)`
+   de ESTE archivo comprobaba ese valor: si el guardado fallaba, la
+   función seguía igual, cerrando el editor y repintando la pantalla con
+   la copia VIEJA de localStorage (la única que sí cupo), como si el
+   guardado hubiera funcionado — el admin veía sus líneas recién
+   tecleadas desaparecer al instante. Ahora CADA `guardarXxx(...)` de
+   este archivo va envuelto en `if (!window.Estado.guardarXxx(...))
+   return;`: si falla, la función se detiene AHÍ MISMO — el editor se
+   queda abierto con el texto tal cual el admin lo dejó (nada
+   "desaparece" visualmente) y el aviso de cuota de
+   js/estado.js::_avisarFalloGuardado explica qué hacer. Todo editor
+   NUEVO que guarde texto libre hereda este patrón: comprobar SIEMPRE el
+   booleano antes de cerrar/repintar.
    ============================================================ */
 (function () {
   "use strict";
@@ -447,7 +466,7 @@
         if (!window.confirm(aviso)) return;
       }
     }
-    window.Estado.guardarCalendarioExtraTexto(clubId, ta.value);
+    if (!window.Estado.guardarCalendarioExtraTexto(clubId, ta.value)) return;
     cerrarModalClub();
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);
   }
@@ -459,7 +478,7 @@
   function guardarPlantillaClub(clubId) {
     var ta = document.getElementById("plantilla-club-textarea");
     if (!ta || !window.Estado) return;
-    window.Estado.guardarRosterTexto(clubId, ta.value);
+    if (!window.Estado.guardarRosterTexto(clubId, ta.value)) return;
     cerrarModalClub();
   }
   function cancelarPlantillaClub() {
@@ -487,7 +506,7 @@
   function guardarStatsPlantilla(clubId) {
     var ta = document.getElementById("stats-plantilla-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarStatsOverrideTexto(clubId, ta.value);
+    if (!window.Estado.guardarStatsOverrideTexto(clubId, ta.value)) return;
     window.Renderizadores.renderizarPlantillaClub(clubId);
   }
   function cancelarStatsPlantilla(clubId) {
@@ -521,8 +540,10 @@
     var ta = document.getElementById("liga1ref-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
     ligaId = _ligaNavActual = ligaId || _ligaNavActual;
-    if (ligaId === "1ref") window.Estado.guardarLiga1RefTexto(ta.value);
-    else window.Estado.guardarLigaExtraTexto(ligaId, ta.value);
+    var okGuardado = ligaId === "1ref"
+      ? window.Estado.guardarLiga1RefTexto(ta.value)
+      : window.Estado.guardarLigaExtraTexto(ligaId, ta.value);
+    if (!okGuardado) return;
     window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
   }
   function cancelarLiga1Ref(clubId, ligaId) {
@@ -546,7 +567,7 @@
   function fijarDivisionClub(clubId, ligaId) {
     if (!clubId || !ligaId || !window.Estado || !window.Renderizadores) return;
     pedirPinAdmin(function () {
-      window.Estado.guardarDivisionClub(clubId, ligaId);
+      if (!window.Estado.guardarDivisionClub(clubId, ligaId)) return;
       _ligaNavActual = ligaId;
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
     }, "🔒 Fijar liga del club", "Introduce el PIN de administrador.");
@@ -647,7 +668,7 @@
   function _infoOverlayGuardar() {
     var ta = document.getElementById("liga-info-textarea");
     if (!ta || !_infoOverlayClave || !window.Estado) return;
-    window.Estado.guardarFormatoOverride(_infoOverlayClave, ta.value);
+    if (!window.Estado.guardarFormatoOverride(_infoOverlayClave, ta.value)) return;
     if (_infoOverlayReabrir) _infoOverlayReabrir();
     else cerrarInfoLigaFormato();
   }
@@ -684,8 +705,10 @@
     var ta = document.getElementById("liga1ref-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
     ligaId = _ligaNavActual = ligaId || _ligaNavActual;
-    if (ligaId === "1ref") window.Estado.guardarLiga1RefStatTexto(categoria, ta.value);
-    else window.Estado.guardarLigaExtraStatTexto(ligaId, categoria, ta.value);
+    var okGuardadoStat = ligaId === "1ref"
+      ? window.Estado.guardarLiga1RefStatTexto(categoria, ta.value)
+      : window.Estado.guardarLigaExtraStatTexto(ligaId, categoria, ta.value);
+    if (!okGuardadoStat) return;
     window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
   }
   function cancelarLiga1RefStat(clubId, categoria, ligaId) {
@@ -780,7 +803,7 @@
   function guardarCopaStat(clubId, categoria) {
     var ta = document.getElementById("copa-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarCopaStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarCopaStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarCopaStatDetalle("copa-content", clubId, categoria);
   }
   function cancelarCopaStat(clubId, categoria) {
@@ -796,7 +819,7 @@
   function guardarCopaPlayoff(clubId, ronda) {
     var ta = document.getElementById("copa-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarCopaPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarCopaPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarCopaDelRey("copa-content", clubId);
   }
   function cancelarCopaPlayoff(clubId) {
@@ -826,7 +849,7 @@
   function guardarRecopaStat(clubId, categoria) {
     var ta = document.getElementById("recopa-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarRecopaStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarRecopaStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarRecopaStatDetalle("recopa-content", clubId, categoria);
   }
   function cancelarRecopaStat(clubId, categoria) {
@@ -842,7 +865,7 @@
   function guardarRecopaPlayoff(clubId, ronda) {
     var ta = document.getElementById("recopa-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarRecopaPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarRecopaPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarRecopa("recopa-content", clubId);
   }
   function cancelarRecopaPlayoff(clubId) {
@@ -870,7 +893,7 @@
   function guardarInterStat(clubId, categoria) {
     var ta = document.getElementById("inter-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarInterStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarInterStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria);
   }
   function cancelarInterStat(clubId, categoria) {
@@ -886,7 +909,7 @@
   function guardarInterPlayoff(clubId, ronda) {
     var ta = document.getElementById("inter-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarInterPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarInterPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarInter("inter-content", clubId);
   }
   function cancelarInterPlayoff(clubId) {
@@ -915,7 +938,7 @@
   function guardarVeranoStat(clubId, categoria) {
     var ta = document.getElementById("verano-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarVeranoStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarVeranoStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria);
   }
   function cancelarVeranoStat(clubId, categoria) {
@@ -931,7 +954,7 @@
   function guardarVeranoPlayoff(clubId, ronda) {
     var ta = document.getElementById("verano-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarVeranoPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarVeranoPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarVerano("verano-content", clubId);
   }
   function cancelarVeranoPlayoff(clubId) {
@@ -960,7 +983,7 @@
   function guardarUscStat(clubId, categoria) {
     var ta = document.getElementById("usc-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUscStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarUscStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria);
   }
   function cancelarUscStat(clubId, categoria) {
@@ -976,7 +999,7 @@
   function guardarUscPlayoff(clubId, ronda) {
     var ta = document.getElementById("usc-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUscPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarUscPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarUsc("usc-content", clubId);
   }
   function cancelarUscPlayoff(clubId) {
@@ -1005,7 +1028,7 @@
   function guardarSceStat(clubId, categoria) {
     var ta = document.getElementById("sce-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarSceStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarSceStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarSceStatDetalle("sce-content", clubId, categoria);
   }
   function cancelarSceStat(clubId, categoria) {
@@ -1021,7 +1044,7 @@
   function guardarScePlayoff(clubId, ronda) {
     var ta = document.getElementById("sce-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarScePlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarScePlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarSce("sce-content", clubId);
   }
   function cancelarScePlayoff(clubId) {
@@ -1045,7 +1068,7 @@
   function guardarChampions(clubId) {
     var ta = document.getElementById("champions-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarChampionsTexto(ta.value);
+    if (!window.Estado.guardarChampionsTexto(ta.value)) return;
     window.Renderizadores.renderizarChampions("champions-content", clubId);
   }
   function cancelarChampions(clubId) {
@@ -1067,7 +1090,7 @@
   function guardarChampionsStat(clubId, categoria) {
     var ta = document.getElementById("champions-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarChampionsStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarChampionsStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria);
   }
   function cancelarChampionsStat(clubId, categoria) {
@@ -1083,7 +1106,7 @@
   function guardarChampionsPlayoff(clubId, ronda) {
     var ta = document.getElementById("champions-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarChampionsPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarChampionsPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarChampions("champions-content", clubId);
   }
   function cancelarChampionsPlayoff(clubId) {
@@ -1109,7 +1132,7 @@
   function guardarUel(clubId) {
     var ta = document.getElementById("uel-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUelTexto(ta.value);
+    if (!window.Estado.guardarUelTexto(ta.value)) return;
     window.Renderizadores.renderizarUel("uel-content", clubId);
   }
   function cancelarUel(clubId) {
@@ -1131,7 +1154,7 @@
   function guardarUelStat(clubId, categoria) {
     var ta = document.getElementById("uel-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUelStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarUelStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria);
   }
   function cancelarUelStat(clubId, categoria) {
@@ -1147,7 +1170,7 @@
   function guardarUelPlayoff(clubId, ronda) {
     var ta = document.getElementById("uel-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUelPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarUelPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarUel("uel-content", clubId);
   }
   function cancelarUelPlayoff(clubId) {
@@ -1174,7 +1197,7 @@
   function guardarUecl(clubId) {
     var ta = document.getElementById("uecl-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUeclTexto(ta.value);
+    if (!window.Estado.guardarUeclTexto(ta.value)) return;
     window.Renderizadores.renderizarUecl("uecl-content", clubId);
   }
   function cancelarUecl(clubId) {
@@ -1196,7 +1219,7 @@
   function guardarUeclStat(clubId, categoria) {
     var ta = document.getElementById("uecl-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUeclStatTexto(categoria, ta.value);
+    if (!window.Estado.guardarUeclStatTexto(categoria, ta.value)) return;
     window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria);
   }
   function cancelarUeclStat(clubId, categoria) {
@@ -1212,7 +1235,7 @@
   function guardarUeclPlayoff(clubId, ronda) {
     var ta = document.getElementById("uecl-playoff-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarUeclPlayoffTexto(ronda, ta.value);
+    if (!window.Estado.guardarUeclPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarUecl("uecl-content", clubId);
   }
   function cancelarUeclPlayoff(clubId) {
@@ -1248,7 +1271,7 @@
   function guardarTitulos(clubId) {
     var ta = document.getElementById("titulos-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarTitulosTexto(clubId, ta.value);
+    if (!window.Estado.guardarTitulosTexto(clubId, ta.value)) return;
     window.Renderizadores.renderizarTitulos("titulos-content", clubId);
   }
   function cancelarTitulos(clubId) {
@@ -1270,7 +1293,7 @@
   function guardarObjetivos(clubId) {
     var ta = document.getElementById("objetivos-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarObjetivosTexto(clubId, ta.value);
+    if (!window.Estado.guardarObjetivosTexto(clubId, ta.value)) return;
     window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
     _sincronizarValoracionConObjetivos(clubId);
   }
@@ -1304,7 +1327,7 @@
   function guardarDerbys(clubId) {
     var ta = document.getElementById("derbys-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarDerbysTexto(clubId, ta.value);
+    if (!window.Estado.guardarDerbysTexto(clubId, ta.value)) return;
     window.Renderizadores.renderizarDerbys("derbys-content", clubId);
   }
   function cancelarDerbys(clubId) {
@@ -1354,7 +1377,7 @@
     if (!clubId || !window.Estado || !window.Renderizadores || !window.Renderizadores.calcularObjetivosPuntos) return;
     var puntos = window.Renderizadores.calcularObjetivosPuntos(clubId);
     var actual = window.Estado.obtenerValoracionClub(clubId);
-    window.Estado.guardarValoracionClub(clubId, puntos.ptsLogrados, actual.objetivo);
+    if (!window.Estado.guardarValoracionClub(clubId, puntos.ptsLogrados, actual.objetivo)) return;
     _pintarValoracionClub(clubId);
   }
   function editarValoracionClub(clubId) {
@@ -1363,7 +1386,7 @@
     var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtObjetivoValoracion(actual.objetivo));
     if (objetivoStr === null) return; // cancelado
     var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
-    window.Estado.guardarValoracionClub(clubId, actual.logrado, isNaN(objetivo) ? 0 : objetivo);
+    if (!window.Estado.guardarValoracionClub(clubId, actual.logrado, isNaN(objetivo) ? 0 : objetivo)) return;
     _pintarValoracionClub(clubId);
     repintarMenuClub(clubId);
   }
@@ -1377,7 +1400,7 @@
       var actuales = window.Estado.obtenerObjetivosIconos(clubId);
       var nuevo = window.prompt("Icono/emoji para esta caja:", actuales[seccion] || "");
       if (nuevo === null || !nuevo.trim()) return;
-      window.Estado.guardarObjetivosIconoSeccion(clubId, seccion, nuevo.trim());
+      if (!window.Estado.guardarObjetivosIconoSeccion(clubId, seccion, nuevo.trim())) return;
       window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
     }, "🔒 Editar icono", "Introduce el PIN de administrador.");
   }
@@ -1622,7 +1645,7 @@
     var ta = document.getElementById("calendario-comp-textarea");
     var contenedor = document.getElementById("admin-detalle-contenido");
     if (!ta || !contenedor || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarCalendarioTexto(ta.value);
+    if (!window.Estado.guardarCalendarioTexto(ta.value)) return;
     window.Renderizadores.pintarRoadmapCalendario(contenedor);
   }
 
@@ -1658,7 +1681,7 @@
       var nueva = window.prompt("Nombre de la temporada:", actual);
       if (nueva === null) return; // cancelado
       if (!nueva.trim()) return;
-      window.Estado.guardarTemporada(nueva);
+      if (!window.Estado.guardarTemporada(nueva)) return;
       if (window.Renderizadores) window.Renderizadores.pintarTemporada();
     }, "🔒 Editar temporada", "Introduce el PIN de administrador.");
   }
@@ -1677,7 +1700,7 @@
     var nueva = window.prompt("Nombre de la liga de este club:", actual);
     if (nueva === null) return; // cancelado
     if (!nueva.trim()) return;
-    window.Estado.guardarNombreLiga(clubId, nueva);
+    if (!window.Estado.guardarNombreLiga(clubId, nueva)) return;
     var badge = document.getElementById("calendar-liga-badge");
     if (badge) badge.textContent = nueva.trim();
   }
@@ -1729,7 +1752,7 @@
   function guardarTitulosTemporada() {
     var ta = document.getElementById("titulos-temporada-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Estado.guardarTitulosTemporadaTexto(ta.value);
+    if (!window.Estado.guardarTitulosTemporadaTexto(ta.value)) return;
     window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
   }
   function cancelarTitulosTemporada() {

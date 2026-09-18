@@ -125,6 +125,12 @@ button { font-family: inherit; cursor: pointer; }
   flex-shrink: 0;
 }
 .pantalla-header--inicio { justify-content: space-between; }
+/* Agrupa el 🏆 Títulos de la Temporada + el ⚙️ Panel Admin a la derecha
+   de la cabecera de Inicio, pegados entre sí (gap corto) — sin este
+   wrapper, el justify-content:space-between del header repartiría el
+   hueco POR IGUAL entre los 3 hijos (marca/🏆/⚙️) separando también el
+   🏆 del ⚙️, en vez de solo separar la marca del bloque de botones. */
+.header-actions { display: flex; align-items: center; gap: 10px; }
 .pantalla-header-title {
   font-size: 13px;
   font-weight: 800;
@@ -2158,6 +2164,39 @@ button { font-family: inherit; cursor: pointer; }
   grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
   gap: 8px;
 }
+/* Títulos de la TEMPORADA (🏆 de Inicio, pantalla global) — la card
+   "GANADOR" (petición usuario, "editable como la foto 2"): escudo real/
+   CSS de siempre (crearEscudoHTML, 0 KB nuevos) centrado sobre fondo
+   oscuro, con las líneas de Pichichi/MVP/Zamora debajo como texto simple. */
+.titulos-temp-ganador {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+}
+.titulos-temp-ganador-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+}
+.titulos-temp-ganador-nombre {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-hi);
+  text-align: center;
+}
+.titulos-temp-sub {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--text-lo);
+}
+.titulos-temp-sub b { color: var(--text-hi); font-weight: 700; }
 .trofeo-card {
   position: relative;
   display: flex;

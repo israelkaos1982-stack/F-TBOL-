@@ -18,7 +18,10 @@
         <span id="brand-sub-label">Temporada 7</span>
       </button>
     </div>
-    <button type="button" class="btn-gear" id="btn-abrir-admin" aria-label="Panel Admin">⚙️</button>
+    <div class="header-actions">
+      <button type="button" class="btn-gear" id="btn-abrir-titulos-temporada" aria-label="Títulos de la temporada">🏆</button>
+      <button type="button" class="btn-gear" id="btn-abrir-admin" aria-label="Panel Admin">⚙️</button>
+    </div>
   </header>
 
   <div class="pantalla-body pantalla-body--inicio">
@@ -83,6 +86,23 @@
       <input type="file" id="input-importar" accept="application/json" class="visually-hidden">
       <p class="control-panel-hint">Descarga un archivo a tu dispositivo — además de esto, el servidor guarda sus propias copias automáticas (ver "🛟 Copias automáticas" arriba).</p>
     </div>
+  </div>
+</section>
+
+<!-- ============ PANTALLA — TÍTULOS DE LA TEMPORADA (🏆 de Inicio) ============ -->
+<!-- Registro GLOBAL (no depende de ningún club) del campeón + premios
+     individuales de cada competición de la temporada actual — ver
+     js/renderizadores.js::renderizarTitulosTemporada/
+     parsearTitulosTemporadaTexto y js/estado.js::obtenerTitulosTemporadaTexto.
+     Abrirla no pide PIN (como la Sala de Títulos de cada caja); solo la
+     edición (✏️, candado 646) sí. -->
+<section id="screen-titulos-temporada" class="screen" hidden>
+  <header class="pantalla-header">
+    <button type="button" class="btn-volver" id="titulos-temporada-volver">← Volver</button>
+    <span class="pantalla-header-title">🏆 Títulos de la Temporada</span>
+  </header>
+  <div class="pantalla-body">
+    <div id="titulos-temporada-content"></div>
   </div>
 </section>
 

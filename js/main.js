@@ -25,7 +25,7 @@
   var ADMIN_PASSWORD = "646";
 
   // ---------- Gestor de pantallas ----------
-  var PANTALLAS = ["inicio", "admin", "club"];
+  var PANTALLAS = ["inicio", "admin", "club", "titulos-temporada"];
   function mostrarPantalla(nombre) {
     PANTALLAS.forEach(function (n) {
       var el = document.getElementById("screen-" + n);
@@ -1710,6 +1710,32 @@
     }, "🔒 Reiniciar partidos del club", "Solo el administrador puede reiniciar todos los partidos jugados.");
   }
 
+  // ---------- Pantalla — Títulos de la Temporada (🏆 de Inicio) ----------
+  // GLOBAL (no depende de ningún club activo) — abrirla nunca pide PIN,
+  // igual que la Sala de Títulos de cada caja; solo la EDICIÓN (nombres
+  // libres de campeón/Pichichi/MVP/Zamora) va detrás del candado 646,
+  // mismo criterio que Liga1RefStat/Copa/Recopa.
+  function abrirTitulosTemporada() {
+    mostrarPantalla("titulos-temporada");
+    if (window.Renderizadores) window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
+  }
+  function editarTitulosTemporadaInline() {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("titulos-temporada-content");
+      if (cont) window.Renderizadores.pintarEditorTitulosTemporada(cont);
+    }, "🔒 Editar títulos de la temporada", "Introduce el PIN de administrador.");
+  }
+  function guardarTitulosTemporada() {
+    var ta = document.getElementById("titulos-temporada-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarTitulosTemporadaTexto(ta.value);
+    window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
+  }
+  function cancelarTitulosTemporada() {
+    if (window.Renderizadores) window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
+  }
+
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
     if (window.Renderizadores) {
@@ -1745,6 +1771,14 @@
 
     var btnGear = document.getElementById("btn-abrir-admin");
     if (btnGear) btnGear.addEventListener("click", abrirCandadoAdmin);
+
+    var btnTitulosTemp = document.getElementById("btn-abrir-titulos-temporada");
+    if (btnTitulosTemp) btnTitulosTemp.addEventListener("click", abrirTitulosTemporada);
+
+    var btnTitulosTempVolver = document.getElementById("titulos-temporada-volver");
+    if (btnTitulosTempVolver) {
+      btnTitulosTempVolver.addEventListener("click", function () { mostrarPantalla("inicio"); });
+    }
 
     var btnEditarClub = document.getElementById("btn-editar-club-menu");
     if (btnEditarClub) btnEditarClub.addEventListener("click", abrirCandadoEditorClub);
@@ -1994,6 +2028,9 @@
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;
+        case "editar-titulos-temporada-inline": editarTitulosTemporadaInline(); break;
+        case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
+        case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;
         case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;
         case "guardar-objetivos": guardarObjetivos(d.clubId); break;
         case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;

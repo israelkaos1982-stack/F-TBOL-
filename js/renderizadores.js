@@ -8445,6 +8445,191 @@
   }
 
   // ============================================================
+  // TÍTULOS DE LA TEMPORADA — pantalla GLOBAL (🏆 en la cabecera de
+  // Inicio, ver index.html/js/main.js), distinta de la Sala de Títulos
+  // de arriba (esa es POR club, catálogo cerrado de trofeos históricos
+  // de CADA mánager). Aquí se registra, para la temporada actual, el
+  // campeón de cada competición + sus premios individuales (Pichichi/
+  // MVP/Zamora donde aplique) + Balón de Oro/Bota de Oro — petición
+  // usuario, foto del icono 🏆 señalado en la cabecera de Inicio: "Una
+  // vez se pulsa se abre la pantalla con todos los títulos de la
+  // temporada (el campeón de cada torneo editable...)" + el desglose
+  // exacto de competiciones/subpremios que dio a continuación.
+  //
+  // Texto libre GLOBAL (Estado.obtenerTitulosTemporadaTexto, sin
+  // clubId — es el MISMO dato para las 6 cajas) con un cursor de
+  // "competición actual": una línea "Campeón <Nombre>: <equipo>" abre
+  // esa competición; las líneas "Pichichi:"/"MVP:"/"Zamora:" que le
+  // siguen (sin repetir el nombre de la comp) se le atribuyen, hasta la
+  // siguiente cabecera "Campeón ..." — es EXACTAMENTE el formato que el
+  // usuario escribió en su petición, así que puede reeditarlo tal cual.
+  // "Balón de Oro:"/"Bota de Oro:" son líneas sueltas, sin competición.
+  // 0 imágenes nuevas: el campeón se pinta con crearEscudoHTML (mismo
+  // escudo real/CSS de siempre vía resolverRivalPorNombre) — "que no
+  // pese apenas KB" queda cubierto solo con texto + el motor de escudos
+  // que YA existe en toda la app.
+  // ============================================================
+  var TITULOS_TEMPORADA_COMPS = [
+    { key: "liga", label: "Liga EA Sports", sub: ["Pichichi", "MVP", "Zamora"] },
+    { key: "copa", label: "Copa del Rey", sub: ["Pichichi", "MVP"] },
+    { key: "supercopa", label: "Supercopa España", sub: [] },
+    { key: "superliga", label: "Superliga", sub: ["Pichichi", "MVP", "Zamora"] },
+    { key: "hypermotion", label: "Liga Hypermotion", sub: ["Pichichi", "MVP", "Zamora"] },
+    { key: "1ref", label: "1ª REF", sub: ["Pichichi", "MVP", "Zamora"] },
+    { key: "2ref", label: "2ª REF", sub: ["Pichichi", "MVP", "Zamora"] },
+    { key: "champions", label: "Champions", sub: ["Pichichi", "MVP"] },
+    { key: "uel", label: "Europa League", sub: ["Pichichi", "MVP"] },
+    { key: "uecl", label: "Conference", sub: ["Pichichi", "MVP"] },
+    { key: "recopa", label: "Recopa", sub: ["Pichichi", "MVP"] },
+    { key: "usc", label: "Supercopa Europa", sub: [] },
+    { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"] }
+  ];
+  var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
+
+  // Cursor por líneas: "Campeón <Label>:" (o "<Label>:" a secas, por
+  // tolerancia) abre esa competición y le atribuye TODAS las líneas
+  // "Pichichi:"/"MVP:"/"Zamora:" que vengan detrás, hasta la siguiente
+  // cabecera de competición. Una línea sin ":" o con el valor vacío se
+  // ignora, igual que el resto de parsers de texto libre de esta app —
+  // nunca se inventa un dato ni revienta con un formato inesperado.
+  function parsearTitulosTemporadaTexto(texto) {
+    var campeones = {}, subs = {}, individuales = {};
+    var actual = null;
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var idx = l.indexOf(":");
+      if (idx === -1) return;
+      var etiqueta = _normNombre(l.slice(0, idx));
+      var valor = l.slice(idx + 1).trim();
+      if (!valor) return;
+
+      var comp = TITULOS_TEMPORADA_COMPS.filter(function (c) {
+        return etiqueta === _normNombre("campeon " + c.label) || etiqueta === _normNombre(c.label);
+      })[0];
+      if (comp) { campeones[comp.key] = valor; actual = comp; return; }
+
+      if (etiqueta === _normNombre("balon de oro")) { individuales["Balón de Oro"] = valor; actual = null; return; }
+      if (etiqueta === _normNombre("bota de oro")) { individuales["Bota de Oro"] = valor; actual = null; return; }
+
+      if (!actual) return;
+      var sub = actual.sub.filter(function (s) { return etiqueta === _normNombre(s); })[0];
+      if (sub) (subs[actual.key] = subs[actual.key] || {})[sub] = valor;
+    });
+    return { campeones: campeones, subs: subs, individuales: individuales };
+  }
+
+  // Pre-relleno del editor: TODAS las competiciones/subpremios del
+  // catálogo cerrado, con el valor YA guardado (vacío si no hay) —
+  // mismo espíritu que _construirTextoEdicionTitulos, adaptado a texto
+  // libre con valor (no solo un número). El admin nunca teclea el
+  // nombre de una competición a mano; solo rellena tras los ":".
+  function _construirTextoEdicionTitulosTemporada(textoGuardado) {
+    var parsed = parsearTitulosTemporadaTexto(textoGuardado);
+    var lineas = [];
+    TITULOS_TEMPORADA_COMPS.forEach(function (comp, i) {
+      if (i > 0) lineas.push("");
+      lineas.push("Campeón " + comp.label + ": " + (parsed.campeones[comp.key] || ""));
+      comp.sub.forEach(function (s) {
+        lineas.push(s + ": " + ((parsed.subs[comp.key] || {})[s] || ""));
+      });
+    });
+    lineas.push("");
+    TITULOS_TEMPORADA_INDIVIDUALES.forEach(function (nombreCampo) {
+      lineas.push(nombreCampo + ": " + (parsed.individuales[nombreCampo] || ""));
+    });
+    return lineas.join("\n");
+  }
+
+  function renderizarTitulosTemporada(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var texto = window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "";
+      var parsed = parsearTitulosTemporadaTexto(texto);
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<span class="liga1ref-leyenda-mini">Campeones y premios individuales de la temporada</span>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-titulos-temporada-inline" aria-label="Editar títulos de la temporada">✏️</button>';
+      contenedor.appendChild(header);
+
+      TITULOS_TEMPORADA_COMPS.forEach(function (comp, i) {
+        if (i > 0) contenedor.appendChild(nodoSeparador());
+        var nombreCampeon = parsed.campeones[comp.key];
+        var subVals = parsed.subs[comp.key] || {};
+        var html = '<p class="titulos-bloque-titulo">🏆 ' + escapeHTML(comp.label) + "</p>";
+        if (nombreCampeon) {
+          var equipo = resolverRivalPorNombre(nombreCampeon, datos, null);
+          html +=
+            '<div class="titulos-temp-ganador">' +
+            '<span class="titulos-temp-ganador-label">GANADOR</span>' +
+            crearEscudoHTML(equipo, "escudo--lg") +
+            '<span class="titulos-temp-ganador-nombre">' + escapeHTML((equipo && equipo.nombre) || nombreCampeon) + "</span>" +
+            "</div>";
+        } else {
+          html += '<p class="admin-nota">Sin campeón todavía.</p>';
+        }
+        html += comp.sub.map(function (s) {
+          var v = subVals[s];
+          return '<p class="titulos-temp-sub"><b>' + escapeHTML(s) + ":</b> " + (v ? escapeHTML(v) : "—") + "</p>";
+        }).join("");
+        var bloque = document.createElement("div");
+        bloque.className = "titulos-bloque";
+        bloque.innerHTML = html;
+        contenedor.appendChild(bloque);
+      });
+
+      contenedor.appendChild(nodoSeparador());
+      var indivBloque = document.createElement("div");
+      indivBloque.className = "titulos-bloque";
+      indivBloque.innerHTML =
+        '<p class="titulos-bloque-titulo">🥇 Individuales</p>' +
+        TITULOS_TEMPORADA_INDIVIDUALES.map(function (nombreCampo) {
+          var v = parsed.individuales[nombreCampo];
+          return '<p class="titulos-temp-sub"><b>' + escapeHTML(nombreCampo) + ":</b> " + (v ? escapeHTML(v) : "—") + "</p>";
+        }).join("");
+      contenedor.appendChild(indivBloque);
+    });
+  }
+
+  // Editor inline (candado 646, texto libre — a diferencia de la Sala de
+  // Títulos de arriba, aquí SÍ se teclean nombres a mano, así que se
+  // protege igual que Liga1RefStat/Copa/Recopa).
+  function pintarEditorTitulosTemporada(contenedor) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Rellena, tras los dos puntos, el equipo campeón de cada competición y sus premios " +
+      "individuales — deja la línea vacía si todavía no se sabe. No borres ni reordenes las " +
+      "líneas \"Campeón ...\": son las que dan pie al escudo/color de cada bloque.";
+    contenedor.appendChild(nota);
+
+    var textoGuardado = window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "";
+    var textarea = document.createElement("textarea");
+    textarea.id = "titulos-temporada-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 46;
+    textarea.value = _construirTextoEdicionTitulosTemporada(textoGuardado);
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-titulos-temporada">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-titulos-temporada">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
   // OBJETIVOS DEL CLUB — 4 cajas FIJAS (Liga/Copa/Superliga/Globales),
   // iguales para los 6 humanos pero cada uno con su propio texto/número
   // (candado 646, texto libre — a diferencia de Títulos, aquí el admin
@@ -11975,6 +12160,8 @@
     calcularSuperliga: calcularSuperliga,
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,
+    renderizarTitulosTemporada: renderizarTitulosTemporada,
+    pintarEditorTitulosTemporada: pintarEditorTitulosTemporada,
     parsearTitulosTexto: parsearTitulosTexto,
     renderizarObjetivos: renderizarObjetivos,
     pintarEditorObjetivos: pintarEditorObjetivos,

@@ -1516,6 +1516,34 @@
     }
   }
 
+  // ---------- Títulos de la TEMPORADA (pantalla global, 🏆 de Inicio) ----------
+  // A diferencia de la Sala de Títulos de arriba (POR club, catálogo
+  // cerrado de trofeos históricos), esto es UN SOLO registro GLOBAL —
+  // campeón + Pichichi/MVP/Zamora de cada competición de la temporada
+  // ACTUAL, editable desde el icono 🏆 de la cabecera de Inicio (ver
+  // js/renderizadores.js::renderizarTitulosTemporada/parsearTitulosTemporadaTexto).
+  // Mismo texto libre de siempre — ni un KB de imagen, el campeón se
+  // pinta con el escudo real/CSS que ya usa toda la app.
+  var TITULOS_TEMPORADA_KEY = "ef7_titulos_temporada_v1";
+  function obtenerTitulosTemporadaTexto() {
+    try {
+      var v = localStorage.getItem(TITULOS_TEMPORADA_KEY);
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarTitulosTemporadaTexto(texto) {
+    try {
+      localStorage.setItem(TITULOS_TEMPORADA_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar los títulos de la temporada:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Lesionados / sancionados por club (Fase 4) ----------
   // Igual que el calendario extra: una lista POR CLUB (el mánager de
   // cada caja lleva la suya, independiente de con quién juegue cada
@@ -3320,6 +3348,8 @@
     reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
+    obtenerTitulosTemporadaTexto: obtenerTitulosTemporadaTexto,
+    guardarTitulosTemporadaTexto: guardarTitulosTemporadaTexto,
     obtenerListaJugadores: obtenerListaJugadores,
     obtenerListaJugadoresActivosPara: obtenerListaJugadoresActivosPara,
     obtenerNombresListaActiva: obtenerNombresListaActiva,

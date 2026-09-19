@@ -8469,20 +8469,26 @@
   // pese apenas KB" queda cubierto solo con texto + el motor de escudos
   // que YA existe en toda la app.
   // ============================================================
+  // "color" = el MISMO color que ya tiene esa competición como trofeo
+  // de club en data/titulos.json (misma id) — una sola fuente de verdad
+  // de "qué color le corresponde a cada competición" en toda la app.
+  // Petición usuario: "el texto de cada competición en color llamativo
+  // para diferenciarlas" (foto: título "LIGA EA SPORTS"/"COPA DEL REY"
+  // en gris uniforme, indistinguibles entre sí de un vistazo).
   var TITULOS_TEMPORADA_COMPS = [
-    { key: "liga", label: "Liga EA Sports", sub: ["Pichichi", "MVP", "Zamora"] },
-    { key: "copa", label: "Copa del Rey", sub: ["Pichichi", "MVP"] },
-    { key: "supercopa", label: "Supercopa España", sub: [] },
-    { key: "superliga", label: "Superliga", sub: ["Pichichi", "MVP", "Zamora"] },
-    { key: "hypermotion", label: "Liga Hypermotion", sub: ["Pichichi", "MVP", "Zamora"] },
-    { key: "1ref", label: "1ª REF", sub: ["Pichichi", "MVP", "Zamora"] },
-    { key: "2ref", label: "2ª REF", sub: ["Pichichi", "MVP", "Zamora"] },
-    { key: "champions", label: "Champions", sub: ["Pichichi", "MVP"] },
-    { key: "uel", label: "Europa League", sub: ["Pichichi", "MVP"] },
-    { key: "uecl", label: "Conference", sub: ["Pichichi", "MVP"] },
-    { key: "recopa", label: "Recopa", sub: ["Pichichi", "MVP"] },
-    { key: "usc", label: "Supercopa Europa", sub: [] },
-    { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"] }
+    { key: "liga", label: "Liga EA Sports", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff3b5c" },
+    { key: "copa", label: "Copa del Rey", sub: ["Pichichi", "MVP"], color: "#f1c40f" },
+    { key: "supercopa", label: "Supercopa España", sub: [], color: "#c48a5c" },
+    { key: "superliga", label: "Superliga", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff4d9e" },
+    { key: "hypermotion", label: "Liga Hypermotion", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff8c00" },
+    { key: "1ref", label: "1ª REF", sub: ["Pichichi", "MVP", "Zamora"], color: "#8bc34a" },
+    { key: "2ref", label: "2ª REF", sub: ["Pichichi", "MVP", "Zamora"], color: "#c98a4a" },
+    { key: "champions", label: "Champions", sub: ["Pichichi", "MVP"], color: "#3ba7ff" },
+    { key: "uel", label: "Europa League", sub: ["Pichichi", "MVP"], color: "#ff7a29" },
+    { key: "uecl", label: "Conference", sub: ["Pichichi", "MVP"], color: "#39ff6a" },
+    { key: "recopa", label: "Recopa", sub: ["Pichichi", "MVP"], color: "#e0a458" },
+    { key: "usc", label: "Supercopa Europa", sub: [], color: "#8ecae6" },
+    { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"], color: "#ffe600" }
   ];
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
   // Emoji de cada subpremio en la card GANADOR — sustituye a la etiqueta
@@ -8570,15 +8576,21 @@
         if (i > 0) contenedor.appendChild(nodoSeparador());
         var nombreCampeon = parsed.campeones[comp.key];
         var subVals = parsed.subs[comp.key] || {};
-        var html = '<p class="titulos-bloque-titulo">🏆 ' + escapeHTML(comp.label) + "</p>";
+        var html = '<p class="titulos-bloque-titulo" style="color:' + comp.color + '">🏆 ' + escapeHTML(comp.label) + "</p>";
 
         var izqHtml;
         if (nombreCampeon) {
           var equipo = resolverRivalPorNombre(nombreCampeon, datos, null);
+          var nombreMostrado = (equipo && equipo.nombre) || nombreCampeon;
+          // Campeón HUMANO (data/equipos.json trae "mister" solo en los
+          // 6 clubes de los usuarios, nunca en la IA) -> el nombre del
+          // entrenador va pegado al del equipo, petición usuario:
+          // "Copa del rey / Liverpool-Toñín".
+          if (equipo && equipo.mister) nombreMostrado += "-" + equipo.mister;
           izqHtml =
             '<span class="titulos-temp-ganador-label">GANADOR</span>' +
             crearEscudoHTML(equipo, "escudo--lg") +
-            '<span class="titulos-temp-ganador-nombre">' + escapeHTML((equipo && equipo.nombre) || nombreCampeon) + "</span>";
+            '<span class="titulos-temp-ganador-nombre">' + escapeHTML(nombreMostrado) + "</span>";
         } else {
           izqHtml = '<p class="admin-nota">Sin campeón todavía.</p>';
         }

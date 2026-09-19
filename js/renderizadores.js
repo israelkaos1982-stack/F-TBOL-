@@ -8585,12 +8585,18 @@
           // Campeón HUMANO (data/equipos.json trae "mister" solo en los
           // 6 clubes de los usuarios, nunca en la IA) -> el nombre del
           // entrenador va pegado al del equipo, petición usuario:
-          // "Copa del rey / Liverpool-Toñín".
-          if (equipo && equipo.mister) nombreMostrado += "-" + equipo.mister;
+          // "Copa del rey / Liverpool-Toñín". Además, el nombre entero se
+          // pinta en verde (--neon, el verde de siempre de la app) para
+          // diferenciar de un vistazo a un campeón HUMANO de uno IA,
+          // petición usuario: "Cuando es un equipo humano el campeón de
+          // 1 torneo, liga copa etc el texto en color verde".
+          var esHumano = !!(equipo && equipo.mister);
+          if (esHumano) nombreMostrado += "-" + equipo.mister;
+          var claseNombre = "titulos-temp-ganador-nombre" + (esHumano ? " titulos-temp-ganador-nombre--humano" : "");
           izqHtml =
             '<span class="titulos-temp-ganador-label">GANADOR</span>' +
             crearEscudoHTML(equipo, "escudo--lg") +
-            '<span class="titulos-temp-ganador-nombre">' + escapeHTML(nombreMostrado) + "</span>";
+            '<span class="' + claseNombre + '">' + escapeHTML(nombreMostrado) + "</span>";
         } else {
           izqHtml = '<p class="admin-nota">Sin campeón todavía.</p>';
         }

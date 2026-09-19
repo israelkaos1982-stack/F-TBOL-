@@ -705,17 +705,47 @@
   // resultado llegaba a ocupar ese hueco de identidad (p.ej. al re-
   // sincronizar desde otro móvil), el que se veía ANTES podía quedar
   // sin marcador que reclamar, mostrándose "sin jugar" de un momento a
-  // otro. Para LIGA se preserva el texto COMPLETO de la ronda — cada
+  // otro. Para LIGA se preserva (una versión reducida de) la ronda — cada
   // jornada numerada mantiene su propia identidad — y solo el resto de
   // competiciones (todas de eliminatoria: Copa, Champions/Europa/
   // Conference, Recopa, Supercopa de Europa, Intercontinental, Previa
   // Champions…) siguen tolerando que se renombre la ronda (p.ej.
   // "1/64" -> "1ª Ronda") sin perder el resultado ya confirmado.
+  //
+  // BUG REAL (reporte usuario 2026-09-19, «El Real Madrid desde su móvil
+  // ha finalizado esos 2 partidos [Liga J7 vs Arsenal, Liga J13 vs FC
+  // Barcelona] / Ahora abro mi móvil y me doy cuenta de que no se ha
+  // guardado»): en un HUMANO VS HUMANO de Liga, CADA mánager teclea SU
+  // PROPIA línea en SU PROPIO Calendario extra — 2 textos libres
+  // independientes describiendo el MISMO cruce real, sin que nada
+  // obligue a que ambos escriban la ronda con las MISMAS palabras (Real
+  // Madrid "Jornada 7", Arsenal "J7" o "7ª Jornada"). Exigir coincidencia
+  // EXACTA del texto completo de la ronda (como hacía esta función hasta
+  // ahora para "liga") hacía que un simple desajuste de estilo entre los
+  // 2 admins impidiera que `_deduplicarExtraHumanoVsHumano` (arriba) Y la
+  // identidad de reserva `_identidadFallbackKey` (justo debajo) —
+  // AMBAS dependen de esta misma función— reconocieran las 2 líneas como
+  // el MISMO partido: el resultado que Real Madrid confirmaba en vivo
+  // (bajo SU id, derivado de SU propio texto) nunca se encontraba al
+  // releer el calendario (que evalúa la línea de CADA club con su propia
+  // ronda tecleada) — se veía "sin jugar"/PREVIA en cualquier lectura
+  // que no fuera la pantalla de resumen inmediatamente posterior a
+  // confirmar. Ahora, para "liga", se extrae SOLO el número de jornada
+  // (lo único que de verdad identifica qué partido real es dentro de la
+  // temporada) — sigue distinguiendo perfectamente la ida (p.ej.
+  // "Jornada 5") de la vuelta (p.ej. "Jornada 23") del mismo par, porque
+  // cada una lleva un número distinto, pero ya tolera cualquier estilo de
+  // escritura del mismo número ("Jornada 7"/"J7"/"7ª Jornada" -> "j7").
+  // Sin ningún número en la ronda (texto atípico), se conserva el texto
+  // completo como respaldo — nunca peor que el comportamiento anterior.
   function _legDeRondaExtra(ronda, competicion) {
     var n = _normTxtExtra(ronda || "");
     if (/\bida\b/.test(n)) return "ida";
     if (/\bvuelta\b/.test(n)) return "vuelta";
-    if (_normTxtExtra(competicion) === "liga") return n;
+    if (_normTxtExtra(competicion) === "liga") {
+      var mJor = n.match(/\d+/);
+      return mJor ? ("j" + mJor[0]) : n;
+    }
     return "";
   }
   function _identidadFallbackKey(competicion, ronda, nombreA, nombreB) {

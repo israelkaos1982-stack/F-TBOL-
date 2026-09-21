@@ -574,8 +574,13 @@
   // reiniciara SU club de paso borraba los partidos HvH compartidos con
   // cualquier otro). El reinicio de un partido HvH concreto sigue siendo
   // posible, pero SOLO uno a uno desde el botón individual (↺ por partido,
-  // con su propio PIN+confirm) — nunca en el barrido masivo.
-  function reiniciarResultadosDeClub(clubId, excluirComps) {
+  // con su propio PIN+confirm) — nunca en el barrido masivo, SALVO que el
+  // caller pida explícitamente `incluirHvH:true` (petición usuario
+  // 2026-09-21, "Hazlo tú porque es un lío": reiniciar TODA la pirámide
+  // española de un golpe, cruces entre los 5 humanos incluidos — ver
+  // js/renderizadores.js::reiniciarPiramideCompleta, el ÚNICO caller que
+  // pasa `true` aquí).
+  function reiniciarResultadosDeClub(clubId, excluirComps, incluirHvH) {
     if (!clubId) return 0;
     var excluir = excluirComps || ["superliga"];
     var e = cargarEstado();
@@ -588,7 +593,7 @@
       // vacía (jugado:false, sin pospuesto) no necesita otro reinicio.
       if (r.jugado !== true && !r.pospuesto) return;
       if (!Array.isArray(r._clubes) || r._clubes.indexOf(clubId) === -1) return;
-      if (r._clubes.length > 1) return; // HvH — nunca en el barrido masivo, ver comentario de arriba
+      if (!incluirHvH && r._clubes.length > 1) return; // HvH — nunca en el barrido masivo, ver comentario de arriba
       if (r._competicion && excluir.indexOf(r._competicion) !== -1) return;
       e.resultados[id] = _tumbaDeResultado(r);
       n++;

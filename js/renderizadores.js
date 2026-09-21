@@ -9751,7 +9751,12 @@
   // opera sobre el calendario GENERAL, nunca sobre Superliga — no debe
   // borrar de rebote partidos de una competición que ni siquiera se ve
   // ahí.
-  function reiniciarTodosPartidosClub(clubId) {
+  // `incluirHvH` (opcional, default false — comportamiento de siempre):
+  // si es `true`, TAMBIÉN reinicia los partidos compartidos con otro club
+  // humano (ver Estado.reiniciarResultadosDeClub, mismo parámetro). Solo
+  // lo usa reiniciarPiramideCompleta, más abajo — el botón normal de
+  // "⚙️ Ajustes" de un club sigue protegiendo los HvH por defecto.
+  function reiniciarTodosPartidosClub(clubId, incluirHvH) {
     if (!clubId || !window.Estado) return 0;
     var n = 0;
     if (_ultimoContexto && _ultimoContexto.equipo && _ultimoContexto.equipo.id === clubId) {
@@ -9766,9 +9771,12 @@
         // partido no ha pedido tocar nada suyo. Espejo de la misma
         // protección en Estado.reiniciarResultadosDeClub (ver ahí el
         // porqué: reporte usuario "los partidos que juegan otros humanos
-        // no se guardan").
-        var rivalId = p.local === clubId ? p.visitante : p.local;
-        if (_esClubHumano(rivalId, _ultimoContexto.datos)) return;
+        // no se guardan"). Se salta esta protección SOLO si el caller
+        // pidió `incluirHvH:true` explícitamente.
+        if (!incluirHvH) {
+          var rivalId = p.local === clubId ? p.visitante : p.local;
+          if (_esClubHumano(rivalId, _ultimoContexto.datos)) return;
+        }
         n++;
         window.Estado.reiniciarResultadoPartido(id, _descripcionCortaPartido(p, _ultimoContexto.datos));
       });
@@ -9784,10 +9792,158 @@
     // resultado que el bucle de arriba ya borró deja de existir, así que
     // esta 2ª pasada simplemente no lo vuelve a encontrar.
     if (window.Estado.reiniciarResultadosDeClub) {
-      n += window.Estado.reiniciarResultadosDeClub(clubId);
+      n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, incluirHvH);
     }
     generarCalendarioLateralDerecho(clubId);
     return n;
+  }
+
+  // Reinicia de un golpe TODA la pirámide española de los 5 clubes
+  // humanos no-PSG (Liverpool/Arsenal/Real Madrid/Atlético Madrid/FC
+  // Barcelona): TODOS sus partidos de Liga a cero — INCLUIDOS los cruces
+  // entre ellos (HvH), que el reinicio individual de un club protege a
+  // propósito — y deja pegado en las 4 divisiones de la pirámide (2ª REF/
+  // 1ª REF/Hypermotion/Ea Sports) el roster real que dio el usuario, todo
+  // a cero. Petición usuario 2026-09-21 ("Hazlo tú porque es un lío"):
+  // hace de un solo golpe lo que antes requería reiniciar cada club uno a
+  // uno + el icono ↺ de cada cruce HvH + pegar a mano el texto de las 4
+  // divisiones. Los nombres de los 5 clubes humanos NUNCA se incluyen en
+  // estos textos — su propia fila la aporta siempre la batidora
+  // (_combinarClasificacionConHumanos), nunca el texto pegado.
+  //
+  // A diferencia del reinicio individual de un club, esta acción NO pasa
+  // por la 🗑️ Papelera de partidos — el volumen esperado (temporada
+  // entera de 5 clubes) desborda de sobra su tope de 30 entradas, así que
+  // archivarlas ahí daría una falsa sensación de "esto se puede
+  // deshacer". El confirm() de renderizarAdminPiramide lo advierte
+  // explícitamente antes de ejecutar. No toca PSG/Ligue 1 (fuera de la
+  // pirámide española, el usuario no lo mencionó).
+  var _PIRAMIDE_CLUBES_HUMANOS = ["liverpool", "arsenal", "real-madrid", "atletico-madrid", "fc-barcelona"];
+  var _PIRAMIDE_TEXTO_2REF = [
+    "1    Villarreal B          0   0   0   0   0   0   0",
+    "2    AD Mérida*            0   0   0   0   0   0   0",
+    "3    Algeciras CF*         0   0   0   0   0   0   0",
+    "4    Atlético Madrileño*   0   0   0   0   0   0   0",
+    "5    CD Lugo*              0   0   0   0   0   0   0",
+    "6    RM Castilla*          0   0   0   0   0   0   0",
+    "7    Real Sociedad B       0   0   0   0   0   0   0",
+    "8    Cultural Leonesa      0   0   0   0   0   0   0",
+    "9    Sabadell              0   0   0   0   0   0   0"
+  ].join("\n");
+  var _PIRAMIDE_TEXTO_1REF = [
+    "1    Celta Fortuna         0   0   0   0   0   0   0",
+    "2    Eldense               0   0   0   0   0   0   0",
+    "3    FC Andorra            0   0   0   0   0   0   0",
+    "4    Huesca                0   0   0   0   0   0   0",
+    "5    Mirandés              0   0   0   0   0   0   0",
+    "6    Tenerife              0   0   0   0   0   0   0",
+    "7    Ponferradina*         0   0   0   0   0   0   0",
+    "8    Real Murcia*          0   0   0   0   0   0   0",
+    "9    FC Cartagena*         0   0   0   0   0   0   0",
+    "10   CE Europa*            0   0   0   0   0   0   0",
+    "11   Antequera CF*         0   0   0   0   0   0   0",
+    "12   Zamora CF*            0   0   0   0   0   0   0",
+    "13   Hércules*             0   0   0   0   0   0   0",
+    "14   Unionistas CF*        0   0   0   0   0   0   0",
+    "15   Ceuta                 0   0   0   0   0   0   0"
+  ].join("\n");
+  var _PIRAMIDE_TEXTO_HYPERMOTION = [
+    "1    UD Las Palmas         0   0   0   0   0   0   0",
+    "2    Hércules*             0   0   0   0   0   0   0",
+    "3    Real Sporting         0   0   0   0   0   0   0",
+    "4    CD Castellón          0   0   0   0   0   0   0",
+    "5    Almería               0   0   0   0   0   0   0",
+    "6    Córdoba CF            0   0   0   0   0   0   0",
+    "7    Barakaldo*            0   0   0   0   0   0   0",
+    "8    Eibar                 0   0   0   0   0   0   0",
+    "9    Cádiz                 0   0   0   0   0   0   0",
+    "10   Pontevedra*           0   0   0   0   0   0   0",
+    "11   Real Valladolid       0   0   0   0   0   0   0",
+    "12   Málaga                0   0   0   0   0   0   0",
+    "13   Levante               0   0   0   0   0   0   0",
+    "14   Leganés               0   0   0   0   0   0   0",
+    "15   Elche                 0   0   0   0   0   0   0"
+  ].join("\n");
+  var _PIRAMIDE_TEXTO_EASPORTS = [
+    "1    Athletic Club         0   0   0   0   0   0   0",
+    "2    Celta                 0   0   0   0   0   0   0",
+    "3    Deportivo Alavés      0   0   0   0   0   0   0",
+    "4    Espanyol              0   0   0   0   0   0   0",
+    "5    Getafe                0   0   0   0   0   0   0",
+    "6    Girona FC             0   0   0   0   0   0   0",
+    "7    Mallorca              0   0   0   0   0   0   0",
+    "8    Osasuna               0   0   0   0   0   0   0",
+    "9    RC Deportivo          0   0   0   0   0   0   0",
+    "10   Racing                0   0   0   0   0   0   0",
+    "11   Rayo Vallecano        0   0   0   0   0   0   0",
+    "12   Real Betis            0   0   0   0   0   0   0",
+    "13   Real Sociedad         0   0   0   0   0   0   0",
+    "14   Sevilla               0   0   0   0   0   0   0",
+    "15   Valencia              0   0   0   0   0   0   0",
+    "16   Villarreal            0   0   0   0   0   0   0",
+    "17   Real Oviedo           0   0   0   0   0   0   0",
+    "18   Albacete              0   0   0   0   0   0   0",
+    "19   Burgos CF             0   0   0   0   0   0   0",
+    "20   Granada               0   0   0   0   0   0   0"
+  ].join("\n");
+  function reiniciarPiramideCompleta() {
+    if (!window.Estado) return 0;
+    var n = 0;
+    _PIRAMIDE_CLUBES_HUMANOS.forEach(function (clubId) {
+      n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, true);
+      n += window.Estado.reiniciarCalendarioExtraJugados(clubId);
+    });
+    window.Estado.guardarLigaExtraTexto("2ref", _PIRAMIDE_TEXTO_2REF);
+    window.Estado.guardarLiga1RefTexto(_PIRAMIDE_TEXTO_1REF);
+    window.Estado.guardarLigaExtraTexto("hypermotion", _PIRAMIDE_TEXTO_HYPERMOTION);
+    window.Estado.guardarLigaExtraTexto("easports", _PIRAMIDE_TEXTO_EASPORTS);
+    if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
+    return n;
+  }
+
+  // Vista "🧹 Reiniciar pirámide" del Panel Admin (ver index.html —
+  // admin-grid — y js/main.js::ADMIN_VISTAS). Ya vive detrás del candado
+  // 646 que abre el propio Panel Admin, así que —igual que "🗑️ Borrar
+  // TODO"— el único gate adicional es el confirm() explícito que nombra
+  // lo que va a pasar, no un 2º PIN.
+  function renderizarAdminPiramide(id) {
+    var contenedor = document.getElementById(id);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Reinicia a CERO absolutamente TODOS los partidos de Liga de los 5 clubes humanos de la " +
+      "pirámide española (Liverpool, Arsenal, Real Madrid, Atlético Madrid, FC Barcelona) — INCLUIDOS " +
+      "los cruces entre ellos, que el reinicio individual de cada club protege a propósito. Además " +
+      "deja pegada la clasificación de 2ª REF/1ª REF/Hypermotion/Ea Sports con el roster indicado, " +
+      "todo a cero. PSG/Ligue 1 no se toca — el calendario en sí tampoco, solo los resultados.";
+    contenedor.appendChild(nota);
+
+    var notaPapelera = document.createElement("p");
+    notaPapelera.className = "admin-nota";
+    notaPapelera.textContent =
+      "⚠️ Esta acción NO pasa por la 🗑️ Papelera de partidos (son demasiados partidos para su límite " +
+      "de 30) — no se puede deshacer.";
+    contenedor.appendChild(notaPapelera);
+
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "admin-danger-btn";
+    btn.textContent = "🧹 Reiniciar TODA la pirámide a cero";
+    btn.addEventListener("click", function () {
+      var ok = window.confirm(
+        "⚠️ Esto reinicia a CERO todos los partidos de Liga de Liverpool, Arsenal, Real Madrid, " +
+        "Atlético Madrid y FC Barcelona (incluidos los que jugaron entre ellos) y sustituye el texto " +
+        "pegado de 2ª REF/1ª REF/Hypermotion/Ea Sports por el roster indicado, todo a cero.\n\n" +
+        "NO se archiva en la Papelera de partidos y NO se puede deshacer.\n\n¿Seguro que quieres continuar?"
+      );
+      if (!ok) return;
+      var n = reiniciarPiramideCompleta();
+      window.alert("✅ Pirámide reiniciada" + (n ? " (" + n + " partido(s) de Liga puestos a cero)" : "") + ".");
+    });
+    contenedor.appendChild(btn);
   }
 
   // Pestaña "⚙️ Ajustes" del editor del club (candado 646, ver
@@ -12214,6 +12370,8 @@
     pintarTemporada: pintarTemporada,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
     reiniciarTodosPartidosClub: reiniciarTodosPartidosClub,
+    reiniciarPiramideCompleta: reiniciarPiramideCompleta,
+    renderizarAdminPiramide: renderizarAdminPiramide,
     renderizarMenuClub: renderizarMenuClub,
     pintarEditorMenuClub: pintarEditorMenuClub,
     pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,

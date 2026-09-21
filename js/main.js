@@ -1514,6 +1514,10 @@
     snapshots: {
       titulo: "🛟 Copias automáticas del servidor",
       render: function (id) { window.Renderizadores.renderizarAdminSnapshots(id); }
+    },
+    piramide: {
+      titulo: "🧹 Reiniciar pirámide española",
+      render: function (id) { window.Renderizadores.renderizarAdminPiramide(id); }
     }
   };
 

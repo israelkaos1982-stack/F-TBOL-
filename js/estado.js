@@ -2246,14 +2246,18 @@
   // ---------- Ligas EXTRA (2ª REF / Hypermotion / Ea Sports) — mismo
   // formato de texto libre que Liga 1ª REF de arriba (clasificación:
   // "Pos Nombre Pts PJ PE PP G+ G- DG"; estadística: "Nombre - Equipo
-  // Cantidad"), pero SIN "batidora": ningún club humano juega de verdad
-  // estas 3 competiciones dentro de la app (a diferencia de Liga 1ª REF,
-  // que sí fusiona con los partidos reales de cada club vía
-  // js/renderizadores.js::calcularLiga1RefCombinada). Aquí la
-  // clasificación Y las 5 cajas de estadísticas son 100% lo que el admin
-  // pega a mano — petición usuario: "el resto de estadísticas y
-  // clasificación te las doy yo manualmente texto". Una clave de texto
-  // por liga (clasificación) + una por liga+categoría (cada estadística).
+  // Cantidad"). Por defecto son 100% texto pegado por el admin — ningún
+  // club humano aparece aquí solo — pero, si un club ASCIENDE/DESCIENDE
+  // hasta esta división (ver obtenerDivisionHumano/guardarDivisionHumano,
+  // justo debajo), sus propios partidos de Liga se suman solos aquí,
+  // igual que ya hace SIEMPRE Liga 1ª REF vía
+  // js/renderizadores.js::calcularLiga1RefCombinada — mismo mecanismo,
+  // solo que en 1ª REF los 5 humanos están fijos "de fábrica" y en estas
+  // 3 divisiones depende de a quién se le haya asignado. Petición
+  // usuario: "el resto de estadísticas y clasificación te las doy yo
+  // manualmente texto" (para los equipos IA, que sigue siendo así) — una
+  // clave de texto por liga (clasificación) + una por liga+categoría
+  // (cada estadística).
   var LIGA_EXTRA_IDS = ["2ref", "hypermotion", "easports"];
   function _ligaExtraTextoKey(ligaId) {
     return "ef7_liga_" + ligaId + "_clasificacion_v1";
@@ -2275,6 +2279,54 @@
       return false;
     }
   }
+
+  // ---------- División ACTUAL de cada club (candado 646) ----------
+  // 2ª REF / 1ª REF / Hypermotion / Ea Sports son 4 escalones de la MISMA
+  // pirámide española (ver js/renderizadores.js::LIGA_NAV_ORDEN). Los 5
+  // clubes humanos que juegan en España (todos salvo PSG, que juega en
+  // Francia — ver LIGA1REF_HUMANOS_EXCLUIDOS en renderizadores.js)
+  // empiezan SIEMPRE en 1ª REF, pero pueden ascender o descender de
+  // escalón real con el tiempo (petición usuario 2026-09-21: "Atlético
+  // Madrid / Real Madrid / Liverpool / Han ascendido a Hypermotion").
+  // Esta clave guarda, por clubId, en QUÉ escalón está jugando AHORA —
+  // solo en ESE escalón sus propios partidos de Liga se mezclan con la
+  // tabla pegada a mano; en los demás, ese club simplemente no aparece
+  // (ver _liga1RefEquiposHumanos/_equiposHumanosEnDivisionExtra en
+  // renderizadores.js). Sin entrada guardada todavía -> "1ref" (el
+  // escalón de siempre, para no cambiar el comportamiento de nadie que
+  // nunca haya tocado esto). Cambiar la división de un club NUNCA borra
+  // ningún resultado — solo decide en qué tabla se ve a partir de ahora;
+  // el reinicio de sus partidos (nueva temporada) sigue siendo el botón
+  // aparte "🔄 Reiniciar temporada de este club".
+  var DIVISION_HUMANOS_KEY = "ef7_liga_division_humanos_v1";
+  var DIVISION_HUMANOS_DEFECTO = "1ref";
+  function _leerDivisionHumanos() {
+    try {
+      var raw = localStorage.getItem(DIVISION_HUMANOS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function obtenerDivisionHumano(clubId) {
+    if (!clubId) return DIVISION_HUMANOS_DEFECTO;
+    var mapa = _leerDivisionHumanos();
+    return mapa[clubId] || DIVISION_HUMANOS_DEFECTO;
+  }
+  function guardarDivisionHumano(clubId, divisionId) {
+    if (!clubId || !divisionId) return false;
+    try {
+      var mapa = _leerDivisionHumanos();
+      mapa[clubId] = divisionId;
+      localStorage.setItem(DIVISION_HUMANOS_KEY, JSON.stringify(mapa));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la división del club " + clubId + ":", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- 📌 Override del texto de ℹ️ FORMATO/reglas (candado 646)
   // — cada pantalla con ℹ️ (2ª REF/1ª REF/Hypermotion/Ea Sports/Copa
   // del Rey/Superliga) tiene un texto de fábrica
@@ -3429,6 +3481,8 @@
     guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
     obtenerLigaExtraTexto: obtenerLigaExtraTexto,
     guardarLigaExtraTexto: guardarLigaExtraTexto,
+    obtenerDivisionHumano: obtenerDivisionHumano,
+    guardarDivisionHumano: guardarDivisionHumano,
     obtenerFormatoOverride: obtenerFormatoOverride,
     guardarFormatoOverride: guardarFormatoOverride,
     obtenerLigaExtraStatTexto: obtenerLigaExtraStatTexto,

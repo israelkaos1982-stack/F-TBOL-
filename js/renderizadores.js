@@ -1171,15 +1171,41 @@
     return items;
   }
 
-  // PSG no juega en la Liga 1ª REF (Primera RFEF) — ni siquiera en España,
-  // juega en Francia. Es el único de los 6 humanos fuera de esta liga; si
-  // en el futuro se añade otro club humano de fuera de España, su id va
-  // aquí también.
+  // PSG no juega en la pirámide española (2ª REF/1ª REF/Hypermotion/Ea
+  // Sports) — ni siquiera en España, juega en Francia (Ligue 1, ver
+  // LIGA_NAV_HUMANO_PROPIO más abajo). Es el único de los 6 humanos fuera
+  // de esta pirámide; si en el futuro se añade otro club humano de fuera
+  // de España, su id va aquí también.
   var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
 
+  // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
+  // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
+  // cargó, mismo default "1ref" que ya usa la clave de estado.
+  function _divisionActualClub(clubId) {
+    return (window.Estado && window.Estado.obtenerDivisionHumano) ? window.Estado.obtenerDivisionHumano(clubId) : "1ref";
+  }
+
+  // Los 5 clubes humanos de la pirámide española que están ASCENDIDOS/
+  // DESCENDIDOS a "1ref" ahora mismo (el escalón "de fábrica" — la
+  // mayoría, mientras nadie los mueva). Un club movido a otra división
+  // (ver _equiposHumanosEnDivisionExtra, más abajo) deja de aparecer aquí.
   function _liga1RefEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
-      return LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+      if (LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) !== -1) return false;
+      return _divisionActualClub(e.id) === "1ref";
+    });
+  }
+
+  // Los clubes humanos de la pirámide española que hayan ascendido/
+  // descendido hasta ESTA división extra (2ª REF/Hypermotion/Ea Sports —
+  // nunca "1ref", que tiene su propia función de arriba, ni "ligue1",
+  // que es de PSG en exclusiva vía LIGA_NAV_HUMANO_PROPIO). Vacío
+  // mientras nadie haya sido movido hasta aquí — el comportamiento por
+  // defecto (100% texto pegado por el admin) no cambia para nadie.
+  function _equiposHumanosEnDivisionExtra(ligaId, datos) {
+    return (datos.equipos.equipos || []).filter(function (e) {
+      if (LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) !== -1) return false;
+      return _divisionActualClub(e.id) === ligaId;
     });
   }
 
@@ -1268,13 +1294,16 @@
     acc.gf += r.gf; acc.gc += r.gc; acc.pts += r.pts;
   }
 
-  function calcularLiga1RefCombinada(datos) {
-    var equiposHumanos = _liga1RefEquiposHumanos(datos);
+  // Núcleo de la "batidora", EXTRAÍDO para poder reutilizarlo tanto en
+  // 1ª REF (equiposHumanos fijo: los 5 no-PSG) como en cualquier división
+  // extra a la que se haya ascendido/descendido un club (ver
+  // calcularLigaExtraFilasConHumano, más abajo) — mismo criterio exacto,
+  // solo cambia QUÉ humanos y QUÉ texto pegado se le pasan.
+  function _combinarClasificacionConHumanos(equiposHumanos, texto, datos) {
     var idsHumanos = {};
     equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
     var filas = [];
 
-    var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
       if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo, nunca el texto
       filas.push({
@@ -1341,6 +1370,11 @@
       return a.nombre.localeCompare(b.nombre);
     });
     return filas;
+  }
+
+  function calcularLiga1RefCombinada(datos) {
+    var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
+    return _combinarClasificacionConHumanos(_liga1RefEquiposHumanos(datos), texto, datos);
   }
 
   // Zona de ascenso/descenso por POSICIÓN ABSOLUTA — el ascenso (1-4) y la
@@ -1445,7 +1479,11 @@
   // js/acta.js::simularGoleadorAutomatorioIA — petición usuario: los
   // goles/tarjetas de la IA TAMBIÉN suben a Pichichi/MVP/etc) + porterías
   // a 0 del equipo, atribuidas a su portero principal.
-  function calcularLiga1RefStatsHumanos(datos) {
+  // `equiposHumanos` es opcional — por defecto los 5 no-PSG de 1ª REF
+  // (comportamiento de siempre); se pasa explícito para reutilizar esta
+  // misma función con los clubes ascendidos/descendidos a otra división
+  // (ver calcularLigaExtraStatsHumanos, más abajo).
+  function calcularLiga1RefStatsHumanos(datos, equiposHumanos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
 
     function sumar(bucket, nombre, equipo, equipoId, n) {
@@ -1470,7 +1508,7 @@
       sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
     }
 
-    _liga1RefEquiposHumanos(datos).forEach(function (e) {
+    (equiposHumanos || _liga1RefEquiposHumanos(datos)).forEach(function (e) {
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
       var portero = _liga1RefPorteroPrincipal(e.id);
@@ -1672,12 +1710,17 @@
 
   // ============================================================
   // 3c-ter-bis. NAVEGACIÓN entre las 4 divisiones — 2ª REF / 1ª REF /
-  // Hypermotion / Ea Sports. Solo 1ª REF tiene "batidora" (fusiona con
-  // los partidos reales de los clubes humanos, ver
+  // Hypermotion / Ea Sports. 1ª REF tiene SIEMPRE "batidora" (fusiona con
+  // los partidos reales de los 5 clubes humanos no-PSG, ver
   // calcularLiga1RefCombinada más arriba) — las otras 3 son 100% texto
-  // libre que pega el admin (petición usuario: "el resto de
-  // estadísticas y clasificación te las doy yo manualmente texto"),
-  // mismo formato EXACTO que 1ª REF (parsearLiga1RefTexto/
+  // libre que pega el admin por defecto (petición usuario: "el resto de
+  // estadísticas y clasificación te las doy yo manualmente texto"), pero
+  // GANAN su propia batidora en cuanto algún club ascienda/descienda
+  // hasta ahí (ver Estado.obtenerDivisionHumano/guardarDivisionHumano,
+  // _equiposHumanosEnDivisionExtra y calcularLigaExtraFilasConHumano/
+  // calcularLigaExtraStatsHumanos) — petición usuario 2026-09-21:
+  // "Atlético Madrid / Real Madrid / Liverpool / Han ascendido a
+  // Hypermotion". Mismo formato EXACTO que 1ª REF (parsearLiga1RefTexto/
   // parsearLiga1RefStatTexto se reutilizan tal cual).
   // Orden izquierda->derecha: 2ª REF · 1ª REF (central por defecto,
   // igual que siempre) · Hypermotion (azul) · Ea Sports (rojo) — los
@@ -2078,8 +2121,27 @@
   function calcularLigaExtraFilasConHumano(ligaId, datos) {
     var clubId = LIGA_NAV_HUMANO_PROPIO[ligaId];
     var club = clubId ? buscarEquipoPorId(clubId, datos) : null;
-    if (!club) return calcularLigaExtraFilas(ligaId);
+    if (club) return _combinarClasificacionConHumanosLigueUno(club, ligaId, datos);
 
+    // Clubes de la pirámide española (2ª REF/1ª REF/Hypermotion/Ea
+    // Sports) que hayan ascendido/descendido hasta ESTA división — ver
+    // Estado.obtenerDivisionHumano/guardarDivisionHumano. Vacío mientras
+    // nadie haya sido movido hasta aquí -> se conserva el comportamiento
+    // de siempre (100% texto pegado por el admin, calcularLigaExtraFilas).
+    var equiposHumanos = _equiposHumanosEnDivisionExtra(ligaId, datos);
+    if (!equiposHumanos.length) return calcularLigaExtraFilas(ligaId);
+    var textoDivision = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
+    return _combinarClasificacionConHumanos(equiposHumanos, textoDivision, datos);
+  }
+
+  // Camino histórico de "Ligue 1" (PSG, el único club fuera de la
+  // pirámide española) — EXTRAÍDO tal cual, sin tocar una coma, para que
+  // la nueva rama de arriba (clubes ascendidos/descendidos dentro de la
+  // pirámide) no pueda alterar su comportamiento. A diferencia de
+  // _combinarClasificacionConHumanos, ésta descarta el rival "?" sin fila
+  // (ver el comentario más abajo) — PSG puede anotar resultados rápidos
+  // sin rival identificado, algo que no ocurre en la pirámide española.
+  function _combinarClasificacionConHumanosLigueUno(club, ligaId, datos) {
     var filas = [];
     var texto = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
@@ -2238,16 +2300,32 @@
     });
   }
 
+  // Auto-suma de Pichichi/MVP/Amarillas/Rojas/Zamora de los clubes que
+  // hayan ascendido/descendido hasta esta división extra — reutiliza
+  // EXACTAMENTE la misma acumulación que ya hace Liga 1ª REF, solo con
+  // otro conjunto de clubes (ver _equiposHumanosEnDivisionExtra). `null`
+  // mientras nadie haya sido movido hasta aquí, para que
+  // calcularLigaExtraStatFilas sepa que no hay nada que fusionar.
+  function calcularLigaExtraStatsHumanos(ligaId, datos) {
+    var equiposHumanos = _equiposHumanosEnDivisionExtra(ligaId, datos);
+    return equiposHumanos.length ? calcularLiga1RefStatsHumanos(datos, equiposHumanos) : null;
+  }
+
   // Ranking (top 15) de UNA categoría — pinta DENTRO del mismo contenedor
   // que la clasificación, con un botón "← Volver" para regresar sin
   // cerrar el modal (mismo patrón que el editor inline de la tabla).
-  // Ranking de UNA categoría de una liga EXTRA — 100% texto libre (sin
-  // auto-suma humana, mismo motivo que calcularLigaExtraFilas), mismo
-  // orden top-15 y misma excepción de Zamora ascendente que 1ª REF.
-  function calcularLigaExtraStatFilas(ligaId, categoria) {
+  // Ranking de UNA categoría de una liga EXTRA: 100% texto libre por
+  // defecto (mismo motivo que calcularLigaExtraFilas) — salvo que algún
+  // club haya ascendido/descendido hasta aquí, en cuyo caso se fusiona
+  // con su auto-suma igual que ya hace Liga 1ª REF (mismo orden top-15 y
+  // misma excepción de Zamora ascendente).
+  function calcularLigaExtraStatFilas(ligaId, categoria, datos) {
     var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
     var texto = window.Estado ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria) : "";
-    var filas = parsearLiga1RefStatTexto(texto);
+    var statsHumanos = datos ? calcularLigaExtraStatsHumanos(ligaId, datos) : null;
+    var filas = statsHumanos
+      ? _fusionarStatFilasConOverride(parsearLiga1RefStatTexto(texto), statsHumanos[categoria] || [])
+      : parsearLiga1RefStatTexto(texto);
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
@@ -2281,7 +2359,7 @@
       titulo.textContent = meta.icono + " " + meta.label;
       contenedor.appendChild(titulo);
 
-      var filas = ligaId === "1ref" ? calcularLiga1RefStatsCombinado(datos, categoria) : calcularLigaExtraStatFilas(ligaId, categoria);
+      var filas = ligaId === "1ref" ? calcularLiga1RefStatsCombinado(datos, categoria) : calcularLigaExtraStatFilas(ligaId, categoria, datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -9725,6 +9803,38 @@
   function pintarEditorAjustesClub(clubId, contenedor) {
     contenedor.innerHTML = "";
 
+    // División ACTUAL de la pirámide española (2ª REF/1ª REF/Hypermotion/
+    // Ea Sports) — solo para los 5 clubes que juegan en España (PSG juega
+    // Ligue 1, en Francia, y no tiene división que elegir aquí). Cambiar
+    // esto NUNCA borra ningún resultado — solo decide en qué tabla se ve
+    // este club a partir de ahora (ver Estado.guardarDivisionHumano).
+    if (LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(clubId) === -1) {
+      var notaDivision = document.createElement("p");
+      notaDivision.className = "admin-nota";
+      notaDivision.textContent =
+        "En qué división de la pirámide está jugando este club AHORA MISMO. " +
+        "Sus propios partidos de Liga se suman solos a la clasificación de esa " +
+        "división (igual que ya pasa siempre en 1ª REF); en las demás divisiones " +
+        "deja de aparecer. Cámbialo cuando el club ascienda o descienda de categoría.";
+      contenedor.appendChild(notaDivision);
+
+      var divisionActual = _divisionActualClub(clubId);
+      var grupoDivision = document.createElement("div");
+      grupoDivision.className = "liga-tab-boxes"; // mismo look que las pestañas 2ª REF/1ª REF/Hypermotion/Ea Sports
+      ["2ref", "1ref", "hypermotion", "easports"].forEach(function (id) {
+        var meta = LIGA_NAV_META[id];
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "liga-tab-box " + meta.boxClase + (id === divisionActual ? " liga-tab-box--activa" : "");
+        btn.dataset.accion = "cambiar-division-club";
+        btn.dataset.clubId = clubId;
+        btn.dataset.divisionId = id;
+        btn.textContent = meta.corta;
+        grupoDivision.appendChild(btn);
+      });
+      contenedor.appendChild(grupoDivision);
+    }
+
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
@@ -12130,6 +12240,10 @@
     obtenerFormatoCopaTexto: obtenerFormatoCopaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
+    calcularLigaExtraFilas: calcularLigaExtraFilas,
+    calcularLigaExtraFilasConHumano: calcularLigaExtraFilasConHumano,
+    calcularLigaExtraStatFilas: calcularLigaExtraStatFilas,
+    calcularLigaExtraStatsHumanos: calcularLigaExtraStatsHumanos,
     renderizarCopaDelRey: renderizarCopaDelRey,
     irCopaTab: irCopaTab,
     renderizarCoupeFrancia: renderizarCoupeFrancia,

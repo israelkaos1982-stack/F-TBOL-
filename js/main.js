@@ -1733,6 +1733,25 @@
     }, "🔒 Reiniciar partidos del club", "Solo el administrador puede reiniciar todos los partidos jugados.");
   }
 
+  // ---------- Cambiar la división ACTUAL de un club (solo admin) ----------
+  // Botones "2ª REF/1ª REF/Hypermotion/Ea Sports" de la pestaña "⚙️
+  // Ajustes" del editor del club (ver
+  // js/renderizadores.js::pintarEditorAjustesClub) — mueve el club a
+  // otra división de la pirámide española: sus propios partidos de Liga
+  // pasan a sumarse solos en la clasificación de la división NUEVA (y
+  // dejan de aparecer en la vieja), igual que ya pasa siempre en 1ª REF.
+  // Petición usuario 2026-09-21: "Atlético Madrid / Real Madrid /
+  // Liverpool / Han ascendido a Hypermotion". Reversible en cualquier
+  // momento — nunca borra ningún resultado, solo cambia qué tabla los
+  // muestra — así que NO pide un 2º gate: la propia pestaña ya está
+  // detrás del candado 646 que exige abrirEditorClub.
+  function cambiarDivisionClub(clubId, divisionId) {
+    if (!clubId || !divisionId || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarDivisionHumano(clubId, divisionId)) return;
+    var contenido = document.getElementById("editor-club-contenido");
+    if (contenido) window.Renderizadores.pintarEditorAjustesClub(clubId, contenido);
+  }
+
   // ---------- Pantalla — Títulos de la Temporada (🏆 de Inicio) ----------
   // GLOBAL (no depende de ningún club activo) — abrirla nunca pide PIN,
   // igual que la Sala de Títulos de cada caja; solo la EDICIÓN (nombres
@@ -1917,6 +1936,7 @@
         case "guardar-calendario-comp": guardarCalendarioComp(); break;
         case "editor-club-tab": cambiarTabEditorClub(d.clubId, d.tab, accionBtn); break;
         case "reiniciar-temporada-club": reiniciarTodosPartidosClub(d.clubId); break;
+        case "cambiar-division-club": cambiarDivisionClub(d.clubId, d.divisionId); break;
         case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
         case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
         case "editar-tarjeta-menu-club": editarTarjetaMenuClubPrompt(d.clubId, d.id, d.icono, d.etiqueta); break;

@@ -291,6 +291,17 @@
     amistosos: "amistosos", amistoso: "amistosos",
     superliga: "superliga",
     verano: "verano", "torneo de verano": "verano", "torneos de verano": "verano",
+    // El admin teclea el NOMBRE REAL del trofeo de la edición de este año
+    // del Torneo de Verano ("Teresa Herrera") en el Calendario extra, no
+    // el genérico "Torneo de Verano" — sin este alias esas líneas caían
+    // en "comp-otro" (el borde/texto quedaba en el color del club activo,
+    // no amarillo) y fuera de COMPS_ELIMINACION_DIRECTA (las rondas no se
+    // bloqueaban hasta clasificar, como sí hace Copa del Rey). El resto
+    // del formato (nombre abreviado + ☀️ + separador " - ", ver
+    // _etiquetaCompRondaTexto más abajo) es GENÉRICO por texto — no hace
+    // falta tocar nada ahí. Cuando una temporada futura estrene OTRO
+    // trofeo (otro nombre), se añade aquí con una línea más.
+    "teresa herrera": "verano",
     mundialito: "mundialito", "mundialito de clubes": "mundialito"
   };
   // Emoji/símbolos decorativos que el admin puede haber tecleado delante
@@ -568,6 +579,33 @@
   };
   function _claseComp(competicion) {
     return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
+  }
+
+  // Torneo de Verano — el admin teclea el nombre REAL del trofeo de esta
+  // edición ("Teresa Herrera", "🏆 Teresa Herrera"...) en el Calendario
+  // extra en vez del genérico "Torneo de Verano" — se abrevia igual que
+  // un nombre de equipo largo (inicial + ". " + resto: "Teresa Herrera"
+  // -> "T. Herrera"), quitando cualquier emoji que el admin haya podido
+  // teclear delante (mismo _EMOJI_RE que ya usa _normCompKey, más
+  // arriba). Petición usuario: el ☀️ va SIEMPRE delante (nunca el 🏆 u
+  // otro emoji tecleado), y la ronda se une con un guion " - " en vez
+  // del " · " del resto de competiciones. GENÉRICO por texto — ningún
+  // nombre de trofeo queda hardcodeado aquí; solo hace falta que el
+  // alias de _BALON_COMP_ALIAS lo resuelva a "verano" (ver comentario
+  // ahí) para que herede este formato automáticamente.
+  function _abreviarNombreTorneoVerano(nombreCrudo) {
+    var limpio = String(nombreCrudo || "").replace(_EMOJI_RE, "").replace(/[️‍]/g, "").replace(/\s+/g, " ").trim();
+    if (!limpio) return COMP_LABEL.verano;
+    var partes = limpio.split(" ");
+    return partes.length > 1 ? (partes[0].charAt(0).toUpperCase() + ". " + partes.slice(1).join(" ")) : limpio;
+  }
+  function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
+    if (compKeyResuelto === "verano") {
+      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + ronda : "");
+    }
+    var compLabel = COMP_LABEL[compKeyResuelto] || competicionCruda;
+    var etiquetaRonda = ronda ? " · " + ronda : (jornada ? " · J" + jornada : "");
+    return compLabel + etiquetaRonda;
   }
 
   // Competiciones de ELIMINACIÓN DIRECTA (partido único o eliminatoria, sin
@@ -943,9 +981,29 @@
     return ignoradas;
   }
 
-  var _COLORES_SINTETICOS = ["#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b"];
+  // Paleta AMPLIADA (8 -> 24, petición usuario: "los colores... no
+  // coinciden... colisionan entre equipos distintos" — reporte con capturas
+  // de un Torneo de Verano con muchos rivales europeos que este simulador
+  // nunca modela, ver resolverRivalPorNombre más abajo: con solo 8 colores,
+  // un bracket de 16+ equipos sintéticos casi siempre repetía color entre 2
+  // rivales sin relación). 24 colores × 4 formas (_formatoSintetico, más
+  // abajo) = 96 combinaciones — una colisión exacta color+forma entre 2
+  // nombres distintos pasa a ser rara en vez de garantizada.
+  var _COLORES_SINTETICOS = [
+    "#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b",
+    "#d94ff0", "#4fd9a0", "#f0704f", "#5f7ff0", "#c2e64f", "#f04f8f", "#4fc2f0", "#a0704f",
+    "#7ae64f", "#f0c24f", "#4f8ff0", "#e64f7a", "#4ff0c2", "#f0904f", "#8f4ff0", "#4ff08f"
+  ];
   function _colorSintetico(nombre) {
     return _COLORES_SINTETICOS[_hashStr(nombre) % _COLORES_SINTETICOS.length];
+  }
+  // Forma del escudo sintético — hash DISTINTO del color (string distinto
+  // como entrada) para que 2 rivales que compartan color por azar no
+  // compartan también la forma. Mismas 4 formas ya definidas en
+  // crearEscudoHTML (FORMATOS_ESCUDO + el "rayas" por defecto).
+  var _FORMATOS_SINTETICOS = ["rombo", "solido", "mitad", "rayas"];
+  function _formatoSintetico(nombre) {
+    return _FORMATOS_SINTETICOS[_hashStr("forma:" + nombre) % _FORMATOS_SINTETICOS.length];
   }
 
   // valoracionPoder determinista (mismo nombre -> mismo poder siempre) pero
@@ -1081,6 +1139,28 @@
 
     var id = "extra-rival-" + norm.replace(/[^a-z0-9]+/g, "-");
     if (!_sinteticosExtra[id]) {
+      // ¿Ya existe un sintético para un nombre MUY parecido (el admin
+      // tecleó "Frankfurt" en una ronda y "Eintracht Frankfurt" en otra,
+      // p.ej.)? Sin este cruce, el MISMO rival de un torneo con muchos
+      // clubes europeos que este simulador nunca modela (Torneo de
+      // Verano y similares) podía acabar con 2 colores/escudos DISTINTOS
+      // según qué grafía se hubiera tecleado en cada línea — el reporte
+      // de "los colores no coinciden entre 2 rondas del mismo rival".
+      // Nunca se fusiona con un rival "?" (desconocido) todavía sin
+      // sortear — ese no tiene identidad real que reutilizar.
+      var sintExistente = null;
+      Object.keys(_sinteticosExtra).some(function (idExist) {
+        var s = _sinteticosExtra[idExist];
+        if (s.desconocido) return false;
+        var nExist = _normNombre(s.nombre);
+        if (norm.length > 2 && nExist.length > 2 && (nExist.indexOf(norm) !== -1 || norm.indexOf(nExist) !== -1)) {
+          sintExistente = s;
+          return true;
+        }
+        return false;
+      });
+      if (sintExistente) { _sinteticosExtra[id] = sintExistente; return sintExistente; }
+
       var real = _buscarRivalReal(norm);
       if (real) {
         _sinteticosExtra[id] = {
@@ -1113,7 +1193,7 @@
           siglas: siglas,
           colorPrimario: _colorSintetico(nombre),
           colorSecundario: "#101114",
-          escudoFormato: "rombo",
+          escudoFormato: _formatoSintetico(nombre),
           valoracionPoder: _poderSinteticoPorLiga(nombre, ligaContexto),
           mostrarSiglas: true,
           // Rival aún SIN sortear (el admin tecleó "?" como marcador de
@@ -9473,8 +9553,11 @@
       (partido.pospuesto ? " match-card--pospuesto" : "");
     card.dataset.partidoId = partido.id;
 
-    var compLabel = COMP_LABEL[compKeyResuelto] || partido.competicion;
-    var etiquetaRonda = partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · J" + partido.jornada : "");
+    // Torneo de Verano ("Teresa Herrera"...): nombre abreviado + ☀️ +
+    // separador " - ", ver _etiquetaCompRondaTexto. Cualquier otra
+    // competición mantiene el formato de siempre (compLabel + " · " +
+    // ronda/jornada) — sin cambios.
+    var etiquetaCompTexto = _etiquetaCompRondaTexto(compKeyResuelto, partido.competicion, partido.ronda, partido.jornada);
 
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
     // icono, para que quepa siempre entre los 2 bloques de equipo), más
@@ -9550,7 +9633,7 @@
       (esSiguiente ? _pinProximoHTML() : "") +
       (mostrarPospuestoBtn ? _pospuestoIconoHTML(partido) : "") +
       (mostrarResetBtn ? _resetPartidoIconoHTML(partido) : "") +
-      '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
+      '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(etiquetaCompTexto) + "</div>" +
       equiposHTML;
 
     return card;

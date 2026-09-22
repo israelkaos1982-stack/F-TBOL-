@@ -93,6 +93,48 @@
     } catch (err2) { /* ni el propio alert está disponible, nada más que hacer aquí */ }
   }
 
+  // ---------- Confirmación de recortes GRANDES antes de guardar ----------
+  // Reporte usuario 2026-09-22 ("Añadí todo nuevo... Absolutamente todo...
+  // abro la web y sale todo lo antiguo"): app.py::_ef7_es_regresion_grave
+  // rechaza en el servidor cualquier clave "ef7_*" cuyo valor entrante sea
+  // MENOS DE LA MITAD del que ya había guardado (protege contra un
+  // dispositivo con copia vieja/vacía pisando la buena) — pero un admin
+  // que borra a mano media plantilla (bajas) o pega la clasificación
+  // "todo a cero" de una temporada nueva produce EXACTAMENTE ese mismo
+  // patrón de forma DELIBERADA. Sin avisar de esto, ese guardado parece
+  // funcionar aquí (localStorage lo acepta sin pegas) pero el servidor lo
+  // rechaza en silencio — tras ~50 s de reintentos fallidos (ver
+  // js/sync.js::UMBRAL_AVISO_SYNC_ATASCADO) este mismo dispositivo termina
+  // ADOPTANDO de vuelta la copia vieja/rica del servidor, deshaciendo el
+  // recorte como si nunca se hubiera guardado.
+  //
+  // Mismo umbral EXACTO que el guard del servidor y el del pull de
+  // js/sync.js (20 caracteres mínimo, mitad de tamaño) — si de verdad es
+  // un recorte grande, se avisa y, si el admin confirma, se marca la
+  // clave para que el PRÓXIMO push se salte ese guard en el servidor
+  // (js/sync.js::marcarParaForzar) — así el recorte persiste de verdad en
+  // vez de deshacerse solo al reabrir la web.
+  var _REGRESION_LEN_MINIMO_LOCAL = 20;
+  function _confirmarSiEncogeMucho(clave, textoViejo, textoNuevo) {
+    var viejo = typeof textoViejo === "string" ? textoViejo : "";
+    var nuevo = typeof textoNuevo === "string" ? textoNuevo : "";
+    if (viejo.length < _REGRESION_LEN_MINIMO_LOCAL || nuevo.length >= viejo.length * 0.5) {
+      return true; // no es un recorte grande — nada que confirmar
+    }
+    var ok = window.confirm(
+      "⚠️ Esto reduce el contenido a MENOS DE LA MITAD de lo que había guardado " +
+      "(de " + viejo.length + " a " + nuevo.length + " caracteres).\n\n" +
+      "Si es un recorte deliberado (temporada nueva, bajas de plantilla...), confirma para " +
+      "guardarlo de verdad — el servidor protege contra copias viejas/vacías rechazando " +
+      "justo este patrón, y sin confirmarlo aquí el cambio podría deshacerse solo al " +
+      "reabrir la web en otro momento.\n\n¿Guardar este recorte igualmente?"
+    );
+    if (ok && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+      window.Sync.marcarParaForzar(clave);
+    }
+    return ok;
+  }
+
   function cargarEstado() {
     if (_estado) return _estado;
     try {
@@ -1532,9 +1574,15 @@
       return "";
     }
   }
-  function guardarCalendarioExtraTexto(clubId, texto) {
+  function guardarCalendarioExtraTexto(clubId, texto, opts) {
+    var clave = _calendarioExtraKey(clubId);
+    var forzar = !!(opts && opts.forzar);
+    if (!forzar && !_confirmarSiEncogeMucho(clave, obtenerCalendarioExtraTexto(clubId), texto)) return false;
     try {
-      localStorage.setItem(_calendarioExtraKey(clubId), texto || "");
+      localStorage.setItem(clave, texto || "");
+      if (forzar && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+        window.Sync.marcarParaForzar(clave);
+      }
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el calendario extra del club:", err);
@@ -1568,7 +1616,7 @@
       })
       .join("\n");
     if (!n) return 0;
-    guardarCalendarioExtraTexto(clubId, limpio);
+    guardarCalendarioExtraTexto(clubId, limpio, { forzar: true });
     return n;
   }
 
@@ -2137,9 +2185,15 @@
       return "";
     }
   }
-  function guardarRosterTexto(clubId, texto) {
+  function guardarRosterTexto(clubId, texto, opts) {
+    var clave = _rosterKey(clubId);
+    var forzar = !!(opts && opts.forzar);
+    if (!forzar && !_confirmarSiEncogeMucho(clave, obtenerRosterTexto(clubId), texto)) return false;
     try {
-      localStorage.setItem(_rosterKey(clubId), texto || "");
+      localStorage.setItem(clave, texto || "");
+      if (forzar && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+        window.Sync.marcarParaForzar(clave);
+      }
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la plantilla del club:", err);
@@ -2280,9 +2334,14 @@
       return LIGA1REF_TEXTO_DEFECTO;
     }
   }
-  function guardarLiga1RefTexto(texto) {
+  function guardarLiga1RefTexto(texto, opts) {
+    var forzar = !!(opts && opts.forzar);
+    if (!forzar && !_confirmarSiEncogeMucho(LIGA1REF_TEXTO_KEY, obtenerLiga1RefTexto(), texto)) return false;
     try {
       localStorage.setItem(LIGA1REF_TEXTO_KEY, texto || "");
+      if (forzar && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+        window.Sync.marcarParaForzar(LIGA1REF_TEXTO_KEY);
+      }
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de 1ª REF:", err);
@@ -2343,9 +2402,15 @@
       return "";
     }
   }
-  function guardarLigaExtraTexto(ligaId, texto) {
+  function guardarLigaExtraTexto(ligaId, texto, opts) {
+    var clave = _ligaExtraTextoKey(ligaId);
+    var forzar = !!(opts && opts.forzar);
+    if (!forzar && !_confirmarSiEncogeMucho(clave, obtenerLigaExtraTexto(ligaId), texto)) return false;
     try {
-      localStorage.setItem(_ligaExtraTextoKey(ligaId), texto || "");
+      localStorage.setItem(clave, texto || "");
+      if (forzar && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+        window.Sync.marcarParaForzar(clave);
+      }
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de " + ligaId + ":", err);

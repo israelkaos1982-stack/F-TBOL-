@@ -6481,6 +6481,14 @@ def api_ef7_state_post():
     entrantes = body.get("claves")
     if not isinstance(entrantes, dict):
         return jsonify({"ok": False, "error": "falta `claves`"}), 400
+    # Claves que el propio cliente marca como un recorte DELIBERADO (ver
+    # js/sync.js::marcarParaForzar) — el admin ya confirmó explícitamente
+    # (su propio confirm(), o el de js/estado.js::_confirmarSiEncogeMucho)
+    # que este contenido más corto es intencional, así que el guard de
+    # regresión de abajo se salta SOLO para estas claves y SOLO en este
+    # POST. No afecta a ningún otro límite (tamaño máximo, formato...).
+    forzar_raw = body.get("forzar")
+    forzar = set(k for k in forzar_raw if _ef7_key_is_valid(k)) if isinstance(forzar_raw, list) else set()
     now = utc_now_iso()
     guardadas = []
     # Candado de archivo (ver _ef7_state_lock_acquire) + with_for_update()
@@ -6502,6 +6510,8 @@ def api_ef7_state_post():
             # y el comentario "EXCEPCIÓN" más arriba.
             if key == _EF7_ESTADO_LIGA_KEY and row is not None:
                 value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
+            elif key in forzar:
+                pass  # recorte deliberado ya confirmado por el admin — se salta el guard
             elif row is not None and _ef7_es_regresion_grave(key, row.valor_json, value):
                 # Ver "GUARD DE REGRESIÓN" más arriba — el resto de claves NO
                 # llegan a este punto (row=None es la 1ª vez que se guardan, y

@@ -1327,6 +1327,7 @@
     }
   }
   function guardarCalendarioTexto(texto) {
+    if (!_confirmarSiEncogeMucho(CALENDARIO_TEXTO_KEY, obtenerCalendarioTexto(), texto)) return false;
     try {
       localStorage.setItem(CALENDARIO_TEXTO_KEY, texto || "");
       return true;
@@ -1680,6 +1681,7 @@
     }
   }
   function guardarTitulosTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_titulosKey(clubId), obtenerTitulosTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(_titulosKey(clubId), texto || "");
       return true;
@@ -1708,6 +1710,7 @@
     }
   }
   function guardarTitulosTemporadaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(TITULOS_TEMPORADA_KEY, obtenerTitulosTemporadaTexto(), texto)) return false;
     try {
       localStorage.setItem(TITULOS_TEMPORADA_KEY, texto || "");
       return true;
@@ -1924,6 +1927,7 @@
     }
   }
   function guardarObjetivosTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_objetivosTextoKey(clubId), obtenerObjetivosTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(_objetivosTextoKey(clubId), texto || "");
       return true;
@@ -2126,6 +2130,7 @@
     }
   }
   function guardarDerbysTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_derbysKey(clubId), obtenerDerbysTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(_derbysKey(clubId), texto || "");
       return true;
@@ -2282,6 +2287,7 @@
     }
   }
   function guardarStatsOverrideTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_statsOverrideKey(clubId), obtenerStatsOverrideTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(_statsOverrideKey(clubId), texto || "");
       return true;
@@ -2366,6 +2372,7 @@
     }
   }
   function guardarLiga1RefStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_liga1RefStatKey(categoria), obtenerLiga1RefStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_liga1RefStatKey(categoria), texto || "");
       return true;
@@ -2471,6 +2478,7 @@
     }
   }
   function guardarFormatoOverride(clave, texto) {
+    if (!_confirmarSiEncogeMucho(_formatoOverrideKey(clave), obtenerFormatoOverride(clave), texto)) return false;
     try {
       localStorage.setItem(_formatoOverrideKey(clave), texto || "");
       return true;
@@ -2491,6 +2499,7 @@
     }
   }
   function guardarLigaExtraStatTexto(ligaId, categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_ligaExtraStatKey(ligaId, categoria), obtenerLigaExtraStatTexto(ligaId, categoria), texto)) return false;
     try {
       localStorage.setItem(_ligaExtraStatKey(ligaId, categoria), texto || "");
       return true;
@@ -2521,6 +2530,7 @@
     }
   }
   function guardarCopaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_copaStatKey(categoria), obtenerCopaStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_copaStatKey(categoria), texto || "");
       return true;
@@ -2551,6 +2561,7 @@
     }
   }
   function guardarCopaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_copaPlayoffKey(ronda), obtenerCopaPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_copaPlayoffKey(ronda), texto || "");
       return true;
@@ -2579,6 +2590,7 @@
     }
   }
   function guardarRecopaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_recopaStatKey(categoria), obtenerRecopaStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_recopaStatKey(categoria), texto || "");
       return true;
@@ -2611,6 +2623,7 @@
     }
   }
   function guardarRecopaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_recopaPlayoffKey(ronda), obtenerRecopaPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_recopaPlayoffKey(ronda), texto || "");
       return true;
@@ -2637,6 +2650,7 @@
     }
   }
   function guardarInterStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_interStatKey(categoria), obtenerInterStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_interStatKey(categoria), texto || "");
       return true;
@@ -2666,37 +2680,12 @@
     }
   }
   function guardarInterPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_interPlayoffKey(ronda), obtenerInterPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_interPlayoffKey(ronda), texto || "");
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el playoff " + ronda + " de Copa Intercontinental:", err);
-      _avisarFalloGuardado(err);
-      return false;
-    }
-  }
-
-  // ---------- Torneo de Verano — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
-  // Mismo mecanismo EXACTO que Copa Intercontinental (texto libre +
-  // auto-suma), con su PROPIA clave — nunca comparte contador con
-  // ninguna otra competición. Ver js/renderizadores.js::VERANO_STATS/
-  // calcularVeranoStatsCombinado/renderizarVeranoStatDetalle.
-  function _veranoStatKey(categoria) {
-    return "ef7_verano_stat_" + categoria + "_v1";
-  }
-  function obtenerVeranoStatTexto(categoria) {
-    try {
-      return localStorage.getItem(_veranoStatKey(categoria)) || "";
-    } catch (err) {
-      return "";
-    }
-  }
-  function guardarVeranoStatTexto(categoria, texto) {
-    try {
-      localStorage.setItem(_veranoStatKey(categoria), texto || "");
-      return true;
-    } catch (err) {
-      console.error("[estado] no se pudo guardar la estadística " + categoria + " del Torneo de Verano:", err);
       _avisarFalloGuardado(err);
       return false;
     }
@@ -2720,6 +2709,7 @@
     }
   }
   function guardarVeranoPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_veranoPlayoffKey(ronda), obtenerVeranoPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_veranoPlayoffKey(ronda), texto || "");
       return true;
@@ -2746,6 +2736,7 @@
     }
   }
   function guardarUscStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_uscStatKey(categoria), obtenerUscStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_uscStatKey(categoria), texto || "");
       return true;
@@ -2774,6 +2765,7 @@
     }
   }
   function guardarUscPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_uscPlayoffKey(ronda), obtenerUscPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_uscPlayoffKey(ronda), texto || "");
       return true;
@@ -2800,6 +2792,7 @@
     }
   }
   function guardarSceStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_sceStatKey(categoria), obtenerSceStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_sceStatKey(categoria), texto || "");
       return true;
@@ -2828,6 +2821,7 @@
     }
   }
   function guardarScePlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_scePlayoffKey(ronda), obtenerScePlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_scePlayoffKey(ronda), texto || "");
       return true;
@@ -2857,6 +2851,7 @@
     }
   }
   function guardarChampionsTexto(texto) {
+    if (!_confirmarSiEncogeMucho(CHAMPIONS_TEXTO_KEY, obtenerChampionsTexto(), texto)) return false;
     try {
       localStorage.setItem(CHAMPIONS_TEXTO_KEY, texto || "");
       return true;
@@ -2884,6 +2879,7 @@
     }
   }
   function guardarChampionsStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_championsStatKey(categoria), obtenerChampionsStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_championsStatKey(categoria), texto || "");
       return true;
@@ -2913,6 +2909,7 @@
     }
   }
   function guardarChampionsPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_championsPlayoffKey(ronda), obtenerChampionsPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_championsPlayoffKey(ronda), texto || "");
       return true;
@@ -2938,6 +2935,7 @@
     }
   }
   function guardarUelTexto(texto) {
+    if (!_confirmarSiEncogeMucho(UEL_TEXTO_KEY, obtenerUelTexto(), texto)) return false;
     try {
       localStorage.setItem(UEL_TEXTO_KEY, texto || "");
       return true;
@@ -2959,6 +2957,7 @@
     }
   }
   function guardarUelStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_uelStatKey(categoria), obtenerUelStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_uelStatKey(categoria), texto || "");
       return true;
@@ -2980,6 +2979,7 @@
     }
   }
   function guardarUelPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_uelPlayoffKey(ronda), obtenerUelPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_uelPlayoffKey(ronda), texto || "");
       return true;
@@ -3006,6 +3006,7 @@
     }
   }
   function guardarUeclTexto(texto) {
+    if (!_confirmarSiEncogeMucho(UECL_TEXTO_KEY, obtenerUeclTexto(), texto)) return false;
     try {
       localStorage.setItem(UECL_TEXTO_KEY, texto || "");
       return true;
@@ -3027,6 +3028,7 @@
     }
   }
   function guardarUeclStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_ueclStatKey(categoria), obtenerUeclStatTexto(categoria), texto)) return false;
     try {
       localStorage.setItem(_ueclStatKey(categoria), texto || "");
       return true;
@@ -3048,6 +3050,7 @@
     }
   }
   function guardarUeclPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_ueclPlayoffKey(ronda), obtenerUeclPlayoffTexto(ronda), texto)) return false;
     try {
       localStorage.setItem(_ueclPlayoffKey(ronda), texto || "");
       return true;
@@ -3627,8 +3630,6 @@
     guardarInterStatTexto: guardarInterStatTexto,
     obtenerInterPlayoffTexto: obtenerInterPlayoffTexto,
     guardarInterPlayoffTexto: guardarInterPlayoffTexto,
-    obtenerVeranoStatTexto: obtenerVeranoStatTexto,
-    guardarVeranoStatTexto: guardarVeranoStatTexto,
     obtenerVeranoPlayoffTexto: obtenerVeranoPlayoffTexto,
     guardarVeranoPlayoffTexto: guardarVeranoPlayoffTexto,
     obtenerUscStatTexto: obtenerUscStatTexto,

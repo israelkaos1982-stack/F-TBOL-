@@ -1199,13 +1199,38 @@
   // de clasificación (candado 646) — ver js/main.js::fijarDivisionClub.
   var LIGA_DIVISION_KEY_BASE = "ef7_liga_division_v1";
   var LIGA_DIVISION_DEFECTO = "1ref";
+  // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
+  // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
+  // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este
+  // (LIGA_DIVISION_KEY_BASE), así que pulsar "📌 fijar" en una tabla de
+  // clasificación no movía lo que decidía "⚙️ Ajustes", y viceversa: el
+  // admin fijaba Liverpool/Real Madrid en Hypermotion desde la tabla y "el
+  // botón no hacía nada" — en realidad SÍ hacía algo, pero en el sistema
+  // que NO controla qué pantalla abre la tarjeta del menú (bug reportado
+  // 2026-09-22). Ahora ambos son EL MISMO storage (ver alias más abajo);
+  // este fallback solo migra, de forma transparente, lo que un club ya
+  // tuviera guardado en el sistema viejo ANTES de este fix, para que
+  // nadie pierda un ascenso/descenso ya fijado desde "⚙️ Ajustes".
+  var _LIGA_DIVISION_LEGACY_BLOB_KEY = "ef7_liga_division_humanos_v1";
+  function _leerDivisionLegacyBlob(clubId) {
+    try {
+      var raw = localStorage.getItem(_LIGA_DIVISION_LEGACY_BLOB_KEY);
+      if (!raw) return null;
+      var mapa = JSON.parse(raw);
+      return mapa && mapa[clubId] ? mapa[clubId] : null;
+    } catch (err) {
+      return null;
+    }
+  }
   function obtenerDivisionClub(clubId) {
     try {
       var v = localStorage.getItem(LIGA_DIVISION_KEY_BASE + "_" + clubId);
-      return v && v.trim() ? v : LIGA_DIVISION_DEFECTO;
+      if (v && v.trim()) return v;
     } catch (err) {
       return LIGA_DIVISION_DEFECTO;
     }
+    var legacy = _leerDivisionLegacyBlob(clubId);
+    return legacy || LIGA_DIVISION_DEFECTO;
   }
   function guardarDivisionClub(clubId, ligaId) {
     if (!clubId || !ligaId) return false;
@@ -2337,43 +2362,31 @@
   // empiezan SIEMPRE en 1ª REF, pero pueden ascender o descender de
   // escalón real con el tiempo (petición usuario 2026-09-21: "Atlético
   // Madrid / Real Madrid / Liverpool / Han ascendido a Hypermotion").
-  // Esta clave guarda, por clubId, en QUÉ escalón está jugando AHORA —
-  // solo en ESE escalón sus propios partidos de Liga se mezclan con la
-  // tabla pegada a mano; en los demás, ese club simplemente no aparece
-  // (ver _liga1RefEquiposHumanos/_equiposHumanosEnDivisionExtra en
-  // renderizadores.js). Sin entrada guardada todavía -> "1ref" (el
-  // escalón de siempre, para no cambiar el comportamiento de nadie que
-  // nunca haya tocado esto). Cambiar la división de un club NUNCA borra
-  // ningún resultado — solo decide en qué tabla se ve a partir de ahora;
-  // el reinicio de sus partidos (nueva temporada) sigue siendo el botón
+  // Qué escalón está jugando AHORA cada club — solo en ESE escalón sus
+  // propios partidos de Liga se mezclan con la tabla pegada a mano; en
+  // los demás, ese club simplemente no aparece (ver
+  // _liga1RefEquiposHumanos/_equiposHumanosEnDivisionExtra en
+  // renderizadores.js). Cambiar la división de un club NUNCA borra ningún
+  // resultado — solo decide en qué tabla se ve a partir de ahora; el
+  // reinicio de sus partidos (nueva temporada) sigue siendo el botón
   // aparte "🔄 Reiniciar temporada de este club".
-  var DIVISION_HUMANOS_KEY = "ef7_liga_division_humanos_v1";
-  var DIVISION_HUMANOS_DEFECTO = "1ref";
-  function _leerDivisionHumanos() {
-    try {
-      var raw = localStorage.getItem(DIVISION_HUMANOS_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (err) {
-      return {};
-    }
-  }
+  // obtenerDivisionHumano/guardarDivisionHumano son ahora ALIAS PUROS de
+  // obtenerDivisionClub/guardarDivisionClub (ver más arriba,
+  // "División actual de cada club (2ª REF/1ª REF/Hypermotion/Ea Sports)")
+  // — fix 2026-09-22: hasta este cambio eran DOS sistemas de storage
+  // completamente separados (esta clave, "ef7_liga_division_humanos_v1",
+  // vs LIGA_DIVISION_KEY_BASE), así que el botón de "⚙️ Ajustes" guardaba
+  // en un sitio que la tarjeta del menú / el botón 📌 fijar de la propia
+  // tabla de clasificación nunca leían — el admin fijaba una división y
+  // "no pasaba nada" desde el punto de vista de qué pantalla se abría.
+  // Unificar aquí (en vez de al revés) es lo más seguro: obtenerDivisionClub
+  // ya migra el blob viejo como fallback, así que ningún club pierde lo
+  // que ya tuviera fijado desde cualquiera de los dos sitios.
   function obtenerDivisionHumano(clubId) {
-    if (!clubId) return DIVISION_HUMANOS_DEFECTO;
-    var mapa = _leerDivisionHumanos();
-    return mapa[clubId] || DIVISION_HUMANOS_DEFECTO;
+    return obtenerDivisionClub(clubId);
   }
   function guardarDivisionHumano(clubId, divisionId) {
-    if (!clubId || !divisionId) return false;
-    try {
-      var mapa = _leerDivisionHumanos();
-      mapa[clubId] = divisionId;
-      localStorage.setItem(DIVISION_HUMANOS_KEY, JSON.stringify(mapa));
-      return true;
-    } catch (err) {
-      console.error("[estado] no se pudo guardar la división del club " + clubId + ":", err);
-      _avisarFalloGuardado(err);
-      return false;
-    }
+    return guardarDivisionClub(clubId, divisionId);
   }
 
   // ---------- 📌 Override del texto de ℹ️ FORMATO/reglas (candado 646)

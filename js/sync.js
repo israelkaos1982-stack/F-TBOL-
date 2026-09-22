@@ -96,6 +96,35 @@
   var _enVuelo = false;
   var _primerCicloHecho = false;
 
+  // ---------- Claves que se empujan SALTÁNDOSE el guard de regresión del
+  // servidor (app.py::_ef7_es_regresion_grave) ----------
+  // Reporte usuario 2026-09-22 ("Añadí todo nuevo... Absolutamente todo...
+  // abro la web y sale todo lo antiguo"): el guard de regresión (pensado
+  // para proteger contra un dispositivo con copia VIEJA/VACÍA pisando la
+  // buena) trata IGUAL una copia vieja accidental que un recorte GRANDE y
+  // DELIBERADO del admin — "🧹 Reiniciar TODA la pirámide a cero" sustituye
+  // la clasificación de una temporada entera (con puntos/goles reales) por
+  // un texto "todo a cero" mucho más corto, y una plantilla con muchas
+  // bajas puede encoger a menos de la mitad igual de fácil. Sin esta vía,
+  // ese recorte legítimo se rechaza en el servidor, se reintenta ~50 s
+  // (5 ciclos) y termina ABANDONADO — este dispositivo adopta de vuelta la
+  // copia vieja del servidor, exactamente lo que el admin acababa de
+  // borrar a propósito.
+  //
+  // `marcarParaForzar(clave)` lo llama código que ya sabe (por su propio
+  // confirm() explícito, o por preguntárselo al admin — ver
+  // js/estado.js::_confirmarSiEncogeMucho) que este recorte es intencional.
+  // La clave se manda en el próximo push dentro de `forzar` (ver
+  // `_empujarPendientes`) y el servidor la exime del guard SOLO para ese
+  // push — no cambia nada del resto de protecciones (tamaño máximo,
+  // formato, etc.), y una clave que no está en `_pendientes` no se llega a
+  // enviar aunque esté marcada. Se limpia igual que `_intentosFallidos` en
+  // cuanto el servidor confirma el guardado.
+  var _forzar = {}; // clave -> true mientras el próximo push deba saltarse el guard de regresión
+  function marcarParaForzar(clave) {
+    if (typeof clave === "string" && clave) _forzar[clave] = true;
+  }
+
   // ---------- Aviso si una clave NUNCA consigue sincronizar ----------
   // El servidor responde 200 OK a /api/ef7/state incluso cuando RECHAZA
   // en silencio alguna clave del cuerpo (app.py::api_ef7_state_post), por
@@ -115,10 +144,20 @@
   // todos los demás) tienen la buena.
   var UMBRAL_AVISO_SYNC_ATASCADO = 5; // ~5 ciclos (INTERVALO_MS) seguidos sin éxito
   var _intentosFallidos = {}; // clave -> nº de ciclos seguidos rechazada por el servidor
-  var _avisoSyncMostrado = false;
+  // Reporte usuario 2026-09-22 ("Añadí todo nuevo... abro la web y sale
+  // todo lo antiguo"): este flag era un ÚNICO booleano GLOBAL, así que solo
+  // avisaba la PRIMERA vez que CUALQUIER clave se atascaba en TODA la
+  // sesión — si esa misma tanda de ediciones (p.ej. las 4 clasificaciones +
+  // 5 plantillas de la pirámide, empujadas juntas en el MISMO ciclo) hacía
+  // que 2+ claves distintas se atascaran a la vez, solo la PRIMERA del
+  // forEach mostraba el aviso; las demás se abandonaban y se pisaban con la
+  // copia del servidor EN SILENCIO, sin que el admin llegara a enterarse de
+  // que también se habían perdido. Ahora es por CLAVE — cada clave que se
+  // atasca avisa una vez, sea la primera o la quinta de la misma sesión.
+  var _avisoMostradoPara = {};
   function _avisarSyncAtascado(clave) {
-    if (_avisoSyncMostrado) return;
-    _avisoSyncMostrado = true;
+    if (_avisoMostradoPara[clave]) return;
+    _avisoMostradoPara[clave] = true;
     try {
       window.setTimeout(function () {
         // "ef7_estado_liga_v1" (los resultados/actas) NUNCA se abandona
@@ -309,11 +348,18 @@
 
     var cuerpo = {};
     claves.forEach(function (k) { cuerpo[k] = actuales[k]; });
+    // Solo se listan las que de verdad van en ESTE push — una clave
+    // marcada con `marcarParaForzar` que hoy no tenga ningún cambio local
+    // pendiente no debe viajar suelta en `forzar` sin su valor.
+    var forzar = claves.filter(function (k) { return !!_forzar[k]; });
+
+    var cuerpoPeticion = { claves: cuerpo };
+    if (forzar.length) cuerpoPeticion.forzar = forzar;
 
     return fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claves: cuerpo })
+      body: JSON.stringify(cuerpoPeticion)
     })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (resp) {
@@ -330,6 +376,7 @@
             _snapshot[k] = _hash(cuerpo[k]);
             delete _pendientes[k];
             delete _intentosFallidos[k];
+            delete _forzar[k];
             huboConfirmadas = true;
           }
         });
@@ -378,6 +425,7 @@
             // adopta la copia del servidor sin esperar 10 s más.
             delete _pendientes[k];
             delete _intentosFallidos[k];
+            delete _forzar[k];
           }
         });
         if (huboConfirmadas) _guardarSnapshotPersistido();
@@ -567,5 +615,5 @@
   // otro móvil hiciera nada especial).
   function estaSincronizado() { return _primerCicloHecho; }
 
-  window.Sync = { forzarCiclo: _ciclo, estaSincronizado: estaSincronizado };
+  window.Sync = { forzarCiclo: _ciclo, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar };
 })();

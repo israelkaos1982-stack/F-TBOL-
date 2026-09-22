@@ -9915,10 +9915,19 @@
       n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, true);
       n += window.Estado.reiniciarCalendarioExtraJugados(clubId);
     });
-    window.Estado.guardarLigaExtraTexto("2ref", _PIRAMIDE_TEXTO_2REF);
-    window.Estado.guardarLiga1RefTexto(_PIRAMIDE_TEXTO_1REF);
-    window.Estado.guardarLigaExtraTexto("hypermotion", _PIRAMIDE_TEXTO_HYPERMOTION);
-    window.Estado.guardarLigaExtraTexto("easports", _PIRAMIDE_TEXTO_EASPORTS);
+    // {forzar:true} — este reinicio YA pasó por su propio confirm() en
+    // renderizarAdminPiramide, así que no hace falta un 2º confirm por
+    // cada una de las 4 clasificaciones (serían 4 diálogos más de golpe);
+    // pero SÍ hace falta que el push al servidor se salte el guard de
+    // regresión (ver js/estado.js::_confirmarSiEncogeMucho y
+    // js/sync.js::marcarParaForzar) — sustituir la clasificación de una
+    // temporada entera por "todo a cero" es justo el patrón que ese guard
+    // trata como "copia vieja pisando la buena" (reporte usuario
+    // 2026-09-22: "abro la web y sale todo lo antiguo").
+    window.Estado.guardarLigaExtraTexto("2ref", _PIRAMIDE_TEXTO_2REF, { forzar: true });
+    window.Estado.guardarLiga1RefTexto(_PIRAMIDE_TEXTO_1REF, { forzar: true });
+    window.Estado.guardarLigaExtraTexto("hypermotion", _PIRAMIDE_TEXTO_HYPERMOTION, { forzar: true });
+    window.Estado.guardarLigaExtraTexto("easports", _PIRAMIDE_TEXTO_EASPORTS, { forzar: true });
     if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
     return n;
   }

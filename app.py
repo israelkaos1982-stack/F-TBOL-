@@ -6297,6 +6297,26 @@ def _ef7_key_is_valid(key):
 # su lugar (nunca se queda bloqueado para siempre — ver `_ciclo`).
 _EF7_REGRESION_LEN_MINIMO = 20  # por debajo de esto no merece la pena proteger (ruido/campos cortos)
 
+# EXENCIÓN del guard de arriba — reporte usuario 2026-09-22: "los objetivos
+# cuando desmarco el color verde hay algunos que siguen saliendo cuando
+# vuelvo a abrir la web". `ef7_objetivos_logrados_v1_<clubId>` (ver
+# js/estado.js::toggleObjetivoLogrado) NO es texto largo que el admin pega
+# y recorta de vez en cuando (el caso que el guard de arriba sí protege
+# bien) — es un ARRAY de claves que crece/encoge en 1 elemento con CADA
+# toque normal de la Plantilla de Objetivos. Desmarcar el único objetivo
+# que quedaba marcado (o varios de golpe) reduce el array a MENOS de la
+# mitad de su longitud de texto con total normalidad — el guard lo
+# confundía con un dispositivo con copia vieja/pobre pisando la buena, lo
+# rechazaba en silencio, y unos ciclos después js/sync.js "abandonaba" el
+# push y adoptaba la copia (más rica, con el objetivo TODAVÍA marcado) del
+# servidor — el desmarcado del admin se deshacía solo al recargar. Esta
+# clave la edita siempre el ÚNICO mánager de ese club (nunca 2 dispositivos
+# a la vez, a diferencia de un resultado HvH) y es progreso de baja
+# gravedad (un toque la vuelve a marcar) — no necesita la protección de
+# regresión: gana siempre el último toque, como ya hace `ef7_estado_liga_v1`
+# por su propio motivo.
+_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_",)
+
 
 def _ef7_valor_como_texto(v):
     """Toda clave ef7_* termina siendo un string cuando sale de
@@ -6306,7 +6326,9 @@ def _ef7_valor_como_texto(v):
     return v if isinstance(v, str) else ""
 
 
-def _ef7_es_regresion_grave(existing_row_value, incoming_value):
+def _ef7_es_regresion_grave(key, existing_row_value, incoming_value):
+    if key.startswith(_EF7_REGRESION_EXENTA_PREFIJOS):
+        return False
     if not existing_row_value:
         return False
     try:
@@ -6480,7 +6502,7 @@ def api_ef7_state_post():
             # y el comentario "EXCEPCIÓN" más arriba.
             if key == _EF7_ESTADO_LIGA_KEY and row is not None:
                 value_a_guardar = _ef7_merge_resultados(row.valor_json, value)
-            elif row is not None and _ef7_es_regresion_grave(row.valor_json, value):
+            elif row is not None and _ef7_es_regresion_grave(key, row.valor_json, value):
                 # Ver "GUARD DE REGRESIÓN" más arriba — el resto de claves NO
                 # llegan a este punto (row=None es la 1ª vez que se guardan, y
                 # ahí no hay nada que proteger todavía).

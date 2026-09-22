@@ -984,26 +984,50 @@
   // Paleta AMPLIADA (8 -> 24, petición usuario: "los colores... no
   // coinciden... colisionan entre equipos distintos" — reporte con capturas
   // de un Torneo de Verano con muchos rivales europeos que este simulador
-  // nunca modela, ver resolverRivalPorNombre más abajo: con solo 8 colores,
-  // un bracket de 16+ equipos sintéticos casi siempre repetía color entre 2
-  // rivales sin relación). 24 colores × 4 formas (_formatoSintetico, más
-  // abajo) = 96 combinaciones — una colisión exacta color+forma entre 2
-  // nombres distintos pasa a ser rara en vez de garantizada.
+  // nunca modela, ver resolverRivalPorNombre más abajo). 24 colores × 4
+  // formas (rombo/solido/mitad/rayas, las 4 de crearEscudoHTML) = 96
+  // combinaciones posibles.
   var _COLORES_SINTETICOS = [
     "#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b",
     "#d94ff0", "#4fd9a0", "#f0704f", "#5f7ff0", "#c2e64f", "#f04f8f", "#4fc2f0", "#a0704f",
     "#7ae64f", "#f0c24f", "#4f8ff0", "#e64f7a", "#4ff0c2", "#f0904f", "#8f4ff0", "#4ff08f"
   ];
+  var _FORMATOS_SINTETICOS = ["rombo", "solido", "mitad", "rayas"];
   function _colorSintetico(nombre) {
     return _COLORES_SINTETICOS[_hashStr(nombre) % _COLORES_SINTETICOS.length];
   }
-  // Forma del escudo sintético — hash DISTINTO del color (string distinto
-  // como entrada) para que 2 rivales que compartan color por azar no
-  // compartan también la forma. Mismas 4 formas ya definidas en
-  // crearEscudoHTML (FORMATOS_ESCUDO + el "rayas" por defecto).
-  var _FORMATOS_SINTETICOS = ["rombo", "solido", "mitad", "rayas"];
   function _formatoSintetico(nombre) {
     return _FORMATOS_SINTETICOS[_hashStr("forma:" + nombre) % _FORMATOS_SINTETICOS.length];
+  }
+  // Asignación SIN COLISIONES (petición usuario, 2ª ronda de capturas: 2
+  // rivales DISTINTOS —"Eintracht Frankfurt"/"Lommel SK", "Odense BK"/
+  // "Nottingham Forest"— con el MISMO color+forma exactos, indistinguibles
+  // en la lista). Un hash puro (arriba) solo hace la colisión RARA, nunca
+  // imposible — con un torneo de verano lleno de clubes europeos que este
+  // simulador no modela (16-30+ rivales sintéticos de golpe), acaba
+  // pasando. Este helper arranca en el índice del hash (mismo nombre ->
+  // mismo resultado de sesión en sesión, salvo que otro rival YA se
+  // hubiera quedado con ese combo) y avanza hasta encontrar un
+  // color+forma que NINGÚN otro sintético ya creado esté usando —
+  // garantiza 0 colisiones mientras queden combos libres de los 96 (con
+  // más de 96 rivales sintéticos a la vez, algo nunca visto en un torneo
+  // real, cae al hash simple sin esa garantía).
+  function _identidadSinteticaLibre(nombre) {
+    var usados = {};
+    Object.keys(_sinteticosExtra).forEach(function (k) {
+      var s = _sinteticosExtra[k];
+      if (s && s.colorPrimario && s.escudoFormato) usados[s.colorPrimario + "|" + s.escudoFormato] = true;
+    });
+    var nColores = _COLORES_SINTETICOS.length, nFormas = _FORMATOS_SINTETICOS.length;
+    var total = nColores * nFormas;
+    var base = _hashStr(nombre) % total;
+    for (var i = 0; i < total; i++) {
+      var idx = (base + i) % total;
+      var color = _COLORES_SINTETICOS[idx % nColores];
+      var forma = _FORMATOS_SINTETICOS[Math.floor(idx / nColores) % nFormas];
+      if (!usados[color + "|" + forma]) return { color: color, forma: forma };
+    }
+    return { color: _colorSintetico(nombre), forma: _formatoSintetico(nombre) };
   }
 
   // valoracionPoder determinista (mismo nombre -> mismo poder siempre) pero
@@ -1187,13 +1211,14 @@
         };
       } else {
         var siglas = (nombre.match(/\b[a-zA-Z0-9]/g) || []).slice(0, 3).join("").toUpperCase() || "?";
+        var identidadSint = _identidadSinteticaLibre(nombre);
         _sinteticosExtra[id] = {
           id: id,
           nombre: nombre,
           siglas: siglas,
-          colorPrimario: _colorSintetico(nombre),
+          colorPrimario: identidadSint.color,
           colorSecundario: "#101114",
-          escudoFormato: _formatoSintetico(nombre),
+          escudoFormato: identidadSint.forma,
           valoracionPoder: _poderSinteticoPorLiga(nombre, ligaContexto),
           mostrarSiglas: true,
           // Rival aún SIN sortear (el admin tecleó "?" como marcador de

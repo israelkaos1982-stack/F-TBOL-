@@ -8782,10 +8782,21 @@
   // palabra en vez de frase completa — necesario porque aquí puede venir
   // texto libre detrás (bug: "# LIGUE 1" y "# COUPE FRAMCE" del PSG
   // quedaban sin caja porque solo se reconocía "LIGA"/"COPA" literales).
+  //
+  // La caja "CHAMPIONS" es, en realidad, "la competición europea de
+  // este club" — no todos los clubes juegan la Champions: Liverpool
+  // juega la Recopa esta temporada (petición usuario 2026-09-22,
+  // "Liverpool Juega en Liga Hypermotion, Copa del Rey y Recopa"), así
+  // que "# RECOPA" tiene que caer en la MISMA caja cerrada que
+  // "# CHAMPIONS" (con el título que teclee el admin, "Recopa", no
+  // "Champions" — mismo mecanismo que ya usa el PSG con Ligue 1/Coupe).
+  // Si en el futuro otro club juega la Europa League/Conference League/
+  // Supercopa de Europa, añadir su alias aquí — es la misma caja
+  // "competición europea", solo cambia el nombre real.
   var OBJETIVOS_SECCION_ALIAS_PREFIJO = {
     LIGA: ["LIGA", "LIGUE"],
     COPA: ["COPA", "COUPE"],
-    CHAMPIONS: ["CHAMPIONS"]
+    CHAMPIONS: ["CHAMPIONS", "RECOPA"]
   };
 
   // "# SECCIÓN" (LIGA/COPA/CHAMPIONS/SUPERLIGA/GLOBALES, o un alias
@@ -8956,11 +8967,12 @@
     nota.className = "admin-nota";
     nota.textContent =
       'Una línea "# LIGA" / "# COPA" / "# CHAMPIONS" / "# SUPERLIGA" / "# GLOBALES" abre cada caja ' +
-      '(también vale "# LIGUE 1" para la caja Liga, o "# COUPE ..." para la caja Copa) — puedes ' +
-      'añadir texto detrás (p.ej. "# LIGUE 1 FRANCIA") y se usará como título de la caja, sigue ' +
-      "siendo la misma caja. Debajo, un objetivo por línea con \"- 1\" o \"- 2\" al final (los puntos " +
-      "que vale); si te dejas el número o el guion mal puesto, el objetivo se guarda igual con 1 " +
-      "punto, nunca desaparece. Añade, edita o borra líneas libremente.";
+      '(también vale "# LIGUE 1" para la caja Liga, "# COUPE ..." para la caja Copa, o "# RECOPA" ' +
+      'para la caja de competición europea si este club no juega la Champions) — puedes añadir ' +
+      'texto detrás (p.ej. "# LIGUE 1 FRANCIA") y se usará como título de la caja, sigue siendo la ' +
+      "misma caja. Debajo, un objetivo por línea con \"- 1\" o \"- 2\" al final (los puntos que " +
+      "vale); si te dejas el número o el guion mal puesto, el objetivo se guarda igual con 1 punto, " +
+      "nunca desaparece. Añade, edita o borra líneas libremente.";
     contenedor.appendChild(nota);
 
     var textoGuardado = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";

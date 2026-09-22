@@ -264,6 +264,15 @@
   var _BALON_COMP_ALIAS = {
     liga: "liga", "ligue 1": "liga", "liga ea sports": "liga", "liga ea": "liga",
     "la liga": "liga", "primera division": "liga",
+    // "Hypermotion" es, en el fondo, la MISMA Liga (un club puede jugarla
+    // en cualquiera de las 4 divisiones de la pirámide española) — pero
+    // NO se funde con el alias "liga" de arriba a propósito: el usuario
+    // pidió una card con SU PROPIO color (azul verdoso, distinto del rojo
+    // de Liga) para distinguir de un vistazo en qué división está
+    // jugando cada partido (petición usuario 2026-09-22, foto "Atl.
+    // Madrid · HYPERMOTION · 1ª JORNADA"). Sin este alias, "# Hypermotion"
+    // del Calendario extra caía en "comp-otro" (gris neutro).
+    hypermotion: "hypermotion", "liga hypermotion": "hypermotion",
     copa: "copa", "copa del rey": "copa", coupe: "copa", "coupe de france": "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
     "supercopa espana": "supercopa",
@@ -525,7 +534,7 @@
   }
 
   var COMP_LABEL = {
-    liga: "Liga", copa: "Copa del Rey", supercopa: "Supercopa de España",
+    liga: "Liga", hypermotion: "Hypermotion", copa: "Copa del Rey", supercopa: "Supercopa de España",
     promocion: "Promoción",
     champions: "Champions League", "ucl-previa": "Previa Champions",
     uel: "Europa League", uecl: "Conference League",
@@ -537,16 +546,17 @@
   };
 
   // Color de la etiqueta de competición — cada una con el SUYO propio
-  // (Liga rojo, Copa dorado, Supercopa España marrón, Promoción gris,
-  // Champions azul, Previa Champions morado, Europa League naranja,
-  // Conference League verde, Intercontinental amarillo vivo, Supercopa
-  // de Europa plata, Recopa de Europa bronce, Selecciones rosa), para
-  // que ninguna se pierda de un vistazo entre las demás. Solo el texto
-  // libre tecleado por el admin (calendario extra) que no reconozca
-  // ninguna clase cae en un tono neutro común ("comp-otro"). Ver
-  // reglas .match-card-comp*/.match-card.comp-* en css/estilos.css.
+  // (Liga rojo, Hypermotion azul verdoso, Copa dorado, Supercopa España
+  // marrón, Promoción gris, Champions azul, Previa Champions morado,
+  // Europa League naranja, Conference League verde, Intercontinental
+  // amarillo vivo, Supercopa de Europa plata, Recopa de Europa bronce,
+  // Torneo de Verano amarillo, Selecciones rosa), para que ninguna se
+  // pierda de un vistazo entre las demás. Solo el texto libre tecleado
+  // por el admin (calendario extra) que no reconozca ninguna clase cae
+  // en un tono neutro común ("comp-otro"). Ver reglas
+  // .match-card-comp*/.match-card.comp-* en css/estilos.css.
   var COMP_CLASE = {
-    liga: "comp-liga", copa: "comp-copa", supercopa: "comp-supercopa",
+    liga: "comp-liga", hypermotion: "comp-hypermotion", copa: "comp-copa", supercopa: "comp-supercopa",
     promocion: "comp-promocion",
     champions: "comp-champions", "ucl-previa": "comp-previa",
     uel: "comp-uel", uecl: "comp-uecl",

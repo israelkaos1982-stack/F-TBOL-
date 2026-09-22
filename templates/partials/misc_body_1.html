@@ -21625,6 +21625,23 @@ window._hdrCleanCache = function(){
           '<i>Ejemplo: ida A 2-1 B, vuelta B 3-2 A → global 4-4; avanza A '+
           'por marcar más fuera de casa. Si también empatan los goles de '+
           'visitante, se decide por penaltis.</i>'+
+        '</div>' +
+        /* Petición usuario 2026-09-22 (torneo "Teresa Herrera"): 5
+           checkboxes opt-in, todos DESMARCADOS por defecto — un
+           ko-2leg ya existente que se re-guarde sin tocarlos queda
+           exactamente como estaba. */
+        '<label style="margin-top:10px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-3rdtie" type="checkbox" style="width:auto;" '+(fc.thirdMatchTiebreak?'checked':'')+'> Si empata también el gol de visitante, tercer partido (gol de oro) antes de penaltis</label>' +
+        '<label style="margin-top:6px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-singleleglast" type="checkbox" style="width:auto;" '+(fc.singleLegLastRound?'checked':'')+'> Última ronda (Final) a partido único</label>' +
+        '<label style="margin-top:6px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-koetp" type="checkbox" style="width:auto;" '+(fc.koExtraTimePens?'checked':'')+'> Prórroga + penaltis en la Final a partido único (si empata)</label>' +
+        '<label style="margin-top:6px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-3rdplace" type="checkbox" style="width:auto;" '+(fc.thirdPlaceMatch?'checked':'')+'> Partido de 3º y 4º puesto (con los 2 perdedores de semifinales)</label>' +
+        '<label style="margin-top:6px;display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:13px;">'+
+        '<input id="tour-ed-final10" type="checkbox" style="width:auto;" '+(fc.finalHuman10?'checked':'')+'> Final (y 3º/4º si lo hay) con humano: 10 min, ambos equipos en racha ⬆️⬆️</label>' +
+        '<div style="margin-top:8px;padding:8px 10px;background:rgba(240,192,64,.08);border:1px dashed rgba(240,192,64,.4);border-radius:6px;font-size:11px;color:rgba(255,255,255,.6);line-height:1.4;text-transform:none;letter-spacing:0;">'+
+          'El 3º/4º puesto se juega SIEMPRE a partido único (con prórroga+penaltis si está marcado) — nunca a ida y vuelta, aunque el resto de rondas sí lo sean.'+
         '</div>';
     } else if (fmt === 'league') {
       box.innerHTML =
@@ -22257,7 +22274,20 @@ window._hdrCleanCache = function(){
         /* Doble partido + regla goles fuera × 2 (petición usuario
            2026-05-08). El motor de simulación (fase 3) leerá este
            flag al calcular el agregado de cada cruce. */
-        awayGoalsX2: true
+        awayGoalsX2: true,
+        /* 4 checkboxes nuevos (petición usuario 2026-09-22, "Teresa
+           Herrera"): TODOS opt-in y por defecto DESMARCADOS — un
+           torneo ko-2leg ya existente (Soccer Champions Tour, Premier
+           Summer Series, o cualquier "Torneo Personalizado" ya
+           configurado) que se re-guarde desde este editor SIN tocar
+           estos checkboxes queda exactamente como estaba, porque
+           todos quedan en `false`/`undefined` salvo que el admin los
+           marque explícitamente. */
+        singleLegLastRound: !!(document.getElementById('tour-ed-singleleglast') && document.getElementById('tour-ed-singleleglast').checked),
+        koExtraTimePens: !!(document.getElementById('tour-ed-koetp') && document.getElementById('tour-ed-koetp').checked),
+        thirdMatchTiebreak: !!(document.getElementById('tour-ed-3rdtie') && document.getElementById('tour-ed-3rdtie').checked),
+        thirdPlaceMatch: !!(document.getElementById('tour-ed-3rdplace') && document.getElementById('tour-ed-3rdplace').checked),
+        finalHuman10: !!(document.getElementById('tour-ed-final10') && document.getElementById('tour-ed-final10').checked)
       };
     } else if (cfg.format === 'league') {
       cfg.formatConfig = {
@@ -24633,6 +24663,14 @@ window._hdrCleanCache = function(){
             + '↺ Reset bracket'
             + '</button></div>';
         }
+      }
+      /* Petición usuario 2026-09-22 ("Teresa Herrera"): partido de 3º
+         y 4º puesto, SIEMPRE visible en cuanto `_tourBuildNextRound`
+         lo emparejó (tras Semis) — independientemente de qué ronda del
+         cuadro principal se esté viendo con ◀ ▶, porque no vive dentro
+         de ninguna ronda del bracket principal. */
+      if (cfg.thirdPlacePair && cfg.thirdPlacePair.length === 2) {
+        html += _tourThirdPlaceHtml(id, cfg);
       }
       infoEl.innerHTML = _statsBoxHtml + html;
       /* Persistir bracket recién inicializado (2026-05-26): sin esto,
@@ -27341,6 +27379,41 @@ window._hdrCleanCache = function(){
       + '</div>';
   }
 
+  /* Caja del partido de 3º y 4º puesto (petición usuario 2026-09-22,
+     "Teresa Herrera") — mismo look que una eliminatoria normal del
+     bracket (`.tour-tie`/`.tour-match`), con cabecera propia "🥉 3º Y
+     4º PUESTO" para no confundirla con la Final. `cfg.thirdPlacePair`
+     son los 2 objetos equipo (los perdedores de semis); el resultado
+     vive en `cfg.results['tp']` — nunca en `cfg.bracket`. */
+  function _tourThirdPlaceHtml(id, cfg) {
+    var pair = cfg.thirdPlacePair;
+    var res = (cfg.results || {})['tp'];
+    var played = !!(res && res.played);
+    var hasHuman = _tourPairHasHuman(pair, 0);
+    var body;
+    if (played) {
+      var aWin = res.winner === 'a', bWin = res.winner === 'b';
+      var sA = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
+      var sB = '<span class="tour-score'+(bWin?' tour-score-win':'')+'">'+res.b+'</span>';
+      body = '<div class="tour-match tour-match-played">'
+        + _bracketTeamHtml(pair[0], id, 0, aWin, bWin && !aWin)
+        + '<span class="vs tour-score-wrap">'+sA+' - '+sB+'</span>'
+        + _bracketTeamHtml(pair[1], id, 1, bWin, aWin && !bWin)
+        + '</div>'
+        + _tourActaPanelHtml(id, 'tp', res);
+    } else {
+      var rowClass = 'tour-match tour-match-pickable' + (hasHuman ? ' tour-match-has-human' : '');
+      body = '<div class="'+rowClass+'" data-tour="'+id+'" data-tp-key="tp">'
+        + _bracketTeamHtml(pair[0], id, 0)
+        + '<span class="vs">vs</span>'
+        + _bracketTeamHtml(pair[1], id, 1)
+        + '</div>';
+    }
+    return '<div class="tour-tie'+(hasHuman?' tour-tie-human':'')+'" style="margin-top:14px;">'
+      + '<div class="tour-tie-date" style="text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.6);">🥉 3º Y 4º PUESTO</div>'
+      + body + '</div>';
+  }
+
   /* ─── Cálculo de premios (monedas) ─────────────────────── */
 
   function _payoutRow(label, coins, isHuman) {
@@ -27623,7 +27696,14 @@ window._hdrCleanCache = function(){
       }
       window._ppDurationMin = _isFinal ? 10 : 0;
       if (_isFinal) duracion = '10 min';
-    } catch(_){ try { window._ppDurationMin = 0; } catch(__){} }
+      /* Petición usuario 2026-09-22 ("Teresa Herrera"): la Final con
+         humano (finalHuman10) fuerza además "ambos equipos en racha
+         ⬆️⬆️" — override leído por `_wrapPRFS` (misc_body_1.html,
+         bloque de forma de temporada), consumido y BORRADO en la
+         siguiente resolución de forma para no "pegarse" al partido
+         de otro torneo que se abra después. */
+      window._ppFormOverride = _isFinal ? { home:'⬆️', away:'⬆️' } : null;
+    } catch(_){ try { window._ppDurationMin = 0; window._ppFormOverride = null; } catch(__){} }
     var prePartidoKey = 'tour_' + tourId + '_' + matchKey;
     /* Marcamos el contexto previo a la previa para que `_ppCustomCallback`
        sepa abrir abrirTorneo con los datos correctos. */
@@ -27652,7 +27732,24 @@ window._hdrCleanCache = function(){
         var _isKoETP = _mkETP.indexOf('ko_') === 0;
         var _rIdxETP = _isKoETP ? parseInt(_mkETP.split('_')[1], 10) : -1;
         var _is2LegETP = _isKoETP && _tour2LegRound(_cfgETP, _rIdxETP);
-        if (_isKoETP && _fcETP.koExtraTimePens && !_is2LegETP) {
+        /* Formato PLANO `ko`/`ko-2leg` (SCT/PSS/"Torneos Personalizados",
+           matchKey SIN prefijo `ko_`, p.ej. "3_0"): la detección de
+           arriba (pensada para `groups-ko`/mundial-48) nunca casaba
+           aquí, así que `koExtraTimePens` en la Final de un ko-2leg
+           NUNCA inyectaba los toggles PRÓRROGA+PENALTIS — hueco
+           encontrado al añadir el flag para "Teresa Herrera"
+           (2026-09-22). Detección PARALELA, propia de este formato:
+           última ronda del array `rounds` Y a partido único
+           (`!_tour2LegRound`, ya sea porque el format es `ko` puro o
+           porque es `ko-2leg` con `singleLegLastRound`). */
+        var _isPlainKoFinal = false;
+        if (!_isKoETP && (_cfgETP && (_cfgETP.format === 'ko' || _cfgETP.format === 'ko-2leg'))) {
+          var _rrETP = _fcETP.rounds || [];
+          var _rIdxPlain = parseInt(_mkETP.split('_')[0], 10);
+          _isPlainKoFinal = (_rrETP.length > 0) && (_rIdxPlain === _rrETP.length - 1)
+                            && !_tour2LegRound(_cfgETP, _rIdxPlain);
+        }
+        if (((_isKoETP && !_is2LegETP) || _isPlainKoFinal) && _fcETP.koExtraTimePens) {
           if (typeof window._injectProrrogaPenaltisConfirms === 'function') {
             window._injectProrrogaPenaltisConfirms();
           }
@@ -27666,6 +27763,61 @@ window._hdrCleanCache = function(){
     }
   }
   window._tourOpenHumanMatch = _tourOpenHumanMatch;
+
+  /* Abre la previa/gm-modal del partido de 3º y 4º puesto (petición
+     usuario 2026-09-22, "Teresa Herrera"). Deliberadamente SEPARADA de
+     `_tourOpenHumanMatch`: es SIEMPRE a partido único (nunca ida/vuelta,
+     regla explícita del usuario — "3º y 4º puesto... a partido único"),
+     así que no necesita nada de la lógica de `_tour2LegRound`/`|L1`/`|L2`
+     que sí aplica al resto de rondas. matchKey es SIEMPRE 'tp'. */
+  function _tourOpenThirdPlaceHumanMatch(tourId, teamAObj, teamBObj) {
+    if (!teamAObj || !teamBObj) return;
+    var matchKey = 'tp';
+    var nameA = teamAObj.name || '?';
+    var nameB = teamBObj.name || '?';
+    try { window._tourPrefetchMatchAlias && window._tourPrefetchMatchAlias(nameA, nameB); } catch(_){}
+    var isHvH = (typeof _tourSlotIsHuman === 'function')
+      ? (_tourSlotIsHuman(teamAObj) && _tourSlotIsHuman(teamBObj))
+      : (!!teamAObj.isHuman && !!teamBObj.isHuman);
+    var humanInvolved = (typeof _tourSlotIsHuman === 'function')
+      ? (_tourSlotIsHuman(teamAObj) || _tourSlotIsHuman(teamBObj))
+      : (!!teamAObj.isHuman || !!teamBObj.isHuman);
+    var duracion = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: humanInvolved })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    var cfgD = _tourLoadCachedSync(tourId);
+    var fcD = (cfgD && cfgD.formatConfig) || {};
+    var force10 = !!(fcD.finalHuman10 && humanInvolved);
+    window._ppDurationMin = force10 ? 10 : 0;
+    if (force10) duracion = '10 min';
+    /* Mismo override de forma que la Final (ver _tourOpenHumanMatch) —
+       "ambos equipos en racha ⬆️⬆️" pedido explícitamente también para
+       el 3º/4º puesto. */
+    window._ppFormOverride = force10 ? { home:'⬆️', away:'⬆️' } : null;
+    var prePartidoKey = 'tour_' + tourId + '_' + matchKey;
+    window._ppPreviaTeams = { home: nameA, away: nameB, j: 0, comp: 'torneo',
+                              tourId: tourId, tourKey: matchKey };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      if (typeof window.abrirTorneo === 'function') {
+        try { window.abrirTorneo(nameA, nameB, isHvH, tourId, matchKey); } catch(_){}
+      } else {
+        alert('Falta window.abrirTorneo (Fase 3 incompleta).');
+      }
+    };
+    if (typeof window.showPrePartidoOverlay === 'function') {
+      window.showPrePartidoOverlay(prePartidoKey, 'torneo', 'Sí', duracion, isHvH);
+      /* Partido único → PRÓRROGA + PENALTIS si `koExtraTimePens` está
+         activo (mismo criterio que la Final: prórroga+penaltis SOLO
+         cuando el admin lo marcó explícitamente para este torneo). */
+      if (fcD.koExtraTimePens && typeof window._injectProrrogaPenaltisConfirms === 'function') {
+        try { window._injectProrrogaPenaltisConfirms(); } catch(_){}
+      }
+    } else if (typeof window.abrirTorneo === 'function') {
+      try { window.abrirTorneo(nameA, nameB, isHvH, tourId, matchKey); } catch(_){}
+    }
+  }
+  window._tourOpenThirdPlaceHumanMatch = _tourOpenThirdPlaceHumanMatch;
 
   /* Mensaje breve cuando un sim-batch saltó N partidos humanos. Se
      pinta sobre el feedback del torneo. No bloqueante.
@@ -28577,11 +28729,34 @@ window._hdrCleanCache = function(){
       else if (totalB > totalA) winner = 'b';
       else {
         var aw = !!(cfg.formatConfig && cfg.formatConfig.awayGoalsX2);
+        var third = null;
         if (aw) {
           /* B fuera (en ida) vs A fuera (en vuelta). */
           if (leg1.ga > leg2.ga) winner = 'b';
           else if (leg2.ga > leg1.ga) winner = 'a';
-          else {
+          else if (cfg.formatConfig && cfg.formatConfig.thirdMatchTiebreak) {
+            /* Petición usuario 2026-09-22 ("Teresa Herrera"): empate en
+               agregado Y en gol de visitante → TERCER PARTIDO (gol de
+               oro). Si sigue empatado, penaltis — este motor (a
+               diferencia del de la Previa de Champions, self-contained
+               a propósito) no simula una prórroga con goles propios
+               para IA vs IA; un empate en el partido único ya se
+               resuelve siempre así en single-leg (`useSingleLeg`, más
+               abajo), así que el tercer partido hereda el MISMO criterio
+               en vez de duplicar una fase de prórroga que este motor
+               nunca ha modelado para nadie. OPT-IN — sin este flag el
+               comportamiento es IDÉNTICO al de siempre (penaltis
+               directos), así que Soccer Champions Tour/Premier Summer
+               Series (que no lo activan) no se ven afectados. */
+            var thirdRes = simFn(teamA, teamB);
+            third = { a: thirdRes.gh, b: thirdRes.ga };
+            if (thirdRes.gh > thirdRes.ga) winner = 'a';
+            else if (thirdRes.ga > thirdRes.gh) winner = 'b';
+            else {
+              pens = _tourSimPenalties(teamA, teamB);
+              winner = (pens.a > pens.b) ? 'a' : 'b';
+            }
+          } else {
             pens = _tourSimPenalties(teamA, teamB);
             winner = (pens.a > pens.b) ? 'a' : 'b';
           }
@@ -28593,6 +28768,7 @@ window._hdrCleanCache = function(){
       var out2 = { a: totalA, b: totalB, winner: winner, played: true,
                    legs:[{a:leg1.gh,b:leg1.ga},{a:leg2.gh,b:leg2.ga}] };
       if (pens) out2.pens = pens;
+      if (third) out2.thirdMatch = third;
       _tourAttachActa(out2, teamA, teamB, totalA, totalB, cfg.id, roundIdx + '_' + matchIdx);
       return out2;
     }
@@ -29013,7 +29189,7 @@ window._hdrCleanCache = function(){
        allPlayed pero por seguridad lo verificamos aquí también. */
     var curR = cfg.currentRound || 0;
     var teams = cfg.bracket[curR] || [];
-    var winners = [];
+    var winners = [], losers = [];
     var pairs = 0, played = 0;
     for (var i = 0; i < teams.length; i += 2) {
       if (!teams[i+1]) break;
@@ -29023,8 +29199,26 @@ window._hdrCleanCache = function(){
       if (!res || !res.played) continue;
       played++;
       winners.push(res.winner === 'a' ? teams[i] : teams[i+1]);
+      losers.push(res.winner === 'a' ? teams[i+1] : teams[i]);
     }
     if (pairs === 0 || played < pairs) return false;  /* aborta */
+    /* 3º y 4º puesto (petición usuario 2026-09-22, "Teresa Herrera"):
+       al avanzar de SEMIS (la ronda justo antes de la Final) a la
+       Final, si `formatConfig.thirdPlaceMatch` está activo, los 2
+       perdedores de semis quedan emparejados aparte en
+       `cfg.thirdPlacePair` — NUNCA dentro de `cfg.bracket` (que solo
+       modela la cadena de eliminación principal). Solo se fija UNA
+       vez (`!cfg.thirdPlacePair`) para no resembrarlo si el bracket
+       se re-simula/avanza por cualquier motivo. `pairs===2` exige
+       que semis tenga EXACTAMENTE 2 partidos (4 equipos) — la forma
+       estándar de unas semifinales; con cualquier otra forma no hay
+       "los 2 perdedores de semis" que tenga sentido emparejar. */
+    var fc0 = cfg.formatConfig || {};
+    var roundsArr = fc0.rounds || [];
+    var isSemisRound = (roundsArr.length >= 2) && (curR === roundsArr.length - 2);
+    if (fc0.thirdPlaceMatch && isSemisRound && pairs === 2 && !cfg.thirdPlacePair) {
+      cfg.thirdPlacePair = losers.slice();
+    }
     /* Auto re-sortear humanos (petición usuario 2026-05-25): si en
        la lista de ganadores hay >1 humano vivo, re-spreadar usando
        bit-reversal igual que el sorteo inicial — así un humano que
@@ -29034,6 +29228,43 @@ window._hdrCleanCache = function(){
     cfg.bracket[curR + 1] = winners;
     cfg.currentRound = curR + 1;
     return true;
+  }
+
+  /* Partido de 3º y 4º puesto (petición usuario 2026-09-22, "Teresa
+     Herrera") — SIEMPRE a partido único, con prórroga+penaltis en
+     empate si `formatConfig.koExtraTimePens` está activo (si no,
+     penaltis directos, igual que cualquier KO single-leg de este
+     motor). Vive fuera de `cfg.bracket`/`cfg.results[roundIdx_idx]`
+     por completo: se guarda en `cfg.results['tp']` para no colisionar
+     nunca con una key `roundIdx_matchIdx` (esas son siempre dígitos).
+     Fase 3: si hay humano y el admin no activó auto-sim, devuelve
+     `{blockedHuman:true}` — mismo contrato que `_tourSimMatch`. */
+  function _tourSimThirdPlaceMatch(cfg) {
+    var pair = cfg.thirdPlacePair;
+    if (!pair || pair.length !== 2 || !pair[0] || !pair[1]) return null;
+    if (_tourPairHasHuman(pair, 0) && !cfg._adminAllowAutoSim) {
+      return { blockedHuman: true };
+    }
+    var teamA = _tourFindTeam(pair[0]);
+    var teamB = _tourFindTeam(pair[1]);
+    if (!teamA || !teamB) return null;
+    var simFn = (typeof window.simulateMatch === 'function') ? window.simulateMatch : null;
+    if (!simFn) return null;
+    var aHome = (Math.random() < 0.5);
+    var r = aHome ? simFn(teamA, teamB) : simFn(teamB, teamA);
+    var ga = aHome ? r.gh : r.ga;
+    var gb = aHome ? r.ga : r.gh;
+    var winner, pens = null;
+    if (ga > gb) winner = 'a';
+    else if (gb > ga) winner = 'b';
+    else {
+      pens = _tourSimPenalties(teamA, teamB);
+      winner = (pens.a > pens.b) ? 'a' : 'b';
+    }
+    var out = { a: ga, b: gb, winner: winner, played: true };
+    if (pens) out.pens = pens;
+    _tourAttachActa(out, teamA, teamB, ga, gb, cfg.id, 'tp');
+    return out;
   }
 
   /* Recoloca un array de equipos para separar a los HUMANOS al
@@ -29251,6 +29482,27 @@ window._hdrCleanCache = function(){
         var r = _tourSimMatch(cfg, roundIdx, matchIdx);
         if (!r || r.blockedHuman) return;
         cfg.results[mk] = r;
+        _tourSaveAndRender(tid, cfg);
+        ev.stopPropagation();
+        return;
+      }
+
+      /* a.1b) Partido de 3º y 4º puesto (petición usuario 2026-09-22,
+         "Teresa Herrera"). Vive fuera de cfg.bracket — sus 2 equipos
+         están en cfg.thirdPlacePair, no en teams[roundIdx]. */
+      var tpk = matchEl.getAttribute('data-tp-key');
+      if (tpk) {
+        if (cfg.results[tpk] && cfg.results[tpk].played) return;
+        var tpPair = cfg.thirdPlacePair || [];
+        if (tpPair.length !== 2) return;
+        if (_tourPairHasHuman(tpPair, 0) && !cfg._adminAllowAutoSim) {
+          _tourOpenThirdPlaceHumanMatch(tid, tpPair[0], tpPair[1]);
+          ev.stopPropagation();
+          return;
+        }
+        var rtp = _tourSimThirdPlaceMatch(cfg);
+        if (!rtp || rtp.blockedHuman) return;
+        cfg.results[tpk] = rtp;
         _tourSaveAndRender(tid, cfg);
         ev.stopPropagation();
         return;
@@ -56366,6 +56618,17 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             else if (fA)       fs = { home: fA.rival, away: fA.yo };
           }
         } catch(_){}
+        /* Override "ambos en racha ⬆️⬆️" para la Final/3º-4º puesto de
+           un torneo con `finalHuman10` (petición usuario 2026-09-22,
+           "Teresa Herrera"). Puesto por `_tourOpenHumanMatch`/
+           `_tourOpenThirdPlaceHumanMatch` justo antes de abrir la
+           previa — GANA sobre lo resuelto arriba, y se consume una
+           sola vez (se limpia aquí) para no "pegarse" al siguiente
+           partido normal que se abra después. */
+        if (window._ppFormOverride) {
+          fs = { home: window._ppFormOverride.home, away: window._ppFormOverride.away };
+          window._ppFormOverride = null;
+        }
         window._ppFormStates = fs;
       } catch(_){}
     };

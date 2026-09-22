@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v47';
+var CACHE_HTML   = 'ftbol-html-v48';
 /* v46 → v47 (bug real usuario — Copa del Rey): un partido de Copa
    jugado por un humano se mostraba "FINALIZADO" con acta completa pero
    al reabrir la web al día siguiente aparecía como no jugado. Causa:

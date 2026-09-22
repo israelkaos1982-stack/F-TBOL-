@@ -1547,6 +1547,50 @@
     return n;
   }
 
+  // Quita del texto del Calendario extra TODAS las líneas de "Liga" (Liga
+  // EA Sports, la categoría máxima) — pensado para limpiar de un golpe los
+  // enfrentamientos de la TEMPORADA ANTERIOR que se quedan colgados tras
+  // un ascenso/descenso (reporte usuario 2026-09-22, "nueva temporada,
+  // nuevo calendario, sigue habiendo enfrentamientos humano vs humano de
+  // la Liga del año pasado" — Liverpool ascendido a Hypermotion seguía
+  // mostrando "Liga - 2ª Jornada - Real Madrid" etc.). Esta app no tiene
+  // ningún concepto de "temporada" dentro del texto libre del Calendario
+  // extra — una línea tecleada NUNCA caduca sola, solo desaparece si se
+  // borra a mano (ver comentario de reiniciarCalendarioExtraJugados, un
+  // poco más arriba) — así que el único modo de "limpiar la Liga vieja"
+  // es quitar esas líneas del texto.
+  //
+  // Función PURA (no toca localStorage): el botón que la usa (ver
+  // js/main.js::limpiarLigaCalendarioExtraClub) solo edita el <textarea>
+  // en pantalla con el resultado — el admin sigue teniendo que pulsar
+  // 💾 Guardar para confirmar el cambio, exactamente igual que cualquier
+  // otra edición manual del texto (y puede pulsar ✕ Cancelar para
+  // deshacerlo sin haber tocado nada guardado).
+  //
+  // Solo quita líneas cuya competición normaliza a "liga" (mismo alias
+  // que ya usa parsearPartidosExtraTexto/generarCalendarioLateralDerecho
+  // vía Renderizadores.resolverCompKeyPartido) — Hypermotion/1ª RFEF/
+  // Copa/Recopa/Torneo Verano/etc, con SU PROPIO nombre de competición,
+  // nunca se tocan. Devuelve {conservar: [líneas que sobreviven, en
+  // orden], n: cuántas se quitaron}.
+  function filtrarLigaDeCalendarioExtraTexto(texto) {
+    var R = window.Renderizadores;
+    var resolverCompKey = (R && R.resolverCompKeyPartido) || function (c) { return c; };
+    var n = 0;
+    var conservar = String(texto || "").split("\n").filter(function (linea) {
+      var l = linea.trim().replace(/^\d+[.)]\s*/, "");
+      if (!l) return true; // línea vacía/decorativa: se conserva tal cual
+      // Mismo separador tolerante que parsearPartidosExtraTexto — sin al
+      // menos "Competición - Ronda" no es una línea de partido reconocible.
+      var partes = l.split(/\s+-\s*|\s*-\s+/);
+      if (partes.length < 2) return true;
+      var esLiga = resolverCompKey(partes[0].trim()) === "liga";
+      if (esLiga) n++;
+      return !esLiga;
+    });
+    return { conservar: conservar, n: n };
+  }
+
   // ---------- Títulos ganados por club (Sala de Títulos) ----------
   // Igual que el calendario extra: texto libre POR CLUB, una línea por
   // trofeo ganado ("Liga - 2032"), que js/renderizadores.js resuelve
@@ -3455,6 +3499,7 @@
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
     reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,
+    filtrarLigaDeCalendarioExtraTexto: filtrarLigaDeCalendarioExtraTexto,
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerTitulosTemporadaTexto: obtenerTitulosTemporadaTexto,

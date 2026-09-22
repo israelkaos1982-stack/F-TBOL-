@@ -11033,6 +11033,21 @@
     textarea.value = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(clubId) : "";
     contenedor.appendChild(textarea);
 
+    // "Liga" (Liga EA Sports, la categoría máxima) nunca caduca sola en
+    // este texto libre — tras un ascenso/descenso, las líneas de la
+    // temporada anterior se quedan colgadas hasta que se borran a mano.
+    // Este botón solo EDITA el <textarea> de arriba (nada se guarda
+    // todavía) — el admin revisa el resultado y pulsa 💾 Guardar, o ✕
+    // Cancelar si se ha equivocado de club. Ver
+    // Estado.filtrarLigaDeCalendarioExtraTexto / js/main.js::limpiarLigaCalendarioExtraClub.
+    var limpiar = document.createElement("button");
+    limpiar.type = "button";
+    limpiar.className = "btn-ghost";
+    limpiar.dataset.accion = "limpiar-liga-calendario-extra-club";
+    limpiar.textContent = "🧹 Quitar Liga de temporada anterior";
+    limpiar.title = "Borra del texto de arriba TODAS las líneas «Liga - ...» (Hypermotion/1ª RFEF/Copa/Recopa/Torneo Verano/etc no se tocan). Recuerda pulsar 💾 Guardar después.";
+    contenedor.appendChild(limpiar);
+
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =

@@ -9901,6 +9901,38 @@
     return n;
   }
 
+  // Reparto de división pedido por el usuario tras el reinicio de la
+  // pirámide 2026-09-22 ("Liverpool Juega en Liga Hypermotion... Arsenal
+  // Juega en Liga 2ª Ref... Real Madrid Juega en Liga Hypermotion...
+  // Atletico Madrid Juega en Liga Hypermotion... FC Barcelona Juega en
+  // Liga 1 REF"). Antes de este fix (ver js/estado.js::obtenerDivisionClub/
+  // obtenerDivisionHumano) fijar la división desde la propia tabla de
+  // clasificación (📌) y fijarla desde "⚙️ Ajustes" escribían en DOS
+  // storages DISTINTOS y desconectados — pulsar cualquiera de los dos
+  // "no hacía nada" desde el punto de vista del otro (bug reportado:
+  // "por más que fijo a Liverpool y Real Madrid en Liga Hypermotion este
+  // botón no hace nada"). Ahora ambos sistemas son el MISMO storage, así
+  // que este botón único fija los 5 de golpe con la garantía de que se
+  // ve igual en la tarjeta del menú Y en la tabla de clasificación.
+  // PSG no aparece — juega su propia Ligue 1 (LIGA_NAV_HUMANO_PROPIO),
+  // fuera de esta pirámide, y el usuario dijo explícitamente "PSG sigue
+  // igual".
+  var _PIRAMIDE_DIVISION_PEDIDA = {
+    liverpool: "hypermotion",
+    "real-madrid": "hypermotion",
+    "atletico-madrid": "hypermotion",
+    arsenal: "2ref",
+    "fc-barcelona": "1ref"
+  };
+  function fijarDivisionesPiramideSegunPeticion() {
+    if (!window.Estado) return 0;
+    var n = 0;
+    Object.keys(_PIRAMIDE_DIVISION_PEDIDA).forEach(function (clubId) {
+      if (window.Estado.guardarDivisionClub(clubId, _PIRAMIDE_DIVISION_PEDIDA[clubId])) n++;
+    });
+    return n;
+  }
+
   // Vista "🧹 Reiniciar pirámide" del Panel Admin (ver index.html —
   // admin-grid — y js/main.js::ADMIN_VISTAS). Ya vive detrás del candado
   // 646 que abre el propio Panel Admin, así que —igual que "🗑️ Borrar
@@ -9944,6 +9976,34 @@
       window.alert("✅ Pirámide reiniciada" + (n ? " (" + n + " partido(s) de Liga puestos a cero)" : "") + ".");
     });
     contenedor.appendChild(btn);
+
+    var notaDivision = document.createElement("p");
+    notaDivision.className = "admin-nota";
+    notaDivision.textContent =
+      "Fija de golpe la división ACTUAL de los 5 clubes (dónde juegan AHORA, no afecta a los " +
+      "resultados/textos de arriba): Liverpool → Hypermotion · Arsenal → 2ª REF · Real Madrid → " +
+      "Hypermotion · Atlético Madrid → Hypermotion · FC Barcelona → 1ª REF. Se ve igual tanto al abrir " +
+      "la tarjeta 'Liga' del menú de cada club como en su tabla de clasificación — ambas leen ya la " +
+      "misma división guardada.";
+    contenedor.appendChild(notaDivision);
+
+    var btnDivision = document.createElement("button");
+    btnDivision.type = "button";
+    btnDivision.className = "admin-danger-btn";
+    btnDivision.textContent = "📌 Fijar la división de los 5 clubes";
+    btnDivision.addEventListener("click", function () {
+      var ok = window.confirm(
+        "Fija la división actual de:\n\n" +
+        "• Liverpool → Hypermotion\n• Arsenal → 2ª REF\n• Real Madrid → Hypermotion\n" +
+        "• Atlético Madrid → Hypermotion\n• FC Barcelona → 1ª REF\n\n" +
+        "PSG no se toca (juega su propia Ligue 1). ¿Continuar?"
+      );
+      if (!ok) return;
+      var n2 = fijarDivisionesPiramideSegunPeticion();
+      if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
+      window.alert("✅ División fijada" + (n2 ? " (" + n2 + " club(es))" : "") + ".");
+    });
+    contenedor.appendChild(btnDivision);
   }
 
   // Pestaña "⚙️ Ajustes" del editor del club (candado 646, ver
@@ -12386,6 +12446,7 @@
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
     reiniciarTodosPartidosClub: reiniciarTodosPartidosClub,
     reiniciarPiramideCompleta: reiniciarPiramideCompleta,
+    fijarDivisionesPiramideSegunPeticion: fijarDivisionesPiramideSegunPeticion,
     renderizarAdminPiramide: renderizarAdminPiramide,
     renderizarMenuClub: renderizarMenuClub,
     pintarEditorMenuClub: pintarEditorMenuClub,

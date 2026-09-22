@@ -474,6 +474,30 @@
     cerrarModalClub();
   }
 
+  // Botón "🧹 Quitar Liga de temporada anterior" del editor de Calendario
+  // extra (ver js/renderizadores.js::pintarEditorCalendarioExtraClub) —
+  // borra del <textarea> EN PANTALLA todas las líneas «Liga - ...» (Liga
+  // EA Sports), típicas de quedarse colgadas tras un ascenso/descenso.
+  // Solo toca lo que hay escrito AHORA MISMO en el textarea (no lo ya
+  // guardado, por si el admin tenía cambios sin guardar a medio
+  // escribir) y NO persiste nada — el admin sigue teniendo que pulsar
+  // 💾 Guardar (o ✕ Cancelar si se equivocó de club/quiere deshacerlo).
+  function limpiarLigaCalendarioExtraClub() {
+    var ta = document.getElementById("calendario-extra-club-textarea");
+    if (!ta || !window.Estado || !window.Estado.filtrarLigaDeCalendarioExtraTexto) return;
+    var r = window.Estado.filtrarLigaDeCalendarioExtraTexto(ta.value);
+    if (!r.n) {
+      window.alert('No hay ninguna línea de "Liga" en el texto actual.');
+      return;
+    }
+    if (!window.confirm(
+      "Se van a quitar " + r.n + " línea(s) de \"Liga\" (Liga EA Sports) del texto de abajo — " +
+      "Hypermotion/1ª RFEF/Copa/Recopa/Torneo Verano/etc no se tocan. Pulsa 💾 Guardar después " +
+      "para confirmar el cambio. ¿Continuar?"
+    )) return;
+    ta.value = r.conservar.join("\n");
+  }
+
   // ---------- Plantilla (roster real) del club (candado 646) ----------
   function guardarPlantillaClub(clubId) {
     var ta = document.getElementById("plantilla-club-textarea");
@@ -1948,6 +1972,7 @@
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
+        case "limpiar-liga-calendario-extra-club": limpiarLigaCalendarioExtraClub(); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;

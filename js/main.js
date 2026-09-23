@@ -574,6 +574,21 @@
   // partidos de las fotos volverán a aparecer como "sin jugar" y habrá
   // que volver a registrarlos — es el precio de la garantía total que
   // pide el usuario ("solo tienen que salir estas estadísticas").
+  //
+  // ⚠️ RETIRADO (2026-09-23, ver el `// _fixupAtletiResetResultadosV1()
+  // RETIRADO` junto a la cadena de wiring más abajo): el candado es POR
+  // DISPOSITIVO (localStorage local, nunca sincronizado como "ya hecho"
+  // entre los 6 móviles/PC hasta que ESE dispositivo concreto haga su
+  // primer push) — así que cualquier dispositivo que abriera la app por
+  // primera vez CON este código ya cargado, pero DESPUÉS de que el reset
+  // ya hubiera corrido y sincronizado en otro, volvía a resetear TODO lo
+  // que encontrara en local en ese instante — incluidos partidos NUEVOS
+  // ya jugados y sincronizados desde el primer disparo (reporte usuario:
+  // Hypermotion J4/J6 recién jugados, sin sumar nada en la Plantilla).
+  // La función se deja definida por si hace falta consultarla, pero
+  // JAMÁS debe volver a invocarse automáticamente — un candado
+  // `localStorage` de un solo dispositivo es la herramienta equivocada
+  // para una acción destructiva sobre datos que viajan entre varios.
   var FIXUP_ATLETI_RESET_RESULTADOS_KEY = "ef7_fixup_atleti_reset_resultados_v1";
   function _fixupAtletiResetResultadosV1() {
     try {
@@ -1880,7 +1895,19 @@
     }
 
     _fixupAtletiDivisionesAntiguasV1();
-    _fixupAtletiResetResultadosV1();
+    // _fixupAtletiResetResultadosV1() RETIRADO (ver comentario junto a su
+    // definición, más arriba) — ya cumplió su propósito una vez y
+    // dejarlo activo es peligroso: es un candado POR DISPOSITIVO
+    // (localStorage), no por partida — cualquier móvil/PC que todavía no
+    // hubiera cargado este código (uno de los varios dispositivos del
+    // parque, o el mismo tras borrar datos de navegación) lo dispararía
+    // OTRA VEZ, y ese 2º disparo resetearía TAMBIÉN los partidos nuevos
+    // que ya se hubieran jugado y sincronizado desde entonces (reporte
+    // usuario 2026-09-23: "ahora no se están sumando las estadísticas de
+    // esta temporada" tras jugar Hypermotion J4/J6, justo después de que
+    // el reset ya hubiera corrido en otro sitio). Se deja la función
+    // DEFINIDA (nunca invocada) por si algún día hace falta revisar qué
+    // hacía exactamente.
 
     // Recalcula el hueco de la cabecera fija si gira el móvil / cambia
     // el tamaño de letra del sistema mientras la caja del club está abierta.

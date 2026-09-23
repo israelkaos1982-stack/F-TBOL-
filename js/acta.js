@@ -182,7 +182,33 @@
     //    vuelta) para que este resultado sobreviva si el admin corrige
     //    DESPUÉS el texto de la ronda de esa línea en el Calendario extra
     //    (ver Estado.registrarResultadoPartido/listarPartidosResueltos).
-    window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal, { partido: ctx.partido, datos: ctx.datos });
+    // REVISAR EL GUARDADO — antes esta llamada se ignoraba por completo:
+    // si `guardarEstado()` (js/estado.js) revienta por cuota llena, el
+    // partido se sigue mostrando "FINALIZADO" igual (todo lo demás de
+    // esta función usa datos YA en memoria, no depende de que el
+    // guardado saliera bien) y el paso D de más abajo vacía
+    // `actaTemporal` de todas formas — el fallo queda TOTALMENTE
+    // invisible: el marcador puede sobrevivir por otra vía, pero el acta
+    // compacta (goles/tarjetas/MVP por jugador) nunca llega a
+    // `e.resultados`, así que Plantilla/Liga 1ª REF nunca la ven, sin
+    // ningún aviso de por qué (reporte usuario 2026-09-23: partidos con
+    // acta visible en su propia pantalla, pero 0 estadísticas en la
+    // Plantilla). `guardarEstado()` YA avisa con un alert() cuando
+    // revienta (ver `_avisarFalloGuardado`), pero solo si de verdad
+    // lanza una excepción — este chequeo cubre TAMBIÉN cualquier otro
+    // motivo por el que devuelva `false` sin lanzar, y deja constancia
+    // aquí mismo, en el punto exacto donde se pierde el partido.
+    var _guardadoOk = window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal, { partido: ctx.partido, datos: ctx.datos });
+    if (_guardadoOk === false) {
+      window.alert(
+        "⚠️ ESTE PARTIDO NO SE HA GUARDADO — el navegador se ha quedado sin espacio (o bloquea el " +
+        "guardado local).\n\n" +
+        "El marcador puede verse aquí, pero sus goles/tarjetas/MVP NO van a sumar en la Plantilla ni " +
+        "en ninguna clasificación — se han perdido.\n\n" +
+        "Ve a Panel Admin → 💾 Espacio del navegador para liberar espacio, y vuelve a registrar " +
+        "este resultado."
+      );
+    }
 
     // B) Clasificación de la liga: Estado.calcularClasificacion() la
     //    recalcula en caliente a partir de TODOS los partidos jugados —

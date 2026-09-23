@@ -1919,6 +1919,31 @@
     return _normNombre(p.competicion) === compKeyEsperado;
   }
 
+  // Los compKeys de TODAS las divisiones de la pirámide EXCEPTO la
+  // ACTUAL de este club — petición usuario 2026-09-23 ("hazlo", tras
+  // ofrecer "un botón que limpie de golpe TODAS las divisiones
+  // antiguas de un club, no solo Liga"): un club ascendido/descendido
+  // deja colgadas en su Calendario extra las líneas de CUALQUIER
+  // división por la que ya pasó, no solo la legacy "Liga" — este es el
+  // conjunto que
+  // js/estado.js::filtrarDivisionesAntiguasDeCalendarioExtraTexto quita
+  // de un golpe. "1ª REF" y "Ligue 1" comparten el MISMO compKey
+  // "liga" (ver _compKeyEsperadoParaDivision) — deduplicado aquí para
+  // que, si la división actual es una de esas 2, la otra NO se
+  // considere "antigua" por error (mismo compKey, mismo texto real).
+  function compKeysDivisionesAntiguas(clubId) {
+    var actual = _compKeyEsperadoParaDivision(_divisionActualClub(clubId));
+    var vistos = {};
+    var out = [];
+    LIGA_NAV_ORDEN.forEach(function (ligaId) {
+      var ck = _compKeyEsperadoParaDivision(ligaId);
+      if (ck === actual || vistos[ck]) return;
+      vistos[ck] = true;
+      out.push(ck);
+    });
+    return out;
+  }
+
   // El texto EXACTO del ℹ️ de 1ª REF (petición usuario, verbatim). Las
   // otras 3 (2ª REF/Hypermotion/Ea Sports) tienen el suyo propio más
   // abajo (FORMATO_LIGA_EXTRA_TEXTO).
@@ -11032,19 +11057,23 @@
     textarea.value = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(clubId) : "";
     contenedor.appendChild(textarea);
 
-    // "Liga" (Liga EA Sports, la categoría máxima) nunca caduca sola en
-    // este texto libre — tras un ascenso/descenso, las líneas de la
-    // temporada anterior se quedan colgadas hasta que se borran a mano.
-    // Este botón solo EDITA el <textarea> de arriba (nada se guarda
-    // todavía) — el admin revisa el resultado y pulsa 💾 Guardar, o ✕
-    // Cancelar si se ha equivocado de club. Ver
-    // Estado.filtrarLigaDeCalendarioExtraTexto / js/main.js::limpiarLigaCalendarioExtraClub.
+    // Ninguna división de la pirámide (2ª REF/1ª REF/Hypermotion/Ea
+    // Sports/Ligue 1) caduca sola en este texto libre — tras un
+    // ascenso/descenso, las líneas de TEMPORADAS ANTERIORES (de
+    // CUALQUIER división por la que este club ya pasó, no solo "Liga")
+    // se quedan colgadas hasta que se borran a mano. Este botón solo
+    // EDITA el <textarea> de arriba (nada se guarda todavía) — el admin
+    // revisa el resultado y pulsa 💾 Guardar, o ✕ Cancelar si se ha
+    // equivocado de club. Ver
+    // Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto /
+    // js/main.js::limpiarDivisionesAntiguasCalendarioExtraClub.
     var limpiar = document.createElement("button");
     limpiar.type = "button";
     limpiar.className = "btn-ghost";
-    limpiar.dataset.accion = "limpiar-liga-calendario-extra-club";
-    limpiar.textContent = "🧹 Quitar Liga de temporada anterior";
-    limpiar.title = "Borra del texto de arriba TODAS las líneas «Liga - ...» (Hypermotion/1ª RFEF/Copa/Recopa/Torneo Verano/etc no se tocan). Recuerda pulsar 💾 Guardar después.";
+    limpiar.dataset.accion = "limpiar-divisiones-antiguas-calendario-extra-club";
+    limpiar.dataset.clubId = clubId;
+    limpiar.textContent = "🧹 Quitar divisiones antiguas";
+    limpiar.title = "Borra del texto de arriba TODAS las líneas de cualquier división de la pirámide (Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1) que YA NO sea la actual de este club (Copa/Recopa/Champions/Torneo Verano/etc no se tocan). Recuerda pulsar 💾 Guardar después.";
     contenedor.appendChild(limpiar);
 
     var acciones = document.createElement("div");
@@ -12409,6 +12438,7 @@
     guardarStatFilaOverride: guardarStatFilaOverride,
     obtenerFormatoLigaTexto: obtenerFormatoLigaTexto,
     obtenerLigaNombreCorta: obtenerLigaNombreCorta,
+    compKeysDivisionesAntiguas: compKeysDivisionesAntiguas,
     obtenerFormatoSuperligaTexto: obtenerFormatoSuperligaTexto,
     obtenerFormatoCopaTexto: obtenerFormatoCopaTexto,
     parsearLiga1RefTexto: parsearLiga1RefTexto,

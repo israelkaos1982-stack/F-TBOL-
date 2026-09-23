@@ -10180,10 +10180,25 @@
   // resuelve sus penaltis leyendo el acta (ver sistema-temporadas.js).
   function detectarModoPartido(partido) {
     // Superliga comparte el modo "liga" (nunca prórroga ni penaltis — la
-    // caja del checkbox no se pinta) — petición usuario explícita.
+    // caja del checkbox no se pinta) — petición usuario explícita. Lo
+    // mismo aplica a CUALQUIER división de la pirámide española (2ª REF/
+    // 1ª REF/Hypermotion/Ea Sports, mismos nombres «corta» que
+    // LIGA_NAV_META) y a Ligue 1 (PSG): son formato liga (tabla, se
+    // juega a 0/1/3 puntos, round-robin), nunca eliminatoria — petición
+    // usuario 2026-09-23, foto "Hypermotion · 1ª Jornada": "En los
+    // partidos de liga o donde se suman 0, 1 o 3 puntos no hay prórroga
+    // y penaltis. Solo en eliminatorias... siempre". Antes solo
+    // reconocía el texto literal "Liga"/"Superliga", así que cualquier
+    // otra división de la pirámide caía por defecto en
+    // "eliminatoria-unica" y pintaba la casilla OBLIGATORIA de prórroga
+    // en un partido de tabla normal.
     if (partido.competicion) {
       var compNorm = _normNombre(partido.competicion);
       if (compNorm === "liga" || compNorm === "superliga") return "liga";
+      var esDivisionPiramide = Object.keys(LIGA_NAV_META).some(function (ligaId) {
+        return _normNombre(LIGA_NAV_META[ligaId].corta) === compNorm;
+      });
+      if (esDivisionPiramide) return "liga";
     }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
     // Fase de grupos de Champions/Europa League/Conference League:

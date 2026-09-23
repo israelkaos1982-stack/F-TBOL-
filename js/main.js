@@ -508,6 +508,41 @@
     ta.value = r.conservar.join("\n");
   }
 
+  // Corrección de UN SOLO USO (candado
+  // ef7_fixup_atleti_divisiones_antiguas_v1): reporte usuario 2026-09-23
+  // (fotos de la Plantilla del Atlético Madrid, "Pichichi: A. Sørloth:
+  // 24 / MVP: A. Sørloth: 7" pese a llevar solo 2 partidos jugados en
+  // Hypermotion, y "sigue igual" tras el fix de la sección anterior) —
+  // el club fue descendido a Hypermotion pero su Calendario extra seguía
+  // lleno de líneas de "Liga" (la división en la que jugaba la temporada
+  // pasada) con el marcador ya pegado, así que calcularStatsRosterClub
+  // las seguía sumando a la Plantilla. El botón "🧹 Quitar divisiones
+  // antiguas" del editor de Calendario extra hace justo esto, pero
+  // necesita que el admin lo encuentre y lo pulse a mano — se aplica
+  // aquí UNA VEZ, automáticamente, para este club concreto (mismo
+  // mecanismo de candado que js/estado.js::_fixupAtletiOblakDorsalV1),
+  // para que la Plantilla quede a 0 de la temporada pasada sin que el
+  // admin tenga que hacer nada. `{forzar:true}` salta tanto el confirm()
+  // del guard anti-encogimiento como el guard de regresión del servidor
+  // — quitar de un golpe todas las líneas de Liga de una temporada
+  // entera es justo el patrón que esos guards tratan por defecto como
+  // "copia vieja pisando la buena" (ver reiniciarPiramideCompleta, mismo
+  // motivo).
+  var FIXUP_ATLETI_DIVISIONES_ANTIGUAS_KEY = "ef7_fixup_atleti_divisiones_antiguas_v1";
+  function _fixupAtletiDivisionesAntiguasV1() {
+    try {
+      if (localStorage.getItem(FIXUP_ATLETI_DIVISIONES_ANTIGUAS_KEY)) return;
+      if (!window.Estado || !window.Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto || !window.Renderizadores) return;
+      var clubId = "atletico-madrid";
+      var texto = window.Estado.obtenerCalendarioExtraTexto(clubId);
+      var r = window.Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto(texto, clubId);
+      if (r.n > 0) window.Estado.guardarCalendarioExtraTexto(clubId, r.conservar.join("\n"), { forzar: true });
+      localStorage.setItem(FIXUP_ATLETI_DIVISIONES_ANTIGUAS_KEY, "1");
+    } catch (err) {
+      console.error("[main] fixup atleti-divisiones-antiguas:", err);
+    }
+  }
+
   // ---------- Plantilla (roster real) del club (candado 646) ----------
   function guardarPlantillaClub(clubId) {
     var ta = document.getElementById("plantilla-club-textarea");
@@ -1800,6 +1835,8 @@
       window.Renderizadores.renderizarInicioEquipos();
       window.Renderizadores.pintarTemporada();
     }
+
+    _fixupAtletiDivisionesAntiguasV1();
 
     // Recalcula el hueco de la cabecera fija si gira el móvil / cambia
     // el tamaño de letra del sistema mientras la caja del club está abierta.

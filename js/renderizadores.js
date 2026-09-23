@@ -1414,7 +1414,8 @@
   // extra a la que se haya ascendido/descendido un club (ver
   // calcularLigaExtraFilasConHumano, más abajo) — mismo criterio exacto,
   // solo cambia QUÉ humanos y QUÉ texto pegado se le pasan.
-  function _combinarClasificacionConHumanos(equiposHumanos, texto, datos) {
+  function _combinarClasificacionConHumanos(equiposHumanos, texto, datos, compKeyEsperado) {
+    compKeyEsperado = compKeyEsperado || "liga";
     var idsHumanos = {};
     equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
     var filas = [];
@@ -1441,7 +1442,7 @@
       // como si hubiera jugado y ganado 5 veces). Filtrando a los
       // partidos de ESTE club, cada partido se cuenta UNA sola vez.
       var partidos = todosPartidos.filter(function (p) {
-        return p.jugado && p.resultado && p.competicion === "liga" && p.liga === e.ligaActual &&
+        return p.jugado && p.resultado && _partidoPerteneceADivision(p, e, compKeyEsperado) &&
           (p.local === e.id || p.visitante === e.id);
       });
 
@@ -1489,7 +1490,7 @@
 
   function calcularLiga1RefCombinada(datos) {
     var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
-    return _combinarClasificacionConHumanos(_liga1RefEquiposHumanos(datos), texto, datos);
+    return _combinarClasificacionConHumanos(_liga1RefEquiposHumanos(datos), texto, datos, "liga");
   }
 
   // Zona de ascenso/descenso por POSICIÓN ABSOLUTA — el ascenso (1-4) y la
@@ -1598,7 +1599,8 @@
   // (comportamiento de siempre); se pasa explícito para reutilizar esta
   // misma función con los clubes ascendidos/descendidos a otra división
   // (ver calcularLigaExtraStatsHumanos, más abajo).
-  function calcularLiga1RefStatsHumanos(datos, equiposHumanos) {
+  function calcularLiga1RefStatsHumanos(datos, equiposHumanos, compKeyEsperado) {
+    compKeyEsperado = compKeyEsperado || "liga";
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
 
     function sumar(bucket, nombre, equipo, equipoId, n) {
@@ -1634,7 +1636,7 @@
       // ligaActual="LIGA_EA_SPORTS"), el partido de un club se procesaba
       // también en el bucle de los otros 4, multiplicando el conteo.
       var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
-        return p.jugado && p.competicion === "liga" && p.liga === e.ligaActual &&
+        return p.jugado && _partidoPerteneceADivision(p, e, compKeyEsperado) &&
           (p.local === e.id || p.visitante === e.id);
       });
 
@@ -1879,6 +1881,42 @@
   function obtenerLigaNombreCorta(ligaId) {
     var meta = LIGA_NAV_META[ligaId] || LIGA_NAV_META["1ref"];
     return meta.corta;
+  }
+
+  // El compKey que llega a `p.competicion` (ya RESUELTO por
+  // resolverCompKeyPartido/_resolverCompKeyBalon, ver
+  // js/estado.js::_partidosExtraDeTodosLosClubes) para los partidos de
+  // CADA división de la pirámide — "1ª REF" es la división LEGACY (el
+  // admin sigue tecleando "Liga" en Calendario extra, nunca "1ª REF",
+  // mismo alias de toda la vida); Ligue 1 (PSG) también resuelve a
+  // "liga" (alias explícito de _BALON_COMP_ALIAS). El resto (2ª REF/
+  // Hypermotion/Ea Sports) no tiene alias — su compKey es el propio
+  // nombre «corta» de LIGA_NAV_META normalizado, tal cual lo teclea el
+  // admin ("Hypermotion" -> "hypermotion").
+  //
+  // Petición usuario 2026-09-23, foto "Hypermotion" con Atl. Madrid a
+  // 0 PJ/0 pts pese a 2 partidos ya jugados: `_combinarClasificacionConHumanos`/
+  // `calcularLiga1RefStatsHumanos` filtraban SIEMPRE por el literal
+  // "liga", así que ningún partido de Hypermotion (compKey "hypermotion",
+  // no "liga") llegaba a sumarse a la clasificación ni a las
+  // estadísticas de un club recién ascendido/descendido a esa división.
+  var LIGA_NAV_COMPKEY_LEGACY = { "1ref": "liga", ligue1: "liga" };
+  function _compKeyEsperadoParaDivision(ligaId) {
+    if (LIGA_NAV_COMPKEY_LEGACY.hasOwnProperty(ligaId)) return LIGA_NAV_COMPKEY_LEGACY[ligaId];
+    var meta = LIGA_NAV_META[ligaId];
+    return meta ? _normNombre(meta.corta) : ligaId;
+  }
+  // ¿Este partido YA jugado pertenece a la división `compKeyEsperado`?
+  // La división "liga" (legacy — 1ª REF/Ligue 1) necesita ADEMÁS
+  // `p.liga === e.ligaActual` (varios humanos pueden compartir el MISMO
+  // compKey "liga" pero jugar ligas DISTINTAS — ver el comentario de
+  // _combinarClasificacionConHumanos); el resto de divisiones tiene su
+  // PROPIO compKey exclusivo, así que basta comparar `p.competicion`
+  // (normalizado, por si quedó sin alias y llegó con la grafía cruda
+  // tal cual la tecleó el admin — "2ª REF"/"2ª ref"/etc).
+  function _partidoPerteneceADivision(p, e, compKeyEsperado) {
+    if (compKeyEsperado === "liga") return p.competicion === "liga" && p.liga === e.ligaActual;
+    return _normNombre(p.competicion) === compKeyEsperado;
   }
 
   // El texto EXACTO del ℹ️ de 1ª REF (petición usuario, verbatim). Las
@@ -2246,7 +2284,7 @@
     var equiposHumanos = _equiposHumanosEnDivisionExtra(ligaId, datos);
     if (!equiposHumanos.length) return calcularLigaExtraFilas(ligaId);
     var textoDivision = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
-    return _combinarClasificacionConHumanos(equiposHumanos, textoDivision, datos);
+    return _combinarClasificacionConHumanos(equiposHumanos, textoDivision, datos, _compKeyEsperadoParaDivision(ligaId));
   }
 
   // Camino histórico de "Ligue 1" (PSG, el único club fuera de la
@@ -2423,7 +2461,7 @@
   // calcularLigaExtraStatFilas sepa que no hay nada que fusionar.
   function calcularLigaExtraStatsHumanos(ligaId, datos) {
     var equiposHumanos = _equiposHumanosEnDivisionExtra(ligaId, datos);
-    return equiposHumanos.length ? calcularLiga1RefStatsHumanos(datos, equiposHumanos) : null;
+    return equiposHumanos.length ? calcularLiga1RefStatsHumanos(datos, equiposHumanos, _compKeyEsperadoParaDivision(ligaId)) : null;
   }
 
   // Ranking (top 15) de UNA categoría — pinta DENTRO del mismo contenedor

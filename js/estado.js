@@ -1621,35 +1621,46 @@
     return n;
   }
 
-  // Quita del texto del Calendario extra TODAS las líneas de "Liga" (Liga
-  // EA Sports, la categoría máxima) — pensado para limpiar de un golpe los
-  // enfrentamientos de la TEMPORADA ANTERIOR que se quedan colgados tras
-  // un ascenso/descenso (reporte usuario 2026-09-22, "nueva temporada,
-  // nuevo calendario, sigue habiendo enfrentamientos humano vs humano de
-  // la Liga del año pasado" — Liverpool ascendido a Hypermotion seguía
-  // mostrando "Liga - 2ª Jornada - Real Madrid" etc.). Esta app no tiene
-  // ningún concepto de "temporada" dentro del texto libre del Calendario
-  // extra — una línea tecleada NUNCA caduca sola, solo desaparece si se
-  // borra a mano (ver comentario de reiniciarCalendarioExtraJugados, un
-  // poco más arriba) — así que el único modo de "limpiar la Liga vieja"
-  // es quitar esas líneas del texto.
+  // Quita del texto del Calendario extra TODAS las líneas de una división
+  // de la pirámide española que YA NO sea la ACTUAL de este club — pensado
+  // para limpiar de un golpe los enfrentamientos de TEMPORADAS ANTERIORES
+  // que se quedan colgados tras un ascenso/descenso (reporte usuario
+  // 2026-09-22, "nueva temporada, nuevo calendario, sigue habiendo
+  // enfrentamientos humano vs humano de la Liga del año pasado" —
+  // Liverpool ascendido a Hypermotion seguía mostrando "Liga - 2ª
+  // Jornada - Real Madrid" etc.; y 2026-09-23, "sigue las estadísticas
+  // de la temporada pasada" — Atl. Madrid descendido a Hypermotion
+  // seguía arrastrando los goles/tarjetas de cuando jugaba en Liga).
+  // Esta app no tiene ningún concepto de "temporada" dentro del texto
+  // libre del Calendario extra — una línea tecleada NUNCA caduca sola,
+  // solo desaparece si se borra a mano (ver comentario de
+  // reiniciarCalendarioExtraJugados, un poco más arriba) — así que el
+  // único modo de "limpiar la división vieja" es quitar esas líneas del
+  // texto.
   //
   // Función PURA (no toca localStorage): el botón que la usa (ver
-  // js/main.js::limpiarLigaCalendarioExtraClub) solo edita el <textarea>
-  // en pantalla con el resultado — el admin sigue teniendo que pulsar
-  // 💾 Guardar para confirmar el cambio, exactamente igual que cualquier
-  // otra edición manual del texto (y puede pulsar ✕ Cancelar para
-  // deshacerlo sin haber tocado nada guardado).
+  // js/main.js::limpiarDivisionesAntiguasCalendarioExtraClub) solo edita
+  // el <textarea> en pantalla con el resultado — el admin sigue teniendo
+  // que pulsar 💾 Guardar para confirmar el cambio, exactamente igual que
+  // cualquier otra edición manual del texto (y puede pulsar ✕ Cancelar
+  // para deshacerlo sin haber tocado nada guardado).
   //
-  // Solo quita líneas cuya competición normaliza a "liga" (mismo alias
-  // que ya usa parsearPartidosExtraTexto/generarCalendarioLateralDerecho
-  // vía Renderizadores.resolverCompKeyPartido) — Hypermotion/1ª RFEF/
-  // Copa/Recopa/Torneo Verano/etc, con SU PROPIO nombre de competición,
-  // nunca se tocan. Devuelve {conservar: [líneas que sobreviven, en
-  // orden], n: cuántas se quitaron}.
-  function filtrarLigaDeCalendarioExtraTexto(texto) {
+  // GENERALIZA la versión anterior (que solo quitaba "Liga") a las 5
+  // divisiones de la pirámide (2ª REF/1ª REF/Hypermotion/Ea Sports/
+  // Ligue 1, ver js/renderizadores.js::LIGA_NAV_ORDEN): quita CUALQUIERA
+  // de ellas que NO sea la división ACTUAL del club
+  // (Renderizadores.compKeysDivisionesAntiguas, mismo alias que ya usa
+  // parsearPartidosExtraTexto/generarCalendarioLateralDerecho vía
+  // Renderizadores.resolverCompKeyPartido). Copa/Recopa/Champions/
+  // Torneo Verano/etc, fuera de la pirámide, nunca se tocan. Devuelve
+  // {conservar: [líneas que sobreviven, en orden], n: cuántas se
+  // quitaron}.
+  function filtrarDivisionesAntiguasDeCalendarioExtraTexto(texto, clubId) {
     var R = window.Renderizadores;
     var resolverCompKey = (R && R.resolverCompKeyPartido) || function (c) { return c; };
+    var antiguas = (R && R.compKeysDivisionesAntiguas) ? R.compKeysDivisionesAntiguas(clubId) : [];
+    var antiguasSet = {};
+    antiguas.forEach(function (ck) { antiguasSet[_normTxtExtra(ck)] = true; });
     var n = 0;
     var conservar = String(texto || "").split("\n").filter(function (linea) {
       var l = linea.trim().replace(/^\d+[.)]\s*/, "");
@@ -1658,9 +1669,9 @@
       // menos "Competición - Ronda" no es una línea de partido reconocible.
       var partes = l.split(/\s+-\s*|\s*-\s+/);
       if (partes.length < 2) return true;
-      var esLiga = resolverCompKey(partes[0].trim()) === "liga";
-      if (esLiga) n++;
-      return !esLiga;
+      var esAntigua = antiguasSet.hasOwnProperty(_normTxtExtra(resolverCompKey(partes[0].trim())));
+      if (esAntigua) n++;
+      return !esAntigua;
     });
     return { conservar: conservar, n: n };
   }
@@ -3580,7 +3591,7 @@
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
     reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,
-    filtrarLigaDeCalendarioExtraTexto: filtrarLigaDeCalendarioExtraTexto,
+    filtrarDivisionesAntiguasDeCalendarioExtraTexto: filtrarDivisionesAntiguasDeCalendarioExtraTexto,
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerTitulosTemporadaTexto: obtenerTitulosTemporadaTexto,

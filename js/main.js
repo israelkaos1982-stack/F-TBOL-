@@ -475,26 +475,35 @@
     cerrarModalClub();
   }
 
-  // Botón "🧹 Quitar Liga de temporada anterior" del editor de Calendario
-  // extra (ver js/renderizadores.js::pintarEditorCalendarioExtraClub) —
-  // borra del <textarea> EN PANTALLA todas las líneas «Liga - ...» (Liga
-  // EA Sports), típicas de quedarse colgadas tras un ascenso/descenso.
-  // Solo toca lo que hay escrito AHORA MISMO en el textarea (no lo ya
-  // guardado, por si el admin tenía cambios sin guardar a medio
-  // escribir) y NO persiste nada — el admin sigue teniendo que pulsar
-  // 💾 Guardar (o ✕ Cancelar si se equivocó de club/quiere deshacerlo).
-  function limpiarLigaCalendarioExtraClub() {
+  // Botón "🧹 Quitar divisiones antiguas" del editor de Calendario extra
+  // (ver js/renderizadores.js::pintarEditorCalendarioExtraClub) — borra
+  // del <textarea> EN PANTALLA todas las líneas de CUALQUIER división de
+  // la pirámide (Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1) que YA NO
+  // sea la división ACTUAL de este club, típicas de quedarse colgadas
+  // tras un ascenso/descenso (generaliza el botón anterior, que solo
+  // quitaba "Liga" — petición usuario 2026-09-23, tras el reporte de que
+  // la Plantilla seguía sumando goles/tarjetas de la Liga de la
+  // temporada pasada aunque el club ya jugara en Hypermotion). Solo toca
+  // lo que hay escrito AHORA MISMO en el textarea (no lo ya guardado, por
+  // si el admin tenía cambios sin guardar a medio escribir) y NO
+  // persiste nada — el admin sigue teniendo que pulsar 💾 Guardar (o
+  // ✕ Cancelar si se equivocó de club/quiere deshacerlo).
+  function limpiarDivisionesAntiguasCalendarioExtraClub(clubId) {
     var ta = document.getElementById("calendario-extra-club-textarea");
-    if (!ta || !window.Estado || !window.Estado.filtrarLigaDeCalendarioExtraTexto) return;
-    var r = window.Estado.filtrarLigaDeCalendarioExtraTexto(ta.value);
+    if (!ta || !window.Estado || !window.Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto) return;
+    var r = window.Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto(ta.value, clubId);
+    var R = window.Renderizadores;
+    var divisionActual = (R && R.obtenerLigaNombreCorta && window.Estado.obtenerDivisionHumano)
+      ? R.obtenerLigaNombreCorta(window.Estado.obtenerDivisionHumano(clubId)) : "tu división actual";
     if (!r.n) {
-      window.alert('No hay ninguna línea de "Liga" en el texto actual.');
+      window.alert("No hay ninguna línea de una división anterior a " + divisionActual + " en el texto actual.");
       return;
     }
     if (!window.confirm(
-      "Se van a quitar " + r.n + " línea(s) de \"Liga\" (Liga EA Sports) del texto de abajo — " +
-      "Hypermotion/1ª RFEF/Copa/Recopa/Torneo Verano/etc no se tocan. Pulsa 💾 Guardar después " +
-      "para confirmar el cambio. ¿Continuar?"
+      "Se van a quitar " + r.n + " línea(s) de divisiones anteriores de la pirámide española (" +
+      divisionActual + " es tu división actual, no se toca) del texto de abajo — Copa/Recopa/" +
+      "Champions/Torneo Verano/etc tampoco se tocan. Pulsa 💾 Guardar después para confirmar el " +
+      "cambio. ¿Continuar?"
     )) return;
     ta.value = r.conservar.join("\n");
   }
@@ -1951,7 +1960,7 @@
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
-        case "limpiar-liga-calendario-extra-club": limpiarLigaCalendarioExtraClub(); break;
+        case "limpiar-divisiones-antiguas-calendario-extra-club": limpiarDivisionesAntiguasCalendarioExtraClub(d.clubId); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;

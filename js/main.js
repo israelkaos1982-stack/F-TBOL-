@@ -543,6 +543,49 @@
     }
   }
 
+  // Corrección de UN SOLO USO, más profunda (candado
+  // ef7_fixup_atleti_reset_resultados_v1): el fixup anterior solo quita
+  // líneas de DIVISIONES antiguas del texto de Calendario extra (Liga/2ª
+  // REF/Hypermotion-vieja/Ea Sports/Ligue 1) — a propósito nunca toca
+  // Copa/Recopa/Champions/Torneo Verano/etc, porque esas no tienen el
+  // concepto de "división antigua". El usuario reportó 3 veces (la
+  // última con fotos exactas de los ÚNICOS 4 partidos que deben contar:
+  // Hypermotion J1/J2/J3 + Copa del Rey 1ª Ronda) que la Plantilla
+  // seguía mostrando totales absurdos (65 goles/19 amarillas/5 rojas) —
+  // muy por encima de esos 4 partidos — porque el texto de Calendario
+  // extra de este club sigue lleno de líneas de temporadas ANTERIORES en
+  // Copa/Recopa/Champions/Torneo Verano y demás, que el fixup anterior
+  // nunca tocaba.
+  //
+  // No se puede reconstruir el texto adivinando SOLO esas 4 líneas: el id
+  // de cada línea es un hash de competición+ronda+rival tal cual lo
+  // tecleó el admin — si se adivina mal la redacción exacta, el
+  // resultado YA jugado (con su acta real) queda huérfano bajo el id
+  // viejo, y el partido re-creado con el id nuevo aparece "sin jugar".
+  // La única vía fiable de garantizar "solo estas 4" sin arriesgar ese
+  // huérfano es la MISMA que ya ofrece el botón manual "🔄 Reiniciar
+  // temporada de este club" (pestaña ⚙️ Ajustes, ver
+  // reiniciarTodosPartidosClub/Estado.reiniciarResultadosDeClub más
+  // arriba): pone a "sin jugar" TODOS los resultados ya confirmados de
+  // este club en CUALQUIER competición (excepto Superliga, que tiene su
+  // propio ciclo, y los partidos HvH compartidos con otro humano, que
+  // este botón nunca toca por defecto) — el calendario en sí (rivales,
+  // fechas, competiciones) NO se borra, solo el marcador/acta. Los 4
+  // partidos de las fotos volverán a aparecer como "sin jugar" y habrá
+  // que volver a registrarlos — es el precio de la garantía total que
+  // pide el usuario ("solo tienen que salir estas estadísticas").
+  var FIXUP_ATLETI_RESET_RESULTADOS_KEY = "ef7_fixup_atleti_reset_resultados_v1";
+  function _fixupAtletiResetResultadosV1() {
+    try {
+      if (localStorage.getItem(FIXUP_ATLETI_RESET_RESULTADOS_KEY)) return;
+      if (!window.Estado || !window.Estado.reiniciarResultadosDeClub) return;
+      window.Estado.reiniciarResultadosDeClub("atletico-madrid", ["superliga"], false);
+      localStorage.setItem(FIXUP_ATLETI_RESET_RESULTADOS_KEY, "1");
+    } catch (err) {
+      console.error("[main] fixup atleti-reset-resultados:", err);
+    }
+  }
+
   // ---------- Plantilla (roster real) del club (candado 646) ----------
   function guardarPlantillaClub(clubId) {
     var ta = document.getElementById("plantilla-club-textarea");
@@ -1837,6 +1880,7 @@
     }
 
     _fixupAtletiDivisionesAntiguasV1();
+    _fixupAtletiResetResultadosV1();
 
     // Recalcula el hueco de la cabecera fija si gira el móvil / cambia
     // el tamaño de letra del sistema mientras la caja del club está abierta.

@@ -4241,98 +4241,6 @@
     return datos.equipos.equipos || [];
   }
 
-  // Partidos de Torneo de Verano de UN club, ordenados por fecha — mismo
-  // criterio EXACTO que _interPartidosDelClub/_recopaPartidosDelClub.
-  // `competicion==="verano"` ya sale normalizado de Calendario extra
-  // (_BALON_COMP_ALIAS: "Torneo de Verano"/"Torneos de Verano" tecleado
-  // por el admin siempre cuadra con este ===).
-  function _veranoPartidosDelClub(datos, clubId) {
-    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
-      .filter(function (p) {
-        return p.competicion === "verano" && (p.local === clubId || p.visitante === clubId);
-      })
-      .sort(function (a, b) {
-        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
-        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
-        return ta - tb;
-      });
-  }
-
-  // Recorre, para cada club humano, sus propios partidos de Torneo de
-  // Verano ya jugados y suma goles/MVP/amarillas/rojas por jugador —
-  // mismo criterio EXACTO que calcularInterStatsHumanos, con su PROPIO
-  // acumulado (nunca comparte contador con ninguna otra competición).
-  function calcularVeranoStatsHumanos(datos) {
-    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
-
-    function sumar(bucket, nombre, equipo, equipoId, n) {
-      if (!n) return;
-      var key = _normNombre(nombre);
-      if (!key) return;
-      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
-      bucket[key].cantidad += n;
-    }
-    function sumarFila(fila, nombre, equipo, equipoId) {
-      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
-      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
-      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
-      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
-    }
-
-    _veranoEquiposHumanos(datos).forEach(function (e) {
-      var nombresPorId = {};
-      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
-
-      _veranoPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
-        var oponenteId = p.local === e.id ? p.visitante : p.local;
-        (p.jug || []).forEach(function (fila) {
-          if (!fila.j) return;
-          if (fila.e === e.id) {
-            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
-            sumarFila(fila, nombreJ, e.nombre, e.id);
-          } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
-          }
-        });
-      });
-    });
-
-    var salida = {};
-    Object.keys(acumulado).forEach(function (k) {
-      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
-    });
-    return salida;
-  }
-
-  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
-  // top 15 — mismo criterio que calcularInterStatsCombinado, sobre el
-  // almacén propio de Torneo de Verano (Estado.obtenerVeranoStatTexto).
-  function calcularVeranoStatsCombinado(datos, categoria) {
-    var texto = window.Estado ? window.Estado.obtenerVeranoStatTexto(categoria) : "";
-    var filas = _fusionarStatFilasConOverride(
-      parsearLiga1RefStatTexto(texto),
-      calcularVeranoStatsHumanos(datos)[categoria] || []
-    );
-
-    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
-  }
-
-  // Bloque "estado del Torneo de Verano" de UN club — mismo cálculo
-  // EXACTO que _interEstadoClub/_recopaEstadoClub (reutiliza el mismo
-  // _estadoRondasEliminacion, genérico por competición). Devuelve null si
-  // el club no tiene ningún partido de este torneo todavía.
-  function _veranoEstadoClub(datos, e) {
-    var partidos = _veranoPartidosDelClub(datos, e.id);
-    if (!partidos.length) return null;
-    var ultima = partidos[partidos.length - 1];
-    var estado = _estadoRondasEliminacion(partidos, e.id);
-    return {
-      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
-      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
-    };
-  }
-
   // Texto EXACTO del ℹ️ del Torneo de Verano — 4 rondas, TODAS a partido
   // único con prórroga y penaltis (nunca ida+vuelta).
   var FORMATO_VERANO_TEXTO = [
@@ -4353,75 +4261,15 @@
     return override || FORMATO_VERANO_TEXTO;
   }
 
-  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
-  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
-  // criterio EXACTO que _interAppendStatsGrid.
-  var VERANO_STATS = [
-    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
-    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
-    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
-  ];
-
-  function _veranoAppendStatsGrid(contenedor, idClubActivo) {
-    contenedor.appendChild(nodoSeparador());
-    contenedor.appendChild(nodoTituloEstadisticas());
-
-    var statsGrid = document.createElement("div");
-    statsGrid.className = "liga1ref-stats-grid";
-    statsGrid.innerHTML = VERANO_STATS.map(function (s) {
-      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-verano-stat" data-club-id="' +
-        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
-        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
-    }).join("");
-    contenedor.appendChild(statsGrid);
-  }
-
-  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
-  // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental ----------
-  var _veranoTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
-
-  function _veranoTabsHTML(idClubActivo) {
-    return (
-      '<div class="liga-tab-boxes copa-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
-      (_veranoTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="verano-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_veranoTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="verano-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
-      "</div>"
-    );
-  }
-
-  // Pestaña 👥️ Humanos — el cuadro completo (Octavos → Final) de CADA
-  // club humano, uno debajo del otro — mismo patrón EXACTO que
-  // _renderizarInterHumanos, reutilizando _copaBloqueClubHTML tal cual
-  // (genérico, no hardcodea "copa"/"recopa"/"intercontinental").
-  function _renderizarVeranoHumanos(contenedor, datos, idClubActivo) {
-    var equiposHumanos = _veranoEquiposHumanos(datos).slice().sort(function (a, b) {
-      if (a.id === idClubActivo) return -1;
-      if (b.id === idClubActivo) return 1;
-      return a.nombre.localeCompare(b.nombre);
-    });
-
-    var bloques = equiposHumanos
-      .map(function (e) { return _veranoEstadoClub(datos, e); })
-      .filter(Boolean);
-
-    if (!bloques.length) {
-      contenedor.appendChild(nodoEstado("☀️", "Todavía no hay partidos del Torneo de Verano. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «Torneo de Verano»)."));
-    } else {
-      bloques.forEach(function (b, bi) {
-        if (bi > 0) contenedor.appendChild(nodoSeparador());
-        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
-      });
-    }
-
-    _veranoAppendStatsGrid(contenedor, idClubActivo);
-  }
-
-  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO desde Octavos ----------
+  // ---------- ⛓️ Eliminatorias — cuadro ÚNICO desde Octavos, ÚNICA
+  // pantalla del Torneo de Verano (sin pestañas, sin Estadísticas —
+  // petición usuario: "se quitan todas las estadísticas y quitamos
+  // apartado humano / Todos las eliminatorias en la caja eliminatorias /
+  // Ahi salen partidos IA vs IA, humano vs Humano e IA vs humano / Los
+  // humanos en la caja que corresponde con el texto TU"). El propio
+  // cuadro de abajo YA mezcla los 3 tipos de cruce (auto-computados de
+  // cualquier club humano + los que pega el admin en texto libre) y
+  // _championsTieRowHTML ya marca "TÚ" junto al club activo. ----------
   // Octavos YA es la primera ronda del cuadro de 16 clubes (igual que
   // Intercontinental) — las 4 rondas se ven todas aquí.
   var VERANO_PLAYOFF_RONDAS = [
@@ -4535,10 +4383,11 @@
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
       "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
     ));
-
-    _veranoAppendStatsGrid(contenedor, idClubActivo);
   }
 
+  // Única pantalla del Torneo de Verano — SIN pestañas (petición usuario:
+  // fuera el apartado 👥️ Humanos y las Estadísticas, todo va en la caja
+  // ⛓️ Eliminatorias).
   function renderizarVerano(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -4547,110 +4396,8 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
-      contenedor.insertAdjacentHTML("beforeend", _veranoTabsHTML(idClubActivo));
-
-      if (_veranoTabActual === "eliminatorias") _renderizarVeranoEliminatorias(contenedor, datos, idClubActivo);
-      else _renderizarVeranoHumanos(contenedor, datos, idClubActivo);
+      _renderizarVeranoEliminatorias(contenedor, datos, idClubActivo);
     });
-  }
-
-  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
-  // punto que toca `_veranoTabActual`, mismo patrón que irInterTab.
-  function irVeranoTab(idClubActivo, tab) {
-    _veranoTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
-    renderizarVerano("verano-content", idClubActivo);
-  }
-
-  // Ranking (top 15) de UNA categoría del Torneo de Verano — mismo patrón
-  // exacto que renderizarInterStatDetalle.
-  function renderizarVeranoStatDetalle(contenedorId, idClubActivo, categoria) {
-    var contenedor = document.getElementById(contenedorId);
-    if (!contenedor) return;
-    var meta = VERANO_STATS.filter(function (s) { return s.key === categoria; })[0];
-    if (!meta) return;
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
-
-    cargarTodo().then(function (datos) {
-      contenedor.innerHTML = "";
-
-      var header = document.createElement("div");
-      header.className = "liga1ref-header";
-      header.innerHTML =
-        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-verano" data-club-id="' +
-        (idClubActivo || "") + '">← Volver</button>' +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-verano-stat-inline" data-club-id="' +
-        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
-      contenedor.appendChild(header);
-
-      var titulo = document.createElement("p");
-      titulo.className = "liga1ref-stat-titulo";
-      titulo.textContent = meta.icono + " " + meta.label;
-      contenedor.appendChild(titulo);
-
-      var filas = calcularVeranoStatsCombinado(datos, categoria);
-      if (!filas.length) {
-        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
-        return;
-      }
-
-      var wrap = document.createElement("div");
-      wrap.className = "clasificacion-wrap";
-      var tablaEl = document.createElement("table");
-      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
-      var tbody = document.createElement("tbody");
-      filas.forEach(function (f, i) {
-        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
-        var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
-        tr.innerHTML =
-          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
-          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
-          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
-          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
-          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("verano", "", categoria, idClubActivo, f, meta) + "</td>";
-        tbody.appendChild(tr);
-      });
-      tablaEl.appendChild(tbody);
-      wrap.appendChild(tablaEl);
-      contenedor.appendChild(wrap);
-    });
-  }
-
-  // Editor inline de UNA categoría de estadística del Torneo de Verano
-  // (PIN 646) — mismo patrón exacto que pintarEditorInterStat.
-  function pintarEditorVeranoStat(contenedor, idClubActivo, categoria) {
-    var meta = VERANO_STATS.filter(function (s) { return s.key === categoria; })[0];
-    if (!meta) return;
-    contenedor.innerHTML = "";
-
-    var nota = document.createElement("p");
-    nota.className = "admin-nota";
-    nota.textContent =
-      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
-      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
-      "humanas se suman SOLOS al añadir eventos en un partido del Torneo de Verano — no hace falta escribirlos aquí, " +
-      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
-      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
-      "sumarse aparte.";
-    contenedor.appendChild(nota);
-
-    var textarea = document.createElement("textarea");
-    textarea.id = "verano-stat-textarea";
-    textarea.className = "admin-roadmap-textarea";
-    textarea.rows = 14;
-    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
-    textarea.value = window.Estado ? window.Estado.obtenerVeranoStatTexto(categoria) : "";
-    contenedor.appendChild(textarea);
-
-    var acciones = document.createElement("div");
-    acciones.className = "admin-roadmap-editor-acciones";
-    acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-verano-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-verano-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
-    contenedor.appendChild(acciones);
   }
 
   // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
@@ -12640,9 +12387,6 @@
     calcularInterPlayoffTodasLasRondas: calcularInterPlayoffTodasLasRondas,
     obtenerFormatoVeranoTexto: obtenerFormatoVeranoTexto,
     renderizarVerano: renderizarVerano,
-    irVeranoTab: irVeranoTab,
-    renderizarVeranoStatDetalle: renderizarVeranoStatDetalle,
-    pintarEditorVeranoStat: pintarEditorVeranoStat,
     pintarEditorVeranoPlayoff: pintarEditorVeranoPlayoff,
     calcularVeranoPlayoffTodasLasRondas: calcularVeranoPlayoffTodasLasRondas,
     obtenerFormatoUscTexto: obtenerFormatoUscTexto,

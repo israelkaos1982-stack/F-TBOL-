@@ -232,17 +232,18 @@
       );
       window.Renderizadores.irInterTab(clubId, "humanos");
     } else if (vista === "verano") {
-      // Mismo patrón EXACTO que "intercontinental" (Humanos + Eliminatorias,
-      // sin fase de grupos) — petición usuario 2026-09-15: "Creame torneo
-      // de verano, 16 equipos jugando eliminatorias como la copa del rey
-      // desde Octavos-Cuartos-Semifinal y final a partido único con
-      // prórroga y penaltis, con editor". Sin exclusión de club.
+      // SOLO ⛓️ Eliminatorias, sin pestañas ni Estadísticas — petición
+      // usuario: "se quitan todas las estadísticas y quitamos apartado
+      // humano / Todos las eliminatorias en la caja eliminatorias / Ahi
+      // salen partidos IA vs IA, humano vs Humano e IA vs humano / Los
+      // humanos en la caja que corresponde con el texto TU" (ya cubierto
+      // por _championsTieRowHTML, reutilizado por el propio cuadro).
       body.innerHTML = '<div id="verano-content"></div>';
       _pintarTituloModalInfo(
         titulo, "Torneo de Verano", "info-verano-formato", null,
         window.Renderizadores.obtenerFormatoVeranoTexto(), etiqueta
       );
-      window.Renderizadores.irVeranoTab(clubId, "humanos");
+      window.Renderizadores.renderizarVerano("verano-content", clubId);
     } else if (vista === "usc") {
       // Mismo patrón EXACTO que "verano"/"intercontinental" (Humanos +
       // Eliminatorias, sin fase de grupos) — petición usuario
@@ -940,34 +941,12 @@
     if (window.Renderizadores) window.Renderizadores.renderizarInter("inter-content", clubId);
   }
 
-  // ---------- Torneo de Verano — 👥️ Humanos + ⛓️ Eliminatorias, mismo
-  // patrón EXACTO que Copa Intercontinental (arriba), contenedor
-  // "verano-content".
-  function irVeranoTab(clubId, tab) {
-    if (window.Renderizadores) window.Renderizadores.irVeranoTab(clubId, tab);
-  }
-  function verVeranoStat(clubId, categoria) {
-    if (window.Renderizadores) window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria);
-  }
-  function volverVerano(clubId) {
-    if (window.Renderizadores) window.Renderizadores.renderizarVerano("verano-content", clubId);
-  }
-  function editarVeranoStatInline(clubId, categoria) {
-    if (!window.Renderizadores) return;
-    abrirCandado(ADMIN_PASSWORD, function () {
-      var cont = document.getElementById("verano-content");
-      if (cont) window.Renderizadores.pintarEditorVeranoStat(cont, clubId, categoria);
-    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
-  }
-  function guardarVeranoStat(clubId, categoria) {
-    var ta = document.getElementById("verano-stat-textarea");
-    if (!ta || !window.Estado || !window.Renderizadores) return;
-    if (!window.Estado.guardarVeranoStatTexto(categoria, ta.value)) return;
-    window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria);
-  }
-  function cancelarVeranoStat(clubId, categoria) {
-    if (window.Renderizadores) window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria);
-  }
+  // ---------- Torneo de Verano — SOLO ⛓️ Eliminatorias, contenedor
+  // "verano-content". Petición usuario: sin pestaña 👥️ Humanos (era
+  // redundante — el cuadro de Eliminatorias ya muestra los cruces de
+  // CUALQUIER club humano, con IA vs IA / Humano vs Humano / IA vs
+  // Humano todos mezclados y el propio con la etiqueta "TÚ") y sin
+  // caja de Estadísticas.
   function editarVeranoPlayoffInline(clubId, ronda) {
     if (!window.Renderizadores) return;
     abrirCandado(ADMIN_PASSWORD, function () {
@@ -2027,12 +2006,6 @@
         case "guardar-inter-playoff": guardarInterPlayoff(d.clubId, d.ronda); break;
         case "cancelar-inter-playoff": cancelarInterPlayoff(d.clubId); break;
         case "info-verano-formato": mostrarInfoVerano(); break;
-        case "verano-tab-ir": irVeranoTab(d.clubId, d.tab); break;
-        case "ver-verano-stat": verVeranoStat(d.clubId, d.categoria); break;
-        case "volver-verano": volverVerano(d.clubId); break;
-        case "editar-verano-stat-inline": editarVeranoStatInline(d.clubId, d.categoria); break;
-        case "guardar-verano-stat": guardarVeranoStat(d.clubId, d.categoria); break;
-        case "cancelar-verano-stat": cancelarVeranoStat(d.clubId, d.categoria); break;
         case "editar-verano-playoff-inline": editarVeranoPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-verano-playoff": guardarVeranoPlayoff(d.clubId, d.ronda); break;
         case "cancelar-verano-playoff": cancelarVeranoPlayoff(d.clubId); break;

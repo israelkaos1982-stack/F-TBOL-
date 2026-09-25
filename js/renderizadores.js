@@ -1032,6 +1032,44 @@
     return duplicados;
   }
 
+  // Quita del texto las líneas de LIGA que detectarDuplicadosLigaCalendarioExtra
+  // marca como copia de más — SIEMPRE conserva la PRIMERA aparición de cada
+  // línea repetida (misma prioridad que el id estable de parsearPartidosExtraTexto:
+  // esa es la que puede tener un resultado ya jugado en vivo, ver idsVistos)
+  // y quita solo las que sobran. Botón "🧹 Quitar jornadas duplicadas" (ver
+  // pintarEditorCalendarioExtraClub) — SOLO edita el <textarea> en pantalla,
+  // nunca persiste nada por sí sola (el admin sigue teniendo que pulsar
+  // 💾 Guardar). Devuelve { n: nº de líneas quitadas, conservar: [líneas] }.
+  function quitarDuplicadosLigaDeCalendarioExtraTexto(texto, nombreClubActivo) {
+    var aQuitar = [];
+    parsearPartidosExtraTexto(texto, nombreClubActivo, null, function (linea) { aQuitar.push(linea); });
+    var lineasCrudas = (texto || "").split("\n");
+    if (!aQuitar.length) return { n: 0, conservar: lineasCrudas };
+    function normLinea(lineaCruda) {
+      return lineaCruda.trim().replace(/^\d+[.)]\s*/, "");
+    }
+    var pendientes = {}; // nº de copias a quitar, por texto de línea
+    aQuitar.forEach(function (l) { pendientes[l] = (pendientes[l] || 0) + 1; });
+    var totales = {}; // nº de apariciones TOTALES de esa línea en el texto
+    lineasCrudas.forEach(function (lineaCruda) {
+      var l = normLinea(lineaCruda);
+      if (pendientes.hasOwnProperty(l)) totales[l] = (totales[l] || 0) + 1;
+    });
+    var vistas = {};
+    var conservar = [];
+    var quitadas = 0;
+    lineasCrudas.forEach(function (lineaCruda) {
+      var l = normLinea(lineaCruda);
+      if (pendientes.hasOwnProperty(l)) {
+        vistas[l] = (vistas[l] || 0) + 1;
+        var aConservarDeEsta = totales[l] - pendientes[l]; // siempre >= 1
+        if (vistas[l] > aConservarDeEsta) { quitadas++; return; }
+      }
+      conservar.push(lineaCruda);
+    });
+    return { n: quitadas, conservar: conservar };
+  }
+
   // Paleta AMPLIADA (8 -> 24, petición usuario: "los colores... no
   // coinciden... colisionan entre equipos distintos" — reporte con capturas
   // de un Torneo de Verano con muchos rivales europeos que este simulador
@@ -11127,6 +11165,27 @@
     limpiar.title = "Borra del texto de arriba TODAS las líneas de cualquier división de la pirámide (Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1) que YA NO sea la actual de este club (Copa/Recopa/Champions/Torneo Verano/etc no se tocan). Recuerda pulsar 💾 Guardar después.";
     contenedor.appendChild(limpiar);
 
+    // Reporte usuario 2026-09-25 (fotos: "HYPERMOTION · 33ª JORNADA" contra
+    // el mismo rival repetida 2 veces seguidas en el calendario): 2 líneas
+    // de Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1 que repiten exactamente
+    // competición+ronda+rival (copia/pega sin corregir) cuentan como 2
+    // partidos independientes, duplicando puntos/goles/PJ en la
+    // clasificación y en la Plantilla — ver aviso al Guardar
+    // (js/main.js::guardarCalendarioExtraClub). Este botón las localiza y
+    // las quita del <textarea> de arriba (SOLO en pantalla, nada se guarda
+    // todavía — el admin revisa y pulsa 💾 Guardar, o ✕ Cancelar si algo no
+    // cuadra), conservando SIEMPRE la PRIMERA aparición de cada línea
+    // repetida (la que conserva su id estable y, si el partido ya se jugó
+    // en vivo desde la app, su resultado) y quitando solo las copias de más.
+    var limpiarDup = document.createElement("button");
+    limpiarDup.type = "button";
+    limpiarDup.className = "btn-ghost";
+    limpiarDup.dataset.accion = "quitar-duplicados-liga-calendario-extra-club";
+    limpiarDup.dataset.clubId = clubId;
+    limpiarDup.textContent = "🧹 Quitar jornadas duplicadas";
+    limpiarDup.title = "Busca líneas de Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1 que repiten EXACTAMENTE la misma competición+ronda+rival que otra de arriba y quita las copias de más (se conserva siempre la primera). Recuerda pulsar 💾 Guardar después.";
+    contenedor.appendChild(limpiarDup);
+
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
@@ -12474,6 +12533,7 @@
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
     detectarLineasIgnoradasCalendarioExtra: detectarLineasIgnoradasCalendarioExtra,
     detectarDuplicadosLigaCalendarioExtra: detectarDuplicadosLigaCalendarioExtra,
+    quitarDuplicadosLigaDeCalendarioExtraTexto: quitarDuplicadosLigaDeCalendarioExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,
     renderizarPlantillaClub: renderizarPlantillaClub,

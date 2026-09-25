@@ -531,6 +531,33 @@
     ta.value = r.conservar.join("\n");
   }
 
+  // Botón "🧹 Quitar jornadas duplicadas" (ver
+  // js/renderizadores.js::pintarEditorCalendarioExtraClub) — reporte usuario
+  // 2026-09-25, fotos exactas: "HYPERMOTION · 33ª JORNADA" (Real Madrid vs
+  // Atlético Madrid) aparecía 2 veces seguidas en el calendario de AMBOS
+  // clubes, duplicando puntos/goles/PJ en la clasificación de Hypermotion y
+  // en la Plantilla. Quita del <textarea> EN PANTALLA las líneas de Liga/2ª
+  // REF/Hypermotion/Ea Sports/Ligue 1 que repiten exactamente competición+
+  // ronda+rival de otra línea de arriba, conservando SIEMPRE la primera
+  // aparición. Solo toca lo que hay escrito AHORA MISMO en el textarea, NO
+  // persiste nada — el admin sigue teniendo que pulsar 💾 Guardar (o
+  // ✕ Cancelar si se equivocó de club/quiere deshacerlo).
+  function quitarDuplicadosLigaCalendarioExtraClub(clubId) {
+    var ta = document.getElementById("calendario-extra-club-textarea");
+    if (!ta || !window.Renderizadores || !window.Renderizadores.quitarDuplicadosLigaDeCalendarioExtraTexto) return;
+    var r = window.Renderizadores.quitarDuplicadosLigaDeCalendarioExtraTexto(ta.value, null);
+    if (!r.n) {
+      window.alert("No hay ninguna línea de Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1 duplicada en el texto actual.");
+      return;
+    }
+    if (!window.confirm(
+      "Se van a quitar " + r.n + " línea(s) de Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1 que repetían " +
+      "exactamente la misma competición + ronda + rival que otra línea de arriba (se conserva siempre la " +
+      "primera aparición de cada una). Pulsa 💾 Guardar después para confirmar el cambio. ¿Continuar?"
+    )) return;
+    ta.value = r.conservar.join("\n");
+  }
+
   // Corrección de UN SOLO USO (candado
   // ef7_fixup_atleti_divisiones_antiguas_v1): reporte usuario 2026-09-23
   // (fotos de la Plantilla del Atlético Madrid, "Pichichi: A. Sørloth:
@@ -2092,6 +2119,7 @@
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
         case "limpiar-divisiones-antiguas-calendario-extra-club": limpiarDivisionesAntiguasCalendarioExtraClub(d.clubId); break;
+        case "quitar-duplicados-liga-calendario-extra-club": quitarDuplicadosLigaCalendarioExtraClub(d.clubId); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;

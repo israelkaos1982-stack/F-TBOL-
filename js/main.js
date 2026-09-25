@@ -162,9 +162,15 @@
       // ("🇫🇷 Coupe de France") porque sale de la propia tarjeta del menú
       // (ver MENU_CLUB_BUILTIN_POR_CLUB en estado.js) — aquí solo hace
       // falta NO pintar el cuadro compartido de España ni su ℹ️ (ese
-      // formato de 64 clubes no aplica a PSG).
+      // formato de 64 clubes no aplica a PSG). Manchester City/Inter de
+      // Milán (2026-09-25) son el mismo caso con su propia copa nacional
+      // (FA Cup/Coppa Italia).
       if (clubId === "psg") {
         window.Renderizadores.renderizarCoupeFrancia("copa-content", clubId);
+      } else if (clubId === "manchester-city") {
+        window.Renderizadores.renderizarFACup("copa-content", clubId);
+      } else if (clubId === "inter-milan") {
+        window.Renderizadores.renderizarCoppaItalia("copa-content", clubId);
       } else {
         _pintarTituloModalInfo(
           titulo, "Copa del Rey", "info-copa-formato", null,

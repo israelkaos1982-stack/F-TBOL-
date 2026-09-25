@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "descripcion": "Los 6 clubes humanos de eFOOTBALL Temporada 7. Cada mánager dirige un club (Liga EA Sports) y una selección nacional. Los 6 tienen escudo REAL (campo \"crest\"), TODOS como PNG oficial transparente embebido en un SVG wrapper (mismo patrón para los 6, cero peticiones externas — ver el comentario dentro de cada archivo en /static/img/escudos-1/): el del PSG usaba antes (france_psg.svg) un vector dibujado a mano que nunca llegó a parecerse al escudo real (varios intentos fallidos en el historial) — 2026-09-03 se sustituyó por el escudo oficial real (france_psg_v2.svg — nombre nuevo A PROPÓSITO: /static/img/ se cachea 30 días con `immutable`, así que reescribir el archivo viejo en la MISMA URL no habría llegado a los móviles que ya lo tenían cacheado), igual que los otros 5. El fallback CSS de siglas+colorPrimario+colorSecundario+escudoFormato (ver js/escudos.js, Fase 2) de crearEscudoHTML ya no hace falta para ninguno de los 6, pero se deja intacto por si algún club pierde su \"crest\". Incluye valoracionPoder (50-98) para resolver su estadio local vía el algoritmo correlativo de data/estadios.json, salvo que tenga \"estadioId\" (id de data/estadios.json.estadios) — asignación fija elegida por el usuario que SIEMPRE gana sobre el algoritmo. Los 6 humanos tienen estadioId fijo; el resto de equipos (IA) sigue resolviendo por poder.",
+    "descripcion": "Los 8 clubes humanos de eFOOTBALL Temporada 7. Cada mánager dirige un club; los 6 originales (Liga EA Sports) también dirigen una selección nacional (campo \"seleccion\"/\"banderaSeleccion\", puramente decorativo — ningún código lo lee). Los 6 originales tienen escudo REAL (campo \"crest\"), TODOS como PNG oficial transparente embebido en un SVG wrapper (mismo patrón para los 6, cero peticiones externas — ver el comentario dentro de cada archivo en /static/img/escudos-1/): el del PSG usaba antes (france_psg.svg) un vector dibujado a mano que nunca llegó a parecerse al escudo real (varios intentos fallidos en el historial) — 2026-09-03 se sustituyó por el escudo oficial real (france_psg_v2.svg — nombre nuevo A PROPÓSITO: /static/img/ se cachea 30 días con `immutable`, así que reescribir el archivo viejo en la MISMA URL no habría llegado a los móviles que ya lo tenían cacheado), igual que los otros 5. El fallback CSS de siglas+colorPrimario+colorSecundario+escudoFormato (ver js/escudos.js, Fase 2) de crearEscudoHTML ya no hace falta para ninguno de esos 6, pero se deja intacto por si algún club pierde su \"crest\" — es el que usan, de momento, Manchester City e Inter de Milán (2026-09-25, promovidos desde data/equipos_ia.json a clubes humanos independientes de la pirámide española, ver \"mister\"/\"misterEmoji\"): sin \"crest\" propio todavía, se pintan con este mismo fallback CSS (siglas+colores reales) — añadir su SVG real más adelante es opcional. Incluye valoracionPoder (50-98) para resolver su estadio local vía el algoritmo correlativo de data/estadios.json, salvo que tenga \"estadioId\" (id de data/estadios.json.estadios) — asignación fija elegida por el usuario que SIEMPRE gana sobre el algoritmo. Los 8 humanos tienen estadioId fijo; el resto de equipos (IA) sigue resolviendo por poder.",
     "escudoFormatos": [
       "rombo",
       "rayas"
@@ -102,6 +102,32 @@
       "crest": "/static/img/escudos-1/france_psg_v2.svg",
       "misterEmoji": "🦆",
       "banderaSeleccion": "🇪🇸"
+    },
+    {
+      "id": "manchester-city",
+      "nombre": "Manchester City",
+      "mister": "Rubén",
+      "siglas": "MCI",
+      "colorPrimario": "#6cabdd",
+      "colorSecundario": "#1c2c5b",
+      "escudoFormato": "solido",
+      "ligaActual": "LIGA_EA_SPORTS",
+      "valoracionPoder": 96,
+      "estadioId": "wembley",
+      "misterEmoji": "🦔"
+    },
+    {
+      "id": "inter-milan",
+      "nombre": "Inter de Milán",
+      "mister": "Aléx",
+      "siglas": "INT",
+      "colorPrimario": "#010e80",
+      "colorSecundario": "#231f20",
+      "escudoFormato": "rayas",
+      "ligaActual": "LIGA_EA_SPORTS",
+      "valoracionPoder": 89,
+      "estadioId": "san-siro",
+      "misterEmoji": "🐊"
     }
   ]
 }

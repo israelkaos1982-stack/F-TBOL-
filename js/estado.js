@@ -808,11 +808,31 @@
   // escritura del mismo número ("Jornada 7"/"J7"/"7ª Jornada" -> "j7").
   // Sin ningún número en la ronda (texto atípico), se conserva el texto
   // completo como respaldo — nunca peor que el comportamiento anterior.
+  // Familia de competiciones de LIGA en formato "todos contra todos"
+  // (Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1): la extracción del número
+  // de jornada aplica a TODAS por igual, no solo a "liga" — cuando
+  // `competicion` llega aquí YA es el compKey RESUELTO (ver comentario
+  // de _identidadFallbackDePartido, más abajo), así que un club
+  // ascendido/descendido a Hypermotion/2ª REF/Ea Sports (o PSG en Ligue 1)
+  // llega con ese compKey, nunca "liga". BUG REAL (reporte usuario
+  // 2026-09-25, con líneas EXACTAS de su propio texto: "1. Hypermotion -
+  // 1ª Jornada - Levante vs Atlético Madrid" vs "44. Hypermotion - 34ª
+  // Jornada - Atlético Madrid vs Levante", ida y vuelta de VERDAD
+  // independientes): con el check limitado a "liga", CUALQUIER jornada de
+  // Hypermotion (o de las otras 3 divisiones) entre el MISMO par de
+  // equipos caía al `return ""` de abajo — TODAS las jornadas ida/vuelta
+  // de esa pareja colapsaban a la MISMA identidad de reserva. En
+  // listarPartidosResueltos, la jornada 34 (aún sin resultado propio)
+  // encontraba por esta vía el resultado YA CONFIRMADO de la jornada 1 (el
+  // mismo par de equipos) y lo mostraba como si fuera suyo — el "resultado
+  // duplicado" que reportó el usuario nunca estuvo en su texto, lo
+  // fabricaba este fallback.
+  var _COMPS_LIGA_JORNADA_FALLBACK = { liga: true, "2ref": true, hypermotion: true, easports: true, ligue1: true };
   function _legDeRondaExtra(ronda, competicion) {
     var n = _normTxtExtra(ronda || "");
     if (/\bida\b/.test(n)) return "ida";
     if (/\bvuelta\b/.test(n)) return "vuelta";
-    if (_normTxtExtra(competicion) === "liga") {
+    if (_COMPS_LIGA_JORNADA_FALLBACK[_normTxtExtra(competicion)]) {
       var mJor = n.match(/\d+/);
       return mJor ? ("j" + mJor[0]) : n;
     }

@@ -132,6 +132,29 @@
     if (ok && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
       window.Sync.marcarParaForzar(clave);
     }
+    // AVISO EXPLÍCITO cuando NO se confirma (reporte usuario 2026-09-23,
+    // "cada vez que edito el texto... estas ediciones se esfuman y vuelves
+    // a poner otro rival / da igual las veces que lo edite"): hasta ahora,
+    // declinar este confirm() devolvía `false` en silencio — el caller
+    // (guardarCalendarioExtraTexto/guardarObjetivosTexto/etc.) simplemente
+    // no escribía nada y el editor se quedaba abierto SIN NINGÚN aviso de
+    // qué había pasado. Un admin que no lee el confirm() con calma (o que
+    // en un navegador móvil ve el diálogo aparecer y desaparecer muy
+    // rápido) no tiene forma de distinguir "no se ha guardado" de "sí se ha
+    // guardado" — cierra el editor pensando que su edición ya quedó, y al
+    // reabrirlo ve el texto VIEJO (con el rival/objetivo de antes), que es
+    // indistinguible de "mis cambios se han esfumado solos". Este alert()
+    // hace ruidoso lo que antes era silencioso, en TODOS los guardados que
+    // comparten este helper (Calendario extra, Objetivos, Roster, Liga 1ª
+    // REF, Corrección de estadísticas, Formato/reglas...).
+    if (!ok) {
+      window.alert(
+        "❌ NO SE HA GUARDADO NADA — has cancelado el aviso anterior (o no lo has confirmado a tiempo).\n\n" +
+        "El texto sigue siendo el que ya había, tal cual estaba antes de esta edición. Si de verdad " +
+        "querías guardar este cambio, pulsa Guardar otra vez y esta vez pulsa \"Aceptar\" en el " +
+        "aviso amarillo — si no, el editor lo dejará abierto para que puedas intentarlo de nuevo."
+      );
+    }
     return ok;
   }
 

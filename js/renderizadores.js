@@ -865,7 +865,42 @@
   // calendario, indistinguible de "el partido ha desaparecido" (reporte
   // usuario, 2 capturas: una línea sin numerar justo así, y 4 cards del
   // calendario que el admin no lograba explicarse).
-  function parsearPartidosExtraTexto(texto, nombreClubActivo, onIgnorada) {
+  // Familia de competiciones de LIGA en formato "todos contra todos"
+  // (Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1): a diferencia de una
+  // eliminatoria a doble partido (Copa/Champions/Recopa...), donde 2
+  // líneas con la MISMA "ronda" tecleada (ida+vuelta sin distinguirlo en
+  // el texto) son 2 partidos DISTINTOS y legítimos, en un calendario de
+  // liga cada jornada tiene SIEMPRE un número/ronda distinto — 2 líneas
+  // que coincidan en competición+ronda+rival NUNCA pueden ser 2 partidos
+  // reales, solo una línea duplicada por error de copia/pega (ver
+  // detectarDuplicadosLigaCalendarioExtra, más abajo). Coincide con
+  // LIGA_NAV_ORDEN (2ref/1ref/hypermotion/easports/ligue1) más la propia
+  // "liga" (1ª REF, cuando ese club aún no ha ascendido/descendido).
+  var _COMP_LIGA_FAMILIA = {
+    liga: true, "2ref": true, "2 ref": true, "2a ref": true, "segunda ref": true,
+    hypermotion: true, "liga hypermotion": true,
+    easports: true, "ea sports": true, "liga ea sports": true,
+    ligue1: true, "ligue 1": true
+  };
+  function _esCompeticionLigaFamilia(competicionCruda) {
+    return !!_COMP_LIGA_FAMILIA[_normNombre(competicionCruda)];
+  }
+  // `onDuplicadoLiga(lineaOriginal)` — opcional, callback informativo
+  // (NUNCA cambia qué se guarda ni qué se cuenta) que se dispara con el
+  // texto de cada línea que repite EXACTAMENTE la misma competición+
+  // ronda+rival que otra anterior DENTRO de una competición de LIGA
+  // (ver _esCompeticionLigaFamilia). Existe para que el editor pueda
+  // avisar de este patrón concreto ANTES de guardar — reporte usuario
+  // 2026-09-25: tras ampliar Hypermotion a ida y vuelta a mano, el
+  // Atlético Madrid apareció con partidos jugados/puntos/goles
+  // duplicados en la clasificación Y en la Plantilla. La causa: 2 líneas
+  // idénticas para la MISMA jornada (probablemente un copia/pega sin
+  // corregir el número) cuentan como 2 partidos independientes — el
+  // propio parser las desambigua a propósito con un id distinto para
+  // cada una (ver idsVistos, abajo) precisamente para soportar el caso
+  // LEGÍTIMO de Copa/Champions; en Liga ese mismo mecanismo esconde en
+  // silencio un error de tecleo.
+  function parsearPartidosExtraTexto(texto, nombreClubActivo, onIgnorada, onDuplicadoLiga) {
     var clubNorm = _normNombre(nombreClubActivo || "");
     var items = [];
     var idsVistos = {}; // desambigua el raro caso de 2 líneas con la MISMA competición+ronda+rival (ida/vuelta sin distinguir en el texto)
@@ -953,6 +988,7 @@
       var idBase = "extra-" + _hashStr(_normNombre(competicion) + "|" + _normNombre(ronda) + "|" + _normNombre(rivalCrudo)).toString(36);
       idsVistos[idBase] = (idsVistos[idBase] || 0) + 1;
       var idFinal = idsVistos[idBase] > 1 ? idBase + "-" + idsVistos[idBase] : idBase;
+      if (idsVistos[idBase] > 1 && onDuplicadoLiga && _esCompeticionLigaFamilia(competicion)) onDuplicadoLiga(l);
 
       items.push({
         id: idFinal,
@@ -979,6 +1015,21 @@
     var ignoradas = [];
     parsearPartidosExtraTexto(texto, nombreClubActivo, function (linea) { ignoradas.push(linea); });
     return ignoradas;
+  }
+
+  // Líneas del Calendario Extra que van a contar como 2 PARTIDOS DE LIGA
+  // independientes por repetir exactamente competición+ronda+rival de
+  // otra línea anterior (ver onDuplicadoLiga en parsearPartidosExtraTexto)
+  // — para que el editor pueda avisar de este patrón concreto ANTES de
+  // guardar. Solo mira Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1: en
+  // Copa/Champions/etc esa misma repetición SÍ es un ida+vuelta legítimo
+  // y nunca se avisa de ella (ver _esCompeticionLigaFamilia). Nunca
+  // cambia qué se guarda: es una pasada de SOLO LECTURA sobre el mismo
+  // texto.
+  function detectarDuplicadosLigaCalendarioExtra(texto, nombreClubActivo) {
+    var duplicados = [];
+    parsearPartidosExtraTexto(texto, nombreClubActivo, null, function (linea) { duplicados.push(linea); });
+    return duplicados;
   }
 
   // Paleta AMPLIADA (8 -> 24, petición usuario: "los colores... no
@@ -12422,6 +12473,7 @@
     pintarEditorAjustesClub: pintarEditorAjustesClub,
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
     detectarLineasIgnoradasCalendarioExtra: detectarLineasIgnoradasCalendarioExtra,
+    detectarDuplicadosLigaCalendarioExtra: detectarDuplicadosLigaCalendarioExtra,
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,
     renderizarPlantillaClub: renderizarPlantillaClub,

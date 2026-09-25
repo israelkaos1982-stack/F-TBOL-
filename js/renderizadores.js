@@ -9586,6 +9586,37 @@
           return;
         }
 
+        // AUTO-LIMPIEZA silenciosa de jornadas de Liga duplicadas — reporte
+        // usuario 2026-09-25, con fotos exactas de "HYPERMOTION · 33ª
+        // JORNADA" repetida 2 veces seguidas en el calendario de VARIOS
+        // clubes a la vez: el botón manual "🧹 Quitar jornadas duplicadas"
+        // (ver js/main.js::quitarDuplicadosLigaCalendarioExtraClub) exige
+        // que el admin abra el editor de CADA club afectado uno a uno —
+        // demasiado fricción para un bug que ya se ha reportado 2 veces.
+        // Aquí se aplica SOLO al club activo (a los demás les toca cuando
+        // se abra SU calendario) y de forma AUTOMÁTICA, sin confirm() ni
+        // aviso: la operación es idempotente y segura (solo quita una
+        // línea si es COPIA LITERAL EXACTA de otra ya presente en Liga/2ª
+        // REF/Hypermotion/Ea Sports/Ligue 1 — nunca toca jornadas con
+        // rondas/rivales distintos, ni Copa/Champions/etc, ver
+        // _esCompeticionLigaFamilia). {forzar:true} salta el guard
+        // anti-encogimiento del servidor porque quitar 1 línea de 30+ es
+        // un recorte mínimo, pero por si el texto fuera muy corto se pasa
+        // igual para que este auto-fix nunca se quede a medias esperando
+        // un confirm() que aquí nadie va a ver.
+        if (window.Estado && window.Estado.obtenerCalendarioExtraTexto && window.Estado.guardarCalendarioExtraTexto &&
+          window.Renderizadores && window.Renderizadores.quitarDuplicadosLigaDeCalendarioExtraTexto) {
+          try {
+            var textoCalExtraActivo = window.Estado.obtenerCalendarioExtraTexto(idEquipoHumanoActivo);
+            var limpiezaAuto = window.Renderizadores.quitarDuplicadosLigaDeCalendarioExtraTexto(textoCalExtraActivo, null);
+            if (limpiezaAuto.n > 0) {
+              window.Estado.guardarCalendarioExtraTexto(idEquipoHumanoActivo, limpiezaAuto.conservar.join("\n"), { forzar: true });
+            }
+          } catch (errAutoLimpieza) {
+            console.error("[renderizadores] auto-limpieza de jornadas duplicadas:", errAutoLimpieza);
+          }
+        }
+
         var ligaActual = equipo.ligaActual;
         var totalJornadas = TOTAL_JORNADAS_POR_LIGA[ligaActual] || 38;
 

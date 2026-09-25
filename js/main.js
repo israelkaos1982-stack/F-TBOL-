@@ -467,6 +467,29 @@
         if (!window.confirm(aviso)) return;
       }
     }
+    // Reporte usuario 2026-09-25 ("se ha duplicado en el Atlético Madrid
+    // los partidos jugados, puntos, goles etc" al ampliar Hypermotion a
+    // ida y vuelta): 2 líneas de LIGA/2ª REF/Hypermotion/Ea Sports/Ligue 1
+    // que repiten exactamente competición+ronda+rival (típico de un
+    // copia/pega sin corregir el número de jornada) cuentan como 2
+    // partidos independientes — cada una suma su marcador POR SEPARADO en
+    // la clasificación Y en la Plantilla. Se avisa ANTES de guardar,
+    // nombrando la(s) línea(s) exactas, para que el admin pueda corregirlas
+    // — nunca se corrige solo (no hay forma segura de adivinar cuál de las
+    // 2 es la buena sin arriesgar perder un resultado ya jugado).
+    if (window.Renderizadores && window.Renderizadores.detectarDuplicadosLigaCalendarioExtra) {
+      var duplicadas = window.Renderizadores.detectarDuplicadosLigaCalendarioExtra(ta.value, null);
+      if (duplicadas.length) {
+        var avisoDup = "⚠️ " + duplicadas.length + " línea(s) de Liga/2ª REF/Hypermotion/Ea Sports/Ligue 1 repiten " +
+          "EXACTAMENTE la misma competición + ronda + rival que otra línea de arriba — cada una va a contar como " +
+          "un PARTIDO INDEPENDIENTE, duplicando puntos/goles/partidos jugados en la clasificación y en la Plantilla:\n\n" +
+          duplicadas.map(function (l) { return "· " + l; }).join("\n") +
+          "\n\nSi es un copia/pega sin corregir (el mismo rival/jornada repetido por error), vuelve a editar el texto " +
+          "y corrige o borra la línea de más ANTES de guardar.\n\n¿Guardar igualmente tal cual está? " +
+          "(pulsa Cancelar para volver a editarlo)";
+        if (!window.confirm(avisoDup)) return;
+      }
+    }
     if (!window.Estado.guardarCalendarioExtraTexto(clubId, ta.value)) return;
     cerrarModalClub();
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);

@@ -11357,8 +11357,16 @@
     // (calcularSuperliga/SUPERLIGA_STATS), nunca a la ficha del jugador
     // dentro de su club — esos partidos surgen "por casualidad" cuando
     // coinciden 2 humanos, no son partidos oficiales del club.
+    // El Torneo de Verano (compKey "verano" — Teresa Herrera y cualquier
+    // otro trofeo de pretemporada, ver _BALON_COMP_ALIAS) TAMPOCO suma aquí
+    // (petición usuario 2026-09-25: "son partidos amistosos que no suman")
+    // — igual que Superliga, ya tiene su PROPIA caja de estadísticas
+    // (Estado.obtenerVeranoStatTexto/guardarVeranoStatTexto, editable por
+    // el admin), así que esos goles/tarjetas/MVP siguen visibles ahí, solo
+    // dejan de contar hacia la ficha OFICIAL del jugador en la Plantilla.
+    var _COMPS_EXCLUIDAS_STATS_PLANTILLA = { superliga: true, verano: true };
     var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
-      return p.jugado && p.competicion !== "superliga" && (p.local === clubId || p.visitante === clubId);
+      return p.jugado && !_COMPS_EXCLUIDAS_STATS_PLANTILLA[p.competicion] && (p.local === clubId || p.visitante === clubId);
     });
 
     partidos.forEach(function (p) {

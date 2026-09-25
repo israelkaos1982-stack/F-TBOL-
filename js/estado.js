@@ -1027,6 +1027,94 @@
     });
   }
 
+  // BUG REAL (reporte usuario 2026-09-25, fotos del calendario del
+  // Atlético Madrid: "HYPERMOTION · 31ª JORNADA — Liverpool vs Atlético
+  // Madrid" (PREVIA) apareciendo JUSTO ENCIMA de "HYPERMOTION · 30ª
+  // JORNADA — Atlético Madrid vs Liverpool" (PREVIA) — el MISMO cruce
+  // humano-vs-humano dos veces, con jornadas adyacentes, mientras la
+  // jornada 32 (mismo club) ya estaba jugada — "se siguen duplicando
+  // partidos entre humanos de forma consecutiva"):
+  //
+  // Atlético (Isra) y Liverpool (Toñín) mantienen 2 Calendarios extra
+  // INDEPENDIENTES — cada mánager tecleó SU PROPIA línea para el mismo
+  // cruce real, y nada obliga a que ambos usen el MISMO número de
+  // jornada (Isra "30ª Jornada", Toñín "31ª Jornada" — 1 número de
+  // desajuste entre los 2 textos, un simple error humano al escribirlos
+  // por separado). `_deduplicarExtraHumanoVsHumano` (arriba) solo
+  // colapsa 2 líneas de clubes distintos cuando su jornada REDUCIDA es
+  // IDÉNTICA — a propósito, para no fundir la ida con la vuelta de un
+  // mismo par (que sí llevan números MUY separados) — así que un
+  // desajuste de 1 número entre los 2 textos sobrevive como 2 partidos
+  // "distintos": el mismo cruce duplicado en el calendario de LOS 2
+  // clubes, y también en cualquier agregador que lea la misma lista
+  // (clasificación, Pichichi, Plantilla).
+  //
+  // Invariante real de cualquier competición "todos contra todos" (Liga/
+  // 2ª REF/Hypermotion/Ea Sports/Ligue 1, ver _COMPS_LIGA_JORNADA_FALLBACK):
+  // la vuelta de un mismo par SIEMPRE queda separada de la ida por buena
+  // parte de la temporada (con N equipos, el hueco real es de orden
+  // N-1 jornadas) — NUNCA por 0 o 1 jornada. Así que el propio recuento
+  // "2 entradas para este par" NO distingue el bug de una ida/vuelta
+  // legítima (2 es exactamente lo esperado en ambos casos) — el síntoma
+  // real es el HUECO entre sus números de jornada: si 2 entradas del
+  // MISMO par en la MISMA competición tienen números ADYACENTES (o
+  // iguales), es estadísticamente IMPOSIBLE que sean la ida y la vuelta
+  // real — solo puede ser el mismo cruce tecleado 2 veces (por 2 clubes
+  // distintos, cada uno con su propio número, o por el mismo club dos
+  // veces por error).
+  //
+  // Se colapsan a 1 sola cuando el hueco es <= 1 jornada, con esta
+  // prioridad:
+  // 1. Si UNA de las 2 ya está jugada (resultado confirmado en vivo — vía
+  //    id exacto O identidad de reserva, ya resueltos en `resultado`
+  //    para cuando esta función corre — o marcador ya escrito a mano en
+  //    el propio texto) esa NUNCA se descarta: se quita la otra (la
+  //    todavía sin jugar, el duplicado fantasma).
+  // 2. Si las 2 YA están jugadas, no se toca ninguna — sería borrar un
+  //    resultado real, y esta función nunca hace eso; queda como un caso
+  //    raro para revisión manual.
+  // 3. Si ninguna está jugada, se conserva la de MENOR número de jornada
+  //    (la más probable candidata a ser la ida real).
+  //
+  // Corre SOBRE `resultado` YA RESUELTO por listarPartidosResueltos (con
+  // `jugado`/`resultado` puestos vía id exacto O identidad de reserva) —
+  // nunca antes, dentro de `_partidosExtraDeTodosLosClubes`: en ese punto
+  // el resultado en vivo de una de las 2 líneas puede vivir bajo el id
+  // GEMELO (el de la línea del OTRO club) y todavía no se ha resuelto —
+  // decidir el recorte ahí arriesgaría descartar por error la línea que
+  // en realidad SÍ está jugada.
+  function _numJornadaDe(p) {
+    if (typeof p.jornada === "number" && p.jornada > 0) return p.jornada;
+    var m = _normTxtExtra(p.ronda || "").match(/\d+/);
+    return m ? parseInt(m[0], 10) : 0;
+  }
+  function _limitarDosPorParEnLigaFamilia(resultado) {
+    var grupos = {};
+    resultado.forEach(function (p) {
+      if (!_COMPS_LIGA_JORNADA_FALLBACK[_normTxtExtra(p.competicion)]) return;
+      var par = [p.local, p.visitante].slice().sort().join("|");
+      var clave = _normTxtExtra(p.competicion) + "|" + par;
+      (grupos[clave] = grupos[clave] || []).push(p);
+    });
+    var aQuitar = {};
+    Object.keys(grupos).forEach(function (clave) {
+      var lista = grupos[clave];
+      if (lista.length < 2) return;
+      lista.sort(function (a, b) { return _numJornadaDe(a) - _numJornadaDe(b); });
+      for (var i = 0; i < lista.length - 1; i++) {
+        var a = lista[i], b = lista[i + 1];
+        if (aQuitar[a.id] || aQuitar[b.id]) continue;
+        if (Math.abs(_numJornadaDe(b) - _numJornadaDe(a)) > 1) continue;
+        if (a.jugado && b.jugado) continue; // las 2 jugadas: no se toca ninguna
+        if (a.jugado) aQuitar[b.id] = true;
+        else if (b.jugado) aQuitar[a.id] = true;
+        else aQuitar[b.id] = true; // ninguna jugada: se queda la de jornada menor (a)
+      }
+    });
+    if (!Object.keys(aQuitar).length) return resultado;
+    return resultado.filter(function (p) { return !aQuitar[p.id]; });
+  }
+
   // ---------- SUPERLIGA — los 6 clubes humanos, todos contra todos ----------
   // A diferencia del Calendario extra (texto libre pegado por el admin) o
   // Liga 1ª REF (snapshot IA + partidos propios), la Superliga es 100%
@@ -1167,7 +1255,7 @@
     });
 
     if (huboMigracion) guardarEstado();
-    return resultado;
+    return _limitarDosPorParEnLigaFamilia(resultado);
   }
 
   // ---------- Clasificación (calculada en caliente) ----------

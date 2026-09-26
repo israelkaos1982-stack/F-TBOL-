@@ -2103,6 +2103,50 @@
     return _normNombre(p.competicion) === compKeyEsperado;
   }
 
+  // ⚠️ Aviso de división DESAJUSTADA — reporte usuario 2026-09-26
+  // (Liverpool jugó y compartió por WhatsApp sus 3 partidos de Hypermotion,
+  // "FINALIZADO" en el calendario con acta completa, pero la clasificación
+  // seguía a 0 PJ/0 pts). Los partidos SÍ se guardan siempre — lo que falla
+  // es que esta tabla solo suma los del club cuando su división FIJADA
+  // (Estado.obtenerDivisionClub, el 📌 del editor ✏️ → PIN 646, o el botón
+  // del Panel Admin "🧹 Reiniciar pirámide") coincide con `ligaId`. Es el
+  // mismo bug de fondo que ya afectó al Atlético Madrid (ver
+  // _compKeyEsperadoParaDivision, 2026-09-23): el compKey resuelve bien,
+  // pero nadie fijó AQUÍ la división del club — un paso manual, fácil de
+  // olvidar tras cada ascenso/descenso.
+  //
+  // Antes había un 📌 SIEMPRE visible junto al título y el usuario pidió
+  // quitarlo por "molestaba ahí" (ver pintarEditorLiga1Ref, commit
+  // "📌 dentro del editor"). Este aviso NO lo resucita: vuelve `""` (nada
+  // que pintar) en el caso normal — ya fijado aquí, o sin partidos de esta
+  // división todavía — y solo aparece cuando de verdad hay algo real que
+  // arreglar. Solo aplica a las divisiones que usan el mecanismo de 📌 (la
+  // pirámide española sin dueño fijo: "1ref" reparte por defecto sin pin,
+  // y ligue1/premier/seriea tienen SIEMPRE su único club vía
+  // LIGA_NAV_HUMANO_PROPIO, ninguna de las 2 necesita este aviso).
+  function _avisoDivisionDesajustadaHTML(ligaId, idClubActivo, datos) {
+    if (!idClubActivo || !window.Estado || ligaId === "1ref" || LIGA_NAV_HUMANO_PROPIO[ligaId]) return "";
+    if (LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(idClubActivo) !== -1) return "";
+    if (_divisionActualClub(idClubActivo) === ligaId) return "";
+    var club = buscarEquipoPorId(idClubActivo, datos);
+    if (!club) return "";
+    var compKeyEsperado = _compKeyEsperadoParaDivision(ligaId);
+    var todosPartidos = window.Estado.listarPartidosResueltos(datos) || [];
+    var tienePartidos = todosPartidos.some(function (p) {
+      return p.jugado && p.resultado && _partidoPerteneceADivision(p, null, compKeyEsperado) &&
+        (p.local === idClubActivo || p.visitante === idClubActivo);
+    });
+    if (!tienePartidos) return "";
+    var meta = LIGA_NAV_META[ligaId];
+    return '<div class="liga1ref-aviso-desajuste">' +
+      "⚠️ " + escapeHTML(club.nombre) + " ya tiene partidos jugados aquí (" +
+      escapeHTML(meta ? meta.corta : ligaId) +
+      ") que todavía NO cuentan en esta tabla — su división fijada sigue siendo otra." +
+      '<button type="button" class="liga1ref-aviso-desajuste-btn" data-accion="fijar-division-club" ' +
+      'data-liga-id="' + ligaId + '" data-club-id="' + idClubActivo + '">📌 Fijar ' +
+      escapeHTML(club.nombre) + " aquí ahora</button></div>";
+  }
+
   // Los compKeys de TODAS las divisiones de la pirámide EXCEPTO la
   // ACTUAL de este club — petición usuario 2026-09-23 ("hazlo", tras
   // ofrecer "un botón que limpie de golpe TODAS las divisiones
@@ -2626,6 +2670,7 @@
       // hacer scroll (petición usuario).
       contenedor.insertAdjacentHTML("beforeend", _ligaTabBoxesHTML(ligaId, idClubActivo));
       contenedor.insertAdjacentHTML("beforeend", _ligaTituloRowHTML(ligaId, idClubActivo));
+      contenedor.insertAdjacentHTML("beforeend", _avisoDivisionDesajustadaHTML(ligaId, idClubActivo, datos));
       _actualizarTituloModalLiga(ligaId);
 
       var filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilasConHumano(ligaId, datos);

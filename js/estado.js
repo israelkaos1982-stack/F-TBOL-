@@ -1115,7 +1115,7 @@
     return resultado.filter(function (p) { return !aQuitar[p.id]; });
   }
 
-  // ---------- SUPERLIGA — los 6 clubes humanos, todos contra todos ----------
+  // ---------- SUPERLIGA — los clubes humanos, todos contra todos ----------
   // A diferencia del Calendario extra (texto libre pegado por el admin) o
   // Liga 1ª REF (snapshot IA + partidos propios), la Superliga es 100%
   // determinista: NINGÚN dato se pega ni se persiste — el par de cada
@@ -1124,6 +1124,18 @@
   // localStorage; solo el resultado ya jugado (registrarResultadoPartido,
   // por id, igual que cualquier otro partido) se guarda.
   var SUPERLIGA_LEGS = 3;
+
+  // Inter de Milán (Aléx) — petición usuario explícita 2026-09-26 ("El
+  // inter de Milán no participa en el SUPERLIGA"): a diferencia de
+  // Manchester City (que sí compite, ya con jornadas generadas contra el
+  // resto), Inter queda FUERA de la Superliga por completo. Mismo patrón
+  // que COPA_HUMANOS_EXCLUIDOS (renderizadores.js) — un array de ids para
+  // no tener que tocar el bucle round-robin si el usuario añade/quita
+  // alguna exclusión más adelante. index.html es el índice 7 (el último)
+  // dentro de data/equipos.json en el momento de este fix, así que
+  // excluirlo aquí NO reindexa a ningún otro club (0-6 se quedan tal
+  // cual) y no rompe ningún "superliga-i-j-leg" ya jugado.
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["inter-milan"];
 
   // Localía FIJA por pareja (i<j, índices dentro de datos.equipos.equipos):
   // con 6 clubes, cada índice se enfrenta a los otros 5 y siempre termina
@@ -1138,7 +1150,9 @@
   }
 
   function _partidosSuperliga(datos) {
-    var equipos = (datos.equipos && datos.equipos.equipos) || [];
+    var equipos = ((datos.equipos && datos.equipos.equipos) || []).filter(function (e) {
+      return SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
     if (equipos.length < 2) return [];
     var ahoraMs = Date.now();
     var out = [];

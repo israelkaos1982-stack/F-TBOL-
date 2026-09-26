@@ -1956,8 +1956,13 @@
   // ascenso/descenso hacia ninguna de las 4 españolas).
   var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports", "ligue1", "premier", "seriea"];
   var LIGA_NAV_META = {
-    "2ref": { corta: "2ª REF", boxClase: "liga-tab-box--2ref", leyenda: "promocion" },
-    "1ref": { corta: "1ª REF", boxClase: "liga-tab-box--1ref", leyenda: "promocion" },
+    // "Ref" en minúscula tras la inicial (no "REF" en mayúsculas) —
+    // petición usuario 2026-09-26, foto de la fila de pestañas
+    // recortada por ancho: con las 3 ligas extranjeras reducidas a solo
+    // su bandera (ver `chip` más abajo) ya no hace falta abreviar
+    // "2ª Ref"/"1ª Ref" para que quepan en la fila.
+    "2ref": { corta: "2ª Ref", boxClase: "liga-tab-box--2ref", leyenda: "promocion" },
+    "1ref": { corta: "1ª Ref", boxClase: "liga-tab-box--1ref", leyenda: "promocion" },
     hypermotion: { corta: "Hypermotion", boxClase: "liga-tab-box--hypermotion", leyenda: "promocion" },
     easports: { corta: "Ea Sports", boxClase: "liga-tab-box--easports", leyenda: "europa" },
     // Liga francesa 100% texto libre (mismo mecanismo que 2ª REF/
@@ -1966,20 +1971,26 @@
     // posiciones exactas entre paréntesis (mostrarPosiciones:true,
     // petición usuario — las otras 4 ligas siguen SIN posiciones, eso
     // no cambia). "descensoDestino" es solo una ETIQUETA de la leyenda
-    // — Ligue 2 no es una división navegable de esta app.
+    // — Ligue 2 no es una división navegable de esta app. `chip` es
+    // SOLO el texto de la pestaña de la fila de navegación
+    // (_ligaTabBoxesHTML) — petición usuario 2026-09-26: con 7
+    // divisiones en la misma fila (4 españolas + 3 extranjeras), los
+    // nombres completos de las 3 extranjeras no cabían y se veían
+    // cortados con "…". `corta`/`tituloLargo` (título centrado, ℹ️,
+    // mensajes, matching de texto libre) NO cambian — solo la pestaña.
     ligue1: {
-      corta: "Ligue 1", boxClase: "liga-tab-box--ligue1", leyenda: "europa",
+      corta: "Ligue 1", chip: "🇫🇷", boxClase: "liga-tab-box--ligue1", leyenda: "europa",
       tituloLargo: "🇫🇷 Ligue 1", mostrarPosiciones: true, descensoDestino: "Ligue 2"
     },
     // 2 ligas más (2026-09-25), MISMO patrón exacto que Ligue 1: 100% texto
     // libre + su propio club humano dueño en exclusiva (LIGA_NAV_HUMANO_PROPIO,
     // más abajo) + su propio reparto de zonas (_EUROPA_ZONA_CONFIG).
     premier: {
-      corta: "Premier League", boxClase: "liga-tab-box--premier", leyenda: "europa",
+      corta: "Premier League", chip: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", boxClase: "liga-tab-box--premier", leyenda: "europa",
       tituloLargo: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", mostrarPosiciones: true, descensoDestino: "Championship"
     },
     seriea: {
-      corta: "Serie A", boxClase: "liga-tab-box--seriea", leyenda: "europa",
+      corta: "Serie A", chip: "🇮🇹", boxClase: "liga-tab-box--seriea", leyenda: "europa",
       tituloLargo: "🇮🇹 Serie A", mostrarPosiciones: true, descensoDestino: "Serie B"
     }
   };
@@ -2203,7 +2214,8 @@
       html += '<button type="button" class="liga-tab-box ' + meta.boxClase +
         (activa ? " liga-tab-box--activa" : "") +
         '" data-accion="liga-nav-ir" data-liga-id="' + id + '" data-club-id="' +
-        (idClubActivo || "") + '">' + escapeHTML(meta.corta) + "</button>";
+        (idClubActivo || "") + '" aria-label="' + escapeHTML(meta.corta) + '">' +
+        escapeHTML(meta.chip || meta.corta) + "</button>";
     });
     return html + "</div>";
   }

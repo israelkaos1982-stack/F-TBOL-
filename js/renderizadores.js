@@ -1504,11 +1504,18 @@
   //    un marcador con el dorsal para que el gol/tarjeta/MVP siga
   //    sumando en el ranking en vez de desaparecer en silencio.
   function _nombreFilaJugadorConFallback(nombresPorId, fila) {
-    if (fila.n) return fila.n;
-    if (nombresPorId[fila.j]) return nombresPorId[fila.j];
-    var partes = String(fila.j).split("-");
-    var dorsal = partes[partes.length - 1];
-    return /^\d+$/.test(dorsal) ? ("Jugador dorsal " + dorsal) : "Jugador desconocido";
+    var nombre = fila.n ? fila.n : nombresPorId[fila.j];
+    if (!nombre) {
+      var partes = String(fila.j).split("-");
+      var dorsal = partes[partes.length - 1];
+      return /^\d+$/.test(dorsal) ? ("Jugador dorsal " + dorsal) : "Jugador desconocido";
+    }
+    // 🔁 Renombres de plantilla (ver resolverRenombreJugador): además de
+    // aplicarse al ESCRIBIR cada evento nuevo (js/acta.js), se re-aplica
+    // aquí, en el punto ÚNICO de LECTURA — así un partido YA JUGADO antes
+    // de guardar el renombre (`fila.n` con el nombre viejo desde antes de
+    // este fix) también se corrige solo, sin ninguna migración aparte.
+    return resolverRenombreJugador(fila.e, nombre);
   }
 
   // Comparación tolerante de 2 nombres libres (normalizado + substring,
@@ -11614,6 +11621,72 @@
     return out;
   }
 
+  // 🔁 Renombres de plantilla (candado 646, ver
+  // js/estado.js::obtenerRenombresPlantillaTexto) — texto libre, una
+  // línea por jugador: "Nombre viejo - Nombre actual". Se parte por el
+  // PRIMER " - " (nunca el último, al revés que parsearStatsOverrideTexto):
+  // el nombre VIEJO es casi siempre una sola palabra/apellido corto, el
+  // ACTUAL es el que debe prevalecer tal cual lo escriba el admin
+  // (incluido si él mismo contuviera un " - ").
+  function parsearRenombresTexto(texto) {
+    var out = {};
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var partes = l.split(/\s-\s/);
+      if (partes.length < 2) return;
+      var viejo = partes[0].trim();
+      var actual = partes.slice(1).join(" - ").trim();
+      if (!viejo || !actual) return;
+      var key = _normNombre(viejo);
+      if (key) out[key] = actual;
+    });
+    return out;
+  }
+  // Aplica el renombre de ESTE club a `nombre` si hay uno mapeado, si no
+  // lo devuelve tal cual. Único punto de resolución — lo usa
+  // js/acta.js::agregarEventoActa EN EL MOMENTO de guardar cada evento,
+  // así el acta/Plantilla/estadísticas ya nacen con el nombre actual.
+  function resolverRenombreJugador(clubId, nombre) {
+    if (!nombre || !clubId || !window.Estado || !window.Estado.obtenerRenombresPlantillaTexto) return nombre;
+    var mapa = parsearRenombresTexto(window.Estado.obtenerRenombresPlantillaTexto(clubId));
+    var actual = mapa[_normNombre(nombre)];
+    return actual || nombre;
+  }
+
+  // Editor del texto de renombres (mismo patrón EXACTO que
+  // pintarEditorStatsPlantilla, justo debajo) — se abre desde el 🔁 junto
+  // al 📌 de la cabecera de la Plantilla.
+  function pintarEditorRenombresPlantilla(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Cuando un jugador de esta plantilla cambia de nombre con el tiempo (fichaje real que " +
+      "sustituye a otro en el mismo puesto), un partido YA JUGADO se queda con el nombre que se pulsó " +
+      "en su momento — no se actualiza solo. Una línea por jugador: «Nombre viejo - Nombre actual». " +
+      "Desde que se guarda esta línea, CUALQUIER evento nuevo que se registre con el nombre viejo (siga " +
+      "o no en la plantilla pegada) se guarda directamente con el nombre actual — en el acta, en la " +
+      "Plantilla y en cualquier estadística.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "renombres-plantilla-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 10;
+    textarea.placeholder = "Donnarumma - Safonov";
+    textarea.value = window.Estado ? window.Estado.obtenerRenombresPlantillaTexto(idClubActivo) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-renombres-plantilla" data-club-id="' + idClubActivo + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-renombres-plantilla" data-club-id="' + idClubActivo + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
   // Plantilla REAL de un club — fuente ÚNICA para la pantalla "Plantilla"
   // (solo lectura), el editor (candado 646), el selector de jugador del
   // acta en vivo (js/acta.js) y el picker de Lesionados/Sancionados de
@@ -11661,7 +11734,7 @@
           // bloqueo de color de la Plantilla: cuántos partidos distintos
           // tuvo 2+ amarillas en el mismo encuentro (doble amarilla,
           // pierde el siguiente) y cuántos tuvo alguna roja directa
-          // (pierde 2). Ver _tarjetaActivaPara.
+          // (pierde el siguiente). Ver _tarjetaActivaPara.
           partidosDobleAmarilla: 0,
           partidosRojaDirecta: 0
         };
@@ -11828,7 +11901,7 @@
   // hay ningún bloqueo activo ahora mismo.
   function _tarjetaActivaPara(s, flagsJ) {
     if (s.partidosRojaDirecta > 0 && flagsJ.roja !== s.partidosRojaDirecta) {
-      return { tipo: "roja", valor: s.partidosRojaDirecta, titulo: "🟥 Roja directa — se pierde 2 partidos. Pulsa para quitar el bloqueo (PIN admin)." };
+      return { tipo: "roja", valor: s.partidosRojaDirecta, titulo: "🟥 Roja directa — se pierde el siguiente partido. Pulsa para quitar el bloqueo (PIN admin)." };
     }
     if (s.partidosDobleAmarilla > 0 && flagsJ.doble !== s.partidosDobleAmarilla) {
       return { tipo: "doble", valor: s.partidosDobleAmarilla, titulo: "🟨🟨 2 amarillas en el mismo partido — se pierde el siguiente. Pulsa para quitar el bloqueo (PIN admin)." };
@@ -11872,7 +11945,14 @@
         pinWrap.className = "plantilla-header-acciones";
         pinWrap.innerHTML =
           '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-stats-plantilla-inline" ' +
-          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Corregir estadísticas a mano">📌</button>';
+          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Corregir estadísticas a mano">📌</button>' +
+          // 🔁 Renombres de plantilla (candado 646) — ver
+          // resolverRenombreJugador/pintarEditorRenombresPlantilla: para
+          // cuando un jugador cambia de nombre con el tiempo dentro de la
+          // MISMA plantilla (ej. PSG 2023→2027) y un partido ya jugado se
+          // quedó con el nombre viejo.
+          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-renombres-plantilla-inline" ' +
+          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Renombrar jugadores de esta plantilla">🔁</button>';
         contenedor.appendChild(pinWrap);
 
         var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
@@ -12976,6 +13056,9 @@
     parsearRosterTexto: parsearRosterTexto,
     calcularStatsRosterClub: calcularStatsRosterClub,
     calcularSancionadosAutomaticosPara: calcularSancionadosAutomaticosPara,
+    parsearRenombresTexto: parsearRenombresTexto,
+    resolverRenombreJugador: resolverRenombreJugador,
+    pintarEditorRenombresPlantilla: pintarEditorRenombresPlantilla,
     _partidosOrdenadosDelClub: _partidosOrdenadosDelClub,
     parsearStatsOverrideTexto: parsearStatsOverrideTexto,
     pintarEditorPlantillaClub: pintarEditorPlantillaClub,

@@ -631,6 +631,45 @@
     }
   }
 
+  // Siembra de UN SOLO USO (candado ef7_fixup_seed_renombres_psg_v1):
+  // petición usuario 2026-09-26, "PSG》2023 - 2027" — la plantilla del PSG
+  // cambió de nombres en ~14 puestos a lo largo del proyecto (Donnarumma→
+  // Safonov, Ramos→Pacho, Mbappé→Dembélé…) sin tocar los que se quedaron
+  // igual (Marquinhos, Hakimi, Nuno Mendes, Vitinha, Fabián, Zaïre-Emery).
+  // Siembra el texto de 🔁 Renombres de plantilla del PSG con esa tabla —
+  // SOLO si el admin no ha guardado ya el suyo propio (texto vacío), para
+  // no pisar una edición manual. Ver
+  // js/renderizadores.js::resolverRenombreJugador/pintarEditorRenombresPlantilla.
+  var FIXUP_SEED_RENOMBRES_PSG_KEY = "ef7_fixup_seed_renombres_psg_v1";
+  var RENOMBRES_PSG_2023_2027 = [
+    "Donnarumma - Safonov",
+    "Sergio Rico - Chevalier",
+    "Ramos - Pacho",
+    "Bernat - Lucas Hernández",
+    "Kimpembe - Beraldo",
+    "Verratti - João Neves",
+    "Danilo Pereira - Zabarnyi",
+    "Soler - Dro Fernández",
+    "Renato Sanches - Mayulu",
+    "Mbappé - Dembélé",
+    "Neymar - Désiré Doué",
+    "Messi - Kvaratskhelia",
+    "Gharbi - Akliouche",
+    "Ekitiké - Ferran Torres"
+  ].join("\n");
+  function _fixupSeedRenombresPsgV1() {
+    try {
+      if (localStorage.getItem(FIXUP_SEED_RENOMBRES_PSG_KEY)) return;
+      if (!window.Estado || !window.Estado.obtenerRenombresPlantillaTexto || !window.Estado.guardarRenombresPlantillaTexto) return;
+      if (!window.Estado.obtenerRenombresPlantillaTexto("psg").trim()) {
+        window.Estado.guardarRenombresPlantillaTexto("psg", RENOMBRES_PSG_2023_2027);
+      }
+      localStorage.setItem(FIXUP_SEED_RENOMBRES_PSG_KEY, "1");
+    } catch (err) {
+      console.error("[main] fixup seed-renombres-psg:", err);
+    }
+  }
+
   // Corrección de UN SOLO USO, más profunda (candado
   // ef7_fixup_atleti_reset_resultados_v1): el fixup anterior solo quita
   // líneas de DIVISIONES antiguas del texto de Calendario extra (Liga/2ª
@@ -725,6 +764,28 @@
     window.Renderizadores.renderizarPlantillaClub(clubId);
   }
   function cancelarStatsPlantilla(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(clubId);
+  }
+
+  // ---------- 🔁 Renombres de plantilla (candado 646) ----------
+  // Mismo patrón exacto que editarStatsPlantillaInline/guardarStatsPlantilla
+  // /cancelarStatsPlantilla, justo arriba — ver
+  // js/renderizadores.js::pintarEditorRenombresPlantilla.
+  function editarRenombresPlantillaInline(clubId) {
+    if (!clubId || !window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("plantilla-content");
+      if (!cont) return;
+      window.Renderizadores.pintarEditorRenombresPlantilla(cont, clubId);
+    }, "🔒 Renombres de plantilla", "Introduce el PIN de administrador.");
+  }
+  function guardarRenombresPlantilla(clubId) {
+    var ta = document.getElementById("renombres-plantilla-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRenombresPlantillaTexto(clubId, ta.value)) return;
+    window.Renderizadores.renderizarPlantillaClub(clubId);
+  }
+  function cancelarRenombresPlantilla(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(clubId);
   }
 
@@ -1984,6 +2045,7 @@
 
     _fixupAtletiDivisionesAntiguasV1();
     _fixupCapearListasAbiertasV1();
+    _fixupSeedRenombresPsgV1();
     // _fixupAtletiResetResultadosV1() RETIRADO (ver comentario junto a su
     // definición, más arriba) — ya cumplió su propósito una vez y
     // dejarlo activo es peligroso: es un candado POR DISPOSITIVO
@@ -2164,6 +2226,9 @@
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;
         case "guardar-stats-plantilla": guardarStatsPlantilla(d.clubId); break;
         case "cancelar-stats-plantilla": cancelarStatsPlantilla(d.clubId); break;
+        case "editar-renombres-plantilla-inline": editarRenombresPlantillaInline(d.clubId); break;
+        case "guardar-renombres-plantilla": guardarRenombresPlantilla(d.clubId); break;
+        case "cancelar-renombres-plantilla": cancelarRenombresPlantilla(d.clubId); break;
         case "editar-formato-info": _infoOverlayAbrirEditor(); break;
         case "guardar-formato-info": _infoOverlayGuardar(); break;
         case "cancelar-formato-info": _infoOverlayCancelarEdicion(); break;

@@ -2499,6 +2499,44 @@
     }
   }
 
+  // ---------- 🔁 Renombres de plantilla (candado 646) ----------
+  // Petición usuario 2026-09-26 (PSG 2023→2027 — ~14 jugadores que
+  // cambiaron de nombre dentro de la MISMA plantilla del club, ej.
+  // Donnarumma → Safonov): un evento del acta guarda SIEMPRE el nombre
+  // TAL CUAL se pulsó en el picker en ese momento
+  // (ev.jugador_nombre, ver js/acta.js::agregarEventoActa), y ese nombre
+  // GANA SIEMPRE sobre el roster actual al mostrar/sumar el acta (ver
+  // _nombreFilaJugadorConFallback, `if (fila.n) return fila.n`) — así que
+  // un simple cambio de nombre en la Plantilla pegada NUNCA actualiza
+  // retroactivamente un acta ya jugada. Este texto (una línea "Nombre
+  // viejo - Nombre actual" por jugador) se aplica EN EL MOMENTO de
+  // añadir el evento (ver js/renderizadores.js::resolverRenombreJugador),
+  // así que el acta, la Plantilla y cualquier estadística usan SIEMPRE
+  // el nombre actual, sin importar cuál de los 2 se pulsó en el picker
+  // en ese partido concreto. El picker en sí sigue mostrando la
+  // plantilla pegada tal cual (puede seguir listando el nombre viejo) —
+  // solo lo que se GUARDA en el acta cambia.
+  function _renombresPlantillaKey(clubId) { return "ef7_renombres_plantilla_v1_" + clubId; }
+  function obtenerRenombresPlantillaTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_renombresPlantillaKey(clubId));
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRenombresPlantillaTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_renombresPlantillaKey(clubId), obtenerRenombresPlantillaTexto(clubId), texto)) return false;
+    try {
+      localStorage.setItem(_renombresPlantillaKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar los renombres de plantilla:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Liga 1ª REF — tabla BASE de los equipos IA, pegada en texto (candado 646) ----------
   // Este simulador NO simula los partidos IA-vs-IA — el admin lleva esos
   // resultados fuera de la web y pega aquí el snapshot agregado de cada
@@ -3808,6 +3846,8 @@
     guardarRosterTexto: guardarRosterTexto,
     obtenerStatsOverrideTexto: obtenerStatsOverrideTexto,
     guardarStatsOverrideTexto: guardarStatsOverrideTexto,
+    obtenerRenombresPlantillaTexto: obtenerRenombresPlantillaTexto,
+    guardarRenombresPlantillaTexto: guardarRenombresPlantillaTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,

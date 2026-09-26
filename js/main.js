@@ -599,6 +599,38 @@
     }
   }
 
+  // Corrección de UN SOLO USO (candado ef7_fixup_capear_listas_v1):
+  // reporte usuario 2026-09-26 (foto, Brahim Díaz/Arda Güler
+  // "SANCIONADOS" en la previa de un Copa del Rey pese a no haber
+  // recibido ninguna tarjeta en ninguna competición) — antes de este
+  // fix, una entrada de Lesionados/Sancionados quedaba VIGENTE PARA
+  // SIEMPRE (hasta:null) hasta que el admin la cerraba a mano con la ✕;
+  // una que se olvidara así se colaba en TODOS los partidos siguientes
+  // indefinidamente. Desde ahora cada alta NUEVA se cierra sola
+  // (Lesionados: ese partido + el siguiente; Sancionados: solo ese
+  // partido — ver js/renderizadores.js::_abrirPickerJugadorLista), y las
+  // sanciones por tarjetas reales ya no dependen de ninguna entrada
+  // manual (ver calcularSancionadosAutomaticosPara). Esta corrección
+  // aplica esa MISMA capa retroactivamente, UNA vez, a cualquier entrada
+  // que ya se hubiera quedado abierta para siempre en CUALQUIERA de los
+  // clubes humanos — sin necesitar saber qué club/jugador está afectado.
+  var FIXUP_CAPEAR_LISTAS_KEY = "ef7_fixup_capear_listas_v1";
+  function _fixupCapearListasAbiertasV1() {
+    try {
+      if (localStorage.getItem(FIXUP_CAPEAR_LISTAS_KEY)) return;
+      if (!window.Estado || !window.Estado.capearListaJugadoresAbierta || !window.Renderizadores || !window.Renderizadores.cargarTodo) return;
+      window.Renderizadores.cargarTodo().then(function (datos) {
+        (datos.equipos.equipos || []).filter(function (e) { return !!e.mister; }).forEach(function (e) {
+          window.Estado.capearListaJugadoresAbierta(e.id, "lesionados", 2);
+          window.Estado.capearListaJugadoresAbierta(e.id, "sancionados", 1);
+        });
+        localStorage.setItem(FIXUP_CAPEAR_LISTAS_KEY, "1");
+      }).catch(function (err) { console.error("[main] fixup capear-listas:", err); });
+    } catch (err) {
+      console.error("[main] fixup capear-listas:", err);
+    }
+  }
+
   // Corrección de UN SOLO USO, más profunda (candado
   // ef7_fixup_atleti_reset_resultados_v1): el fixup anterior solo quita
   // líneas de DIVISIONES antiguas del texto de Calendario extra (Liga/2ª
@@ -1951,6 +1983,7 @@
     }
 
     _fixupAtletiDivisionesAntiguasV1();
+    _fixupCapearListasAbiertasV1();
     // _fixupAtletiResetResultadosV1() RETIRADO (ver comentario junto a su
     // definición, más arriba) — ya cumplió su propósito una vez y
     // dejarlo activo es peligroso: es un candado POR DISPOSITIVO

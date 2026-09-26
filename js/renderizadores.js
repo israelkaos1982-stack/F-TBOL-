@@ -9813,6 +9813,35 @@
     return card;
   }
 
+  // Calendario COMPLETO de un club, en el MISMO orden cronológico que
+  // pinta generarCalendarioLateralDerecho (idéntica fuente/filtro/sort/
+  // _ordenClub — EXTRAÍDO de ahí, sin tocar una coma) — así
+  // calcularSancionadosAutomaticosPara (más abajo) resuelve "el partido
+  // anterior/siguiente en el calendario" de un jugador con la MISMA
+  // definición exacta que ya usa la pantalla de calendario, en vez de
+  // arriesgarse a que una copia paralela de este filtro/orden diverja.
+  function _partidosOrdenadosDelClub(clubId, datos) {
+    var equipo = buscarEquipoPorId(clubId, datos);
+    var ligaActual = equipo ? equipo.ligaActual : null;
+    var todosLosPartidos = window.Estado
+      ? window.Estado.listarPartidosResueltos(datos)
+      : (datos.partidos.partidos || []);
+    var partidosDelClub = todosLosPartidos.filter(function (p) {
+      var esSuyo = p.local === clubId || p.visitante === clubId;
+      if (!esSuyo) return false;
+      if (p.competicion === "superliga") return false;
+      if (p.competicion === "liga") return p.liga === ligaActual;
+      return true;
+    });
+    partidosDelClub.sort(function (a, b) {
+      var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+      var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+      return ta - tb;
+    });
+    partidosDelClub.forEach(function (p, i) { p._ordenClub = i; p._totalClubCalendario = partidosDelClub.length; });
+    return partidosDelClub;
+  }
+
   function generarCalendarioLateralDerecho(idEquipoHumanoActivo, esActualizacionDeSync) {
     var contenedor = document.getElementById("calendar-content");
     var badge = document.getElementById("calendar-liga-badge");
@@ -9908,24 +9937,7 @@
         // volver a parsearlo/resolverlo aquí, filtrar por "es de este
         // club" ya basta, y así la clasificación/estadísticas ven
         // EXACTAMENTE los mismos partidos que pinta esta pantalla.
-        var todosLosPartidos = window.Estado
-          ? window.Estado.listarPartidosResueltos(datos)
-          : (datos.partidos.partidos || []);
-
-        var partidosDelClub = todosLosPartidos.filter(function (p) {
-          var esSuyo = p.local === idEquipoHumanoActivo || p.visitante === idEquipoHumanoActivo;
-          if (!esSuyo) return false;
-          // La Superliga NUNCA sale en el calendario GENERAL de un club
-          // (petición usuario): sus partidos surgen "por casualidad"
-          // cuando 2 humanos coinciden, no son partidos oficiales de la
-          // temporada del club — solo se ven dentro de su propia caja
-          // Superliga (renderizarSuperliga, calendario propio).
-          if (p.competicion === "superliga") return false;
-          // Liga regular: solo la liga actual del mánager.
-          // Torneos eliminatorios (Copa, Supercopa...): siempre, en paralelo.
-          if (p.competicion === "liga") return p.liga === ligaActual;
-          return true;
-        });
+        var partidosDelClub = _partidosOrdenadosDelClub(idEquipoHumanoActivo, datos);
 
         if (!partidosDelClub.length) {
           // Sin partidos locales Y la sincronización con el servidor
@@ -9948,22 +9960,13 @@
           return;
         }
 
-        partidosDelClub.sort(function (a, b) {
-          var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
-          var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
-          return ta - tb;
-        });
-
-        // Orden cronológico de ESTE club (0, 1, 2…), estable mientras no
-        // cambien los partidos/el Calendario extra — es la "línea de
-        // tiempo" que usan los Lesionados/Sancionados con rango (ver
-        // estado.js) para saber qué partidos ya habían pasado cuando se
-        // marcó/quitó a un jugador de la lista. `_totalClubCalendario`
-        // viaja al lado para que calcularClimaParaPartido pueda usar esta
-        // MISMA posición como "proporción de la temporada" cuando el
-        // partido no tiene fecha real (ver ese comentario para el porqué).
-        partidosDelClub.forEach(function (p, i) { p._ordenClub = i; p._totalClubCalendario = partidosDelClub.length; });
-
+        // El orden/sort/_ordenClub ya vienen resueltos por
+        // _partidosOrdenadosDelClub — es la "línea de tiempo" que usan
+        // Lesionados/Sancionados (manuales y automáticos, ver estado.js y
+        // calcularSancionadosAutomaticosPara) para saber qué partidos ya
+        // habían pasado. `_totalClubCalendario` viaja al lado para que
+        // calcularClimaParaPartido pueda usar esta MISMA posición como
+        // "proporción de la temporada" cuando el partido no tiene fecha real.
         var partidosPorId = {};
         partidosDelClub.forEach(function (p) { partidosPorId[p.id] = p; });
 
@@ -10687,6 +10690,15 @@
       '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-entrada-id="' + escapeHTML(entrada.id) + '" aria-label="Quitar">✕</button></div>'
     );
   }
+  // Fila de sanción AUTOMÁTICA (ver calcularSancionadosAutomaticosPara) —
+  // sin ✕: no es una entrada que alguien haya añadido, es un hecho del
+  // acta ya jugada, y se levanta sola al pasar este partido.
+  function _filaJugadorListaAuto(entrada) {
+    return (
+      '<div class="live-acta-item live-acta-item--auto"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) +
+      '<span class="live-acta-auto-motivo"> — ' + escapeHTML(entrada.motivo) + "</span></span></div>"
+    );
+  }
   function _renderListaJugadores(tipo, contId, vacioTxt) {
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !window.Estado) return;
@@ -10696,9 +10708,23 @@
     // de este partido o que todavía no empezaban en su momento.
     var orden = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
     var lista = window.Estado.obtenerListaJugadoresActivosPara(window._idManagerActivo, tipo, orden);
-    cont.innerHTML = lista.length
-      ? lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("")
-      : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
+    var htmlManual = lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("");
+    // Sancionados AUTOMÁTICOS por tarjetas (roja/doble amarilla/ciclo de
+    // 3) — se calculan SIEMPRE, además de lo que el admin haya añadido a
+    // mano, y NUNCA duplican una fila que ya esté en la lista manual para
+    // el mismo jugador (comparado por nombre normalizado).
+    var htmlAuto = "";
+    if (tipo === "sancionados" && _ultimoContexto && _ultimoContexto.datos) {
+      var nombresManual = {};
+      lista.forEach(function (e) { nombresManual[_normNombre(e.nombre)] = true; });
+      var autos = calcularSancionadosAutomaticosPara(window._idManagerActivo, orden, _ultimoContexto.datos);
+      htmlAuto = autos
+        .filter(function (a) { return !nombresManual[_normNombre(a.nombre)]; })
+        .map(_filaJugadorListaAuto)
+        .join("");
+    }
+    var html = htmlAuto + htmlManual;
+    cont.innerHTML = html || ('<div class="live-acta-vacia">' + vacioTxt + "</div>");
   }
   // Oculta la sección 🚑 Lesionados ENTERA (bloque + botón ➕ Añadir, no
   // solo "sin lesionados registrados") en un partido Humano vs Humano —
@@ -11722,6 +11748,73 @@
       }
     });
     return stats;
+  }
+
+  // ---------- 🟨 Sanción AUTOMÁTICA por tarjetas ----------
+  // Petición usuario 2026-09-26 (foto con Brahim Díaz/Arda Güler
+  // sancionados en la previa sin haber recibido ninguna tarjeta —
+  // arrastre de una entrada MANUAL nunca cerrada): las 3 causas de
+  // sanción (roja directa, doble amarilla en el mismo partido, y
+  // acumulación de amarillas cada múltiplo de 3 — 3/6/9/12/15/18/21…)
+  // cuestan SIEMPRE exactamente el partido SIGUIENTE del calendario del
+  // club (cualquier competición) y se levantan solas al pasar ese único
+  // partido — nunca hace falta añadir NI quitar nada a mano.
+  //
+  // Se deriva 100% del acta ya jugada (misma fuente que
+  // calcularStatsRosterClub/_tarjetaActivaPara) — CERO estado persistido
+  // propio, así que no hay ninguna entrada "abierta" que se pueda quedar
+  // huérfana: mirando solo el partido INMEDIATAMENTE ANTERIOR
+  // (_ordenClub === ordenPartidoActual - 1) del calendario del club, la
+  // sanción desaparece sola en cuanto ese partido dejó de ser "el
+  // anterior" (el siguiente partido del jugador ya no lo mira).
+  function calcularSancionadosAutomaticosPara(clubId, ordenPartidoActual, datos) {
+    if (typeof ordenPartidoActual !== "number" || ordenPartidoActual <= 0) return [];
+    var _COMPS_EXCLUIDAS = { superliga: true, verano: true };
+    var partidosClub = _partidosOrdenadosDelClub(clubId, datos);
+    var anterior = null;
+    for (var i = 0; i < partidosClub.length; i++) {
+      if (partidosClub[i]._ordenClub === ordenPartidoActual - 1) { anterior = partidosClub[i]; break; }
+    }
+    if (!anterior || !anterior.jugado || _COMPS_EXCLUIDAS[anterior.competicion] || !anterior.jug || !anterior.jug.length) return [];
+
+    var nombresPorId = {};
+    obtenerJugadoresClub(clubId).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+    // Amarillas TOTALES del jugador contando SOLO hasta (e incluyendo)
+    // `anterior` — necesarias para saber si fue precisamente ESE partido
+    // el que hizo cruzar un múltiplo de 3, y no uno ya sancionado antes.
+    var amarillasHastaAnterior = {};
+    partidosClub.forEach(function (p) {
+      if (p._ordenClub > ordenPartidoActual - 1 || !p.jugado || _COMPS_EXCLUIDAS[p.competicion]) return;
+      (p.jug || []).forEach(function (row) {
+        if (!row.j || row.e !== clubId) return;
+        var key = _normNombre(_nombreFilaJugadorConFallback(nombresPorId, row));
+        amarillasHastaAnterior[key] = (amarillasHastaAnterior[key] || 0) + (row.a || 0);
+      });
+    });
+
+    var vistos = {};
+    var sancionados = [];
+    anterior.jug.forEach(function (row) {
+      if (!row.j || row.e !== clubId) return;
+      var nombre = _nombreFilaJugadorConFallback(nombresPorId, row);
+      var key = _normNombre(nombre);
+      if (vistos[key]) return;
+      var motivo = null;
+      if ((row.r || 0) >= 1) {
+        motivo = "🟥 Roja directa";
+      } else if ((row.a || 0) >= 2) {
+        motivo = "🟨🟨 2 amarillas en el mismo partido";
+      } else if ((row.a || 0) >= 1) {
+        var total = amarillasHastaAnterior[key] || 0;
+        if (total > 0 && total % 3 === 0) motivo = total + "ª amarilla acumulada";
+      }
+      if (motivo) {
+        vistos[key] = true;
+        sancionados.push({ nombre: nombre, motivo: motivo });
+      }
+    });
+    return sancionados;
   }
 
   // Bloqueo de color del nombre en la Plantilla — 3 niveles, prioridad
@@ -12794,9 +12887,19 @@
         var nombreElegido = selJugador ? selJugador.value : "";
         if (nombreElegido && window._idManagerActivo && window.Estado) {
           // Queda vigente desde EL PARTIDO cuya previa está abierta ahora
-          // (inclusive) — ver estado.js::agregarJugadorALista.
+          // (inclusive) — ver estado.js::agregarJugadorALista. Se cierra
+          // SOLA, sin que el admin tenga que quitarla con la ✕ (reporte
+          // usuario 2026-09-26, una sanción sin ninguna tarjeta que
+          // llevaba así desde su alta): Lesionados dura ESE partido + el
+          // siguiente (regla explícita del usuario); Sancionados dura
+          // SOLO el partido para el que se añade — la acumulación por
+          // tarjetas real ya no necesita entrada manual en absoluto (ver
+          // calcularSancionadosAutomaticosPara), así que "+ Añadir" aquí
+          // queda para el caso excepcional del admin, nunca para el uso
+          // normal.
           var ordenAlta = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
-          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoPicker, nombreElegido, ordenAlta);
+          var hastaAlta = ordenAlta + (tipoPicker === "lesionados" ? 2 : 1);
+          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoPicker, nombreElegido, ordenAlta, hastaAlta);
         }
       }
       renderListasJugadores();
@@ -12872,6 +12975,8 @@
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,
     calcularStatsRosterClub: calcularStatsRosterClub,
+    calcularSancionadosAutomaticosPara: calcularSancionadosAutomaticosPara,
+    _partidosOrdenadosDelClub: _partidosOrdenadosDelClub,
     parsearStatsOverrideTexto: parsearStatsOverrideTexto,
     pintarEditorPlantillaClub: pintarEditorPlantillaClub,
     pintarEditorStatsPlantilla: pintarEditorStatsPlantilla,

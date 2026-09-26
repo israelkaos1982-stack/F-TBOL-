@@ -2153,18 +2153,18 @@
     }
   }
 
-  // ---------- Iconos de las 5 cajas de Objetivos (candado 646) ----------
-  // Las 5 cajas (LIGA/COPA/CHAMPIONS/SUPERLIGA/GLOBALES) son fijas —
-  // solo su ICONO es editable, no su nombre. Por defecto los puestos al
-  // crear la pantalla; el admin los cambia por caja, uno a uno. Copia
-  // EXACTA (mismas claves) del mapa de js/renderizadores.js — si se
-  // añade una caja nueva ahí, añadirla también aquí o
-  // guardarObjetivosIconoSeccion no sabría a qué icono por defecto caer
-  // para esa caja.
+  // ---------- Iconos de las cajas de Objetivos (candado 646) ----------
+  // El catálogo de cajas es ABIERTO (ver js/renderizadores.js::
+  // parsearObjetivosTexto — una caja por cada "# Título" que el admin
+  // escriba, sin límite de cuántas), así que este store acepta CUALQUIER
+  // clave, no solo las 5 "de fábrica". OBJETIVOS_ICONOS_DEFAULT solo da
+  // un icono de partida bonito a esas 5 (copia EXACTA del mapa de
+  // js/renderizadores.js); cualquier caja nueva que el admin invente
+  // arranca con el fallback genérico 🎯 hasta que le ponga el suyo.
   var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", CHAMPIONS: "🇪🇺", SUPERLIGA: "🌟", GLOBALES: "🌍" };
+  var OBJETIVOS_ICONO_FALLBACK = "🎯";
   function _objetivosIconosKey(clubId) { return "ef7_objetivos_iconos_v1_" + clubId; }
   function obtenerObjetivosIconos(clubId) {
-    var out = {};
     var guardados = null;
     try {
       var raw = localStorage.getItem(_objetivosIconosKey(clubId));
@@ -2172,14 +2172,21 @@
     } catch (err) {
       guardados = null;
     }
+    var out = {};
+    // Primero TODO lo ya guardado (incluidas cajas nuevas del admin que
+    // no están en el mapa de defaults) — antes se descartaban en
+    // silencio por no iterar más que las 5 claves de fábrica.
+    if (guardados && typeof guardados === "object") {
+      Object.keys(guardados).forEach(function (s) { out[s] = guardados[s]; });
+    }
     Object.keys(OBJETIVOS_ICONOS_DEFAULT).forEach(function (s) {
-      out[s] = (guardados && guardados[s]) ? guardados[s] : OBJETIVOS_ICONOS_DEFAULT[s];
+      if (!out[s]) out[s] = OBJETIVOS_ICONOS_DEFAULT[s];
     });
     return out;
   }
   function guardarObjetivosIconoSeccion(clubId, seccion, icono) {
     var actuales = obtenerObjetivosIconos(clubId);
-    actuales[seccion] = (icono && String(icono).trim()) || OBJETIVOS_ICONOS_DEFAULT[seccion];
+    actuales[seccion] = (icono && String(icono).trim()) || OBJETIVOS_ICONOS_DEFAULT[seccion] || OBJETIVOS_ICONO_FALLBACK;
     try {
       localStorage.setItem(_objetivosIconosKey(clubId), JSON.stringify(actuales));
       return true;

@@ -557,14 +557,16 @@
   // previa (petición usuario 2026-09-26, ejemplo verbatim: "Champions
   // League · Dieciseisavos Vuelta" -> "Champions - Dieciseisavos -
   // Vuelta" / "Recopa de Europa · Dieciseisavos" -> "Recopa -
-  // Dieciseisavos", "así con todos"). Se quita el sufijo genérico
-  // ("League"/"de España"/"de Europa") de las competiciones que lo
-  // tienen; los nombres YA cortos o que son un nombre propio real (Copa
-  // del Rey, Liga, Hypermotion, Previa Champions, Superliga,
-  // Intercontinental) se quedan tal cual — acortarlos más los dejaría
-  // irreconocibles o los confundiría entre sí (Supercopa España/Europa).
+  // Dieciseisavos", "así con todos"; ampliado el mismo día: "Copa del
+  // Rey · Dieciseisavos Ida" -> "Copa Rey - Dieciseisavos - Ida"). Se
+  // quita el sufijo genérico ("League"/"de España"/"de Europa"/"del")
+  // de las competiciones que lo tienen; los nombres YA cortos o sin
+  // sufijo que recortar (Liga, Hypermotion, Previa Champions,
+  // Superliga, Intercontinental) se quedan tal cual — acortarlos más
+  // los dejaría irreconocibles o los confundiría entre sí (Supercopa
+  // España/Europa).
   var COMP_LABEL = {
-    liga: "Liga", hypermotion: "Hypermotion", copa: "Copa del Rey", supercopa: "Supercopa España",
+    liga: "Liga", hypermotion: "Hypermotion", copa: "Copa Rey", supercopa: "Supercopa España",
     promocion: "Promoción",
     champions: "Champions", "ucl-previa": "Previa Champions",
     uel: "Europa", uecl: "Conference",

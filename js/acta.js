@@ -119,6 +119,16 @@
       jugadorNombre = auto.nombre;
     }
 
+    // 🔁 Renombres de plantilla (ver js/estado.js::obtenerRenombresPlantillaTexto
+    // / js/renderizadores.js::resolverRenombreJugador) — si el jugador
+    // recién elegido tiene un "nombre actual" mapeado para este club (ej.
+    // PSG 2023→2027), el evento se guarda YA con ese nombre: el acta, la
+    // Plantilla y cualquier estadística usan siempre el mismo nombre, sin
+    // importar cuál de los 2 se pulsó en el picker en este partido.
+    if (jugadorNombre && opts.equipoId && window.Renderizadores && window.Renderizadores.resolverRenombreJugador) {
+      jugadorNombre = window.Renderizadores.resolverRenombreJugador(opts.equipoId, jugadorNombre);
+    }
+
     var evento = {
       id_evento: nuevoIdEvento(),
       minuto: opts.minuto,

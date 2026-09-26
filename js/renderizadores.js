@@ -641,21 +641,36 @@
       .replace(/[·\-]+$/, "").replace(/^[·\-]+/, "").replace(/\s+/g, " ").trim();
     return { base: base, leg: m[0] };
   }
-  function _uneRondaConGuion(ronda) {
+  // El "Dieciseisavos" de Champions/Europa League/Conference es en realidad
+  // la ronda de REPESCA (play-off previo a la fase de grupos) — no una
+  // ronda de eliminación directa como el "Dieciseisavos" real de la Copa
+  // del Rey o la Recopa de Europa, que SÍ se llaman así (petición usuario
+  // 2026-09-26: "Champions - Dieciseisavos - Ida" -> "Champions - Repesca
+  // - Ida", "tanto en Champions, Europa League y Conference"). Comparación
+  // por palabra normalizada (sin acentos/mayúsculas, ver _normNombre más
+  // abajo) para que dé igual cómo lo haya tecleado el admin
+  // ("Dieciseisavos"/"dieciseisavos"/"Dieciseisavos de Final"...).
+  var _COMPS_CON_REPESCA = { champions: true, uel: true, uecl: true };
+  function _renombrarRondaSiHaceFalta(compKeyResuelto, texto) {
+    if (!texto || !_COMPS_CON_REPESCA[compKeyResuelto]) return texto;
+    return /\bdieciseisavos\b/.test(_normNombre(texto)) ? "Repesca" : texto;
+  }
+  function _uneRondaConGuion(compKeyResuelto, ronda) {
     var partes = _dividirRondaEnLegs(ronda);
-    if (!partes) return ronda;
-    return partes.base ? (partes.base + " - " + partes.leg) : partes.leg;
+    if (!partes) return _renombrarRondaSiHaceFalta(compKeyResuelto, ronda);
+    var base = _renombrarRondaSiHaceFalta(compKeyResuelto, partes.base);
+    return base ? (base + " - " + partes.leg) : partes.leg;
   }
   function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
     if (compKeyResuelto === "verano") {
-      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(ronda) : "");
+      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : "");
     }
     var compLabel = COMP_LABEL[compKeyResuelto] || competicionCruda;
     // Guion " - " en vez de " · " para TODA competición (petición usuario,
     // "así con todos" — el separador con punto queda solo como legado en
     // el resto de sitios que aún no llaman a esta función, ver comentario
     // en _descripcionCortaPartido/_textoMayorPartido).
-    var etiquetaRonda = ronda ? " - " + _uneRondaConGuion(ronda) : (jornada ? " - J" + jornada : "");
+    var etiquetaRonda = ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : (jornada ? " - J" + jornada : "");
     return compLabel + etiquetaRonda;
   }
 
@@ -10869,16 +10884,18 @@
     document.getElementById("previa-marcador").textContent =
       partido.jugado ? (partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante) : "VS";
 
-    // Mismo nombre acortado + guion " - " que el título del calendario
-    // (ver _etiquetaCompRondaTexto) — aquí se resuelve el compKey desde
-    // partido.competicion (puede venir en texto libre, "Champions League")
-    // antes de mirar COMP_LABEL, para que el acortado también funcione
-    // cuando el admin tecleó el nombre completo en el Calendario extra.
-    // El formato de jornada ("Jornada N", con la palabra completa) es
-    // propio de esta pantalla — no se toca, solo el separador y la ronda.
+    // Mismo nombre acortado + guion " - " (y el mismo renombrado de
+    // Dieciseisavos->Repesca en Champions/Europa League/Conference) que el
+    // título del calendario, ver _etiquetaCompRondaTexto — aquí se resuelve
+    // el compKey desde partido.competicion (puede venir en texto libre,
+    // "Champions League") antes de mirar COMP_LABEL, para que funcione
+    // igual cuando el admin tecleó el nombre completo en el Calendario
+    // extra. El formato de jornada ("Jornada N", con la palabra completa)
+    // es propio de esta pantalla — no se toca, solo el separador y la ronda.
+    var _previaCompKey = _resolverCompKeyBalon(partido.competicion);
     document.getElementById("previa-comp").textContent =
-      (COMP_LABEL[_resolverCompKeyBalon(partido.competicion)] || COMP_LABEL[partido.competicion] || partido.competicion) +
-      (partido.ronda ? " - " + _uneRondaConGuion(partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));
+      (COMP_LABEL[_previaCompKey] || COMP_LABEL[partido.competicion] || partido.competicion) +
+      (partido.ronda ? " - " + _uneRondaConGuion(_previaCompKey, partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));
 
     document.getElementById("previa-estadio").textContent = estadio
       ? estadio.nombre

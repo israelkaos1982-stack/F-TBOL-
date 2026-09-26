@@ -11661,7 +11661,7 @@
           // bloqueo de color de la Plantilla: cuántos partidos distintos
           // tuvo 2+ amarillas en el mismo encuentro (doble amarilla,
           // pierde el siguiente) y cuántos tuvo alguna roja directa
-          // (pierde 2). Ver _tarjetaActivaPara.
+          // (pierde el siguiente). Ver _tarjetaActivaPara.
           partidosDobleAmarilla: 0,
           partidosRojaDirecta: 0
         };
@@ -11828,7 +11828,7 @@
   // hay ningún bloqueo activo ahora mismo.
   function _tarjetaActivaPara(s, flagsJ) {
     if (s.partidosRojaDirecta > 0 && flagsJ.roja !== s.partidosRojaDirecta) {
-      return { tipo: "roja", valor: s.partidosRojaDirecta, titulo: "🟥 Roja directa — se pierde 2 partidos. Pulsa para quitar el bloqueo (PIN admin)." };
+      return { tipo: "roja", valor: s.partidosRojaDirecta, titulo: "🟥 Roja directa — se pierde el siguiente partido. Pulsa para quitar el bloqueo (PIN admin)." };
     }
     if (s.partidosDobleAmarilla > 0 && flagsJ.doble !== s.partidosDobleAmarilla) {
       return { tipo: "doble", valor: s.partidosDobleAmarilla, titulo: "🟨🟨 2 amarillas en el mismo partido — se pierde el siguiente. Pulsa para quitar el bloqueo (PIN admin)." };

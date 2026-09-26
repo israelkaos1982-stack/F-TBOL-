@@ -1991,13 +1991,37 @@
     });
     return Object.keys(vistos);
   }
-  function agregarJugadorALista(clubId, tipo, nombre, orden) {
+  // `hasta` opcional — si se omite, la entrada queda abierta hasta que
+  // alguien la cierre a mano (✕, ver quitarJugadorDeLista). Los callers
+  // nuevos SIEMPRE deben pasarlo (ver js/renderizadores.js::
+  // _abrirPickerJugadorLista) para que una entrada nunca pueda quedarse
+  // vigente para siempre por olvido — reporte usuario 2026-09-26,
+  // sancionados sin ninguna tarjeta que llevaban así desde su alta.
+  function agregarJugadorALista(clubId, tipo, nombre, orden, hasta) {
     nombre = String(nombre || "").trim();
     var lista = obtenerListaJugadores(clubId, tipo);
     if (!nombre) return lista;
-    lista.push({ id: _nuevoIdEntradaLista(), nombre: nombre, desde: typeof orden === "number" ? orden : 0, hasta: null });
+    lista.push({
+      id: _nuevoIdEntradaLista(), nombre: nombre,
+      desde: typeof orden === "number" ? orden : 0,
+      hasta: typeof hasta === "number" ? hasta : null
+    });
     _guardarListaJugadores(clubId, tipo, lista);
     return lista;
+  }
+  // Cierra RETROACTIVAMENTE cualquier entrada todavía ABIERTA
+  // (hasta === null) de esta lista a `desde + ventana` — usado por el
+  // fixup de un solo uso (js/main.js::_fixupCapearListasAbiertasV1) para
+  // sanar entradas creadas ANTES de que agregarJugadorALista empezara a
+  // cerrar cada alta nueva sola. Nunca toca una entrada ya cerrada.
+  function capearListaJugadoresAbierta(clubId, tipo, ventana) {
+    var lista = obtenerListaJugadores(clubId, tipo);
+    var cambio = false;
+    lista.forEach(function (e) {
+      if (e.hasta === null) { e.hasta = e.desde + ventana; cambio = true; }
+    });
+    if (cambio) _guardarListaJugadores(clubId, tipo, lista);
+    return cambio;
   }
   // "Quita" a un jugador de la lista CERRANDO su vigencia en `orden` (el
   // partido cuya previa tenía abierta el admin al pulsar ✕) — nunca
@@ -3767,6 +3791,7 @@
     obtenerNombresListaActiva: obtenerNombresListaActiva,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
+    capearListaJugadoresAbierta: capearListaJugadoresAbierta,
     obtenerTarjetaFlags: obtenerTarjetaFlags,
     limpiarTarjetaFlag: limpiarTarjetaFlag,
     obtenerObjetivosTexto: obtenerObjetivosTexto,

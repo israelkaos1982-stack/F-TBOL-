@@ -7944,7 +7944,7 @@
 
 
   // ============================================================
-  // SUPERLIGA — los 6 clubes humanos, todos contra todos (calendario
+  // SUPERLIGA — los clubes humanos, todos contra todos (calendario
   // generado por Estado.listarPartidosResueltos, ver js/estado.js). A
   // diferencia de Liga 1ª REF y Copa del Rey, NO hay texto libre que
   // pegar — es 100% humano-vs-humano, así que la clasificación Y las 5
@@ -7960,8 +7960,19 @@
     { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
+  // Inter de Milán (Aléx) NO participa en la Superliga (petición usuario
+  // explícita 2026-09-26, foto de la tabla mostrándolo con 0 PJ junto al
+  // resto) — a diferencia de Manchester City, que sí compite con normalidad.
+  // Mismo par que Estado._partidosSuperliga (js/estado.js) tiene que excluir
+  // en el generador de partidos — si algún día se cambia esta lista, hay
+  // que tocar LOS DOS SITIOS (aquí decide quién sale en la tabla/stats,
+  // allí decide contra quién se generan los 15 partidos de cada club).
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["inter-milan"];
+
   function _superligaEquiposHumanos(datos) {
-    return datos.equipos.equipos || [];
+    return (datos.equipos.equipos || []).filter(function (e) {
+      return SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
   }
 
   // Un partido de Superliga DE VERDAD es SIEMPRE uno de los generados por

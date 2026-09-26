@@ -1372,6 +1372,14 @@
   // de clasificación (candado 646) — ver js/main.js::fijarDivisionClub.
   var LIGA_DIVISION_KEY_BASE = "ef7_liga_division_v1";
   var LIGA_DIVISION_DEFECTO = "1ref";
+  // Clubes fuera de la pirámide española (ver
+  // js/renderizadores.js::LIGA1REF_HUMANOS_EXCLUIDOS/LIGA_NAV_HUMANO_PROPIO):
+  // su división de fábrica NUNCA es "1ref" — cada uno tiene SU PROPIA liga
+  // independiente, para que la tarjeta "Liga 1ª REF" del menú abra la
+  // división correcta desde el primer momento, sin que el admin tenga que
+  // pulsar 📌 manualmente para fijarla (un valor ya guardado en
+  // localStorage SIGUE ganando siempre — ver obtenerDivisionClub).
+  var LIGA_DIVISION_DEFECTO_POR_CLUB = { psg: "ligue1", "manchester-city": "premier", "inter-milan": "seriea" };
   // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
   // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
   // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este
@@ -1396,14 +1404,15 @@
     }
   }
   function obtenerDivisionClub(clubId) {
+    var defecto = LIGA_DIVISION_DEFECTO_POR_CLUB[clubId] || LIGA_DIVISION_DEFECTO;
     try {
       var v = localStorage.getItem(LIGA_DIVISION_KEY_BASE + "_" + clubId);
       if (v && v.trim()) return v;
     } catch (err) {
-      return LIGA_DIVISION_DEFECTO;
+      return defecto;
     }
     var legacy = _leerDivisionLegacyBlob(clubId);
-    return legacy || LIGA_DIVISION_DEFECTO;
+    return legacy || defecto;
   }
   function guardarDivisionClub(clubId, ligaId) {
     if (!clubId || !ligaId) return false;
@@ -1553,7 +1562,12 @@
   // edita a mano (candado 646), su edición (overridesFabrica) gana igual
   // que con cualquier otra tarjeta — este mapa solo sustituye el DEFAULT.
   var MENU_CLUB_BUILTIN_POR_CLUB = {
-    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" } }
+    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" } },
+    // Manchester City (Rubén) e Inter de Milán (Aléx) — 2026-09-25,
+    // mismo mecanismo que PSG: su tarjeta "Copa del Rey" del menú pasa a
+    // mostrar el nombre real de SU copa nacional.
+    "manchester-city": { copadelrey: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "FA Cup" } },
+    "inter-milan": { copadelrey: { icono: "🇮🇹", etiqueta: "Coppa Italia" } }
   };
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }

@@ -264,6 +264,12 @@
   var _BALON_COMP_ALIAS = {
     liga: "liga", "ligue 1": "liga", "liga ea sports": "liga", "liga ea": "liga",
     "la liga": "liga", "primera division": "liga",
+    // Manchester City (Rubén) e Inter de Milán (Aléx) — 2 clubes humanos más,
+    // independientes de la pirámide española, cada uno con SU liga real
+    // (mismo mecanismo que "Ligue 1" del PSG, arriba): su "Liga" resuelve
+    // también al compKey "liga" para que _combinarClasificacionConHumanosLigueUno
+    // (ver LIGA_NAV_HUMANO_PROPIO más abajo) encuentre sus partidos.
+    "premier league": "liga", premier: "liga", "serie a": "liga", seriea: "liga",
     // "Hypermotion" es, en el fondo, la MISMA Liga (un club puede jugarla
     // en cualquiera de las 4 divisiones de la pirámide española) — pero
     // NO se funde con el alias "liga" de arriba a propósito: el usuario
@@ -274,6 +280,9 @@
     // del Calendario extra caía en "comp-otro" (gris neutro).
     hypermotion: "hypermotion", "liga hypermotion": "hypermotion",
     copa: "copa", "copa del rey": "copa", coupe: "copa", "coupe de france": "copa",
+    // "FA Cup" (Manchester City) y "Coppa Italia" (Inter de Milán) — su
+    // copa nacional real, mismo mecanismo que "Coupe de France" del PSG.
+    "fa cup": "copa", "facup": "copa", "coppa italia": "copa", coppa: "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
     "supercopa espana": "supercopa",
     promocion: "promocion", "promocion de ascenso": "promocion", "promocion de descenso": "promocion",
@@ -439,7 +448,7 @@
   }
 
   // ============================================================
-  // PANTALLA DE INICIO — las 6 cajas humanas (fuente única: data/equipos.json)
+  // PANTALLA DE INICIO — las 8 cajas humanas (fuente única: data/equipos.json)
   // ============================================================
   // Se renderizan en JS (no hardcodeadas en index.html) para que el escudo
   // real, el mánager, su selección y su emoji salgan SIEMPRE del mismo
@@ -1200,7 +1209,13 @@
     "real-madrid": ["real madrid", "r madrid"],
     "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
     "fc-barcelona": ["fc barcelona", "barcelona", "barca", "barça"],
-    psg: ["psg", "paris saint germain", "paris sg"]
+    psg: ["psg", "paris saint germain", "paris sg"],
+    // 8º/9º clubes humanos (2026-09-25, promovidos desde data/equipos_ia.json):
+    // "city"/"inter" a secas SIN colisión verificada contra equipos_ia.json ni
+    // data/rivales_reales.json (ninguna otra entrada de ninguno de los 2
+    // catálogos contiene "city" ni "inter" como substring).
+    "manchester-city": ["manchester city", "man city", "city"],
+    "inter-milan": ["inter", "inter de milan", "inter milan", "internazionale"]
   };
   function _normSinPuntuacion(s) {
     return _normNombre(s).replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
@@ -1380,7 +1395,7 @@
   // LIGA_NAV_HUMANO_PROPIO más abajo). Es el único de los 6 humanos fuera
   // de esta pirámide; si en el futuro se añade otro club humano de fuera
   // de España, su id va aquí también.
-  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
+  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
 
   // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
   // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
@@ -1587,7 +1602,8 @@
   // descenso y su promoción se cuentan desde ABAJO de la tabla (últimos 4
   // puestos descenso directo, el 5º empezando por el final promoción de
   // descenso), para que sigan siendo correctos aunque cambie el nº total
-  // de equipos (hoy 16: 11 IA reales + 5 humanos, PSG no juega esta liga).
+  // de equipos (hoy 17: 12 IA reales + 5 humanos — PSG/Manchester City/
+  // Inter de Milán no juegan esta liga, tienen la suya propia).
   function _liga1RefZona(pos, total) {
     if (pos <= 4) return "ascenso";
     if (pos === 5) return "promo-ascenso";
@@ -1938,7 +1954,7 @@
   // Sports (_ligaLeyendaHTML, rama "promocion") NUNCA cambien de vecino.
   // Ligue 1 es 100% independiente de esa pirámide (liga francesa, sin
   // ascenso/descenso hacia ninguna de las 4 españolas).
-  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports", "ligue1"];
+  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports", "ligue1", "premier", "seriea"];
   var LIGA_NAV_META = {
     "2ref": { corta: "2ª REF", boxClase: "liga-tab-box--2ref", leyenda: "promocion" },
     "1ref": { corta: "1ª REF", boxClase: "liga-tab-box--1ref", leyenda: "promocion" },
@@ -1954,6 +1970,17 @@
     ligue1: {
       corta: "Ligue 1", boxClase: "liga-tab-box--ligue1", leyenda: "europa",
       tituloLargo: "🇫🇷 Ligue 1", mostrarPosiciones: true, descensoDestino: "Ligue 2"
+    },
+    // 2 ligas más (2026-09-25), MISMO patrón exacto que Ligue 1: 100% texto
+    // libre + su propio club humano dueño en exclusiva (LIGA_NAV_HUMANO_PROPIO,
+    // más abajo) + su propio reparto de zonas (_EUROPA_ZONA_CONFIG).
+    premier: {
+      corta: "Premier League", boxClase: "liga-tab-box--premier", leyenda: "europa",
+      tituloLargo: "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", mostrarPosiciones: true, descensoDestino: "Championship"
+    },
+    seriea: {
+      corta: "Serie A", boxClase: "liga-tab-box--seriea", leyenda: "europa",
+      tituloLargo: "🇮🇹 Serie A", mostrarPosiciones: true, descensoDestino: "Serie B"
     }
   };
   // Título largo de cada liga — "🇪🇸 Liga <nombre corto>" por defecto
@@ -1989,7 +2016,7 @@
   // "liga", así que ningún partido de Hypermotion (compKey "hypermotion",
   // no "liga") llegaba a sumarse a la clasificación ni a las
   // estadísticas de un club recién ascendido/descendido a esa división.
-  var LIGA_NAV_COMPKEY_LEGACY = { "1ref": "liga", ligue1: "liga" };
+  var LIGA_NAV_COMPKEY_LEGACY = { "1ref": "liga", ligue1: "liga", premier: "liga", seriea: "liga" };
   function _compKeyEsperadoParaDivision(ligaId) {
     if (LIGA_NAV_COMPKEY_LEGACY.hasOwnProperty(ligaId)) return LIGA_NAV_COMPKEY_LEGACY[ligaId];
     var meta = LIGA_NAV_META[ligaId];
@@ -2326,7 +2353,11 @@
     // directos y el 16º juega la promoción de permanencia — antes eran
     // solo 3 descensos directos (18º-20º) con el 17º en promoción.
     easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: true, descensoN: 4 },
-    ligue1: { champions: 3, previa: 4, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 4 }
+    ligue1: { champions: 3, previa: 4, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 4 },
+    // Premier League / Serie A (2026-09-25): 20 equipos, 3 descensos
+    // directos (real, sin promoción de permanencia en ninguna de las 2).
+    premier: { champions: 4, previa: 5, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 3 },
+    seriea: { champions: 4, previa: 5, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 3 }
   };
   function _ligaEuropaZona(pos, total, ligaId) {
     var cfg = _EUROPA_ZONA_CONFIG[ligaId] || _EUROPA_ZONA_CONFIG.easports;
@@ -2376,7 +2407,7 @@
   // sola, igual que 1ª REF ya hace con los 5 humanos que sí comparten esa
   // liga (calcularLiga1RefCombinada). Toda liga EXTRA nueva cuyo único
   // humano la juegue de verdad añade aquí su entrada ligaId->clubId.
-  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg" };
+  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg", premier: "manchester-city", seriea: "inter-milan" };
 
   // Fusión: texto pegado (solo IA) + el partido a partido REAL del club
   // humano dueño de esta liga (RESULTADO_RAPIDO_POR_CLUB, o jugado en
@@ -2787,7 +2818,7 @@
   // foto usuario: bloque "PSG" con su propio cuadro Octavos→Final dentro
   // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
   // humano de fuera de España, su id va aquí también.
-  var COPA_HUMANOS_EXCLUIDOS = ["psg"];
+  var COPA_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
 
   function _copaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -3269,6 +3300,65 @@
       nota.className = "liga1ref-leyenda-mini";
       nota.style.marginTop = "10px";
       nota.textContent = "🇫🇷 Competición francesa — solo PSG la disputa, sin cuadro compartido con el resto de cajas.";
+      contenedor.appendChild(nota);
+    });
+  }
+
+  // ---------- 🏴󠁧󠁢󠁥󠁮󠁧󠁿 FA Cup — Manchester City, el ÚNICO club humano que la juega (2026-09-25) ----------
+  // Manchester City (Rubén) no compite en la Copa del Rey — juega en
+  // Inglaterra, no en España. Copia EXACTA de renderizarCoupeFrancia,
+  // solo cambia el nombre de la competición/bandera/texto — mismo motor
+  // compartido de Copa (_copaEstadoClub/_copaBloqueClubHTML).
+  function renderizarFACup(contenedorId, clubId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var equipo = buscarEquipoPorId(clubId, datos);
+      var bloque = equipo ? _copaEstadoClub(datos, equipo) : null;
+
+      if (!bloque) {
+        contenedor.appendChild(nodoEstado("🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Todavía no hay partidos de FA Cup. Añádelos desde el ✏️ de tu Calendario extra → Competición «FA Cup»."));
+        return;
+      }
+      contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(bloque, datos, clubId));
+
+      var nota = document.createElement("p");
+      nota.className = "liga1ref-leyenda-mini";
+      nota.style.marginTop = "10px";
+      nota.textContent = "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Competición inglesa — solo Manchester City la disputa, sin cuadro compartido con el resto de cajas.";
+      contenedor.appendChild(nota);
+    });
+  }
+
+  // ---------- 🇮🇹 Coppa Italia — Inter de Milán, el ÚNICO club humano que la juega (2026-09-25) ----------
+  // Inter de Milán (Aléx) no compite en la Copa del Rey — juega en
+  // Italia, no en España. Copia EXACTA de renderizarCoupeFrancia, solo
+  // cambia el nombre de la competición/bandera/texto.
+  function renderizarCoppaItalia(contenedorId, clubId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var equipo = buscarEquipoPorId(clubId, datos);
+      var bloque = equipo ? _copaEstadoClub(datos, equipo) : null;
+
+      if (!bloque) {
+        contenedor.appendChild(nodoEstado("🇮🇹", "Todavía no hay partidos de Coppa Italia. Añádelos desde el ✏️ de tu Calendario extra → Competición «Coppa Italia»."));
+        return;
+      }
+      contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(bloque, datos, clubId));
+
+      var nota = document.createElement("p");
+      nota.className = "liga1ref-leyenda-mini";
+      nota.style.marginTop = "10px";
+      nota.textContent = "🇮🇹 Competición italiana — solo Inter de Milán la disputa, sin cuadro compartido con el resto de cajas.";
       contenedor.appendChild(nota);
     });
   }
@@ -8808,8 +8898,12 @@
   // Supercopa de Europa, añadir su alias aquí — es la misma caja
   // "competición europea", solo cambia el nombre real.
   var OBJETIVOS_SECCION_ALIAS_PREFIJO = {
-    LIGA: ["LIGA", "LIGUE"],
-    COPA: ["COPA", "COUPE"],
+    // "PREMIER" (Manchester City, Premier League) y "SERIE" (Inter de
+    // Milán, Serie A) — mismo mecanismo que "LIGUE" (PSG, Ligue 1).
+    LIGA: ["LIGA", "LIGUE", "PREMIER", "SERIE"],
+    // "FA" (Manchester City, FA Cup) y "COPPA" (Inter de Milán, Coppa
+    // Italia) — mismo mecanismo que "COUPE" (PSG, Coupe de France).
+    COPA: ["COPA", "COUPE", "FA", "COPPA"],
     CHAMPIONS: ["CHAMPIONS", "RECOPA"]
   };
 
@@ -9355,7 +9449,14 @@
   // color/balón de la card) para que "Ligue 1"/"Coupe"/etc. casen igual
   // que sus claves internas ("liga"/"copa").
   var RESULTADO_RAPIDO_POR_CLUB = {
-    psg: { liga: true, copa: true }
+    psg: { liga: true, copa: true },
+    // Rubén (Manchester City) y Aléx (Inter) — mismo trato que Izan/PSG,
+    // "igual que el PSG" (petición usuario 2026-09-25): Premier League/
+    // FA Cup y Serie A/Coppa Italia se resuelven fuera de la app, solo
+    // se anota el resultado final. El resto de su calendario (Champions/
+    // Recopa/Torneo de Verano/lo que sea) usa la card normal en vivo.
+    "manchester-city": { liga: true, copa: true },
+    "inter-milan": { liga: true, copa: true }
   };
   function _usaResultadoRapido(idClub, compKeyResuelto) {
     var cfg = RESULTADO_RAPIDO_POR_CLUB[idClub];
@@ -12601,6 +12702,8 @@
     renderizarCopaDelRey: renderizarCopaDelRey,
     irCopaTab: irCopaTab,
     renderizarCoupeFrancia: renderizarCoupeFrancia,
+    renderizarFACup: renderizarFACup,
+    renderizarCoppaItalia: renderizarCoppaItalia,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,

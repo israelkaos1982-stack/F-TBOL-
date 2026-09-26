@@ -10632,7 +10632,7 @@
   }
 
   // ---------- Alias eFootball — qué equipo real elegir en el juego ----------
-  // Cualquier equipo SIN `crest` (los 6 humanos son los ÚNICOS con escudo
+  // Cualquier equipo SIN `crest` (los 8 humanos son los ÚNICOS con escudo
   // real — ver crearEscudoHTML) puede no tener licencia en eFootball, así
   // que la PREVIA le pinta debajo del nombre el club real que el admin ha
   // decidido que se le parece más (nivel/escudo/uniforme) — o un botón
@@ -10657,7 +10657,7 @@
     return (r && r.alias) || "";
   }
   function _previaAliasHTML(equipo, lado) {
-    if (!equipo || equipo.crest) return ""; // los 6 humanos siempre existen en el juego
+    if (!equipo || equipo.crest) return ""; // los 8 humanos siempre existen en el juego
     var clave = _claveAliasEquipo(equipo);
     if (!clave) return "";
     var actual = (window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "") || _aliasEfootballDefault(clave);

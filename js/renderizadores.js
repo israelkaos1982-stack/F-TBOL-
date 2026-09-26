@@ -553,12 +553,22 @@
     return d.getUTCDate() + " " + MESES[d.getUTCMonth()] + " " + d.getUTCFullYear();
   }
 
+  // Nombres ACORTADOS para el título de cada competición en calendarios/
+  // previa (petición usuario 2026-09-26, ejemplo verbatim: "Champions
+  // League · Dieciseisavos Vuelta" -> "Champions - Dieciseisavos -
+  // Vuelta" / "Recopa de Europa · Dieciseisavos" -> "Recopa -
+  // Dieciseisavos", "así con todos"). Se quita el sufijo genérico
+  // ("League"/"de España"/"de Europa") de las competiciones que lo
+  // tienen; los nombres YA cortos o que son un nombre propio real (Copa
+  // del Rey, Liga, Hypermotion, Previa Champions, Superliga,
+  // Intercontinental) se quedan tal cual — acortarlos más los dejaría
+  // irreconocibles o los confundiría entre sí (Supercopa España/Europa).
   var COMP_LABEL = {
-    liga: "Liga", hypermotion: "Hypermotion", copa: "Copa del Rey", supercopa: "Supercopa de España",
+    liga: "Liga", hypermotion: "Hypermotion", copa: "Copa del Rey", supercopa: "Supercopa España",
     promocion: "Promoción",
-    champions: "Champions League", "ucl-previa": "Previa Champions",
-    uel: "Europa League", uecl: "Conference League",
-    recopa: "Recopa de Europa", usc: "Supercopa de Europa",
+    champions: "Champions", "ucl-previa": "Previa Champions",
+    uel: "Europa", uecl: "Conference",
+    recopa: "Recopa", usc: "Supercopa Europa",
     intercontinental: "Intercontinental",
     verano: "Torneo de Verano",
     selecciones: "Selecciones", "sel-clasif": "Selecciones · Clasif.",
@@ -608,12 +618,42 @@
     var partes = limpio.split(" ");
     return partes.length > 1 ? (partes[0].charAt(0).toUpperCase() + ". " + partes.slice(1).join(" ")) : limpio;
   }
+
+  // Si `ronda` es una de las 2 legs de una eliminatoria a doble partido
+  // ("Dieciseisavos Vuelta", "Playoffs Ida"...), la separamos en SU PROPIO
+  // segmento con guion en vez de dejarla pegada al nombre de la ronda como
+  // una sola palabra (petición usuario 2026-09-26, ejemplo verbatim:
+  // "Champions League · Dieciseisavos Vuelta" -> "Champions - Dieciseisavos
+  // - Vuelta"). Mismo detector de palabra "ida"/"vuelta" que ya usa
+  // _rondaEsIdaOVuelta (más abajo) para emparejar ida con su vuelta, pero
+  // aquí se conserva el texto TAL CUAL lo tecleó el admin (mayúsculas
+  // incluidas) — _rondaBaseSinLeg normaliza a minúsculas y no sirve para
+  // mostrar. Una ronda sin ida/vuelta ("Dieciseisavos" a secas) no
+  // encuentra nada que partir y se devuelve intacta.
+  function _dividirRondaEnLegs(ronda) {
+    var texto = String(ronda || "").trim();
+    if (!texto) return null;
+    var m = texto.match(/\b(ida|vuelta)\b/i);
+    if (!m) return null;
+    var base = (texto.slice(0, m.index) + texto.slice(m.index + m[0].length))
+      .replace(/[·\-]+$/, "").replace(/^[·\-]+/, "").replace(/\s+/g, " ").trim();
+    return { base: base, leg: m[0] };
+  }
+  function _uneRondaConGuion(ronda) {
+    var partes = _dividirRondaEnLegs(ronda);
+    if (!partes) return ronda;
+    return partes.base ? (partes.base + " - " + partes.leg) : partes.leg;
+  }
   function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
     if (compKeyResuelto === "verano") {
-      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + ronda : "");
+      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(ronda) : "");
     }
     var compLabel = COMP_LABEL[compKeyResuelto] || competicionCruda;
-    var etiquetaRonda = ronda ? " · " + ronda : (jornada ? " · J" + jornada : "");
+    // Guion " - " en vez de " · " para TODA competición (petición usuario,
+    // "así con todos" — el separador con punto queda solo como legado en
+    // el resto de sitios que aún no llaman a esta función, ver comentario
+    // en _descripcionCortaPartido/_textoMayorPartido).
+    var etiquetaRonda = ronda ? " - " + _uneRondaConGuion(ronda) : (jornada ? " - J" + jornada : "");
     return compLabel + etiquetaRonda;
   }
 
@@ -10827,9 +10867,16 @@
     document.getElementById("previa-marcador").textContent =
       partido.jugado ? (partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante) : "VS";
 
+    // Mismo nombre acortado + guion " - " que el título del calendario
+    // (ver _etiquetaCompRondaTexto) — aquí se resuelve el compKey desde
+    // partido.competicion (puede venir en texto libre, "Champions League")
+    // antes de mirar COMP_LABEL, para que el acortado también funcione
+    // cuando el admin tecleó el nombre completo en el Calendario extra.
+    // El formato de jornada ("Jornada N", con la palabra completa) es
+    // propio de esta pantalla — no se toca, solo el separador y la ronda.
     document.getElementById("previa-comp").textContent =
-      (COMP_LABEL[partido.competicion] || partido.competicion) +
-      (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
+      (COMP_LABEL[_resolverCompKeyBalon(partido.competicion)] || COMP_LABEL[partido.competicion] || partido.competicion) +
+      (partido.ronda ? " - " + _uneRondaConGuion(partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));
 
     document.getElementById("previa-estadio").textContent = estadio
       ? estadio.nombre

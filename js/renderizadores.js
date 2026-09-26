@@ -9709,9 +9709,32 @@
     // js/sistema-temporadas.js para re-pintar tras confirmar un partido.
     window._idManagerActivo = idEquipoHumanoActivo;
 
-    // Destruye datos cruzados del mánager anterior antes de redibujar.
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando calendario…"));
+    // Bug reportado por el usuario (2 fotos, "cada 5-15 segundos se sube
+    // arriba del todo"): js/sync.js repinta este calendario cada ~10s en
+    // segundo plano (evento "ef7-sync-actualizado", esActualizacionDeSync
+    // = true) mientras el usuario puede llevar rato con el dedo puesto MÁS
+    // ABAJO (revisando Champions/Recopa, jornadas futuras...). El
+    // contenedor en sí NO tiene scroll propio — el que hace scroll es su
+    // padre `.club-calendar-col` (overflow-y:auto) — así que vaciar
+    // `contenedor` (aunque sea un instante, con el placeholder "Cargando
+    // calendario…") colapsa su altura y el navegador CLAMPEA el scrollTop
+    // del padre a su nuevo scrollHeight, mucho menor: el usuario "vuelve
+    // arriba" ANTES incluso de que el propio scrollIntoView de más abajo
+    // entre en juego. Se guarda esa posición ANTES de tocar nada para
+    // devolverla tal cual al terminar (más abajo), en vez de recentrar en
+    // el próximo partido como sí hace una apertura real del calendario.
+    var colScroll = contenedor.closest(".club-calendar-col") || contenedor;
+    var scrollGuardado = esActualizacionDeSync ? colScroll.scrollTop : null;
+
+    // El placeholder "⏳ Cargando calendario…" (colapsa la altura del
+    // contenedor mientras cargarTodo() resuelve) SOLO tiene sentido en una
+    // apertura real — en un refresco de fondo el contenido anterior sigue
+    // siendo válido de sobra para seguir viéndose mientras llega el nuevo,
+    // así que se deja intacto hasta tener los datos frescos.
+    if (!esActualizacionDeSync) {
+      contenedor.innerHTML = "";
+      contenedor.appendChild(nodoEstado("⏳", "Cargando calendario…"));
+    }
 
     cargarTodo()
       .then(function (datos) {
@@ -9907,11 +9930,22 @@
         // recortó el texto) y se re-abrevia con más margen.
         requestAnimationFrame(function () {
           _ajustarNombresQueNoQuepan(contenedor);
-          // .match-card--siguiente identifica EXACTAMENTE la card de
-          // idSiguiente (arriba) — a diferencia de ":not(.is-played)", que
-          // desde que existen los pospuestos (ver .match-card--pospuesto)
-          // también casaría con uno de ésos si cae antes en el calendario,
-          // aunque ya no sea "el próximo partido" real.
+          if (scrollGuardado !== null) {
+            // Refresco de fondo (sync): se devuelve la posición EXACTA que
+            // el usuario tenía — nunca se recentra en el próximo partido,
+            // o cada ciclo de sync volvería a arrastrarlo hacia arriba.
+            colScroll.scrollTop = scrollGuardado;
+            return;
+          }
+          // Apertura real del calendario (primera vez / cambio de club /
+          // tras una acción del propio usuario que cambia "el próximo
+          // partido", como confirmar un resultado): SÍ tiene sentido
+          // centrar la vista en él. .match-card--siguiente identifica
+          // EXACTAMENTE la card de idSiguiente (arriba) — a diferencia de
+          // ":not(.is-played)", que desde que existen los pospuestos (ver
+          // .match-card--pospuesto) también casaría con uno de ésos si cae
+          // antes en el calendario, aunque ya no sea "el próximo partido"
+          // real.
           var actual = contenedor.querySelector(".match-card--siguiente") || contenedor.querySelector(".match-card:not(.is-played)");
           if (actual) actual.scrollIntoView({ block: "center" });
         });

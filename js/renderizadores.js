@@ -1223,6 +1223,29 @@
   // SOLO si hay un único candidato más cercano (si dos claves distintas
   // quedan igual de cerca — ej. "villarreal"/"villarreal b" — no se
   // adivina, se deja sin resolver antes que confundir 2 equipos reales).
+  // "B. Leverkusen" (abrevia "Bayer" con la inicial + punto) NO es
+  // substring de "bayer leverkusen" en ningún sentido, y el punto +
+  // las 4 letras que faltan de "Bayer" superan con creces la distancia
+  // de edición ≤2 de más abajo — el admin tecleó exactamente esta forma
+  // (la misma que usan las capturas de referencia con los escudos de
+  // los rivales de Champions) y el club se quedaba sin resolver, cayendo
+  // al escudo sintético por hash de color (reportado: "me sale verde
+  // pero el CSS que te di es rojo y negro"). Exige palabra FINAL exacta
+  // (identidad real del club — "leverkusen", "praha"…) + cada palabra
+  // anterior tecleada como PREFIJO de la palabra correspondiente de la
+  // clave real ("b" prefijo de "bayer") — nunca fuzzy libre por letras,
+  // así que "Sporting" no confunde con "Sp. Praha" ni nada por el estilo.
+  function _matchAbreviatura(norm, clave) {
+    var pIn = _normSinPuntuacion(norm).split(" ").filter(Boolean);
+    var pCl = clave.split(" ").filter(Boolean);
+    if (pIn.length < 2 || pCl.length < pIn.length) return false;
+    var ultimaIn = pIn[pIn.length - 1];
+    if (ultimaIn.length < 4 || ultimaIn !== pCl[pCl.length - 1]) return false;
+    for (var i = 0; i < pIn.length - 1; i++) {
+      if (!pCl[i] || pCl[i].indexOf(pIn[i]) !== 0) return false;
+    }
+    return true;
+  }
   function _buscarRivalReal(norm) {
     if (!_rivalesRealesMap) return null;
     if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
@@ -1231,6 +1254,8 @@
       var k = claves[i];
       if (norm.length > 2 && (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1)) return _rivalesRealesMap[k];
     }
+    var candAbrev = claves.filter(function (k2) { return _matchAbreviatura(norm, k2); });
+    if (candAbrev.length === 1) return _rivalesRealesMap[candAbrev[0]];
     if (norm.length >= 6) {
       var mejor = null, mejorDist = 3, empatado = false;
       for (var j = 0; j < claves.length; j++) {

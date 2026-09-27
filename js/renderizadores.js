@@ -2599,12 +2599,28 @@
   // vivo si algún día deja de usarlo) — mismo mecanismo, mismo criterio
   // de "el rival IA también se actualiza", que calcularLiga1RefCombinada,
   // simplificado a UN solo club humano (esta liga nunca la comparten 2).
-  // Su propia fila NUNCA sale del texto pegado (se descarta si el admin
-  // la escribe ahí por error) — sale SIEMPRE de sus propios partidos.
+  //
+  // PERO (petición usuario 2026-09-27, "no tienen que jugar manualmente
+  // sus partidos de liga y copa, sea suficiente con el texto" — PSG/
+  // Manchester City/Inter): si el admin YA incluyó la fila de su PROPIO
+  // club dentro del texto pegado (misma tabla que pega para el resto de
+  // equipos IA de esa liga), esa fila se respeta TAL CUAL — la tabla
+  // entera sale 100% del texto, sin exigir ni un solo partido jugado
+  // dentro de la app (ni en vivo ni por ✅➖❌ resultado rápido). Si el
+  // admin todavía NO ha pegado su propia fila (transición / liga recién
+  // creada), se mantiene el comportamiento de siempre: sumar sus
+  // partidos reales para que la fila no aparezca en blanco.
   function calcularLigaExtraFilasConHumano(ligaId, datos) {
     var clubId = LIGA_NAV_HUMANO_PROPIO[ligaId];
     var club = clubId ? buscarEquipoPorId(clubId, datos) : null;
-    if (club) return _combinarClasificacionConHumanosLigueUno(club, ligaId, datos);
+    if (club) {
+      var textoLiga = window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "";
+      var propiaYaEnTexto = parsearLiga1RefTexto(textoLiga).some(function (f) {
+        return _liga1RefNombresCoinciden(f.nombre, club.nombre);
+      });
+      if (propiaYaEnTexto) return calcularLigaExtraFilas(ligaId);
+      return _combinarClasificacionConHumanosLigueUno(club, ligaId, datos);
+    }
 
     // Clubes de la pirámide española (2ª REF/1ª REF/Hypermotion/Ea
     // Sports) que hayan ascendido/descendido hasta ESTA división — ver
@@ -3544,7 +3560,7 @@
       var nota = document.createElement("p");
       nota.className = "liga1ref-leyenda-mini";
       nota.style.marginTop = "10px";
-      nota.textContent = "🇮🇹 Competición italiana — solo Inter de Milán la disputa, sin cuadro compartido con el resto de cajas.";
+      nota.textContent = "🇮🇹 Competición italiana — solo Inter la disputa, sin cuadro compartido con el resto de cajas.";
       contenedor.appendChild(nota);
     });
   }

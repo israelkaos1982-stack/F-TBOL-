@@ -421,14 +421,16 @@
     // para clubes reconocibles cuyo escudo real NO se parece a ningún
     // patrón (petición usuario: réplica fiel de ~70 escudos de
     // Bundesliga/Premier/Ligue 1/Serie A). Sigue pesando <0,5 KB: es
-    // SOLO la forma+colores (2-4 primitivas SVG), sin duplicar el brillo
-    // ni la sombra — esos los pone gratis `.escudo--ia`/`.escudo` (mismo
-    // brillo "chapa" que ya usan los otros 4 patrones, compartido entre
-    // TODOS los escudos, nunca por-club). SIN siglas dentro del dibujo
-    // (misma decisión que el resto de escudos CSS: "apenas se ven" a
-    // este tamaño — el nombre ya se muestra siempre al lado). El propio
-    // `<div>` (`overflow:hidden; border-radius:50%`) recorta cualquier
-    // forma que se salga del círculo, igual que ya hace con el rombo.
+    // SOLO la forma+colores+siglas (2-4 primitivas SVG + 1 <text>), sin
+    // duplicar el brillo ni la sombra — esos los pone gratis
+    // `.escudo--ia`/`.escudo` (mismo brillo "chapa" que ya usan los
+    // otros 4 patrones, compartido entre TODOS los escudos, nunca
+    // por-club). Este SÍ lleva las siglas DENTRO del dibujo (petición
+    // explícita del usuario para esta réplica fiel — a diferencia del
+    // resto de escudos CSS de abajo, que las omiten por "apenas se ven"
+    // a este tamaño). El propio `<div>` (`overflow:hidden;
+    // border-radius:50%`) recorta cualquier forma que se salga del
+    // círculo, igual que ya hace con el rombo.
     if (equipo.escudoSvg) {
       var esHumanoV = !!equipo.mister;
       var claseIAV = esHumanoV ? "" : "escudo--ia ";

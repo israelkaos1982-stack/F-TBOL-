@@ -279,6 +279,13 @@
     // Madrid · HYPERMOTION · 1ª JORNADA"). Sin este alias, "# Hypermotion"
     // del Calendario extra caía en "comp-otro" (gris neutro).
     hypermotion: "hypermotion", "liga hypermotion": "hypermotion",
+    // "2ª REF" (2ª RFEF, división más baja de la pirámide, ver
+    // LIGA_NAV_META) SÍ tiene su PROPIO compKey — a diferencia de "1ª
+    // REF", que el admin nunca teclea así (siempre "Liga", legacy,
+    // ver LIGA_NAV_COMPKEY_LEGACY) esta división no colisiona con
+    // ninguna otra, así que puede tener su propio alias normal.
+    "2ref": "2ref", "2 ref": "2ref", "2a ref": "2ref", "2ª ref": "2ref",
+    "segunda ref": "2ref", "segunda rfef": "2ref", "2 rfef": "2ref", "2a rfef": "2ref",
     copa: "copa", "copa del rey": "copa", coupe: "copa", "coupe de france": "copa",
     // "FA Cup" (Manchester City) y "Coppa Italia" (Inter de Milán) — su
     // copa nacional real, mismo mecanismo que "Coupe de France" del PSG.
@@ -342,7 +349,16 @@
     return _BALON_COMP_ALIAS.hasOwnProperty(norm) ? _BALON_COMP_ALIAS[norm] : compKeyCrudo;
   }
 
-  function resolverBalonPartido(compKey, climaResultado, balonesData) {
+  // `ligaActualPartido` (opcional) = `partido.liga` ("LIGA_1RFEF"/
+  // "LIGA_HYPERMOTION"/"LIGA_EA_SPORTS"...). "1ª REF" comparte el
+  // compKey LEGACY "liga" con Liga EA Sports (ver
+  // LIGA_NAV_COMPKEY_LEGACY — necesario para que la clasificación siga
+  // agregando por `p.competicion === "liga"`), pero el BALÓN sí debe
+  // distinguirse (petición usuario: Hypermotion/1ª REF/2ª REF llevan
+  // el Vantaggio 5000, distinto del "Ligue 1 McDonald's" de Liga EA
+  // Sports) — se resuelve aquí, SOLO para el balón, sin tocar el
+  // compKey real del partido en ningún otro sitio.
+  function resolverBalonPartido(compKey, climaResultado, balonesData, ligaActualPartido) {
     var catalogo = {};
     (balonesData.balones || []).forEach(function (b) { catalogo[b.id] = b.nombre; });
 
@@ -354,7 +370,9 @@
       };
     }
 
-    var asign = (balonesData.asignacionPorCompeticion || {})[_resolverCompKeyBalon(compKey)];
+    var compKeyResuelto = _resolverCompKeyBalon(compKey);
+    if (compKeyResuelto === "liga" && ligaActualPartido === "LIGA_1RFEF") compKeyResuelto = "1ref";
+    var asign = (balonesData.asignacionPorCompeticion || {})[compKeyResuelto];
     if (!asign) return { id: null, nombre: "Balón oficial", forzadoPorNieve: false };
     return { id: asign.balonId, nombre: catalogo[asign.balonId] || asign.balonId, forzadoPorNieve: false };
   }
@@ -11077,7 +11095,7 @@
     var finMs = meta.finLiga ? new Date(meta.finLiga).getTime() : inicioMs + 1;
 
     var clima = calcularClimaParaPartido(partido, totalJornadas, inicioMs, finMs, local, visitante);
-    var balon = resolverBalonPartido(partido.competicion, clima, datos.balones);
+    var balon = resolverBalonPartido(partido.competicion, clima, datos.balones, partido.liga);
     var estadio = obtenerEstadioDelEquipo(local);
 
     var ov = document.getElementById("previa-overlay");

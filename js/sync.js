@@ -279,6 +279,33 @@
       ) {
         return true;
       }
+      // NUEVO (reporte usuario: "no se están subiendo las estadísticas de
+      // estos 2 partidos en la Plantilla del Atlético Madrid" — marcador
+      // y calendario perfectos en TODAS partes, pero 0 goles/tarjetas/MVP
+      // para esos 2 partidos concretos): el guard de arriba solo cubre el
+      // marcador DISTINTO. El caso real y mucho más común es justo el
+      // opuesto — el MISMO marcador en las 2 copias (no hay ningún
+      // conflicto de resultado, es una re-sincronización normal) pero una
+      // de las 2 perdió el acta (`jug`) por el camino: p.ej. el servidor
+      // todavía no había recibido el push con el acta cuando otra ruta
+      // (otra pestaña de este mismo dispositivo, u otro móvil confirmando
+      // el mismo cruce) volvió a escribir ESTE MISMO match_id sin acta.
+      // Sin acta compacta, `Renderizadores.calcularStatsRosterClub`/Liga
+      // 1ª REF nunca ven los goles/tarjetas/MVP de ese partido — el
+      // marcador sigue siendo correcto en todos lados, así que nada más
+      // delata el problema. Mismo criterio que el guard de arriba: basta
+      // con que la copia LOCAL tenga acta real y la del servidor no, para
+      // bloquear la adopción y dejar que el próximo push "cure" al
+      // servidor con la copia completa. Espejo exacto del guard nuevo de
+      // app.py::_ef7_merge_resultados.
+      if (
+        entryLocal && entryLocal.jugado === true && entryServidor.jugado === true &&
+        entryLocal.golesLocal === entryServidor.golesLocal && entryLocal.golesVisitante === entryServidor.golesVisitante &&
+        Array.isArray(entryLocal.jug) && entryLocal.jug.length > 0 &&
+        !(Array.isArray(entryServidor.jug) && entryServidor.jug.length > 0)
+      ) {
+        return true;
+      }
     }
     return false;
   }

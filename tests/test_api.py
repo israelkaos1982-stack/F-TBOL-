@@ -2573,7 +2573,12 @@ class TestEf7EstadoLigaMerge:
 
     def test_mismo_marcador_no_genera_conflicto(self, client):
         """Un marcador IDÉNTICO en ambos lados no es un conflicto real —
-        no debe disparar la rama nueva ni añadir `_conflictoDescartado`."""
+        no debe disparar la rama de marcador-distinto ni añadir
+        `_conflictoDescartado`. El acta (`jug`) SÍ debe sobrevivir aunque el
+        entrante más reciente no la traiga — ver
+        test_mismo_marcador_conserva_el_acta_cuando_solo_un_lado_la_trae,
+        que es exactamente este mismo escenario con el reporte real que lo
+        motivó."""
         c = client
         self._post(c, {
             "superliga-1-3-1": {
@@ -2592,6 +2597,67 @@ class TestEf7EstadoLigaMerge:
         assert entry["golesLocal"] == 4
         assert entry["golesVisitante"] == 1
         assert "_conflictoDescartado" not in entry
+        assert entry["jug"] == [{"j": "x", "e": "y", "g": 1}]
+
+    def test_mismo_marcador_conserva_el_acta_cuando_solo_un_lado_la_trae(self, client):
+        """Reporte real ("no se están subiendo las estadísticas de estos 2
+        partidos en la Plantilla del Atlético Madrid" — marcador y
+        calendario perfectos en todas partes, 0 goles/tarjetas/MVP de esos
+        2 partidos en la Plantilla): el guard de marcador-distinto
+        (test_conflicto_marcador_distinto_gana_el_que_tiene_acta_real) no
+        cubre este caso — aquí el marcador es IDÉNTICO en los 2 lados (no
+        hay ningún conflicto de resultado, es una simple re-sincronización)
+        pero uno de los 2 perdió el acta (`jug`) por el camino. Sin este
+        guard, el push MÁS RECIENTE ganaba por reloj aunque no trajera
+        acta, borrando en silencio los goles/tarjetas/MVP de ese partido —
+        el marcador seguía viéndose perfecto en todas partes, así que nada
+        delataba el problema."""
+        c = client
+        # El push CON acta llega DESPUÉS (reloj mayor) — debe ganar sin más.
+        self._post(c, {
+            "hypermotion_j9_atletico-madrid-vs-barakaldo": {
+                "jugado": True, "golesLocal": 4, "golesVisitante": 3,
+                "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "hypermotion_j9_atletico-madrid-vs-barakaldo": {
+                "jugado": True, "golesLocal": 4, "golesVisitante": 3,
+                "jug": [
+                    {"j": "atletico-madrid-7", "e": "atletico-madrid", "g": 1, "m": 1, "n": "Koke"},
+                    {"j": "atletico-madrid-18", "e": "atletico-madrid", "r": 1, "n": "Marc Pubill"},
+                ],
+                "_actualizadoEn": 5000,
+            }
+        })
+        resultados = self._get_resultados(c)
+        entry = resultados["hypermotion_j9_atletico-madrid-vs-barakaldo"]
+        assert entry["golesLocal"] == 4
+        assert entry["golesVisitante"] == 3
+        assert entry["jug"] and len(entry["jug"]) == 2
+
+        # Y AL REVÉS — el push SIN acta llega DESPUÉS (reloj mayor): antes
+        # de este fix ganaba por reloj y el acta ya guardada desaparecía.
+        self._post(c, {
+            "hypermotion_j10_ud-almeria-vs-atletico-madrid": {
+                "jugado": True, "golesLocal": 2, "golesVisitante": 0,
+                "jug": [
+                    {"j": "atletico-madrid-20", "e": "atletico-madrid", "a": 1, "n": "Pablo Barrios"},
+                ],
+                "_actualizadoEn": 1000,
+            }
+        })
+        self._post(c, {
+            "hypermotion_j10_ud-almeria-vs-atletico-madrid": {
+                "jugado": True, "golesLocal": 2, "golesVisitante": 0,
+                "_actualizadoEn": 9000,
+            }
+        })
+        resultados = self._get_resultados(c)
+        entry2 = resultados["hypermotion_j10_ud-almeria-vs-atletico-madrid"]
+        assert entry2["golesLocal"] == 2
+        assert entry2["golesVisitante"] == 0
+        assert entry2["jug"] == [{"j": "atletico-madrid-20", "e": "atletico-madrid", "a": 1, "n": "Pablo Barrios"}]
 
     def test_tombstone_mas_reciente_gana_sobre_confirmado(self, client):
         """El botón "🔄 Reiniciar" (reset de temporada) escribe una tumba

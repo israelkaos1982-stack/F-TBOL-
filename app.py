@@ -6094,6 +6094,16 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
     tenga, sin mirar `_actualizadoEn`; si ambos o ninguno la tienen, se
     conserva el criterio de siempre. El marcador descartado se guarda en
     `_conflictoDescartado` sobre el que gana — nunca se destruye.
+
+    GUARD "jugado:true (MISMO marcador), pero solo UNO trae acta real"
+    (reporte usuario: "no se están subiendo las estadísticas de estos 2
+    partidos en la Plantilla del Atlético Madrid" — marcador y calendario
+    perfectos en todas partes, 0 goles/tarjetas/MVP de esos 2 partidos en
+    la Plantilla): el guard de arriba solo protege el marcador DISTINTO.
+    El caso real y mucho más común es el opuesto — una re-sincronización
+    SIN ningún conflicto de resultado (mismo marcador en las 2 copias)
+    donde una de las 2 perdió el acta por el camino. Mismo criterio:
+    si SOLO una de las 2 trae `jug` no vacío, esa gana sin mirar el reloj.
     """
     try:
         incoming = json.loads(incoming_value) if incoming_value else None
@@ -6237,6 +6247,46 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
             }
             merged_res[match_id] = ganador
             continue
+
+        # GUARD "jugado:true (MISMO marcador en los 2 lados), pero solo UNO
+        # trae acta real" (reporte usuario: "no se están subiendo las
+        # estadísticas de estos 2 partidos en la Plantilla del Atlético
+        # Madrid" — el marcador y el calendario salían perfectos en TODAS
+        # partes, pero 0 goles/tarjetas/MVP de esos 2 partidos concretos en
+        # la Plantilla). El guard de arriba solo protege el caso de
+        # marcador DISTINTO — pero el caso real y mucho más frecuente es el
+        # opuesto: una re-sincronización SIN ningún conflicto de resultado
+        # (mismo marcador en ambos lados) donde una de las 2 copias perdió
+        # el acta (`jug`) por el camino — p.ej. el servidor todavía no
+        # había recibido el push con el acta cuando otra escritura para
+        # este MISMO match_id (otra pestaña del mismo dispositivo, u otro
+        # móvil confirmando el mismo cruce) volvió a guardar el resultado
+        # sin acta. Sin `jug`, ningún ranking de jugador (Plantilla, Liga
+        # 1ª REF) ve los goles/tarjetas/MVP de ese partido — y como el
+        # marcador coincide, nada más delata el problema. Mismo criterio
+        # que el guard de arriba: si SOLO una de las 2 trae acta real, esa
+        # gana SIN mirar el reloj (perder un acta real no tiene arreglo
+        # posterior; perder un marcador correcto sin acta no cuesta nada).
+        # Espejo exacto del guard nuevo de js/sync.js::_esRegresionResultados.
+        if (
+            isinstance(incoming_entry, dict)
+            and incoming_entry.get("jugado") is True
+            and existing_entry.get("jugado") is True
+            and existing_entry.get("golesLocal") == incoming_entry.get("golesLocal")
+            and existing_entry.get("golesVisitante") == incoming_entry.get("golesVisitante")
+        ):
+            jug_existing2 = existing_entry.get("jug")
+            jug_incoming2 = incoming_entry.get("jug")
+            tiene_acta_existing2 = isinstance(jug_existing2, list) and len(jug_existing2) > 0
+            tiene_acta_incoming2 = isinstance(jug_incoming2, list) and len(jug_incoming2) > 0
+            if tiene_acta_existing2 and not tiene_acta_incoming2:
+                merged_res[match_id] = existing_entry
+                continue
+            if tiene_acta_incoming2 and not tiene_acta_existing2:
+                merged_res[match_id] = incoming_entry
+                continue
+            # ambos o ninguno traen acta: sin señal objetiva — se conserva
+            # el criterio de siempre (recencia).
 
         merged_res[match_id] = incoming_entry if ts_in >= ts_ex else existing_entry
 

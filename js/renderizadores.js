@@ -12296,7 +12296,7 @@
         grupoSanciones.insertAdjacentHTML(
           "beforeend",
           '<details class="liga1ref-leyenda-details">' +
-          '<summary class="liga1ref-leyenda-summary">🚑 Sanciones y Lesiones</summary>' +
+          '<summary class="liga1ref-leyenda-summary">⚠️ Sanciones y Lesiones</summary>' +
           '<div class="liga1ref-leyenda-grid">' +
           "<span>🚑 Jugador con ⬇️ se pierde ese partido y el siguiente.</span>" +
           "<span>🟨 Acumulación de 3 amarillas se pierde el próximo partido.</span>" +

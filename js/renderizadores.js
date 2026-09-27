@@ -12283,6 +12283,29 @@
         ));
         frag.appendChild(grupoLideres);
 
+        // "🚑 Sanciones y Lesiones" (petición usuario) — desplegable
+        // colapsado por defecto, DEBAJO de la plantilla de CUALQUIER club
+        // humano (esta función es la misma para los 8 — parametrizada por
+        // `idEquipoHumanoActivo`, nunca hay que duplicarla por club).
+        // Solo texto informativo (mismo <details> nativo, 0 JS, que ya usa
+        // la "LEYENDA" de Copa/1ª REF/etc.) — no cambia ningún cálculo de
+        // esta pantalla, es la referencia rápida de las 3 reglas para el
+        // admin sin tener que recordarlas de memoria.
+        var grupoSanciones = document.createElement("div");
+        grupoSanciones.className = "plantilla-grupo plantilla-grupo--sanciones";
+        grupoSanciones.insertAdjacentHTML(
+          "beforeend",
+          '<details class="liga1ref-leyenda-details">' +
+          '<summary class="liga1ref-leyenda-summary">🚑 Sanciones y Lesiones</summary>' +
+          '<div class="liga1ref-leyenda-grid">' +
+          "<span>🚑 Jugador con ⬇️ se pierde ese partido y el siguiente.</span>" +
+          "<span>🟨 Acumulación de 3 amarillas se pierde el próximo partido.</span>" +
+          "<span>🟥 1 Roja se pierde el siguiente partido.</span>" +
+          "</div>" +
+          "</details>"
+        );
+        frag.appendChild(grupoSanciones);
+
         contenedor.appendChild(frag);
       })
       .catch(function (err) {

@@ -2618,7 +2618,30 @@
       var propiaYaEnTexto = parsearLiga1RefTexto(textoLiga).some(function (f) {
         return _liga1RefNombresCoinciden(f.nombre, club.nombre);
       });
-      if (propiaYaEnTexto) return calcularLigaExtraFilas(ligaId);
+      if (propiaYaEnTexto) {
+        // Camino 100% texto (arriba): calcularLigaExtraFilas es GENÉRICA,
+        // no sabe qué fila es "el club humano" — la deja con equipoId:null
+        // como cualquier IA. Sin este parche, la fila del propio club
+        // pierde 2 cosas que SÍ tenía en el camino de abajo (combinado):
+        // (1) el icono del mister (🦆/🦔/🐊) delante del nombre, y (2) el
+        // resaltado en verde neón (clasificacion-fila--activo) al abrir
+        // esta tabla desde SU PROPIA caja — ambos dependen de
+        // `equipoId === idClubActivo`. Petición usuario 2026-09-27: "que
+        // siguiera saliendo el icono... que pinte tu [fila] y el texto en
+        // verde". Se localiza la fila por nombre (mismo criterio tolerante
+        // que ya decide si "ya está en el texto") y se le añade el id +
+        // el icono, sin tocar sus puntos/goles (esos SIEMPRE los da el
+        // texto pegado, tal cual, en este camino).
+        var filasTexto = calcularLigaExtraFilas(ligaId);
+        var filaPropia = filasTexto.find(function (f) {
+          return _liga1RefNombresCoinciden(f.nombre, club.nombre);
+        });
+        if (filaPropia) {
+          filaPropia.equipoId = club.id;
+          filaPropia.nombreMostrado = (club.misterEmoji || "") + filaPropia.nombre;
+        }
+        return filasTexto;
+      }
       return _combinarClasificacionConHumanosLigueUno(club, ligaId, datos);
     }
 

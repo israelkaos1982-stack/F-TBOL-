@@ -1250,9 +1250,27 @@
     if (!_rivalesRealesMap) return null;
     if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
     var claves = Object.keys(_rivalesRealesMap);
-    for (var i = 0; i < claves.length; i++) {
-      var k = claves[i];
-      if (norm.length > 2 && (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1)) return _rivalesRealesMap[k];
+    // El filial NUNCA hereda el escudo del primer equipo (y viceversa):
+    // "real sociedad b"/"villarreal b" SON claves propias, exactas, del
+    // archivo — pero el bucle antiguo devolvía la PRIMERA clave que
+    // casara por substring en CUALQUIER dirección, y "real sociedad"
+    // (más corta, antes en el archivo) siempre gana por substring a
+    // "real sociedad b" antes de que el bucle llegue a comprobar esta
+    // última. Recorremos TODAS las coincidencias y nos quedamos con la
+    // de longitud MÁS CERCANA al texto tecleado (la más específica); si
+    // dos claves DISTINTAS empatan en cercanía, no se adivina — mismo
+    // criterio de prudencia que ya usa la distancia de edición de abajo.
+    if (norm.length > 2) {
+      var mejorSub = null, mejorSubDiff = Infinity, empatadoSub = false;
+      for (var i = 0; i < claves.length; i++) {
+        var k = claves[i];
+        if (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1) {
+          var diff = Math.abs(k.length - norm.length);
+          if (diff < mejorSubDiff) { mejorSubDiff = diff; mejorSub = k; empatadoSub = false; }
+          else if (diff === mejorSubDiff && k !== mejorSub) { empatadoSub = true; }
+        }
+      }
+      if (mejorSub && !empatadoSub) return _rivalesRealesMap[mejorSub];
     }
     var candAbrev = claves.filter(function (k2) { return _matchAbreviatura(norm, k2); });
     if (candAbrev.length === 1) return _rivalesRealesMap[candAbrev[0]];
@@ -1349,28 +1367,17 @@
 
     var id = "extra-rival-" + norm.replace(/[^a-z0-9]+/g, "-");
     if (!_sinteticosExtra[id]) {
-      // ¿Ya existe un sintético para un nombre MUY parecido (el admin
-      // tecleó "Frankfurt" en una ronda y "Eintracht Frankfurt" en otra,
-      // p.ej.)? Sin este cruce, el MISMO rival de un torneo con muchos
-      // clubes europeos que este simulador nunca modela (Torneo de
-      // Verano y similares) podía acabar con 2 colores/escudos DISTINTOS
-      // según qué grafía se hubiera tecleado en cada línea — el reporte
-      // de "los colores no coinciden entre 2 rondas del mismo rival".
-      // Nunca se fusiona con un rival "?" (desconocido) todavía sin
-      // sortear — ese no tiene identidad real que reutilizar.
-      var sintExistente = null;
-      Object.keys(_sinteticosExtra).some(function (idExist) {
-        var s = _sinteticosExtra[idExist];
-        if (s.desconocido) return false;
-        var nExist = _normNombre(s.nombre);
-        if (norm.length > 2 && nExist.length > 2 && (nExist.indexOf(norm) !== -1 || norm.indexOf(nExist) !== -1)) {
-          sintExistente = s;
-          return true;
-        }
-        return false;
-      });
-      if (sintExistente) { _sinteticosExtra[id] = sintExistente; return sintExistente; }
-
+      // El club real del TEXTO ACTUAL siempre se comprueba PRIMERO,
+      // antes que el cruce "¿ya tengo un sintético parecido en caché?"
+      // de más abajo. Si no se hace así, "Real Sociedad B" reutilizaba
+      // el sintético YA cacheado de "Real Sociedad" (su substring exacto)
+      // en vez de resolver su PROPIA ficha en data/rivales_reales.json —
+      // el filial se quedaba con el escudo/colores del primer equipo (y
+      // lo mismo le pasaba a "Villarreal B"). Un filial real es una
+      // entidad DISTINTA de su primer equipo aunque comparta nombre, así
+      // que si _buscarRivalReal ya lo identifica por sí solo, esa ficha
+      // gana siempre — el cruce de caché de abajo es solo para nombres
+      // que NO existen en el catálogo real en absoluto.
       var real = _buscarRivalReal(norm);
       if (real) {
         _sinteticosExtra[id] = {
@@ -1387,6 +1394,11 @@
           colorSecundario: real.colorSecundario,
           escudoFormato: real.escudoFormato,
           valoracionPoder: real.valoracionPoder,
+          // Marca "viene del catálogo real" — el cruce de caché de abajo
+          // (para nombres SIN ficha real, tipo "Frankfurt"/"Eintracht
+          // Frankfurt") nunca debe poder robarle la identidad a una ficha
+          // real ya resuelta, aunque en el futuro se reordene este código.
+          _esRivalReal: true,
           // Plantilla real de data/rivales_reales.json (ver
           // js/acta.js::simularGoleadorAutomatorioIA) — sin esto, un
           // equipo con `jugadores` puesto en el JSON seguía cayendo al
@@ -1396,6 +1408,34 @@
           mostrarSiglas: true
         };
       } else {
+        // Ningún club real lo identifica (ni exacto, ni substring, ni
+        // abreviatura, ni errata de 1-2 letras) — ¿ya existe un sintético
+        // para un nombre MUY parecido, tecleado en otra ronda (el admin
+        // puso "Frankfurt" en una y "Eintracht Frankfurt" en otra, p.ej.)?
+        // Sin este cruce, el MISMO rival de un torneo con muchos clubes
+        // europeos que este simulador nunca modela (Torneo de Verano y
+        // similares) podía acabar con 2 colores/escudos DISTINTOS según
+        // qué grafía se hubiera tecleado en cada línea. Se compara SOLO
+        // contra otros sintéticos igual de "sin ficha real"
+        // (`!s._esRivalReal`) — un club QUE SÍ tiene ficha real (p.ej.
+        // "Real Sociedad") jamás debe poder prestarle su identidad a otro
+        // nombre distinto por simple parecido de substring (ese filial/
+        // homónimo ya se resolvió, o se resolverá, por su cuenta arriba).
+        // Nunca se fusiona con un rival "?" (desconocido) todavía sin
+        // sortear — ese no tiene identidad real que reutilizar.
+        var sintExistente = null;
+        Object.keys(_sinteticosExtra).some(function (idExist) {
+          var s = _sinteticosExtra[idExist];
+          if (s.desconocido || s._esRivalReal) return false;
+          var nExist = _normNombre(s.nombre);
+          if (norm.length > 2 && nExist.length > 2 && (nExist.indexOf(norm) !== -1 || norm.indexOf(nExist) !== -1)) {
+            sintExistente = s;
+            return true;
+          }
+          return false;
+        });
+        if (sintExistente) { _sinteticosExtra[id] = sintExistente; return sintExistente; }
+
         var siglas = (nombre.match(/\b[a-zA-Z0-9]/g) || []).slice(0, 3).join("").toUpperCase() || "?";
         var identidadSint = _identidadSinteticaLibre(nombre);
         _sinteticosExtra[id] = {

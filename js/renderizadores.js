@@ -416,6 +416,29 @@
       );
     }
 
+    // Escudo VECTOR propio por club — formas reales (círculos anidados,
+    // cuñas, barras, medios) en vez de los 4 patrones planos de abajo,
+    // para clubes reconocibles cuyo escudo real NO se parece a ningún
+    // patrón (petición usuario: réplica fiel de ~70 escudos de
+    // Bundesliga/Premier/Ligue 1/Serie A). Sigue pesando <0,5 KB: es
+    // SOLO la forma+colores (2-4 primitivas SVG), sin duplicar el brillo
+    // ni la sombra — esos los pone gratis `.escudo--ia`/`.escudo` (mismo
+    // brillo "chapa" que ya usan los otros 4 patrones, compartido entre
+    // TODOS los escudos, nunca por-club). SIN siglas dentro del dibujo
+    // (misma decisión que el resto de escudos CSS: "apenas se ven" a
+    // este tamaño — el nombre ya se muestra siempre al lado). El propio
+    // `<div>` (`overflow:hidden; border-radius:50%`) recorta cualquier
+    // forma que se salga del círculo, igual que ya hace con el rombo.
+    if (equipo.escudoSvg) {
+      var esHumanoV = !!equipo.mister;
+      var claseIAV = esHumanoV ? "" : "escudo--ia ";
+      return (
+        '<div class="escudo ' + claseIAV + 'escudo--vector ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' +
+        '<svg viewBox="0 0 80 80" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + equipo.escudoSvg + "</svg>" +
+        "</div>"
+      );
+    }
+
     // Sin `crest` (equipo IA todavía sin SVG real en el repo, incluidos
     // los rivales sintéticos que resuelve resolverRivalPorNombre — Copa/
     // Liga 1ª REF): blasón dibujado en CSS puro — 0 KB de imagen, ni
@@ -1393,6 +1416,12 @@
           colorPrimario: real.colorPrimario,
           colorSecundario: real.colorSecundario,
           escudoFormato: real.escudoFormato,
+          // Escudo VECTOR propio (ver crearEscudoHTML) — SIN esto, un
+          // club con `escudoSvg` en rivales_reales.json (Bundesliga/
+          // Premier/Ligue 1/Serie A añadidos 2026-09-27) perdía su
+          // escudo fiel al pasar por este objeto sintético y caía de
+          // vuelta al patrón CSS genérico de 4 formas.
+          escudoSvg: real.escudoSvg,
           valoracionPoder: real.valoracionPoder,
           // Marca "viene del catálogo real" — el cruce de caché de abajo
           // (para nombres SIN ficha real, tipo "Frankfurt"/"Eintracht

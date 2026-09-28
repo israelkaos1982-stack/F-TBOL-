@@ -10301,6 +10301,25 @@
     if (window.Estado.reiniciarResultadosDeClub) {
       n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, incluirHvH);
     }
+    // 🎯 Objetivos LOGRADOS — reporte usuario ("los objetivos... salen
+    // marcados varios del año pasado, aunque los desmarque estos vuelven
+    // a salir"): el catálogo de objetivos (Liga/Copa/Superliga/Globales)
+    // es el MISMO texto cada temporada salvo que el admin lo edite a
+    // mano, así que un objetivo marcado el año pasado seguía apareciendo
+    // YA marcado el primer día de la temporada nueva — nada limpiaba
+    // `ef7_objetivos_logrados_v1_<clubId>` al reiniciar. El texto de los
+    // objetivos en sí NO se toca — solo el progreso de qué se ha logrado.
+    if (window.Estado.reiniciarObjetivosLogrados) window.Estado.reiniciarObjetivosLogrados(clubId);
+    // El 💼 "logrado" de la cabecera es SIEMPRE la suma de lo marcado en
+    // Objetivos (ver js/main.js::_sincronizarValoracionConObjetivos) —
+    // se pone a 0 aquí mismo para que el badge no se quede mostrando un
+    // nº de la temporada anterior hasta que el admin vuelva a abrir
+    // Objetivos. El "objetivo" (meta para la temporada que viene) NO se
+    // toca — es la única parte de la Valoración pensada para persistir.
+    if (window.Estado.obtenerValoracionClub && window.Estado.guardarValoracionClub) {
+      var _valActual = window.Estado.obtenerValoracionClub(clubId);
+      if (_valActual.logrado) window.Estado.guardarValoracionClub(clubId, 0, _valActual.objetivo);
+    }
     generarCalendarioLateralDerecho(clubId);
     return n;
   }
@@ -10571,11 +10590,14 @@
     nota.className = "admin-nota";
     nota.textContent =
       "Reinicia a CERO todos los partidos ya jugados de este club (Liga, Copa y " +
-      "cualquier otra competición en curso). El calendario en sí (rivales, fechas, " +
-      "competiciones) no se toca — solo se borran los resultados. Un partido " +
-      "compartido con OTRO club humano (Copa del Rey con sorteo real, o un cruce " +
-      "de Liga entre 2 de los 6) nunca se toca aquí, aunque el rival no lo haya " +
-      "reiniciado — solo se puede reiniciar uno a uno con el icono ↺ de esa card.";
+      "cualquier otra competición en curso) y el progreso de 🎯 Objetivos ya " +
+      "marcado como logrado. El calendario en sí (rivales, fechas, competiciones) " +
+      "no se toca — solo se borran los resultados —, y el texto de los propios " +
+      "objetivos (las cajas Liga/Copa/Superliga/Globales) tampoco, solo qué está " +
+      "marcado. Un partido compartido con OTRO club humano (Copa del Rey con " +
+      "sorteo real, o un cruce de Liga entre 2 de los 6) nunca se toca aquí, " +
+      "aunque el rival no lo haya reiniciado — solo se puede reiniciar uno a uno " +
+      "con el icono ↺ de esa card.";
     contenedor.appendChild(nota);
 
     var btnReset = document.createElement("button");

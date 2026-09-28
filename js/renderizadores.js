@@ -10631,8 +10631,11 @@
   // "Impredecible" 🎲 (a juego con su nivel "Leyenda", el único club
   // humano que no es "Crack" — ver _NIVEL_LEYENDA_ID). Real Madrid no se
   // tocó en esta petición — se mantiene su valor previo ("Impredecible" 🎲).
+  // Liverpool vuelve a "Mala forma" ⬇️ (petición usuario posterior,
+  // "vuelve a poner al Liverpool como antes"): SOLO este club, el resto
+  // de la tabla de arriba no se toca.
   var _FORMA_POR_CLUB = {
-    liverpool: { icono: "↘️", label: "Irregular" },
+    liverpool: { icono: "⬇️", label: "Mala forma" },
     arsenal: { icono: "↘️", label: "Irregular" },
     "real-madrid": { icono: "🎲", label: "Impredecible" },
     "atletico-madrid": { icono: "🎲", label: "Impredecible" },

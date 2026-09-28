@@ -11146,6 +11146,16 @@
     // extra. El formato de jornada ("Jornada N", con la palabra completa)
     // es propio de esta pantalla — no se toca, solo el separador y la ronda.
     var _previaCompKey = _resolverCompKeyBalon(partido.competicion);
+    // Fondo/borde de la card tiñe con el color de SU competición — misma
+    // clase .comp-XXX (y por tanto los mismos colores) que ya usa la card
+    // del calendario para este mismo partido (ver más abajo, alrededor de
+    // "var claseComp = _claseComp(compKeyResuelto);") — nunca se
+    // recalcula un color aparte, así que ambas vistas del mismo partido
+    // SIEMPRE coinciden. El nodo de la card se reutiliza entre partidos
+    // (esta pantalla no se recrea cada vez), así que la clase vieja hay
+    // que reemplazarla entera, no solo añadir la nueva.
+    var _previaCardEl = document.getElementById("previa-card");
+    if (_previaCardEl) _previaCardEl.className = "previa-card " + _claseComp(_previaCompKey);
     document.getElementById("previa-comp").textContent =
       (COMP_LABEL[_previaCompKey] || COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " - " + _uneRondaConGuion(_previaCompKey, partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));

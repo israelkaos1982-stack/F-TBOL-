@@ -3115,6 +3115,45 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 14px;
 }
 
+/* Tinte de la card de PREVIA por competición (petición usuario) — SIN
+   colores nuevos: reutiliza tal cual la misma paleta y los mismos
+   valores rgba() que .match-card-comp.comp-XXX/.match-card.comp-XXX de
+   más abajo (así la previa de un partido y su fila del calendario
+   SIEMPRE coinciden en color — ver abrirPreviaPartido en
+   js/renderizadores.js, que aplica la MISMA clase .comp-XXX a esta card).
+   El wash de fondo es un degradado MUY sutil detrás del título/escudos
+   (se apaga del todo antes de llegar a estadio/clima/balón) para no
+   restarle legibilidad a nada — literal rgba(), nunca color-mix() (no
+   soportado en todos los móviles, ver nota junto a .club-layout). */
+#previa-card.comp-liga { border-color: rgba(255, 59, 92, 0.4); background-image: linear-gradient(180deg, rgba(255, 59, 92, 0.2) 0%, rgba(255, 59, 92, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-liga .previa-comp { color: var(--accent-2); text-shadow: 0 0 8px rgba(255, 59, 92, 0.45); }
+#previa-card.comp-copa { border-color: rgba(241, 196, 15, 0.4); background-image: linear-gradient(180deg, rgba(241, 196, 15, 0.2) 0%, rgba(241, 196, 15, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-copa .previa-comp { color: var(--gold); text-shadow: var(--gold-glow); }
+#previa-card.comp-supercopa { border-color: rgba(168, 113, 74, 0.45); background-image: linear-gradient(180deg, rgba(168, 113, 74, 0.2) 0%, rgba(168, 113, 74, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-supercopa .previa-comp { color: var(--brown); text-shadow: 0 0 8px rgba(168, 113, 74, 0.5); }
+#previa-card.comp-champions { border-color: rgba(59, 167, 255, 0.4); background-image: linear-gradient(180deg, rgba(59, 167, 255, 0.2) 0%, rgba(59, 167, 255, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-champions .previa-comp { color: var(--info); text-shadow: 0 0 8px rgba(59, 167, 255, 0.45); }
+#previa-card.comp-previa { border-color: rgba(139, 92, 246, 0.4); background-image: linear-gradient(180deg, rgba(139, 92, 246, 0.2) 0%, rgba(139, 92, 246, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-previa .previa-comp { color: var(--morado); text-shadow: 0 0 8px rgba(139, 92, 246, 0.5); }
+#previa-card.comp-uel { border-color: rgba(255, 122, 41, 0.4); background-image: linear-gradient(180deg, rgba(255, 122, 41, 0.2) 0%, rgba(255, 122, 41, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-uel .previa-comp { color: var(--naranja); text-shadow: 0 0 8px rgba(255, 122, 41, 0.45); }
+#previa-card.comp-uecl { border-color: rgba(57, 255, 106, 0.4); background-image: linear-gradient(180deg, rgba(57, 255, 106, 0.2) 0%, rgba(57, 255, 106, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-uecl .previa-comp { color: var(--neon); text-shadow: 0 0 8px rgba(57, 255, 106, 0.4); }
+#previa-card.comp-intercontinental { border-color: rgba(255, 230, 0, 0.45); background-image: linear-gradient(180deg, rgba(255, 230, 0, 0.2) 0%, rgba(255, 230, 0, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-intercontinental .previa-comp { color: var(--amarillo-vivo); text-shadow: 0 0 8px rgba(255, 230, 0, 0.55); }
+#previa-card.comp-usc { border-color: rgba(201, 211, 220, 0.45); background-image: linear-gradient(180deg, rgba(201, 211, 220, 0.2) 0%, rgba(201, 211, 220, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-usc .previa-comp { color: var(--plata); text-shadow: 0 0 8px rgba(201, 211, 220, 0.55); }
+#previa-card.comp-recopa { border-color: rgba(205, 127, 50, 0.45); background-image: linear-gradient(180deg, rgba(205, 127, 50, 0.2) 0%, rgba(205, 127, 50, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-recopa .previa-comp { color: var(--bronce); text-shadow: 0 0 8px rgba(205, 127, 50, 0.5); }
+#previa-card.comp-verano { border-color: rgba(255, 193, 7, 0.4); background-image: linear-gradient(180deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-verano .previa-comp { color: var(--amarillo-verano); text-shadow: 0 0 8px rgba(255, 193, 7, 0.5); }
+#previa-card.comp-hypermotion { border-color: rgba(34, 201, 189, 0.4); background-image: linear-gradient(180deg, rgba(34, 201, 189, 0.2) 0%, rgba(34, 201, 189, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-hypermotion .previa-comp { color: var(--turquesa); text-shadow: 0 0 8px rgba(34, 201, 189, 0.5); }
+#previa-card.comp-selecciones { border-color: rgba(255, 79, 168, 0.4); background-image: linear-gradient(180deg, rgba(255, 79, 168, 0.2) 0%, rgba(255, 79, 168, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-selecciones .previa-comp { color: var(--rosa); text-shadow: 0 0 8px rgba(255, 79, 168, 0.45); }
+#previa-card.comp-superliga { border-color: rgba(217, 38, 201, 0.4); background-image: linear-gradient(180deg, rgba(217, 38, 201, 0.2) 0%, rgba(217, 38, 201, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-superliga .previa-comp { color: var(--fucsia); text-shadow: 0 0 8px rgba(217, 38, 201, 0.5); }
+
 .previa-teams {
   display: flex;
   align-items: center;

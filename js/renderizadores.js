@@ -11941,6 +11941,23 @@
       });
     }
 
+    // 🧮 BASE de temporada (candado 646) — ver Estado.obtenerStatsBaseJSON:
+    // un delta FIJO por jugador (calculado UNA vez, al fijar la base) que
+    // se SUMA a lo que los partidos reales sigan aportando desde entonces
+    // — a diferencia del 📌 de abajo (reemplaza, ciego a partidos nuevos),
+    // este arrastre CRECE con normalidad según se juegan más partidos. Va
+    // ANTES del 📌 para que una corrección puntual de un jugador concreto
+    // siga pudiendo tener la última palabra si el admin la usa encima.
+    var basePorJugador = window.Estado ? window.Estado.obtenerStatsBaseJSON(clubId) : {};
+    Object.keys(basePorJugador).forEach(function (key) {
+      var delta = basePorJugador[key] || {};
+      var f = filaPorNombre(key); // `key` ya es _normNombre(...) — filaPorNombre es idempotente al re-normalizarlo
+      f.goles += delta.goles || 0;
+      f.mvp += delta.mvp || 0;
+      f.amarillas += delta.amarillas || 0;
+      f.rojas += delta.rojas || 0;
+    });
+
     // Corrección MANUAL (📌, candado 646) — ver parsearStatsOverrideTexto.
     // Se aplica DESPUÉS de sumar todo lo automático y SOLO sustituye las 4
     // columnas visibles (Goles/MVP/Amarillas/Rojas) del jugador corregido;
@@ -12099,6 +12116,13 @@
         pinWrap.innerHTML =
           '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-stats-plantilla-inline" ' +
           'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Corregir estadísticas a mano">📌</button>' +
+          // 🧮 BASE de temporada (candado 646) — ver
+          // pintarEditorBaseStatsPlantilla/fijarBaseStatsPlantilla: fija el
+          // TOTAL real de cada jugador AHORA y deja que los partidos
+          // nuevos se sigan sumando encima (a diferencia del 📌, que
+          // congela el número para siempre).
+          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-base-stats-plantilla-inline" ' +
+          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Fijar el total real de hoy (los partidos nuevos se siguen sumando encima)">🧮</button>' +
           // 🔁 Renombres de plantilla (candado 646) — ver
           // resolverRenombreJugador/pintarEditorRenombresPlantilla: para
           // cuando un jugador cambia de nombre con el tiempo dentro de la
@@ -12448,6 +12472,96 @@
       '<button type="button" class="btn-ghost" data-accion="cancelar-stats-plantilla" data-club-id="' + idClubActivo + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-stats-plantilla" data-club-id="' + idClubActivo + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de la 🧮 BASE de temporada (PIN 646) — mismo patrón
+  // exacto que pintarEditorStatsPlantilla, justo arriba, pero para el
+  // OTRO caso: "estas son las estadísticas REALES de la plantilla ahora
+  // mismo, y quiero que los partidos que se jueguen a partir de hoy se
+  // sigan sumando encima" (a diferencia del 📌, que congela el número
+  // para siempre). Se prellena SIEMPRE con lo que la Plantilla muestra
+  // AHORA (base actual + partidos ya jugados), nunca con la base cruda —
+  // el admin edita el TOTAL que quiere ver, no el delta interno.
+  function pintarEditorBaseStatsPlantilla(contenedor, idClubActivo, datos) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Fija el TOTAL real de cada jugador AHORA MISMO — a partir de guardar, cada " +
+      "partido nuevo que se juegue sigue sumando por encima de estos números (no los " +
+      "congela, como sí hace la corrección 📌 de arriba). Una línea por jugador: " +
+      "«Nombre - Goles MVP Amarillas Rojas». Un jugador que no aparezca en el texto " +
+      "(o borres del todo) queda a 0 0 0 0 desde ya — así puedes «resetear y volver a " +
+      "poner solo los reales» en un solo guardado.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "stats-base-plantilla-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    var jugadoresEd = obtenerJugadoresClub(idClubActivo);
+    textarea.rows = Math.max(10, jugadoresEd.length + 2);
+    textarea.placeholder = "A. Sørloth - 8 3 1 0";
+
+    if (datos) {
+      var statsAhora = calcularStatsRosterClub(idClubActivo, datos);
+      textarea.value = jugadoresEd
+        .map(function (j) {
+          var s = statsAhora[j.id] || { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
+          return j.nombre + " - " + s.goles + " " + s.mvp + " " + s.amarillas + " " + s.rojas;
+        })
+        .join("\n");
+    }
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-base-stats-plantilla" data-club-id="' + idClubActivo + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-base-stats-plantilla" data-club-id="' + idClubActivo + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Calcula y persiste el delta de la 🧮 BASE de temporada a partir del
+  // texto pegado (mismo formato de línea que parsearStatsOverrideTexto).
+  // `datos` YA cargado por el caller (mismo patrón que el 📌 de arriba).
+  //
+  // "Lo automático de partidos" se obtiene restando la base YA
+  // guardada (si la había) del total que la Plantilla muestra AHORA
+  // mismo — en vez de vaciar la base en `localStorage`/servidor y
+  // recalcular. Vaciar-y-recalcular haría DOS escrituras por guardado
+  // (una a `{}`, otra a los deltas finales) y, si ya había una base
+  // grande fijada antes, la 1ª escritura ("{}", muy corta) dispararía
+  // el aviso de "recorte a menos de la mitad" de `_confirmarSiEncogeMucho`
+  // sin que el admin esté recortando nada de verdad — solo está fijando
+  // una base nueva. Restando en memoria se llega al mismo número con
+  // UNA sola escritura real.
+  function fijarBaseStatsPlantilla(idClubActivo, texto, datos) {
+    if (!window.Estado) return false;
+    var objetivos = parsearStatsOverrideTexto(texto);
+    var mostradoAhora = calcularStatsRosterClub(idClubActivo, datos);
+    var baseActual = window.Estado.obtenerStatsBaseJSON(idClubActivo) || {};
+    var deltas = {};
+    obtenerJugadoresClub(idClubActivo).forEach(function (j) {
+      var key = _normNombre(j.nombre);
+      var visible = mostradoAhora[j.id] || { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
+      var baseVieja = baseActual[key] || { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
+      var auto = {
+        goles: (visible.goles || 0) - (baseVieja.goles || 0),
+        mvp: (visible.mvp || 0) - (baseVieja.mvp || 0),
+        amarillas: (visible.amarillas || 0) - (baseVieja.amarillas || 0),
+        rojas: (visible.rojas || 0) - (baseVieja.rojas || 0)
+      };
+      var obj = objetivos[key] || { goles: 0, mvp: 0, amarillas: 0, rojas: 0 };
+      var d = {
+        goles: obj.goles - auto.goles,
+        mvp: obj.mvp - auto.mvp,
+        amarillas: obj.amarillas - auto.amarillas,
+        rojas: obj.rojas - auto.rojas
+      };
+      if (d.goles || d.mvp || d.amarillas || d.rojas) deltas[key] = d;
+    });
+    return window.Estado.guardarStatsBaseJSON(idClubActivo, deltas);
   }
 
   // Picker de jugador REAL (reemplaza el window.prompt() de texto libre)
@@ -13239,6 +13353,8 @@
     parsearStatsOverrideTexto: parsearStatsOverrideTexto,
     pintarEditorPlantillaClub: pintarEditorPlantillaClub,
     pintarEditorStatsPlantilla: pintarEditorStatsPlantilla,
+    pintarEditorBaseStatsPlantilla: pintarEditorBaseStatsPlantilla,
+    fijarBaseStatsPlantilla: fijarBaseStatsPlantilla,
     renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,

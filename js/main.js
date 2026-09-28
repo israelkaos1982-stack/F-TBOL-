@@ -767,6 +767,33 @@
     if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(clubId);
   }
 
+  // ---------- 🧮 BASE de temporada de la Plantilla (candado 646) ----------
+  // Mismo patrón exacto que editarStatsPlantillaInline/guardarStatsPlantilla/
+  // cancelarStatsPlantilla, justo arriba — la diferencia vive en
+  // js/renderizadores.js::fijarBaseStatsPlantilla (calcula un DELTA que se
+  // suma a los partidos nuevos, en vez de reemplazar para siempre).
+  function editarBaseStatsPlantillaInline(clubId) {
+    if (!clubId || !window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("plantilla-content");
+      if (!cont) return;
+      window.Renderizadores.cargarTodo().then(function (datos) {
+        window.Renderizadores.pintarEditorBaseStatsPlantilla(cont, clubId, datos);
+      });
+    }, "🔒 Fijar base de temporada", "Introduce el PIN de administrador.");
+  }
+  function guardarBaseStatsPlantilla(clubId) {
+    var ta = document.getElementById("stats-base-plantilla-textarea");
+    if (!ta || !window.Renderizadores) return;
+    window.Renderizadores.cargarTodo().then(function (datos) {
+      if (!window.Renderizadores.fijarBaseStatsPlantilla(clubId, ta.value, datos)) return;
+      window.Renderizadores.renderizarPlantillaClub(clubId);
+    });
+  }
+  function cancelarBaseStatsPlantilla(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(clubId);
+  }
+
   // ---------- 🔁 Renombres de plantilla (candado 646) ----------
   // Mismo patrón exacto que editarStatsPlantillaInline/guardarStatsPlantilla
   // /cancelarStatsPlantilla, justo arriba — ver
@@ -2226,6 +2253,9 @@
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;
         case "guardar-stats-plantilla": guardarStatsPlantilla(d.clubId); break;
         case "cancelar-stats-plantilla": cancelarStatsPlantilla(d.clubId); break;
+        case "editar-base-stats-plantilla-inline": editarBaseStatsPlantillaInline(d.clubId); break;
+        case "guardar-base-stats-plantilla": guardarBaseStatsPlantilla(d.clubId); break;
+        case "cancelar-base-stats-plantilla": cancelarBaseStatsPlantilla(d.clubId); break;
         case "editar-renombres-plantilla-inline": editarRenombresPlantillaInline(d.clubId); break;
         case "guardar-renombres-plantilla": guardarRenombresPlantilla(d.clubId); break;
         case "cancelar-renombres-plantilla": cancelarRenombresPlantilla(d.clubId); break;

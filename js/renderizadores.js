@@ -11753,20 +11753,27 @@
   // mismo orden que las 4 columnas visibles de la Plantilla: ⚽/⭐/🟨/🟥).
   // Se agrupa por NOMBRE normalizado — mismo criterio de identidad que
   // calcularStatsRosterClub — para que la corrección "se pegue" al
-  // jugador aunque cambie de dorsal. Una línea que no case con el
-  // formato (falta el "-", o no hay EXACTAMENTE 4 números al final) se
-  // ignora en silencio, igual que el resto de parsers de texto libre de
-  // esta app.
+  // jugador aunque cambie de dorsal.
+  //
+  // El "-" es OPCIONAL (reporte usuario: pegó la tabla de la 🧮 base de
+  // temporada sin guiones — «Jan Oblak 0 0 0 0» en vez de «Jan Oblak -
+  // 0 0 0 0» — y la línea se ignoraba en silencio SIN avisar de nada:
+  // el admin pulsó Guardar creyendo que había fijado la base, pero el
+  // total mostrado se quedó exactamente igual que antes). Ahora basta
+  // con que la línea termine en EXACTAMENTE 4 números — el resto de la
+  // línea (con o sin guion al final) es el nombre. Solo se ignora una
+  // línea que de verdad no tenga 4 números al final (encabezado, línea
+  // vacía, texto suelto).
   function parsearStatsOverrideTexto(texto) {
     var out = {};
     String(texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
-      var partes = l.split(/\s-\s/);
-      if (partes.length < 2) return;
-      var nombre = partes.slice(0, -1).join(" - ").trim();
-      var numeros = partes[partes.length - 1].trim().split(/\s+/).map(Number);
-      if (!nombre || numeros.length !== 4 || numeros.some(isNaN)) return;
+      var m = l.match(/^(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/);
+      if (!m) return;
+      var nombre = m[1].trim().replace(/-\s*$/, "").trim();
+      var numeros = [m[2], m[3], m[4], m[5]].map(Number);
+      if (!nombre || numeros.some(isNaN)) return;
       var key = _normNombre(nombre);
       if (!key) return;
       out[key] = { goles: numeros[0], mvp: numeros[1], amarillas: numeros[2], rojas: numeros[3] };
@@ -12539,6 +12546,22 @@
   function fijarBaseStatsPlantilla(idClubActivo, texto, datos) {
     if (!window.Estado) return false;
     var objetivos = parsearStatsOverrideTexto(texto);
+    var jugadoresRoster = obtenerJugadoresClub(idClubActivo);
+    // AVISO EXPLÍCITO si NINGUNA línea del texto pegado casó con ningún
+    // jugador de la plantilla — mismo motivo que el aviso de
+    // _confirmarSiEncogeMucho: guardar un delta VACÍO en silencio deja
+    // la Plantilla con los mismos números de antes, indistinguible de
+    // "no ha pasado nada", y el admin no tiene ninguna pista de que su
+    // texto no llegó a aplicarse en absoluto.
+    var huboAlgunMatch = jugadoresRoster.some(function (j) { return !!objetivos[_normNombre(j.nombre)]; });
+    if (!huboAlgunMatch) {
+      window.alert(
+        "⚠️ Ninguna línea del texto se pudo emparejar con un jugador de la plantilla — no se ha " +
+        "guardado nada. Revisa que cada línea termine en EXACTAMENTE 4 números (Goles MVP Amarillas " +
+        "Rojas, en ese orden) y que el nombre coincida con el de la Plantilla."
+      );
+      return false;
+    }
     var mostradoAhora = calcularStatsRosterClub(idClubActivo, datos);
     var baseActual = window.Estado.obtenerStatsBaseJSON(idClubActivo) || {};
     var deltas = {};

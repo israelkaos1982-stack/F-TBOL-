@@ -2741,3 +2741,73 @@ class TestEf7EstadoLigaMerge:
         raw = j["claves"]["ef7_calendario_liverpool"]
         parsed = json.loads(raw)
         assert parsed == {"dia": 2}  # el 2º POST reemplaza ENTERO al 1º, sin fusión
+
+
+class TestPlantillaStatsBaseRegresionExenta:
+    """`ef7_plantilla_stats_base_v1_<clubId>` (la 🧮 "base de temporada" de
+    Estadísticas de la Plantilla, ver js/estado.js::guardarStatsBaseJSON)
+    REEMPLAZA por completo el objeto de deltas por jugador en cada
+    guardado — no es texto libre que crece de forma continua, así que
+    corregir una cifra hacia abajo (o que un jugador pase a tener delta 0
+    y desaparezca del objeto) encoge el JSON con total normalidad. Sin la
+    exención de `_EF7_REGRESION_EXENTA_PREFIJOS` (app.py), ese guardado
+    legítimo quedaba rechazado en silencio por el guard de regresión
+    (pensado para proteger texto libre contra un dispositivo con copia
+    vieja/pobre) — reporte usuario ("ya lo guardo y no se queda
+    guardado... lo he probado un millón de veces")."""
+
+    _KEY = "ef7_plantilla_stats_base_v1_atletico-madrid"
+
+    @pytest.fixture(autouse=True)
+    def _limpiar_ef7(self, client):
+        with app_module.app.app_context():
+            filas = app_module.GlobalState.query.filter(
+                app_module.GlobalState.clave.like("ef7_%")
+            ).all()
+            for f in filas:
+                app_module.db.session.delete(f)
+            app_module.db.session.commit()
+
+    def test_corregir_la_base_hacia_un_valor_mucho_mas_pequeno_no_se_rechaza(self, client):
+        c = client
+        grande = json.dumps({
+            "jugador uno": {"goles": 5, "mvp": 2, "amarillas": 1, "rojas": 0},
+            "jugador dos": {"goles": 3, "mvp": 1, "amarillas": 2, "rojas": 0},
+            "jugador tres": {"goles": 8, "mvp": 3, "amarillas": 0, "rojas": 1},
+        })
+        r1 = c.post("/api/ef7/state", json={"claves": {self._KEY: grande}})
+        assert r1.status_code == 200
+        assert self._KEY in r1.get_json()["guardadas"]
+
+        # Corrección legítima del admin: mucho más corta que la anterior
+        # (bien por debajo del 50 % de longitud) — SIN pasar `forzar`,
+        # que es justo el escenario en el que el guard genérico rechazaría
+        # el guardado en silencio si esta clave no estuviera exenta.
+        pequeno = json.dumps({"jugador uno": {"goles": 1, "mvp": 0, "amarillas": 0, "rojas": 0}})
+        r2 = c.post("/api/ef7/state", json={"claves": {self._KEY: pequeno}})
+        assert r2.status_code == 200
+        assert self._KEY in r2.get_json()["guardadas"]
+
+        r = c.get("/api/ef7/state")
+        assert r.get_json()["claves"][self._KEY] == pequeno
+
+    def test_una_clave_normal_con_el_mismo_recorte_si_se_rechaza(self, client):
+        """Control: el guard general SIGUE protegiendo cualquier otra
+        clave `ef7_*` de texto libre — no se rompió por dar de alta la
+        exención de arriba."""
+        c = client
+        clave = "ef7_calendario_extra_v1_atletico-madrid"
+        grande = json.dumps({
+            "jugador uno": {"goles": 5, "mvp": 2, "amarillas": 1, "rojas": 0},
+            "jugador dos": {"goles": 3, "mvp": 1, "amarillas": 2, "rojas": 0},
+            "jugador tres": {"goles": 8, "mvp": 3, "amarillas": 0, "rojas": 1},
+        })
+        r1 = c.post("/api/ef7/state", json={"claves": {clave: grande}})
+        assert clave in r1.get_json()["guardadas"]
+
+        pequeno = json.dumps({"jugador uno": {"goles": 1, "mvp": 0, "amarillas": 0, "rojas": 0}})
+        r2 = c.post("/api/ef7/state", json={"claves": {clave: pequeno}})
+        assert clave not in r2.get_json()["guardadas"]  # rechazada por el guard, como se espera
+
+        r = c.get("/api/ef7/state")
+        assert r.get_json()["claves"][clave] == grande  # el servidor conserva la copia rica

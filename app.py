@@ -6365,7 +6365,29 @@ _EF7_REGRESION_LEN_MINIMO = 20  # por debajo de esto no merece la pena proteger 
 # gravedad (un toque la vuelve a marcar) — no necesita la protección de
 # regresión: gana siempre el último toque, como ya hace `ef7_estado_liga_v1`
 # por su propio motivo.
-_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_",)
+#
+# `ef7_plantilla_stats_base_v1_<clubId>` (ver
+# js/renderizadores.js::fijarBaseStatsPlantilla/js/estado.js::
+# guardarStatsBaseJSON — la 🧮 "base de temporada" de la Plantilla) es el
+# MISMO patrón, no texto libre que crece de forma continua: cada guardado
+# RECALCULA y REEMPLAZA por completo el objeto entero de deltas por
+# jugador a partir de la tabla que el admin pega — un jugador que pasa a
+# tener el mismo total automático que el objetivo (delta 0) desaparece
+# del objeto, y corregir una cifra puesta demasiado alta hacia abajo
+# encoge el JSON con total normalidad, sin que eso signifique una copia
+# vieja/pobre. Reporte usuario ("ya lo guardo y no se queda guardado...
+# lo he probado un millón de veces"): sin esta exención, un guardado que
+# encogiera lo bastante quedaba rechazado en silencio, y unos ciclos
+# después js/sync.js abandonaba el push y volvía a traer la copia (más
+# rica pero DESACTUALIZADA) del servidor — indistinguible, para el
+# admin, de "no se guarda nunca". El shrink-guard del CLIENTE
+# (js/estado.js::_confirmarSiEncogeMucho) no basta por sí solo para
+# evitar esto: solo compara contra la copia LOCAL de ESTE dispositivo en
+# ESE instante, no contra lo que el servidor tenga guardado — si un
+# intento anterior ya quedó rechazado y revertido, el siguiente intento
+# puede no "verse" como un recorte grande en local y aun así seguir
+# perdiendo la comparación contra el servidor.
+_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_", "ef7_plantilla_stats_base_v1_")
 
 
 def _ef7_valor_como_texto(v):

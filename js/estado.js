@@ -2160,6 +2160,27 @@
     }
     return lista;
   }
+  // Vacía el progreso de Objetivos LOGRADOS de un club — se llama al
+  // "🔄 Reiniciar temporada de este club" (ver
+  // js/renderizadores.js::reiniciarTodosPartidosClub). Sin esto, los
+  // objetivos marcados la temporada anterior (misma clave de texto:
+  // el catálogo de objetivos es el mismo cada año salvo que el admin lo
+  // edite a mano) seguían apareciendo YA marcados el primer día de la
+  // temporada nueva — reporte usuario ("los objetivos... salen marcados
+  // varios del año pasado"). El texto de los objetivos en sí (las cajas
+  // Liga/Copa/Superliga/Globales que el admin definió) NO se toca aquí
+  // — solo el progreso de qué se ha logrado, que es lo único que tiene
+  // sentido resetear al empezar una temporada nueva.
+  function reiniciarObjetivosLogrados(clubId) {
+    try {
+      localStorage.setItem(_objetivosLogradosKey(clubId), "[]");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo reiniciar el progreso de objetivos:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
 
   // ---------- 💼 Valoración del club (cabecera) ----------
   // 2 números sueltos que el propio mánager teclea a mano ("logrado" /
@@ -3879,6 +3900,7 @@
     guardarObjetivosTexto: guardarObjetivosTexto,
     obtenerObjetivosLogrados: obtenerObjetivosLogrados,
     toggleObjetivoLogrado: toggleObjetivoLogrado,
+    reiniciarObjetivosLogrados: reiniciarObjetivosLogrados,
     obtenerValoracionClub: obtenerValoracionClub,
     guardarValoracionClub: guardarValoracionClub,
     obtenerObjetivosIconos: obtenerObjetivosIconos,

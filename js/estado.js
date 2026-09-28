@@ -2499,6 +2499,49 @@
     }
   }
 
+  // ---------- 🧮 BASE de temporada (candado 646) ----------
+  // Petición usuario ("Resetea a cero todas las estadísticas de la
+  // plantilla del Atlético Madrid y añádele estas que son las reales / a
+  // partir de ahora todos los partidos que juegue las estadísticas se
+  // suman automáticamente a las que acabamos de poner"): distinto del 📌
+  // de arriba (que REEMPLAZA para siempre las 4 columnas de un jugador,
+  // ciego a los partidos nuevos — pensado para "corregir lo que veo
+  // ahora mismo"), esto es un ARRASTRE que se SUMA a lo que la app siga
+  // calculando de los partidos reales. No se guarda el texto pegado tal
+  // cual — Renderizadores.guardarBaseStatsPlantilla calcula, en el
+  // instante de guardar, el DELTA necesario para que cada jugador quede
+  // EXACTAMENTE en el número pegado ahora mismo (`delta = objetivo -
+  // automático_actual`) y persiste ese delta ya fijo. A partir de ahí,
+  // cualquier partido nuevo que sume goles/tarjetas/MVP a ese jugador se
+  // añade tal cual al automático — el delta no vuelve a tocarse hasta que
+  // el admin fije una base nueva. Un jugador que no aparezca en el texto
+  // pegado queda con delta = -(lo que tuviera automático en ese momento):
+  // arranca en 0 desde ya, igual que el resto — así "resetea a cero
+  // TODAS" y "añade estas" son la MISMA operación, no dos pasos.
+  function _statsBaseKey(clubId) { return "ef7_plantilla_stats_base_v1_" + clubId; }
+  function obtenerStatsBaseJSON(clubId) {
+    try {
+      var v = localStorage.getItem(_statsBaseKey(clubId));
+      var obj = v ? JSON.parse(v) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function guardarStatsBaseJSON(clubId, deltas) {
+    var clave = _statsBaseKey(clubId);
+    var textoNuevo = JSON.stringify(deltas || {});
+    if (!_confirmarSiEncogeMucho(clave, localStorage.getItem(clave) || "", textoNuevo)) return false;
+    try {
+      localStorage.setItem(clave, textoNuevo);
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la base de temporada de la plantilla:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- 🔁 Renombres de plantilla (candado 646) ----------
   // Petición usuario 2026-09-26 (PSG 2023→2027 — ~14 jugadores que
   // cambiaron de nombre dentro de la MISMA plantilla del club, ej.
@@ -3846,6 +3889,8 @@
     guardarRosterTexto: guardarRosterTexto,
     obtenerStatsOverrideTexto: obtenerStatsOverrideTexto,
     guardarStatsOverrideTexto: guardarStatsOverrideTexto,
+    obtenerStatsBaseJSON: obtenerStatsBaseJSON,
+    guardarStatsBaseJSON: guardarStatsBaseJSON,
     obtenerRenombresPlantillaTexto: obtenerRenombresPlantillaTexto,
     guardarRenombresPlantillaTexto: guardarRenombresPlantillaTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,

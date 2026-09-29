@@ -6636,7 +6636,19 @@ def nueva_temporada_js(filename):
 
 @app.route("/data/<path:filename>")
 def nueva_temporada_data(filename):
-    return _new_sim_static("data", filename)
+    # A diferencia de /js/ y /css/ (versionados con ?v=X.X en index.html,
+    # así que un cambio de contenido siempre pide una URL distinta), estos
+    # JSON se piden SIEMPRE con la misma URL (js/renderizadores.js::cargarJSON
+    # hace fetch(ruta) sin querystring). Sin no-cache explícito, el navegador
+    # puede servir para siempre la copia que ya tenía cacheada (p.ej.
+    # rivales_reales.json) aunque el servidor ya tenga datos nuevos —
+    # exactamente el bug reportado 2026-09-29: escudos actualizados en main/
+    # Render pero el móvil seguía mostrando los viejos.
+    resp = make_response(_new_sim_static("data", filename))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/")

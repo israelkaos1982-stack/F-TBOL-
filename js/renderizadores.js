@@ -11479,7 +11479,8 @@
     ctx.restore();
 
     // Cara
-    var r = R * 0.78, x0 = cx - r, y0 = cy - r, d = r * 2;
+    // Aro fino: misma proporción que la CSS (inset 5% → cara al 90%; 7% en --sm).
+    var r = R * (nodo.classList.contains("escudo--sm") ? 0.86 : 0.9), x0 = cx - r, y0 = cy - r, d = r * 2;
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
     ctx.fillStyle = s; ctx.fillRect(x0, y0, d, d);

@@ -1870,6 +1870,179 @@
     return _porteroPrincipalClub(clubId);
   }
 
+  // ============================================================
+  // ACTAS REALES (js/actas-reales.js) — fuente ÚNICA de las estadísticas
+  // por jugador de los partidos de Liga/Copa ya transcritos por el usuario
+  // ============================================================
+  // Petición usuario 2026-10-03 (Atlético Madrid): "Estos son todos los
+  // partidos... Automatiza las estadísticas jugador a jugador tanto en
+  // plantilla como en las estadísticas de los 15 máximos Pichichis, MVP,
+  // Amarillas, Rojas y Zamora tanto en copa como en Liga". Las cifras del
+  // club venían de resúmenes de partido incompletos/duplicados en algunos
+  // dispositivos + 3 correcciones manuales congeladas (📌, 🧮 base y
+  // líneas pegadas en los rankings), cada una calculada contra un estado
+  // distinto — imposible que cuadraran. Esta capa SOLO alimenta a los
+  // cálculos de estadísticas (Plantilla, rankings de Liga y de Copa) —
+  // nunca al calendario, la clasificación ni las sanciones, que siguen
+  // leyendo listarPartidosResueltos tal cual.
+  //
+  // Para cada club de window.ACTAS_REALES:
+  //  1) un partido de Liga/Copa guardado que corresponda a un acta real
+  //     (misma competición + mismo rival + mismo campo) se sustituye por
+  //     ese acta — goles/MVP/tarjetas EXACTOS, de ambos equipos;
+  //  2) un acta real que no exista en este dispositivo se añade igual
+  //     (las estadísticas no dependen de qué móvil la registró);
+  //  3) cualquier OTRO partido de Liga/Copa del club guardado ANTES del
+  //     `corte` es una copia vieja/duplicada (el usuario confirmó que la
+  //     lista está completa) — fuera de las estadísticas;
+  //  4) todo partido jugado DESPUÉS del corte suma solo, como siempre.
+  //
+  // Toda temporada/club nuevo que necesite lo mismo solo tiene que añadir
+  // su bloque a js/actas-reales.js — ningún cálculo cambia.
+  function _actaRealFamilia(competicion) {
+    var c = _normNombre(competicion || "");
+    if (c === "copa") return "copa";
+    var ligas = ["liga"].concat(["2ref", "hypermotion", "easports"].map(_compKeyEsperadoParaDivision));
+    return ligas.indexOf(c) !== -1 ? "liga" : null;
+  }
+
+  function _actaRealTokens(nombre) {
+    return _normNombre(nombre).replace(/[.\-]/g, " ").split(/\s+/).filter(function (t) { return t.length > 1; });
+  }
+
+  // Nombre del acta ("A. Sørloth") -> nombre EXACTO del jugador en la
+  // plantilla pegada del club, para que la Plantilla (que busca por nombre)
+  // lo encuentre aunque la ficha lleve el nombre completo ("Alexander
+  // Sørloth") o en otro orden ("Lee Kang-In"). Sin candidato ÚNICO se deja
+  // el nombre del acta tal cual — nunca se asigna a otro jugador por error.
+  function _actaRealNombreRoster(nombre, roster) {
+    var n = _normNombre(nombre);
+    var exacto = roster.filter(function (j) { return _normNombre(j.nombre) === n; })[0];
+    if (exacto) return exacto.nombre;
+    var tok = _actaRealTokens(nombre);
+    if (!tok.length) return nombre;
+    var cands = roster.filter(function (j) {
+      var tj = _actaRealTokens(j.nombre);
+      return tok.every(function (t) { return tj.indexOf(t) !== -1; }) ||
+        (tj.length && tj.every(function (t) { return tok.indexOf(t) !== -1; }));
+    });
+    if (cands.length > 1) {
+      // Desempate por la inicial del acta ("J. David" -> Jonathan David,
+      // nunca Dávid Hancko, que también contiene "david").
+      var inicial = (_normNombre(nombre).match(/^([a-z])\.\s/) || [])[1];
+      if (inicial) {
+        cands = cands.filter(function (j) {
+          var tj = _actaRealTokens(j.nombre);
+          return tj.length && tj[0].charAt(0) === inicial && tj[tj.length - 1] === tok[tok.length - 1];
+        });
+      }
+    }
+    return cands.length === 1 ? cands[0].nombre : nombre;
+  }
+
+  function _partidoDesdeActaReal(a, clubId, club, rivalId, rivalNombre, base, compLiga, roster) {
+    var p = {};
+    if (base) for (var k in base) if (base.hasOwnProperty(k)) p[k] = base[k];
+    p.id = base ? base.id : "actareal-" + clubId + "-" + a.comp + "-" + (a.local ? "l" : "v") + "-" + _normNombre(a.rival).replace(/\s+/g, "-");
+    p.jugado = true;
+    p.competicion = a.comp === "copa" ? "copa" : compLiga;
+    if (!p.liga) p.liga = club.ligaActual;
+    p.local = a.local ? clubId : rivalId;
+    p.visitante = a.local ? rivalId : clubId;
+    p.resultado = { golesLocal: a.local ? a.gf : a.gc, golesVisitante: a.local ? a.gc : a.gf };
+    var jug = [];
+    (a.atl || []).forEach(function (r, i) {
+      if (!(r[1] || r[2] || r[3] || r[4])) return;
+      jug.push({ j: clubId + "-actareal-" + i, e: clubId, n: _actaRealNombreRoster(r[0], roster), g: r[1], m: r[2], a: r[3], r: r[4] });
+    });
+    (a.riv || []).forEach(function (r, i) {
+      if (!(r[1] || r[2] || r[3] || r[4])) return;
+      jug.push({ j: rivalId + "-actareal-" + i, e: rivalId, n: r[0], en: rivalNombre || a.rival, g: r[1], m: r[2], a: r[3], r: r[4] });
+    });
+    p.jug = jug;
+    return p;
+  }
+
+  function _aplicarActasReales(todos, clubId, cfg, datos) {
+    var club = buscarEquipoPorId(clubId, datos);
+    if (!club || !cfg || !Array.isArray(cfg.partidos)) return todos;
+    var roster = obtenerJugadoresClub(clubId);
+    // La división REAL del club ahora mismo (la misma que decide en qué
+    // ranking de Liga aparece — ver _equiposHumanosEnDivisionExtra), con la
+    // del propio bloque de actas solo como respaldo.
+    var compLiga = _compKeyEsperadoParaDivision(_divisionActualClub(clubId) || cfg.divisionLiga || "1ref");
+    var usados = {};
+    var out = [];
+    todos.forEach(function (p) {
+      if (!p.jugado || (p.local !== clubId && p.visitante !== clubId)) { out.push(p); return; }
+      var fam = _actaRealFamilia(p.competicion);
+      if (!fam) { out.push(p); return; }
+      var esLocal = p.local === clubId;
+      var rivalId = esLocal ? p.visitante : p.local;
+      var rival = buscarEquipoPorId(rivalId, datos);
+      var idx = -1;
+      cfg.partidos.some(function (a, i) {
+        if (usados[i] || a.comp !== fam || a.local !== esLocal) return false;
+        if (rival && _liga1RefNombresCoinciden(rival.nombre, a.rival)) { idx = i; return true; }
+        return false;
+      });
+      if (idx !== -1) {
+        usados[idx] = true;
+        out.push(_partidoDesdeActaReal(cfg.partidos[idx], clubId, club, rivalId, rival && rival.nombre, p, compLiga, roster));
+        return;
+      }
+      if ((p._actualizadoEn || 0) >= cfg.corte) out.push(p);
+    });
+    cfg.partidos.forEach(function (a, i) {
+      if (usados[i]) return;
+      var rivalId = "actareal-rival-" + _normNombre(a.rival).replace(/\s+/g, "-");
+      out.push(_partidoDesdeActaReal(a, clubId, club, rivalId, a.rival, null, compLiga, roster));
+    });
+    return out;
+  }
+
+  // Lista de partidos que usan TODOS los cálculos de estadísticas por
+  // jugador de Liga/Copa/Plantilla (en vez de listarPartidosResueltos a pelo).
+  function _partidosParaStats(datos) {
+    var todos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var actas = window.ACTAS_REALES;
+    if (!actas || !datos) return todos;
+    Object.keys(actas).forEach(function (clubId) {
+      todos = _aplicarActasReales(todos, clubId, actas[clubId], datos);
+    });
+    return todos;
+  }
+
+  function _clubTieneActasReales(clubId) {
+    return !!(window.ACTAS_REALES && window.ACTAS_REALES[clubId]);
+  }
+
+  // Una línea pegada a mano en un ranking (Pichichi/MVP/…/Zamora de Liga o
+  // Copa) REEMPLAZA el valor automático de ese jugador (ver
+  // _fusionarStatFilasConOverride). Para un club con actas reales eso
+  // volvía a congelar sus cifras — las líneas de SUS jugadores se ignoran
+  // y manda siempre el cálculo automático. Las de jugadores IA siguen
+  // aplicándose exactamente igual que antes.
+  function _filtrarLineasClubesActasReales(filas, datos) {
+    var actas = window.ACTAS_REALES;
+    if (!actas || !datos) return filas;
+    var nombresClub = [];
+    var jugadores = {};
+    Object.keys(actas).forEach(function (clubId) {
+      var club = buscarEquipoPorId(clubId, datos);
+      if (club) nombresClub.push(club.nombre);
+      obtenerJugadoresClub(clubId).forEach(function (j) { jugadores[_normNombre(j.nombre)] = true; });
+      (actas[clubId].partidos || []).forEach(function (a) {
+        (a.atl || []).forEach(function (r) { jugadores[_normNombre(r[0])] = true; });
+      });
+    });
+    return filas.filter(function (f) {
+      if (jugadores[_normNombre(f.nombre)]) return false;
+      if (f.equipo && nombresClub.some(function (n) { return _liga1RefNombresCoinciden(f.equipo, n); })) return false;
+      return true;
+    });
+  }
+
   // Recorre, para cada club humano de esta liga, sus propios partidos de
   // Liga ya jugados (misma fuente que la clasificación) y suma goles/MVP/
   // amarillas/rojas por jugador — de ESTE club (es_humano:true, ficha
@@ -1918,7 +2091,7 @@
       // filtro, con varios humanos en la MISMA liga (todos comparten
       // ligaActual="LIGA_EA_SPORTS"), el partido de un club se procesaba
       // también en el bucle de los otros 4, multiplicando el conteo.
-      var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      var partidos = _partidosParaStats(datos).filter(function (p) {
         return p.jugado && _partidoPerteneceADivision(p, e, compKeyEsperado) &&
           (p.local === e.id || p.visitante === e.id);
       });
@@ -2097,7 +2270,7 @@
     var meta = LIGA1REF_STATS.filter(function (s) { return s.key === categoria; })[0];
     var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
     var filas = _fusionarStatFilasConOverride(
-      parsearLiga1RefStatTexto(texto),
+      _filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
       calcularLiga1RefStatsHumanos(datos)[categoria] || []
     );
 
@@ -2896,7 +3069,7 @@
     var texto = window.Estado ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria) : "";
     var statsHumanos = datos ? calcularLigaExtraStatsHumanos(ligaId, datos) : null;
     var filas = statsHumanos
-      ? _fusionarStatFilasConOverride(parsearLiga1RefStatTexto(texto), statsHumanos[categoria] || [])
+      ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos), statsHumanos[categoria] || [])
       : parsearLiga1RefStatTexto(texto);
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
@@ -3080,7 +3253,15 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    // Zamora también en Copa — petición usuario 2026-10-03 ("Pichichis,
+    // MVP, Amarillas, Rojas y Zamora tanto en copa como en Liga"). Mismo
+    // criterio que la Zamora de Liga: media de goles encajados por partido
+    // del portero titular, de menor a mayor.
+    {
+      key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true,
+      placeholder: "1 Jan Oblak - Atlético Madrid  0.50"
+    }
   ];
 
   // PSG no juega la Copa del Rey — juega su propia Coupe de France (ni
@@ -3121,7 +3302,11 @@
   // js/acta.js::simularGoleadorAutomatorioIA — mismo criterio que Liga
   // 1ª REF, ver calcularLiga1RefStatsHumanos más arriba).
   function calcularCopaStatsHumanos(datos) {
-    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
+    // Fuente de estadísticas (actas reales incluidas, ver
+    // _partidosParaStats) — NO _copaPartidosDelClub, que sigue siendo la
+    // del cuadro/calendario de la Copa y no debe cambiar.
+    var todosStats = _partidosParaStats(datos);
 
     function sumar(bucket, nombre, equipo, equipoId, n) {
       if (!n) return;
@@ -3146,7 +3331,12 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-      _copaPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+      var portero = _porteroPrincipalClub(e.id);
+      var zamoraEncajados = 0, zamoraPartidos = 0;
+
+      todosStats.filter(function (p) {
+        return p.jugado && p.competicion === "copa" && (p.local === e.id || p.visitante === e.id);
+      }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;
@@ -3157,7 +3347,21 @@
             sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
+
+        if (!portero || !p.resultado) return;
+        zamoraEncajados += p.local === e.id ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        zamoraPartidos++;
       });
+
+      // Zamora de Copa — mismo criterio exacto que la de Liga (ver
+      // calcularLiga1RefStatsHumanos): media de goles encajados por partido
+      // del portero titular del club.
+      if (portero && zamoraPartidos > 0) {
+        acumulado.zamora[portero.id] = {
+          nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
+          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
+        };
+      }
     });
 
     var salida = {};
@@ -3172,12 +3376,16 @@
   // el almacén propio de Copa (Estado.obtenerCopaStatTexto).
   function calcularCopaStatsCombinado(datos, categoria) {
     var texto = window.Estado ? window.Estado.obtenerCopaStatTexto(categoria) : "";
+    var meta = COPA_STATS.filter(function (s) { return s.key === categoria; })[0];
     var filas = _fusionarStatFilasConOverride(
-      parsearLiga1RefStatTexto(texto),
+      _filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
       calcularCopaStatsHumanos(datos)[categoria] || []
     );
 
-    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    filas.sort(function (a, b) {
+      var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
+      return diff || a.nombre.localeCompare(b.nombre);
+    });
     return filas.slice(0, 15);
   }
 
@@ -3685,7 +3893,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + (meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad) + "</td>" +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("copa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -11949,7 +12157,8 @@
     // el admin), así que esos goles/tarjetas/MVP siguen visibles ahí, solo
     // dejan de contar hacia la ficha OFICIAL del jugador en la Plantilla.
     var _COMPS_EXCLUIDAS_STATS_PLANTILLA = { superliga: true, verano: true };
-    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+    // _partidosParaStats: actas reales incluidas (ver js/actas-reales.js).
+    var partidos = _partidosParaStats(datos).filter(function (p) {
       return p.jugado && !_COMPS_EXCLUIDAS_STATS_PLANTILLA[p.competicion] && (p.local === clubId || p.visitante === clubId);
     });
 
@@ -11987,7 +12196,12 @@
     // este arrastre CRECE con normalidad según se juegan más partidos. Va
     // ANTES del 📌 para que una corrección puntual de un jugador concreto
     // siga pudiendo tener la última palabra si el admin la usa encima.
-    var basePorJugador = window.Estado ? window.Estado.obtenerStatsBaseJSON(clubId) : {};
+    // Un club con ACTAS REALES (js/actas-reales.js) ya tiene sus cifras
+    // EXACTAS partido a partido — la 🧮 base y el 📌 (calculados contra un
+    // estado viejo) solo podrían volver a descuadrarlas, así que se ignoran
+    // (no se borran: siguen guardados por si se quitara ese bloque).
+    var _autoPuro = _clubTieneActasReales(clubId);
+    var basePorJugador = (!_autoPuro && window.Estado) ? window.Estado.obtenerStatsBaseJSON(clubId) : {};
     Object.keys(basePorJugador).forEach(function (key) {
       var delta = basePorJugador[key] || {};
       var f = filaPorNombre(key); // `key` ya es _normNombre(...) — filaPorNombre es idempotente al re-normalizarlo
@@ -12033,7 +12247,7 @@
     // nada ni de volver a pegar el texto cada vez que suma un gol nuevo en
     // cualquier competición. El 📌 nunca puede hacer bajar un total por
     // debajo de lo que los partidos reales ya demuestran.
-    var overrides = window.Estado ? parsearStatsOverrideTexto(window.Estado.obtenerStatsOverrideTexto(clubId)) : {};
+    var overrides = (!_autoPuro && window.Estado) ? parsearStatsOverrideTexto(window.Estado.obtenerStatsOverrideTexto(clubId)) : {};
 
     // Contrato externo sin cambios: la pantalla Plantilla busca por el id
     // ACTUAL de cada jugador de la lista (`stats[j.id]`, ver
@@ -13432,6 +13646,7 @@
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,
     calcularStatsRosterClub: calcularStatsRosterClub,
+    calcularCopaStatsCombinado: calcularCopaStatsCombinado,
     calcularSancionadosAutomaticosPara: calcularSancionadosAutomaticosPara,
     parsearRenombresTexto: parsearRenombresTexto,
     resolverRenombreJugador: resolverRenombreJugador,

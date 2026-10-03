@@ -1265,6 +1265,10 @@
       // placeholder, no un resultado real — el calendario lo necesita para
       // pintar la etiqueta ✅/➖/❌ en vez del marcador numérico.
       copia.resultadoRapido = !!override.resultadoRapido;
+      // Sello del último guardado de ESTE partido — solo lo lee
+      // js/renderizadores.js::_partidosParaStats (actas reales) para
+      // distinguir un partido nuevo de una copia vieja anterior al corte.
+      copia._actualizadoEn = override._actualizadoEn || 0;
       return copia;
     });
 

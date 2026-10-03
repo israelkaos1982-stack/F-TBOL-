@@ -509,6 +509,102 @@ button { font-family: inherit; cursor: pointer; }
   height: 100%;
 }
 
+/* ---------- CHAPA (escudos IA) — petición usuario 2026-10-03 ----------
+   Referencia: 6 láminas de "chapas" (LaLiga, Primera Federación G1,
+   Segunda B G1/G2/G4/G5). Botón metálico: ARO PLATEADO biselado
+   (`.escudo--chapa`) + CARA abombada (`.escudo-cara`) con el dibujo del
+   club, y el brillo de cristal de `.escudo--ia::after` por encima. Todo
+   en %, así se ve igual a 84px (previa) que a 16px (cruces de Copa).
+   `!important` en el radio: las filas de Copa/Champions fuerzan 5px en
+   `.escudo--sm` más abajo en este archivo — una chapa siempre es redonda. */
+.escudo.escudo--chapa {
+  --tertiary: var(--secondary);
+  border-radius: 50% !important;
+  background: linear-gradient(145deg, #fdfdfd 0%, #b9bcc2 22%, #6f7379 45%, #e6e8eb 62%, #8c9096 80%, #d9dbde 100%);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.45);
+}
+.escudo--chapa::after {
+  inset: 11%;
+  background:
+    radial-gradient(ellipse 70% 45% at 40% 18%, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.08) 70%, transparent 72%),
+    radial-gradient(circle at 50% 120%, rgba(0, 0, 0, 0.32), transparent 60%);
+  box-shadow: none;
+}
+.escudo-cara {
+  position: absolute;
+  inset: 11%;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 1;
+  background-color: var(--secondary);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+.escudo--sm .escudo-cara { inset: 12%; }
+.escudo--chapa.escudo--sm::after { inset: 12%; }
+.escudo-cara svg { display: block; width: 100%; height: 100%; }
+
+.escudo-p-rayas { background-image: repeating-linear-gradient(90deg, var(--primary) 0 12.5%, var(--secondary) 12.5% 25%); }
+.escudo-p-rayas-finas { background-image: repeating-linear-gradient(90deg, var(--primary) 0 5%, var(--secondary) 5% 10%); }
+.escudo-p-rayas-h { background-image: repeating-linear-gradient(180deg, var(--primary) 0 10%, var(--secondary) 10% 20%); }
+.escudo-p-franja-h { background-image: linear-gradient(180deg, var(--primary) 0 34%, var(--secondary) 34% 66%, var(--primary) 66%); }
+.escudo-p-franja-fina-h { background-image: linear-gradient(180deg, var(--primary) 0 45%, var(--secondary) 45% 55%, var(--primary) 55%); }
+.escudo-p-franja-v { background-image: linear-gradient(90deg, var(--primary) 0 34%, var(--secondary) 34% 66%, var(--primary) 66%); }
+.escudo-p-tres-h { background-image: linear-gradient(180deg, var(--primary) 0 38%, var(--tertiary) 38% 62%, var(--secondary) 62%); }
+.escudo-p-mitad { background-image: linear-gradient(180deg, var(--primary) 50%, var(--secondary) 50%); }
+.escudo-p-mitad-v { background-image: linear-gradient(90deg, var(--primary) 50%, var(--secondary) 50%); }
+.escudo-p-cuartos { background-image: conic-gradient(var(--primary) 0 25%, var(--secondary) 0 50%, var(--primary) 0 75%, var(--secondary) 0); }
+.escudo-p-cuadros { background-image: repeating-conic-gradient(var(--primary) 0 25%, var(--secondary) 0 50%); background-size: 25% 25%; }
+.escudo-p-cuadros-grandes { background-image: repeating-conic-gradient(var(--primary) 0 25%, var(--secondary) 0 50%); background-size: 66.67% 66.67%; background-position: 50% 50%; }
+.escudo-p-diana { background-image: repeating-radial-gradient(circle closest-side, var(--primary) 0 20%, var(--secondary) 20% 40%); }
+.escudo-p-diagonal { background-image: repeating-linear-gradient(45deg, var(--primary) 0 9%, var(--secondary) 9% 18%); }
+.escudo-p-banda { background-image: linear-gradient(135deg, var(--secondary) 0 36%, var(--primary) 36% 64%, var(--secondary) 64%); }
+.escudo-p-diagonal-mitad { background-image: linear-gradient(135deg, var(--primary) 0 46%, var(--tertiary) 46% 54%, var(--secondary) 54%); }
+.escudo-p-cuadrado {
+  background:
+    linear-gradient(var(--primary), var(--primary)) 50% 50% / 22% 22% no-repeat,
+    linear-gradient(var(--secondary), var(--secondary)) 50% 50% / 42% 42% no-repeat,
+    linear-gradient(var(--primary), var(--primary)) 50% 50% / 62% 62% no-repeat,
+    linear-gradient(var(--secondary), var(--secondary)) 50% 50% / 82% 82% no-repeat,
+    var(--primary);
+}
+.escudo-p-triangulo::before,
+.escudo-p-triangulo::after { content: ""; position: absolute; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.escudo-p-triangulo::before { left: 8%; right: 8%; top: 10%; bottom: 14%; background: var(--primary); }
+.escudo-p-triangulo::after {
+  left: 27%; right: 27%; top: 39%; bottom: 23%;
+  background: linear-gradient(var(--primary), var(--primary)) 50% 72% / 34% 30% no-repeat, var(--secondary);
+}
+.escudo-p-triangulos { background-image: linear-gradient(45deg, var(--primary) 50%, var(--secondary) 50%); background-size: 25% 25%; }
+.escudo-p-tejido {
+  background-image:
+    repeating-linear-gradient(45deg, var(--primary) 0 7%, transparent 7% 14%),
+    repeating-linear-gradient(-45deg, var(--primary) 0 7%, var(--secondary) 7% 14%);
+}
+.escudo-p-pixel { background-color: var(--primary); }
+.escudo-p-pixel::before {
+  content: "";
+  position: absolute;
+  right: 0; top: 0; width: 58%; height: 58%;
+  background-image: repeating-conic-gradient(var(--secondary) 0 25%, transparent 0 50%);
+  background-size: 34% 34%;
+}
+.escudo-p-solido { background-image: radial-gradient(circle closest-side, var(--primary) 0 80%, var(--secondary) 81%); }
+.escudo-p-rombo::before {
+  content: "";
+  position: absolute;
+  left: 18%; top: 18%; width: 64%; height: 64%;
+  background-color: var(--secondary);
+  background-image: repeating-linear-gradient(90deg, var(--primary) 0 16%, transparent 16% 32%);
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  transform: rotate(45deg);
+}
+.escudo-p-rombo { background-color: var(--primary); }
+
 /* Rival AÚN SIN sortear ("?" tecleado por el admin, ver crearEscudoHTML) —
    cuadro negro liso (hereda --secondary:#101114 de .escudo base, sin rombo
    ni color hash) con un solo glifo ❓️ centrado, más grande que unas

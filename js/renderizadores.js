@@ -451,10 +451,15 @@
     // círculo, igual que ya hace con el rombo.
     if (equipo.escudoSvg) {
       var esHumanoV = !!equipo.mister;
-      var claseIAV = esHumanoV ? "" : "escudo--ia ";
+      var svgV = '<svg viewBox="0 0 80 80" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + equipo.escudoSvg + "</svg>";
+      if (esHumanoV) {
+        return '<div class="escudo escudo--vector ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' + svgV + "</div>";
+      }
+      // IA: el dibujo vectorial va DENTRO de la chapa (aro plateado),
+      // igual que el resto de escudos IA — ver bloque CHAPA más abajo.
       return (
-        '<div class="escudo ' + claseIAV + 'escudo--vector ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' +
-        '<svg viewBox="0 0 80 80" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + equipo.escudoSvg + "</svg>" +
+        '<div class="escudo escudo--ia escudo--chapa escudo--vector ' + claseTamano + '" data-patron="vector" title="' + (equipo.nombre || "") + '">' +
+        '<span class="escudo-cara">' + svgV + "</span>" +
         "</div>"
       );
     }
@@ -481,14 +486,41 @@
     // partidas arriba/abajo tipo Villa/Dortmund).
     var FORMATOS_ESCUDO = { rombo: "escudo--rombo", solido: "escudo--solido", mitad: "escudo--mitad" };
     var esHumano = !!equipo.mister;
-    var formato = FORMATOS_ESCUDO[equipo.escudoFormato] || "escudo--rayas";
     var style = "--primary:" + (equipo.colorPrimario || "#39ff6a") + "; --secondary:" + (equipo.colorSecundario || "#101114") + ";";
-    var claseIA = esHumano ? "" : "escudo--ia ";
+    if (equipo.colorTerciario) style += " --tertiary:" + equipo.colorTerciario + ";";
 
+    if (esHumano) {
+      var formatoH = FORMATOS_ESCUDO[equipo.escudoFormato] || "escudo--rayas";
+      return (
+        '<div class="escudo ' + formatoH + " " + claseTamano + '" style="' + style + '" title="' + (equipo.nombre || "") + '"></div>'
+      );
+    }
+
+    // CHAPA (petición usuario 2026-10-03, 6 láminas de referencia —
+    // "Ninguna chapa se parece a lo que hemos hecho"): botón metálico
+    // con ARO PLATEADO + cara abombada con brillo, y dentro el DIBUJO
+    // propio del club (rayas, franjas, diana, cuadros, cuartos, banda,
+    // cuadrados concéntricos, triángulos, tejido…), no solo 4 patrones
+    // planos. Sigue siendo CSS puro (0 KB de imagen): el aro es
+    // `.escudo--chapa`, la cara es `.escudo-cara.escudo-p-<patrón>` —
+    // ver css/estilos.css (bloque CHAPA) y _dibujarEscudoEnCanvas (copia
+    // para la captura de WhatsApp, lee `data-patron`).
+    var patron = PATRONES_CHAPA[equipo.escudoFormato] ? equipo.escudoFormato : "rayas";
     return (
-      '<div class="escudo ' + claseIA + formato + " " + claseTamano + '" style="' + style + '" title="' + (equipo.nombre || "") + '"></div>'
+      '<div class="escudo escudo--ia escudo--chapa ' + claseTamano + '" data-patron="' + patron + '" style="' + style + '" title="' + (equipo.nombre || "") + '">' +
+      '<span class="escudo-cara escudo-p-' + patron + '"></span>' +
+      "</div>"
     );
   }
+
+  // Dibujos disponibles para la cara de la chapa (`escudoFormato` en
+  // data/rivales_reales.json). Cualquier valor desconocido cae a rayas.
+  var PATRONES_CHAPA = {
+    rayas: 1, "rayas-finas": 1, "rayas-h": 1, "franja-h": 1, "franja-fina-h": 1, "franja-v": 1,
+    "tres-h": 1, mitad: 1, "mitad-v": 1, cuartos: 1, cuadros: 1, "cuadros-grandes": 1,
+    diana: 1, diagonal: 1, banda: 1, "diagonal-mitad": 1, cuadrado: 1, triangulo: 1,
+    triangulos: 1, tejido: 1, pixel: 1, solido: 1, rombo: 1
+  };
 
   // ============================================================
   // PANTALLA DE INICIO — las 8 cajas humanas (fuente única: data/equipos.json)
@@ -1442,6 +1474,9 @@
           // escudo fiel al pasar por este objeto sintético y caía de
           // vuelta al patrón CSS genérico de 4 formas.
           escudoSvg: real.escudoSvg,
+          // 3er color de la chapa (franjas triples, bandas, senyera…) —
+          // ver crearEscudoHTML. Opcional; sin él la chapa usa 2 colores.
+          colorTerciario: real.colorTerciario,
           valoracionPoder: real.valoracionPoder,
           // Marca "viene del catálogo real" — el cruce de caché de abajo
           // (para nombres SIN ficha real, tipo "Frankfurt"/"Eintracht
@@ -11421,6 +11456,120 @@
   // operaciones 2D normales (relleno de color, `drawImage` de un `<img>`
   // YA cargado en pantalla) — nada que html2canvas pueda interpretar
   // mal, porque el resultado que le pasamos ya es un PNG plano.
+  // Copia en canvas de la CHAPA (ver crearEscudoHTML / bloque CHAPA de
+  // css/estilos.css) para la captura de WhatsApp: aro plateado + cara con
+  // el dibujo del club (`data-patron`) + brillo. Solo primitivas 2D.
+  function _dibujarChapaEnCanvas(ctx, w, h, nodo, estilo) {
+    var cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2;
+    var p = (estilo.getPropertyValue("--primary") || "#39ff6a").trim();
+    var s = (estilo.getPropertyValue("--secondary") || "#101114").trim();
+    var t = (estilo.getPropertyValue("--tertiary") || "").trim() || s;
+    var patron = nodo.getAttribute("data-patron") || "rayas";
+
+    // Aro plateado
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.closePath();
+    var aro = ctx.createLinearGradient(0, 0, w, h);
+    aro.addColorStop(0, "#fdfdfd"); aro.addColorStop(0.22, "#b9bcc2"); aro.addColorStop(0.45, "#6f7379");
+    aro.addColorStop(0.62, "#e6e8eb"); aro.addColorStop(0.8, "#8c9096"); aro.addColorStop(1, "#d9dbde");
+    ctx.fillStyle = aro; ctx.fill();
+    ctx.restore();
+
+    // Cara
+    var r = R * 0.78, x0 = cx - r, y0 = cy - r, d = r * 2;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    ctx.fillStyle = s; ctx.fillRect(x0, y0, d, d);
+    var i, n;
+    function rect(c, x, y, ww, hh) { ctx.fillStyle = c; ctx.fillRect(x0 + x * d, y0 + y * d, ww * d, hh * d); }
+    function poly(c, pts) {
+      ctx.fillStyle = c; ctx.beginPath();
+      for (var k = 0; k < pts.length; k++) {
+        var X = x0 + pts[k][0] * d, Y = y0 + pts[k][1] * d;
+        if (k === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+    function franjasDiag(c, ancho, angulo) {
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(angulo); ctx.fillStyle = c;
+      for (var xx = -d; xx < d; xx += ancho * 2 * d) ctx.fillRect(xx, -d, ancho * d, 2 * d);
+      ctx.restore();
+    }
+    switch (patron) {
+      case "rayas-finas": for (i = 0; i < 10; i++) rect(p, i * 0.1, 0, 0.05, 1); break;
+      case "rayas-h": for (i = 0; i < 5; i++) rect(p, 0, i * 0.2, 1, 0.1); break;
+      case "franja-h": rect(p, 0, 0, 1, 0.34); rect(p, 0, 0.66, 1, 0.34); break;
+      case "franja-fina-h": rect(p, 0, 0, 1, 0.45); rect(p, 0, 0.55, 1, 0.45); break;
+      case "franja-v": rect(p, 0, 0, 0.34, 1); rect(p, 0.66, 0, 0.34, 1); break;
+      case "tres-h": rect(p, 0, 0, 1, 0.38); rect(t, 0, 0.38, 1, 0.24); break;
+      case "mitad": rect(p, 0, 0, 1, 0.5); break;
+      case "mitad-v": rect(p, 0, 0, 0.5, 1); break;
+      case "cuartos": rect(p, 0.5, 0, 0.5, 0.5); rect(p, 0, 0.5, 0.5, 0.5); break;
+      case "cuadros": case "cuadros-grandes":
+        n = patron === "cuadros" ? 8 : 3;
+        var off = patron === "cuadros" ? 0 : -1 / 6;
+        for (i = -1; i <= n; i++) for (var j = -1; j <= n; j++) {
+          if ((i + j) % 2 === 0) rect(p, off + i / n, off + j / n, 1 / n, 1 / n);
+        }
+        break;
+      case "diana":
+        for (i = 5; i >= 1; i--) {
+          ctx.fillStyle = (i % 2 === 1) ? p : s;
+          ctx.beginPath(); ctx.arc(cx, cy, r * i / 5, 0, Math.PI * 2); ctx.fill();
+        }
+        break;
+      case "diagonal": franjasDiag(p, 0.09, -Math.PI / 4); break;
+      case "banda": poly(p, [[0.36 + 0.5, -0.5], [0.64 + 0.5, -0.5], [0.64 - 0.5, 1.5], [0.36 - 0.5, 1.5]]); break;
+      case "diagonal-mitad":
+        poly(p, [[0, 0], [1, 0], [0, 1]]);
+        poly(t, [[1.04, 0], [1, 0.04], [0.04, 1], [0, 1.04], [-0.04, 1], [1, -0.04]]);
+        break;
+      case "cuadrado":
+        [[1, p], [0.82, s], [0.62, p], [0.42, s], [0.22, p]].forEach(function (q) { rect(q[1], (1 - q[0]) / 2, (1 - q[0]) / 2, q[0], q[0]); });
+        break;
+      case "triangulo":
+        poly(p, [[0.5, 0.1], [0.92, 0.86], [0.08, 0.86]]);
+        poly(s, [[0.5, 0.39], [0.73, 0.77], [0.27, 0.77]]);
+        poly(p, [[0.5, 0.56], [0.58, 0.72], [0.42, 0.72]]);
+        break;
+      case "triangulos":
+        for (i = 0; i < 4; i++) for (var k2 = 0; k2 < 4; k2++) {
+          var bx = i / 4, by = k2 / 4, c4 = 1 / 4;
+          poly(p, [[bx, by], [bx, by + c4], [bx + c4, by + c4]]);
+        }
+        break;
+      case "tejido": franjasDiag(p, 0.07, Math.PI / 4); franjasDiag(p, 0.07, -Math.PI / 4); break;
+      case "pixel":
+        rect(p, 0, 0, 1, 1);
+        for (i = 0; i < 6; i++) for (var j2 = 0; j2 < 6; j2++) if ((i + j2) % 2 === 0) rect(s, 0.42 + i * 0.0986, j2 * 0.0986, 0.0986, 0.0986);
+        break;
+      case "solido":
+        ctx.fillStyle = p; ctx.beginPath(); ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2); ctx.fill();
+        break;
+      case "rombo":
+        rect(p, 0, 0, 1, 1);
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI / 4);
+        var lado = d * 0.64; ctx.fillStyle = s; ctx.fillRect(-lado / 2, -lado / 2, lado, lado);
+        ctx.fillStyle = p; for (var xr = -lado / 2; xr < lado / 2; xr += lado * 0.32) ctx.fillRect(xr, -lado / 2, lado * 0.16, lado);
+        ctx.restore();
+        break;
+      case "vector": break; // dibujo SVG propio: queda el fondo liso (como antes)
+      default: for (i = 0; i < 4; i++) rect(p, i * 0.25, 0, 0.125, 1);
+    }
+    // Brillo de cristal
+    var brillo = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.64, 0, cx - r * 0.2, cy - r * 0.64, r * 1.1);
+    brillo.addColorStop(0, "rgba(255,255,255,.6)");
+    brillo.addColorStop(0.7, "rgba(255,255,255,.08)");
+    brillo.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = brillo; ctx.fillRect(x0, y0, d, d);
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+
   function _dibujarEscudoEnCanvas(nodo) {
     var rect = nodo.getBoundingClientRect();
     var w = Math.max(1, Math.round(rect.width));
@@ -11434,6 +11583,11 @@
 
     var estilo = getComputedStyle(nodo);
     var esCirculo = nodo.classList.contains("escudo--ia");
+
+    if (nodo.classList.contains("escudo--chapa")) {
+      _dibujarChapaEnCanvas(ctx, w, h, nodo, estilo);
+      return lienzo;
+    }
 
     ctx.beginPath();
     if (esCirculo) {

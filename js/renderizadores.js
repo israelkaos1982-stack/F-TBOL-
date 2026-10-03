@@ -1389,7 +1389,10 @@
     // "city"/"inter" a secas SIN colisión verificada contra equipos_ia.json ni
     // data/rivales_reales.json (ninguna otra entrada de ninguno de los 2
     // catálogos contiene "city" ni "inter" como substring).
-    "manchester-city": ["manchester city", "man city", "city"],
+    // Rubén: desde 2026-10-03 su club es el CHELSEA (id interno
+    // "manchester-city" conservado para no perder sus datos guardados);
+    // el Manchester City vuelve a ser IA, así que "city" ya NO es alias.
+    "manchester-city": ["chelsea", "chelsea fc"],
     "inter-milan": ["inter", "inter de milan", "inter milan", "internazionale"]
   };
   function _normSinPuntuacion(s) {
@@ -3846,7 +3849,7 @@
       var nota = document.createElement("p");
       nota.className = "liga1ref-leyenda-mini";
       nota.style.marginTop = "10px";
-      nota.textContent = "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Competición inglesa — solo Manchester City la disputa, sin cuadro compartido con el resto de cajas.";
+      nota.textContent = "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Competición inglesa — solo el Chelsea la disputa, sin cuadro compartido con el resto de cajas.";
       contenedor.appendChild(nota);
     });
   }

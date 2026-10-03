@@ -11998,12 +11998,41 @@
     });
 
     // Corrección MANUAL (📌, candado 646) — ver parsearStatsOverrideTexto.
-    // Se aplica DESPUÉS de sumar todo lo automático y SOLO sustituye las 4
+    // Se aplica DESPUÉS de sumar todo lo automático y SOLO corrige las 4
     // columnas visibles (Goles/MVP/Amarillas/Rojas) del jugador corregido;
     // porteriaImbatida y los contadores internos de sanción
     // (partidosDobleAmarilla/partidosRojaDirecta) siguen viniendo SIEMPRE
     // de los partidos reales — el admin corrige lo que VE, no reescribe
     // el motor de sanciones.
+    //
+    // ⚠️ obligatorio (reporte usuario 2026-10-03, fotos Atlético Madrid —
+    // "como puede ser que tenga mas goles Sorloth y el resto en Liga
+    // [Hypermotion] que en el global / y en Copa no se ha subido ni una
+    // sola estadística de los jugadores"): el 📌 nació (2026-09) para
+    // CORREGIR UN DÉFICIT puntual — Sørloth llevaba 24 goles reales pero
+    // el cálculo automático solo veía 21 porque un partido antiguo no se
+    // había registrado bien dentro de la app. El texto pegado reemplazaba
+    // las 4 columnas POR COMPLETO, congelado, ciego a cualquier partido
+    // que se jugara DESPUÉS de guardarlo. El problema: en cuanto el total
+    // automático (que sigue sumando Liga+Copa+Hypermotion+lo que sea, sin
+    // que el admin toque nada) alcanza y SUPERA ese valor congelado, el
+    // 📌 deja de ser una corrección y pasa a SER el bug — oculta goles de
+    // Hypermotion recién marcados y absolutamente TODO lo de Copa, porque
+    // el reemplazo es total, no una suma. Por eso el Pichichi de una sola
+    // competición (que no pasa por este 📌) podía mostrar MÁS goles que
+    // el "global" de la Plantilla, algo que debería ser estructuralmente
+    // imposible (el global SUMA todas las competiciones, nunca puede
+    // valer menos que una de sus partes).
+    //
+    // Fix: la corrección manual GANA solo mientras siga siendo mayor o
+    // igual que lo que ya suma el cálculo automático — `Math.max(ov, auto)`
+    // en cada una de las 4 columnas. Así sigue sirviendo exactamente para
+    // lo que se creó (tapar un déficit histórico) y, en cuanto los
+    // partidos reales alcanzan/superan esa cifra fija, el automático toma
+    // el relevo SOLO — sin que el admin tenga que acordarse de "descongelar"
+    // nada ni de volver a pegar el texto cada vez que suma un gol nuevo en
+    // cualquier competición. El 📌 nunca puede hacer bajar un total por
+    // debajo de lo que los partidos reales ya demuestran.
     var overrides = window.Estado ? parsearStatsOverrideTexto(window.Estado.obtenerStatsOverrideTexto(clubId)) : {};
 
     // Contrato externo sin cambios: la pantalla Plantilla busca por el id
@@ -12019,7 +12048,10 @@
       if (ov) {
         var base = porNombre[key] || {};
         stats[j.id] = {
-          goles: ov.goles, mvp: ov.mvp, amarillas: ov.amarillas, rojas: ov.rojas,
+          goles: Math.max(ov.goles, base.goles || 0),
+          mvp: Math.max(ov.mvp, base.mvp || 0),
+          amarillas: Math.max(ov.amarillas, base.amarillas || 0),
+          rojas: Math.max(ov.rojas, base.rojas || 0),
           porteriaImbatida: base.porteriaImbatida || 0,
           partidosDobleAmarilla: base.partidosDobleAmarilla || 0,
           partidosRojaDirecta: base.partidosRojaDirecta || 0,

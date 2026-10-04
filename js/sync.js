@@ -596,6 +596,15 @@
       cadena = _traerDelServidor().then(function (pullOk) {
         if (!pullOk) return;
         _primerCicloHecho = true;
+        // Correcciones de datos únicas (idempotentes por contenido): se
+        // aplican SOBRE la copia recién traída del servidor y el push de
+        // justo abajo las sube para todos los dispositivos.
+        try {
+          if (window.Estado.corregirCalendarioLiverpoolV1 && window.Estado.corregirCalendarioLiverpoolV1()) {
+            if (window.Estado.invalidarCache) window.Estado.invalidarCache();
+            _marcarUiActualizada();
+          }
+        } catch (err) { console.warn("[sync] corrección de calendario falló:", err); }
         return _empujarPendientes(_clavesLocales());
       });
     } else {

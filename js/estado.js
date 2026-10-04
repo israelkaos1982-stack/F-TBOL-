@@ -1755,6 +1755,76 @@
     }
   }
 
+  // ---------- Corrección única del calendario de Liverpool (2026-10-04) ----------
+  // Petición usuario ("haz tú el calendario"): el Calendario extra de
+  // Liverpool no cuadraba con los de Real Madrid y Atlético Madrid (que sí
+  // cuadran entre sí): Liverpool-Real Madrid en J9/J26 vs J17/J18,
+  // Liverpool-Atlético en J5/J30 vs J4/J31, y en J14/15/20/21 Liverpool y
+  // Real Madrid jugaban contra el MISMO rival IA a la vez. La app junta los
+  // calendarios de todos los mánagers, así que salían 3 cruces contra el
+  // Madrid. Se recolocan 12 jornadas de Liverpool (respetando ida/vuelta
+  // k <-> 35-k) para que cuadre con los otros 2.
+  // Idempotente por CONTENIDO: solo actúa si encuentra las 12 líneas
+  // viejas EXACTAS (sin marcador). Si ya están corregidas no hace nada; si
+  // solo aparecen algunas (texto editado a mano) o alguna de esas jornadas
+  // ya tiene un resultado jugado confirmado en la app, NO toca nada (nunca
+  // deja huérfano un resultado ni mezcla 2 versiones del calendario).
+  var _CORRECCION_CAL_LIVERPOOL_V1 = [
+    [4, "Real Sporting vs Liverpool", "Atlético Madrid vs Liverpool"],
+    [5, "Liverpool vs Atlético Madrid", "Real Sporting vs Liverpool"],
+    [9, "Liverpool vs Real Madrid", "Liverpool vs CD Castellón"],
+    [14, "Liverpool vs CD Castellón", "UD Las Palmas vs Liverpool"],
+    [15, "UD Las Palmas vs Liverpool", "Cádiz vs Liverpool"],
+    [17, "Cádiz vs Liverpool", "Real Madrid vs Liverpool"],
+    [18, "Liverpool vs Cádiz", "Liverpool vs Real Madrid"],
+    [20, "Liverpool vs UD Las Palmas", "Liverpool vs Cádiz"],
+    [21, "CD Castellón vs Liverpool", "Liverpool vs UD Las Palmas"],
+    [26, "Real Madrid vs Liverpool", "CD Castellón vs Liverpool"],
+    [30, "Atlético Madrid vs Liverpool", "Liverpool vs Real Sporting"],
+    [31, "Liverpool vs Real Sporting", "Liverpool vs Atlético Madrid"]
+  ];
+  function corregirCalendarioLiverpoolV1() {
+    var clubId = "liverpool";
+    var texto = obtenerCalendarioExtraTexto(clubId);
+    if (!texto) return false;
+    var lineas = texto.split("\n");
+    var reLinea = /^(\s*(?:\d+[.)]\s*)?[^-]*Hypermotion\s+-\s+)(\d+)(ª\s+Jornada\s+-\s+)(.+?)\s*$/i;
+    var porJornada = {};
+    lineas.forEach(function (l, i) {
+      var m = l.match(reLinea);
+      if (m) porJornada[Number(m[2])] = { i: i, m: m };
+    });
+    var cambios = [];
+    for (var k = 0; k < _CORRECCION_CAL_LIVERPOOL_V1.length; k++) {
+      var c = _CORRECCION_CAL_LIVERPOOL_V1[k];
+      var hit = porJornada[c[0]];
+      if (!hit) return false;
+      var actual = _normTxtExtra(hit.m[4]);
+      if (actual === _normTxtExtra(c[2])) continue; // esta ya está corregida
+      if (actual !== _normTxtExtra(c[1])) return false; // editada a mano / con marcador: no se toca nada
+      cambios.push({ i: hit.i, nuevo: hit.m[1] + c[0] + hit.m[3] + c[2], jornada: c[0], viejo: c[1] });
+    }
+    if (!cambios.length) return false;
+    if (cambios.length !== _CORRECCION_CAL_LIVERPOOL_V1.length) return false; // a medias: no mezclar versiones
+    // ¿Alguna de las jornadas viejas ya tiene resultado jugado en la app?
+    var resultados = (cargarEstado().resultados) || {};
+    var jugadoViejo = cambios.some(function (ch) {
+      var rival = ch.viejo.split(/\s+vs\s+/i).map(_normTxtExtra).filter(function (n) { return n !== "liverpool"; })[0] || "";
+      return Object.keys(resultados).some(function (id) {
+        var r = resultados[id];
+        if (!r || r.jugado !== true || typeof r._identidad !== "string") return false;
+        var idn = r._identidad;
+        return idn.indexOf("::j" + ch.jornada + "::") !== -1 && idn.indexOf("liverpool") !== -1 && idn.indexOf(rival) !== -1;
+      });
+    });
+    if (jugadoViejo) {
+      console.warn("[estado] corrección del calendario de Liverpool NO aplicada: alguna jornada afectada ya está jugada.");
+      return false;
+    }
+    cambios.forEach(function (ch) { lineas[ch.i] = ch.nuevo; });
+    return guardarCalendarioExtraTexto(clubId, lineas.join("\n"), { forzar: true });
+  }
+
   // Quita el marcador "(N-M)" pegado al rival en CADA línea del
   // Calendario extra de este club — vuelve esas líneas a "sin jugar" sin
   // borrar la línea entera (conserva competición/ronda/rival/fecha).
@@ -3886,6 +3956,7 @@
     toggleVisibilidadTarjetaMenuClub: toggleVisibilidadTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
+    corregirCalendarioLiverpoolV1: corregirCalendarioLiverpoolV1,
     reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,
     filtrarDivisionesAntiguasDeCalendarioExtraTexto: filtrarDivisionesAntiguasDeCalendarioExtraTexto,
     obtenerTitulosTexto: obtenerTitulosTexto,

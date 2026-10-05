@@ -6387,7 +6387,10 @@ _EF7_REGRESION_LEN_MINIMO = 20  # por debajo de esto no merece la pena proteger 
 # intento anterior ya quedó rechazado y revertido, el siguiente intento
 # puede no "verse" como un recorte grande en local y aun así seguir
 # perdiendo la comparación contra el servidor.
-_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_", "ef7_plantilla_stats_base_v1_")
+# `ef7_vivo_v1_<clubId>` = borrador del partido EN CURSO de ese club (ver
+# js/acta.js): al terminar el partido pasa a una "tumba" de pocos bytes, así
+# que encoger de golpe es lo NORMAL, nunca una copia vieja pisando a la buena.
+_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_", "ef7_plantilla_stats_base_v1_", "ef7_vivo_v1_")
 
 
 def _ef7_valor_como_texto(v):
@@ -6622,6 +6625,61 @@ def api_ef7_state_post():
     finally:
         _ef7_state_lock_release(lock_fh)
     return jsonify({"ok": True, "guardadas": guardadas, "updated_at": now})
+
+
+@app.route("/api/ef7/resultado", methods=["POST"])
+def api_ef7_resultado_post():
+    """Sube SOLO los partidos nuevos/modificados (unos cientos de bytes) en vez
+    de re-enviar el blob entero de `ef7_estado_liga_v1` (~80 KB y creciendo).
+
+    Reutiliza EXACTAMENTE el mismo fusionado partido a partido que
+    /api/ef7/state (`_ef7_merge_resultados`: guards de jugado->no jugado,
+    marcador distinto, acta, tumbas y reseteo global), así que un partido que
+    llega por aquí se trata igual que si hubiera llegado dentro del blob
+    completo. Es lo bastante pequeño para viajar con `keepalive` aunque la app
+    se mande a segundo plano justo al confirmar el partido.
+    """
+    body = request.get_json(silent=True) or {}
+    partidos = body.get("partidos")
+    if not isinstance(partidos, dict):
+        return jsonify({"ok": False, "error": "falta `partidos`"}), 400
+    limpios = {
+        pid: entry for pid, entry in partidos.items()
+        if isinstance(pid, str) and 0 < len(pid) < 200 and isinstance(entry, dict)
+    }
+    generados = body.get("generados")
+    if not limpios and not isinstance(generados, dict):
+        return jsonify({"ok": False, "error": "nada que guardar"}), 400
+    incoming_text = json.dumps(
+        {"version": 1, "resultados": limpios, "partidosGenerados": generados if isinstance(generados, dict) else {}},
+        ensure_ascii=False,
+    )
+    now = utc_now_iso()
+    lock_fh = _ef7_state_lock_acquire()
+    try:
+        row = GlobalState.query.filter_by(clave=_EF7_ESTADO_LIGA_KEY).with_for_update().first()
+        value_a_guardar = _ef7_merge_resultados(row.valor_json, incoming_text) if row is not None else incoming_text
+        try:
+            payload = json.dumps(value_a_guardar, ensure_ascii=False)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "no serializable"}), 400
+        payload_bytes = len(payload.encode("utf-8"))
+        if payload_bytes > _EF7_ESTADO_LIGA_MAX_BYTES:
+            print(
+                f"[ftbol] POST /api/ef7/resultado RECHAZADO por tamaño: bytes={payload_bytes} "
+                f"limite={_EF7_ESTADO_LIGA_MAX_BYTES}",
+                flush=True,
+            )
+            return jsonify({"ok": False, "error": "demasiado grande"}), 413
+        if row:
+            row.valor_json = payload
+            row.updated_at = now
+        else:
+            db.session.add(GlobalState(clave=_EF7_ESTADO_LIGA_KEY, valor_json=payload, updated_at=now))
+        db.session.commit()
+    finally:
+        _ef7_state_lock_release(lock_fh)
+    return jsonify({"ok": True, "guardados": list(limpios.keys()), "updated_at": now})
 
 
 @app.route("/css/<path:filename>")

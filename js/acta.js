@@ -114,47 +114,80 @@
   // ningún aviso y el resultado nunca llega a guardarse ni a subirse (reporte
   // usuario: "los partidos humanos vs IA desde otro móvil no se guardan la
   // mayoría de las veces, tengo que meter los datos en el acta otra vez").
-  // Ahora cada cambio del acta se copia a localStorage (clave FUERA del
-  // prefijo "ef7_": es un borrador de ESTE dispositivo, no se sincroniza ni
-  // entra en las copias de seguridad) y se restaura al reabrir el club.
-  var VIVO_KEY = "efvivo_partido_v1";
+  //
+  // Cada cambio del acta se copia a `ef7_vivo_v1_<club>` (un borrador POR
+  // CLUB, ~200 bytes por evento). Al llevar el prefijo ef7_ lo sincroniza
+  // js/sync.js: sobrevive a recargas Y se puede recuperar desde OTRO móvil si
+  // este se apaga o se queda sin batería. Al terminar o cerrar el partido se
+  // sustituye por una "tumba" de unos pocos bytes ({"fin":ts}), así que el
+  // peso en servidor nunca crece (1 clave pequeña por club).
+  var VIVO_PREFIJO = "ef7_vivo_v1_";
   var VIVO_MAX_EDAD_MS = 24 * 60 * 60 * 1000;
+  // Otro dispositivo escribió el borrador hace menos de esto: sigue jugando
+  // allí — no se le "roba" el partido. Pasado el plazo se asume abandonado.
+  var VIVO_OTRO_DISPOSITIVO_ACTIVO_MS = 3 * 60 * 1000;
+  function _idDispositivo() {
+    try {
+      var d = localStorage.getItem("efvivo_dev_v1");
+      if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem("efvivo_dev_v1", d); }
+      return d;
+    } catch (err) { return "x"; }
+  }
+  function _claveVivo(club) { return VIVO_PREFIJO + club; }
+  function _pedirSync() {
+    if (window.Sync && typeof window.Sync.pedirSincronizacion === "function") window.Sync.pedirSincronizacion();
+  }
   function _persistirVivo() {
     try {
-      if (!_partidoActivo || !_partidoActivo.partido) { localStorage.removeItem(VIVO_KEY); return; }
-      localStorage.setItem(VIVO_KEY, JSON.stringify({
-        partidoId: _partidoActivo.partido.id,
-        idManager: window._idManagerActivo || null,
-        lado: _partidoActivo.lado || "local",
-        prorroga: !!_partidoActivo.prorroga,
-        acta: actaTemporal,
-        ts: Date.now()
+      var club = window._idManagerActivo;
+      if (!club || !_partidoActivo || !_partidoActivo.partido) return;
+      localStorage.setItem(_claveVivo(club), JSON.stringify({
+        p: _partidoActivo.partido.id,
+        l: _partidoActivo.lado || "local",
+        pr: !!_partidoActivo.prorroga,
+        a: actaTemporal,
+        t: Date.now(),
+        d: _idDispositivo()
       }));
+      _pedirSync();
     } catch (err) { /* cuota llena / modo privado: el borrador es best-effort */ }
   }
   function _borrarVivo() {
-    try { localStorage.removeItem(VIVO_KEY); } catch (err) {}
+    try {
+      var club = window._idManagerActivo;
+      if (!club) return;
+      var k = _claveVivo(club);
+      var actual = localStorage.getItem(k);
+      if (actual === null || actual.indexOf('"fin"') !== -1) return; // nada que borrar
+      localStorage.setItem(k, JSON.stringify({ fin: Date.now() }));
+      _pedirSync();
+    } catch (err) {}
   }
   var _restauracionHecha = false;
-  // Reabre el partido que se estaba jugando cuando la pestaña se recargó.
-  // Devuelve true si lo restauró. Solo actúa una vez por carga de página, y
-  // solo si el club abierto es el del mánager que lo estaba jugando.
+  var _ctxRestaurar = null;
+  // Reabre el partido que se estaba jugando cuando la pestaña se recargó (o
+  // que quedó a medias en otro móvil). Devuelve true si lo restauró. Solo
+  // actúa en el club abierto, una vez por partido recuperado.
   function restaurarPartidoEnVivo(ultimoContexto) {
-    if (_restauracionHecha || _partidoActivo || !ultimoContexto) return false;
-    var guardado = null;
-    try { guardado = JSON.parse(localStorage.getItem(VIVO_KEY) || "null"); } catch (err) { guardado = null; }
-    if (!guardado || !guardado.partidoId) { _restauracionHecha = true; return false; }
-    if (!guardado.ts || Date.now() - guardado.ts > VIVO_MAX_EDAD_MS) { _borrarVivo(); _restauracionHecha = true; return false; }
-    if (guardado.idManager && window._idManagerActivo && guardado.idManager !== window._idManagerActivo) return false; // otro club: espera a que abran el suyo
+    if (ultimoContexto) _ctxRestaurar = ultimoContexto;
+    var ctxR = _ctxRestaurar;
+    var club = window._idManagerActivo;
+    if (_restauracionHecha || _partidoActivo || !ctxR || !club) return false;
+    if (ctxR.equipo && ctxR.equipo.id !== club) return false; // contexto de otro club: se espera al del abierto
+    var g = null;
+    try { g = JSON.parse(localStorage.getItem(_claveVivo(club)) || "null"); } catch (err) { g = null; }
+    if (!g || g.fin || !g.p) return false; // sin borrador (o ya terminado): se reintenta si llega uno por sync
+    if (!g.t || Date.now() - g.t > VIVO_MAX_EDAD_MS) { _borrarVivo(); return false; }
+    if (g.d && g.d !== _idDispositivo() && Date.now() - g.t < VIVO_OTRO_DISPOSITIVO_ACTIVO_MS) return false;
     var R = window.Renderizadores;
-    var partido = R && R.resolverPartidoPorId ? R.resolverPartidoPorId(guardado.partidoId, ultimoContexto) : null;
-    _restauracionHecha = true;
+    var partido = R && R.resolverPartidoPorId ? R.resolverPartidoPorId(g.p, ctxR) : null;
     if (!partido || partido.jugado) { _borrarVivo(); return false; } // ya se confirmó (o ya no existe)
-    iniciarPartidoEnVivo(guardado.partidoId, ultimoContexto);
-    if (!_partidoActivo) return false;
-    _partidoActivo.lado = guardado.lado || "local";
-    _partidoActivo.prorroga = !!guardado.prorroga || _partidoActivo.prorroga;
-    actaTemporal = Array.isArray(guardado.acta) ? guardado.acta : [];
+    _restauracionHecha = true;
+    iniciarPartidoEnVivo(g.p, ctxR);
+    if (!_partidoActivo) { _restauracionHecha = false; return false; }
+    _partidoActivo.lado = g.l || "local";
+    _partidoActivo.prorroga = !!g.pr || _partidoActivo.prorroga;
+    actaTemporal = Array.isArray(g.a) ? g.a : [];
     poblarSelectMinuto();
     seleccionarLado(_partidoActivo.lado);
     pintarActaLista();
@@ -164,6 +197,10 @@
     } catch (err) {}
     return true;
   }
+  // Un borrador que llega desde OTRO móvil (sync) también puede recuperarse.
+  document.addEventListener("ef7-sync-actualizado", function () {
+    if (!_partidoActivo) { try { restaurarPartidoEnVivo(null); } catch (err) {} }
+  });
 
   function agregarEventoActa(opts) {
     var meta = TIPOS_EVENTO[opts.tipo];
@@ -701,8 +738,9 @@
   function cerrarPartidoEnVivo() {
     document.getElementById("partido-live-overlay").hidden = true;
     actaTemporal = [];
-    _partidoActivo = null;
     _borrarVivo();
+    _partidoActivo = null;
+    _restauracionHecha = false;
   }
 
   function textoEliminatoria(res, datos) {

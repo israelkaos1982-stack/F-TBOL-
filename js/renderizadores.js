@@ -1603,7 +1603,13 @@
   // LIGA_NAV_HUMANO_PROPIO más abajo). Es el único de los 6 humanos fuera
   // de esta pirámide; si en el futuro se añade otro club humano de fuera
   // de España, su id va aquí también.
-  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
+  // FC Barcelona (2026-10-05, petición usuario: "Chelsea, Inter, PSG y FC
+  // Barcelona... en sus respectivas Ligas y copas son equipos IA, lo que se
+  // añada en texto hace la misma función que cualquier equipo IA"): su liga
+  // (Ea Sports) y su copa se leen del TEXTO pegado como las de los otros 3
+  // — sus partidos de Liga/Copa ya no se suman a mano a la clasificación.
+  // Sigue siendo humano en Superliga, Champions, Mundialito, etc.
+  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan", "fc-barcelona"];
 
   // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
   // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
@@ -2851,7 +2857,7 @@
   // sola, igual que 1ª REF ya hace con los 5 humanos que sí comparten esa
   // liga (calcularLiga1RefCombinada). Toda liga EXTRA nueva cuyo único
   // humano la juegue de verdad añade aquí su entrada ligaId->clubId.
-  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg", premier: "manchester-city", seriea: "inter-milan" };
+  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg", premier: "manchester-city", seriea: "inter-milan", easports: "fc-barcelona" };
 
   // Fusión: texto pegado (solo IA) + el partido a partido REAL del club
   // humano dueño de esta liga (RESULTADO_RAPIDO_POR_CLUB, o jugado en
@@ -2891,7 +2897,14 @@
         // que ya decide si "ya está en el texto") y se le añade el id +
         // el icono, sin tocar sus puntos/goles (esos SIEMPRE los da el
         // texto pegado, tal cual, en este camino).
-        var filasTexto = calcularLigaExtraFilas(ligaId);
+        // Si OTRO club humano de la pirámide española (Liverpool/Real Madrid/
+        // Atlético...) estuviera ahora mismo en esta misma división (p. ej.
+        // ascendido a Ea Sports), sus partidos siguen sumándose a su fila;
+        // el propio club (excluido de esa lista) sale tal cual del texto.
+        var otrosHumanos = _equiposHumanosEnDivisionExtra(ligaId, datos);
+        var filasTexto = otrosHumanos.length
+          ? _combinarClasificacionConHumanos(otrosHumanos, textoLiga, datos, _compKeyEsperadoParaDivision(ligaId))
+          : calcularLigaExtraFilas(ligaId);
         var filaPropia = filasTexto.find(function (f) {
           return _liga1RefNombresCoinciden(f.nombre, club.nombre);
         });
@@ -2943,7 +2956,7 @@
     // Champions/Superliga de este mismo club NO cuentan para ESTA tabla.
     var partidos = todosPartidos.filter(function (p) {
       return p.jugado && p.resultado && (p.local === club.id || p.visitante === club.id) &&
-        p.competicion === "liga";
+        (p.competicion === "liga" || p.competicion === _compKeyEsperadoParaDivision(ligaId));
     });
 
     var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
@@ -3310,7 +3323,7 @@
   // foto usuario: bloque "PSG" con su propio cuadro Octavos→Final dentro
   // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
   // humano de fuera de España, su id va aquí también.
-  var COPA_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
+  var COPA_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan", "fc-barcelona"];
 
   function _copaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -10705,9 +10718,7 @@
   var _PIRAMIDE_DIVISION_PEDIDA = {
     liverpool: "hypermotion",
     "real-madrid": "hypermotion",
-    "atletico-madrid": "hypermotion",
-    arsenal: "2ref",
-    "fc-barcelona": "1ref"
+    "atletico-madrid": "hypermotion"
   };
   function fijarDivisionesPiramideSegunPeticion() {
     if (!window.Estado) return 0;

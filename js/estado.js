@@ -1153,16 +1153,32 @@
     return (j - i) % 2 === 1 ? i : j;
   }
 
+  // Posición FIJA de cada club dentro de los ids "superliga-<i>-<j>-<leg>"
+  // (y de la localía, que depende de i/j). Antes i/j eran el índice dentro de
+  // data/equipos.json: quitar un club de ese fichero (Arsenal dejó de ser
+  // humano, 2026-10-05) movía el índice de todos los siguientes y los
+  // resultados de Superliga YA guardados pasaban a apuntar a otro cruce.
+  // Esta lista congela el orden histórico; un club que ya no está (o está
+  // excluido) deja su hueco vacío y simplemente no genera partidos.
+  var SUPERLIGA_ORDEN_ID = ["liverpool", "arsenal", "real-madrid", "atletico-madrid", "fc-barcelona", "psg", "manchester-city", "inter-milan"];
+
   function _partidosSuperliga(datos) {
-    var equipos = ((datos.equipos && datos.equipos.equipos) || []).filter(function (e) {
-      return SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    var todos = (datos.equipos && datos.equipos.equipos) || [];
+    var equipos = SUPERLIGA_ORDEN_ID.map(function (id) {
+      if (SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(id) !== -1) return null;
+      return todos.filter(function (e) { return e.id === id; })[0] || null;
     });
-    if (equipos.length < 2) return [];
+    // Clubes humanos nuevos (no listados arriba) entran al final, sin mover a nadie.
+    todos.forEach(function (e) {
+      if (SUPERLIGA_ORDEN_ID.indexOf(e.id) === -1 && SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1) equipos.push(e);
+    });
+    if (equipos.filter(Boolean).length < 2) return [];
     var ahoraMs = Date.now();
     var out = [];
     var contador = 0;
     for (var i = 0; i < equipos.length; i++) {
       for (var j = i + 1; j < equipos.length; j++) {
+        if (!equipos[i] || !equipos[j]) continue;
         var localIdx = _superligaLocalIdx(i, j);
         var visitanteIdx = localIdx === i ? j : i;
         var local = equipos[localIdx], visitante = equipos[visitanteIdx];

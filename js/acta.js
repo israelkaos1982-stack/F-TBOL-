@@ -105,6 +105,66 @@
   }
 
   // opts: { tipo, minuto, equipoId, equipoNombre, esHumano, jugadorId, jugadorNombre, datos }
+  // ---------- PARTIDO EN CURSO A PRUEBA DE "LA PESTAÑA SE RECARGÓ" ----------
+  // El acta de un partido EN CURSO (`actaTemporal` + `_partidoActivo`) vivía
+  // SOLO en memoria. En el móvil, el mánager juega el partido en eFootball
+  // (otra app, pesada) mientras apunta goles/tarjetas aquí: Android descarta
+  // la pestaña del navegador para liberar memoria y, al volver, la página se
+  // recarga desde cero — el partido en curso y TODO su acta desaparecen sin
+  // ningún aviso y el resultado nunca llega a guardarse ni a subirse (reporte
+  // usuario: "los partidos humanos vs IA desde otro móvil no se guardan la
+  // mayoría de las veces, tengo que meter los datos en el acta otra vez").
+  // Ahora cada cambio del acta se copia a localStorage (clave FUERA del
+  // prefijo "ef7_": es un borrador de ESTE dispositivo, no se sincroniza ni
+  // entra en las copias de seguridad) y se restaura al reabrir el club.
+  var VIVO_KEY = "efvivo_partido_v1";
+  var VIVO_MAX_EDAD_MS = 24 * 60 * 60 * 1000;
+  function _persistirVivo() {
+    try {
+      if (!_partidoActivo || !_partidoActivo.partido) { localStorage.removeItem(VIVO_KEY); return; }
+      localStorage.setItem(VIVO_KEY, JSON.stringify({
+        partidoId: _partidoActivo.partido.id,
+        idManager: window._idManagerActivo || null,
+        lado: _partidoActivo.lado || "local",
+        prorroga: !!_partidoActivo.prorroga,
+        acta: actaTemporal,
+        ts: Date.now()
+      }));
+    } catch (err) { /* cuota llena / modo privado: el borrador es best-effort */ }
+  }
+  function _borrarVivo() {
+    try { localStorage.removeItem(VIVO_KEY); } catch (err) {}
+  }
+  var _restauracionHecha = false;
+  // Reabre el partido que se estaba jugando cuando la pestaña se recargó.
+  // Devuelve true si lo restauró. Solo actúa una vez por carga de página, y
+  // solo si el club abierto es el del mánager que lo estaba jugando.
+  function restaurarPartidoEnVivo(ultimoContexto) {
+    if (_restauracionHecha || _partidoActivo || !ultimoContexto) return false;
+    var guardado = null;
+    try { guardado = JSON.parse(localStorage.getItem(VIVO_KEY) || "null"); } catch (err) { guardado = null; }
+    if (!guardado || !guardado.partidoId) { _restauracionHecha = true; return false; }
+    if (!guardado.ts || Date.now() - guardado.ts > VIVO_MAX_EDAD_MS) { _borrarVivo(); _restauracionHecha = true; return false; }
+    if (guardado.idManager && window._idManagerActivo && guardado.idManager !== window._idManagerActivo) return false; // otro club: espera a que abran el suyo
+    var R = window.Renderizadores;
+    var partido = R && R.resolverPartidoPorId ? R.resolverPartidoPorId(guardado.partidoId, ultimoContexto) : null;
+    _restauracionHecha = true;
+    if (!partido || partido.jugado) { _borrarVivo(); return false; } // ya se confirmó (o ya no existe)
+    iniciarPartidoEnVivo(guardado.partidoId, ultimoContexto);
+    if (!_partidoActivo) return false;
+    _partidoActivo.lado = guardado.lado || "local";
+    _partidoActivo.prorroga = !!guardado.prorroga || _partidoActivo.prorroga;
+    actaTemporal = Array.isArray(guardado.acta) ? guardado.acta : [];
+    poblarSelectMinuto();
+    seleccionarLado(_partidoActivo.lado);
+    pintarActaLista();
+    pintarMarcadorEnVivo();
+    try {
+      window.alert("♻️ Se ha recuperado el partido que tenías en curso (" + actaTemporal.length + " evento(s) del acta). Revisa el marcador y pulsa FINALIZAR cuando termine.");
+    } catch (err) {}
+    return true;
+  }
+
   function agregarEventoActa(opts) {
     var meta = TIPOS_EVENTO[opts.tipo];
     if (!meta) throw new Error("Tipo de evento desconocido: " + opts.tipo);
@@ -146,6 +206,7 @@
     };
 
     actaTemporal.push(evento);
+    _persistirVivo();
     return evento;
   }
 
@@ -154,6 +215,7 @@
     var idx = actaTemporal.findIndex(function (e) { return e.id_evento === idEvento; });
     if (idx === -1) return false;
     actaTemporal.splice(idx, 1);
+    _persistirVivo();
     return true;
   }
 
@@ -239,6 +301,7 @@
     //    partido. Nunca se persiste completa: solo vivió en memoria
     //    mientras el partido estaba en juego.
     actaTemporal = [];
+    if (_guardadoOk !== false) _borrarVivo(); // si NO se guardó, el borrador se conserva para reintentar
 
     // 3. Eliminatorias de Copa/Promoción: si este partido era una vuelta
     //    o un tercer partido de desempate, decide (o hace avanzar) la
@@ -381,6 +444,7 @@
       });
     }
     pintarActaLista();
+    _persistirVivo();
   }
 
   // Mismo orden/etiquetas que la pantalla "Plantilla" (Renderizadores) —
@@ -448,6 +512,7 @@
     );
   }
   function pintarActaLista() {
+    _persistirVivo();
     var contL = document.getElementById("live-acta-local");
     var contV = document.getElementById("live-acta-visitante");
     if (!contL || !contV || !_partidoActivo) return;
@@ -629,6 +694,7 @@
     document.getElementById("live-entrada").hidden = false;
     document.getElementById("live-resumen").hidden = true;
     document.getElementById("partido-live-overlay").hidden = false;
+    _persistirVivo();
     requestAnimationFrame(_ajustarFuenteEquiposEnVivo);
   }
 
@@ -636,6 +702,7 @@
     document.getElementById("partido-live-overlay").hidden = true;
     actaTemporal = [];
     _partidoActivo = null;
+    _borrarVivo();
   }
 
   function textoEliminatoria(res, datos) {
@@ -898,6 +965,7 @@
     calcularMarcadorDesdeActa: calcularMarcadorDesdeActa,
     finalizarYSubirPartido: finalizarYSubirPartido,
     iniciarPartidoEnVivo: iniciarPartidoEnVivo,
+    restaurarPartidoEnVivo: restaurarPartidoEnVivo,
     obtenerActaTemporal: function () { return actaTemporal.slice(); }
   };
 })();

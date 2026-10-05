@@ -10376,6 +10376,11 @@
         partidosDelClub.forEach(function (p) { partidosPorId[p.id] = p; });
 
         _ultimoContexto = { datos: datos, equipo: equipo, totalJornadas: totalJornadas, partidosPorId: partidosPorId };
+        // Reabre el partido que se estaba jugando si la pestaña se recargó
+        // a mitad (ver js/acta.js::restaurarPartidoEnVivo).
+        if (window.Acta && window.Acta.restaurarPartidoEnVivo) {
+          setTimeout(function () { try { window.Acta.restaurarPartidoEnVivo(_ultimoContexto); } catch (err) { console.warn("[acta] restaurar falló:", err); } }, 0);
+        }
 
         // Eliminación/bloqueo en competiciones de eliminación directa
         // (Copa del Rey, futuros playoffs — ver COMPS_ELIMINACION_DIRECTA):

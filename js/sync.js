@@ -402,9 +402,161 @@
     });
   }
 
+  // ---------- ENVÍO INCREMENTAL de resultados (ef7_estado_liga_v1) ----------
+  // Esta clave es un blob de ~80 KB que crece con cada partido, y se re-subía
+  // ENTERO tras cada confirmación. Ahora, salvo el primer envío, solo viajan
+  // los partidos que cambiaron desde el último envío confirmado (0,3–1 KB):
+  // llega antes, gasta datos mínimos y es lo bastante pequeño para salir con
+  // `keepalive` aunque la app se vaya a segundo plano justo al confirmar. El
+  // servidor los fusiona con la MISMA lógica partido a partido de siempre
+  // (/api/ef7/resultado -> app.py::_ef7_merge_resultados).
+  //
+  // `efsync_res_v1` (fuera del prefijo ef7_: no se sincroniza ni entra en las
+  // copias) recuerda { r: último reseteo global enviado, g: hash de los
+  // partidos generados, m: { idPartido: hash de su contenido } } de lo que YA
+  // está en el servidor. Se compara por CONTENIDO, no por fecha: cualquier
+  // cambio en un partido (aunque no actualice `_actualizadoEn`) se envía.
+  var ENDPOINT_RES = "/api/ef7/resultado";
+  var META_RES_KEY = "efsync_res_v1";
+  function _metaRes() {
+    try {
+      var m = JSON.parse(localStorage.getItem(META_RES_KEY) || "null");
+      return m && typeof m === "object" && m.m && typeof m.m === "object" ? m : null;
+    } catch (err) { return null; }
+  }
+  function _guardarMetaRes(m) {
+    try { localStorage.setItem(META_RES_KEY, JSON.stringify(m)); } catch (err) {}
+  }
+  function _hashEntrada(e) { return _hash(JSON.stringify(e)); }
+  // Marca como "ya en el servidor" los partidos de `valorStr` (todos, o solo
+  // `soloIds`). Se usa tras un envío confirmado y al ADOPTAR el blob del
+  // servidor (lo que viene de allí está en el servidor por definición).
+  function _marcarSubidos(valorStr, soloIds) {
+    var obj;
+    try { obj = JSON.parse(valorStr); } catch (err) { return; }
+    if (!obj || typeof obj !== "object") return;
+    var res = obj.resultados && typeof obj.resultados === "object" ? obj.resultados : {};
+    var meta = _metaRes() || { r: 0, g: "", m: {} };
+    var ids = soloIds || Object.keys(res);
+    ids.forEach(function (id) { if (res[id]) meta.m[id] = _hashEntrada(res[id]); });
+    var reset = typeof obj._resetGlobalEn === "number" ? obj._resetGlobalEn : 0;
+    if (reset > (meta.r || 0)) meta.r = reset;
+    if (!soloIds) meta.g = _hash(JSON.stringify(obj.partidosGenerados || {}));
+    _guardarMetaRes(meta);
+  }
+  // Devuelve { obj, delta, n, gCambio, reciente } o `null` si hay que hacer un
+  // envío COMPLETO (primer envío de este dispositivo o reseteo global nuevo).
+  function _construirDelta(valorStr) {
+    var meta = _metaRes();
+    if (!meta) return null;
+    var obj;
+    try { obj = JSON.parse(valorStr); } catch (err) { return null; }
+    if (!obj || typeof obj !== "object") return null;
+    var reset = typeof obj._resetGlobalEn === "number" ? obj._resetGlobalEn : 0;
+    if (reset > (meta.r || 0)) return null; // "Borrar TODO": viaja completo, con su sello
+    var res = obj.resultados && typeof obj.resultados === "object" ? obj.resultados : {};
+    var delta = {}, n = 0, reciente = false, ahora = Date.now();
+    Object.keys(res).forEach(function (id) {
+      var h = _hashEntrada(res[id]);
+      if (meta.m[id] !== h) {
+        delta[id] = res[id];
+        n++;
+        if (res[id] && res[id].jugado === true && typeof res[id]._actualizadoEn === "number" && ahora - res[id]._actualizadoEn < 5 * 60 * 1000) reciente = true;
+      }
+    });
+    var gCambio = _hash(JSON.stringify(obj.partidosGenerados || {})) !== (meta.g || "");
+    return { obj: obj, delta: delta, n: n, gCambio: gCambio, reciente: reciente };
+  }
+
+  // ---------- Aviso visible de "guardado" ----------
+  // Tras confirmar un partido, el mánager ve si llegó al servidor. Hasta ahora
+  // un fallo de red era invisible: el partido se quedaba solo en ese móvil y se
+  // descubría días después.
+  var _badgeTimer = null;
+  function _badge(tipo, texto) {
+    try {
+      var el = document.getElementById("ef7-sync-badge");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "ef7-sync-badge";
+        el.setAttribute("role", "status");
+        el.style.cssText = "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99999;max-width:92vw;" +
+          "padding:10px 16px;border-radius:999px;font:600 14px/1.3 system-ui,sans-serif;color:#fff;" +
+          "box-shadow:0 4px 18px rgba(0,0,0,.5);text-align:center;pointer-events:none";
+        document.body.appendChild(el);
+      }
+      if (_badgeTimer) { clearTimeout(_badgeTimer); _badgeTimer = null; }
+      if (tipo === "off") { el.style.display = "none"; return; }
+      el.style.display = "block";
+      el.style.background = tipo === "ok" ? "#15803d" : (tipo === "error" ? "#b45309" : "#1d4ed8");
+      el.textContent = texto;
+      if (tipo === "ok") _badgeTimer = setTimeout(function () { el.style.display = "none"; }, 4500);
+    } catch (err) {}
+  }
+
+  function _empujarDelta(info, valorActual) {
+    var K = CLAVE_RESULTADOS;
+    if (info.n === 0 && !info.gCambio) {
+      // Nada distinto de lo que ya tiene el servidor (p. ej. un cambio que no
+      // toca resultados): se da por reconciliado sin gastar red.
+      _snapshot[K] = _hash(valorActual);
+      delete _pendientes[K]; delete _intentosFallidos[K]; delete _forzar[K];
+      _guardarSnapshotPersistido();
+      return Promise.resolve();
+    }
+    var cuerpo = { partidos: info.delta };
+    if (info.gCambio) cuerpo.generados = info.obj.partidosGenerados || {};
+    var texto = JSON.stringify(cuerpo);
+    if (info.reciente) _badge("subiendo", "⏳ Guardando el partido en el servidor…");
+    return _fetchConTimeout(ENDPOINT_RES, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: texto,
+      keepalive: texto.length < 60000 // el límite de keepalive es ~64 KB
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (resp) {
+        if (!resp || !resp.ok) throw new Error("respuesta no válida");
+        var enviados = Object.keys(info.delta);
+        _marcarSubidos(valorActual, enviados);
+        if (info.gCambio) {
+          var meta = _metaRes();
+          if (meta) { meta.g = _hash(JSON.stringify(info.obj.partidosGenerados || {})); _guardarMetaRes(meta); }
+        }
+        delete _intentosFallidos[K];
+        var ahora = _clavesLocales()[K];
+        if (ahora === valorActual) {
+          _snapshot[K] = _hash(valorActual);
+          delete _pendientes[K]; delete _forzar[K];
+          _guardarSnapshotPersistido();
+        } // si cambió mientras volaba, sigue pendiente: el próximo ciclo manda solo lo nuevo
+        if (info.reciente) _badge("ok", "✅ Partido guardado en el servidor");
+      })
+      .catch(function (err) {
+        console.warn("[sync] envío incremental falló:", err);
+        _intentosFallidos[K] = (_intentosFallidos[K] || 0) + 1;
+        if (info.reciente || _intentosFallidos[K] >= 2) {
+          _badge("error", "⚠️ Sin conexión: el partido está guardado en este móvil y se subirá solo. No borres los datos del navegador.");
+        }
+        if (_intentosFallidos[K] >= UMBRAL_AVISO_SYNC_ATASCADO) _avisarSyncAtascado(K);
+      });
+  }
+
   function _empujarPendientes(actuales) {
-    var claves = Object.keys(_pendientes);
-    if (!claves.length) return Promise.resolve();
+    var pendientes = Object.keys(_pendientes);
+    if (!pendientes.length) return Promise.resolve();
+    var info = null;
+    if (_pendientes[CLAVE_RESULTADOS] && typeof actuales[CLAVE_RESULTADOS] === "string") {
+      info = _construirDelta(actuales[CLAVE_RESULTADOS]);
+    }
+    var completas = pendientes.filter(function (k) { return !(info && k === CLAVE_RESULTADOS); });
+    var tareas = [];
+    if (info) tareas.push(_empujarDelta(info, actuales[CLAVE_RESULTADOS]));
+    if (completas.length) tareas.push(_empujarCompleto(completas, actuales));
+    return Promise.all(tareas).then(function () {});
+  }
+
+  function _empujarCompleto(claves, actuales) {
 
     var cuerpo = {};
     claves.forEach(function (k) { cuerpo[k] = actuales[k]; });
@@ -433,6 +585,7 @@
           // MIENTRAS la petición estaba en vuelo — si cambió, se deja
           // pendiente para reintentar con el valor más reciente.
           if (actualesTrasEnviar[k] === cuerpo[k]) {
+            if (k === CLAVE_RESULTADOS) _marcarSubidos(cuerpo[k]);
             _snapshot[k] = _hash(cuerpo[k]);
             delete _pendientes[k];
             delete _intentosFallidos[k];
@@ -556,13 +709,14 @@
           // tamaño relativo del resto del blob.
           var esRegresion = k === CLAVE_RESULTADOS
             ? _esRegresionResultados(actuales[k], valorServidor)
-            : _esRegresionGrave(actuales[k], valorServidor);
+            : (k.indexOf("ef7_vivo_v1_") === 0 ? false : _esRegresionGrave(actuales[k], valorServidor));
           if (esRegresion && !_esReseteoGlobalLegitimo(k, actuales[k], valorServidor)) {
             _pendientes[k] = true;
             return;
           }
           try {
             localStorage.setItem(k, valorServidor);
+            if (k === CLAVE_RESULTADOS) _marcarSubidos(valorServidor); // lo que viene del servidor ya está en el servidor
             _snapshot[k] = _hash(valorServidor);
             huboCambio = true;
             huboSnapshotNuevo = true;
@@ -695,10 +849,23 @@
       _detectarCambiosLocales(actuales);
       var claves = Object.keys(_pendientes);
       if (!claves.length || !navigator.sendBeacon) return;
-      var cuerpo = {};
-      claves.forEach(function (k) { cuerpo[k] = actuales[k]; });
+      // Los resultados viajan como envío incremental (unos cientos de bytes):
+      // el blob completo (~80 KB) supera el límite de sendBeacon (~64 KB) y
+      // fallaba siempre en silencio.
+      var info = (_pendientes[CLAVE_RESULTADOS] && typeof actuales[CLAVE_RESULTADOS] === "string")
+        ? _construirDelta(actuales[CLAVE_RESULTADOS]) : null;
       try {
-        navigator.sendBeacon(ENDPOINT, new Blob([JSON.stringify({ claves: cuerpo })], { type: "application/json" }));
+        if (info && (info.n || info.gCambio)) {
+          var cuerpoRes = { partidos: info.delta };
+          if (info.gCambio) cuerpoRes.generados = info.obj.partidosGenerados || {};
+          navigator.sendBeacon(ENDPOINT_RES, new Blob([JSON.stringify(cuerpoRes)], { type: "application/json" }));
+        }
+        var cuerpo = {}, hay = false;
+        claves.forEach(function (k) {
+          if (info && k === CLAVE_RESULTADOS) return;
+          cuerpo[k] = actuales[k]; hay = true;
+        });
+        if (hay) navigator.sendBeacon(ENDPOINT, new Blob([JSON.stringify({ claves: cuerpo })], { type: "application/json" }));
       } catch (err) {}
     });
   });

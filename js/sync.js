@@ -355,6 +355,39 @@
     return claves;
   }
 
+  // fetch con TIMEOUT. Sin esto, una petición colgada (cambio WiFi/datos,
+  // arranque en frío de Render, red móvil que se queda a medias) dejaba
+  // `_enVuelo = true` PARA SIEMPRE: ese móvil no volvía a subir NI a traer
+  // nada hasta recargar la página — los partidos que jugaba su mánager se
+  // quedaban solo en ese teléfono. Con el timeout el ciclo siempre termina
+  // y se reintenta a los 10 s.
+  var TIMEOUT_PETICION_MS = 45000;
+  function _fetchConTimeout(url, opciones) {
+    if (typeof AbortController !== "function") return fetch(url, opciones);
+    var ctl = new AbortController();
+    var t = setTimeout(function () { try { ctl.abort(); } catch (err) {} }, TIMEOUT_PETICION_MS);
+    var o = opciones ? Object.assign({}, opciones) : {};
+    o.signal = ctl.signal;
+    return fetch(url, o).then(
+      function (r) { clearTimeout(t); return r; },
+      function (err) { clearTimeout(t); throw err; }
+    );
+  }
+
+  // El servidor (Python) devuelve `ef7_estado_liga_v1` re-serializado con
+  // espacios (`"a": 1, "b": 2`) y el cliente lo guarda compacto
+  // (`"a":1,"b":2`). Con esa diferencia de FORMATO, "¿es el mismo valor que
+  // ya tengo?" daba siempre NO: cada ciclo de 10 s el dispositivo se creía
+  // con un cambio local pendiente (volvía a subir los ~80 KB enteros) y a
+  // continuación "adoptaba" el del servidor (reescribía localStorage,
+  // invalidaba la caché y repintaba la pantalla), alternando sin parar.
+  // Se normaliza SIEMPRE a la forma compacta del cliente antes de comparar,
+  // hashear o guardar.
+  function _normalizarJson(valor) {
+    if (typeof valor !== "string") return valor;
+    try { return JSON.stringify(JSON.parse(valor)); } catch (err) { return valor; }
+  }
+
   function _marcarUiActualizada() {
     document.dispatchEvent(new CustomEvent("ef7-sync-actualizado"));
   }
@@ -383,7 +416,7 @@
     var cuerpoPeticion = { claves: cuerpo };
     if (forzar.length) cuerpoPeticion.forzar = forzar;
 
-    return fetch(ENDPOINT, {
+    return _fetchConTimeout(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(cuerpoPeticion)
@@ -468,7 +501,7 @@
   // ciegas si todavía no se ha podido confirmar nada contra el
   // servidor (ver nota FIX 2026 de la cabecera).
   function _traerDelServidor() {
-    return fetch(ENDPOINT)
+    return _fetchConTimeout(ENDPOINT)
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (resp) {
         if (!resp || !resp.ok || !resp.claves) return false;
@@ -495,6 +528,7 @@
           if (_pendientes[k]) return; // hay un cambio local sin confirmar: el servidor NO lo pisa
           var valorServidor = resp.claves[k];
           if (typeof valorServidor !== "string") return; // esta app solo guarda strings (igual que localStorage)
+          if (k === CLAVE_RESULTADOS) valorServidor = _normalizarJson(valorServidor);
           if (valorServidor === actuales[k]) {
             _snapshot[k] = _hash(valorServidor);
             huboSnapshotNuevo = true;
@@ -568,8 +602,13 @@
       });
   }
 
+  // Si algo pide sincronizar mientras hay un ciclo en curso (p. ej. el
+  // mánager confirma un partido justo entonces), antes se perdía el aviso y
+  // el partido esperaba hasta 10 s al siguiente ciclo. Ahora se vuelve a
+  // ejecutar en cuanto termina el actual.
+  var _cicloPedidoMientrasVuelo = false;
   function _ciclo() {
-    if (_enVuelo) return;
+    if (_enVuelo) { _cicloPedidoMientrasVuelo = true; return Promise.resolve(); }
     _enVuelo = true;
 
     // `_snapshot` ya viene persistido (ver arriba) — con eso,
@@ -611,15 +650,44 @@
       cadena = _empujarPendientes(actuales).then(_traerDelServidor);
     }
 
-    return cadena.then(function () { _enVuelo = false; });
+    return cadena.then(function () {
+      _enVuelo = false;
+      if (_cicloPedidoMientrasVuelo) {
+        _cicloPedidoMientrasVuelo = false;
+        setTimeout(_ciclo, 0);
+      }
+    }, function (err) {
+      _enVuelo = false;
+      console.warn("[sync] ciclo falló:", err);
+    });
+  }
+
+  // Sincronización INMEDIATA tras un cambio local (ver Estado.guardarEstado).
+  // Antes un partido confirmado esperaba al siguiente tick de 10 s, y en el
+  // móvil el siguiente paso típico (compartir el acta por WhatsApp) manda la
+  // app a segundo plano: el navegador congela los temporizadores y el
+  // partido se quedaba SOLO en ese teléfono — el otro mánager/el admin lo
+  // veía sin jugar y lo repetía. Con un pequeño debounce se sube en cuanto se
+  // confirma, con la app todavía en primer plano.
+  var _temporizadorPeticion = null;
+  function pedirSincronizacion() {
+    if (_temporizadorPeticion) return;
+    _temporizadorPeticion = setTimeout(function () {
+      _temporizadorPeticion = null;
+      _ciclo();
+    }, 400);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     _ciclo();
     setInterval(_ciclo, INTERVALO_MS);
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") _ciclo();
+      // Al pasar a segundo plano se intenta subir YA lo pendiente (la
+      // petición normal suele alcanzar a salir antes de que el navegador
+      // congele la pestaña); al volver, se sincroniza de inmediato.
+      _ciclo();
     });
+    window.addEventListener("pagehide", function () { _ciclo(); });
     window.addEventListener("beforeunload", function () {
       // Best-effort — no bloqueante, no hay garantía de que llegue, pero
       // reduce la ventana de "cerré la app antes del próximo ciclo".
@@ -651,5 +719,5 @@
   // otro móvil hiciera nada especial).
   function estaSincronizado() { return _primerCicloHecho; }
 
-  window.Sync = { forzarCiclo: _ciclo, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar };
+  window.Sync = { forzarCiclo: _ciclo, pedirSincronizacion: pedirSincronizacion, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar };
 })();

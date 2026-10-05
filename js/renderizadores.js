@@ -11575,7 +11575,12 @@
         ctx.fillStyle = p; for (var xr = -lado / 2; xr < lado / 2; xr += lado * 0.32) ctx.fillRect(xr, -lado / 2, lado * 0.16, lado);
         ctx.restore();
         break;
-      case "vector": break; // dibujo SVG propio: queda el fondo liso (como antes)
+      case "vector":
+        // Dibujo SVG propio (p.ej. Olympique Lyonnais): se pinta la imagen
+        // precargada por _precargarSvgEscudos (sin ella, el escudo salía
+        // como un círculo negro liso en la captura de WhatsApp).
+        if (nodo._svgImg) ctx.drawImage(nodo._svgImg, x0, y0, d, d);
+        break;
       default: for (i = 0; i < 4; i++) rect(p, i * 0.25, 0, 0.125, 1);
     }
     // Brillo de cristal
@@ -11624,6 +11629,11 @@
     }
     ctx.closePath();
     ctx.clip();
+
+    if (nodo._svgImg) {
+      ctx.drawImage(nodo._svgImg, 0, 0, w, h);
+      return lienzo;
+    }
 
     var img = nodo.querySelector("img");
     if (img && img.complete && img.naturalWidth) {
@@ -11731,6 +11741,40 @@
   // image/png...">` plano, que cualquier motor sabe dibujar sin fallos.
   // Devuelve una función que restaura cada escudo a su HTML original —
   // SIEMPRE hay que llamarla después, haya ido bien la captura o no.
+  // Convierte el <svg> de cada escudo VECTOR (`.escudo--vector`) en una
+  // <img> ya cargada (data URL) y la guarda en `nodo._svgImg`, para que
+  // _dibujarEscudoEnCanvas pueda dibujarla de forma síncrona. La carga
+  // de una imagen es asíncrona, así que esto se llama ANTES (con `cb`
+  // al terminar todas, o a los 1,2 s como máximo — nunca bloquea).
+  function _precargarSvgEscudos(el, cb) {
+    var nodos = el.querySelectorAll(".escudo--vector");
+    var pendientes = 0, terminado = false;
+    function fin() { if (terminado) return; terminado = true; cb(); }
+    if (!nodos.length) { fin(); return; }
+    var timer = setTimeout(fin, 1200);
+    function uno() { pendientes--; if (pendientes <= 0) { clearTimeout(timer); fin(); } }
+    for (var i = 0; i < nodos.length; i++) {
+      var nodo = nodos[i];
+      var svg = nodo.querySelector("svg");
+      if (!svg) continue;
+      try {
+        var copia = svg.cloneNode(true);
+        copia.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+        copia.setAttribute("width", "240");
+        copia.setAttribute("height", "240");
+        var xml = new XMLSerializer().serializeToString(copia);
+        var im = new Image();
+        pendientes++;
+        (function (n, img) {
+          img.onload = function () { n._svgImg = img; uno(); };
+          img.onerror = function () { uno(); };
+        })(nodo, im);
+        im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+      } catch (e) {}
+    }
+    if (pendientes === 0) { clearTimeout(timer); fin(); }
+  }
+
   function _sustituirEscudosPorCanvas(el) {
     var restauradores = [];
     var nodos = el.querySelectorAll(".escudo:not(.escudo--desconocido)");
@@ -11896,6 +11940,9 @@
     var watchdog = setTimeout(terminar, 2500);
     try {
       restaurarExpansion = _expandirParaCaptura(el);
+      _precargarSvgEscudos(el, function () {
+      if (listo) return;
+      try {
       restaurarEscudos = _sustituirEscudosPorCanvas(el);
       restaurarNombres = _aplanarNombresConDegradado(el);
       window
@@ -11924,6 +11971,11 @@
           clearTimeout(watchdog);
           terminar();
         });
+      } catch (e2) {
+        clearTimeout(watchdog);
+        terminar();
+      }
+      });
     } catch (e) {
       clearTimeout(watchdog);
       terminar();

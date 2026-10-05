@@ -1380,7 +1380,6 @@
   // NUNCA se abrevia igual que el primer equipo).
   var _ALIAS_CLUBES_HUMANOS = {
     liverpool: ["liverpool", "lfc"],
-    arsenal: ["arsenal", "arsenal fc"],
     "real-madrid": ["real madrid", "r madrid"],
     "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
     "fc-barcelona": ["fc barcelona", "barcelona", "barca", "barça"],
@@ -10590,7 +10589,7 @@
   // deshacer". El confirm() de renderizarAdminPiramide lo advierte
   // explícitamente antes de ejecutar. No toca PSG/Ligue 1 (fuera de la
   // pirámide española, el usuario no lo mencionó).
-  var _PIRAMIDE_CLUBES_HUMANOS = ["liverpool", "arsenal", "real-madrid", "atletico-madrid", "fc-barcelona"];
+  var _PIRAMIDE_CLUBES_HUMANOS = ["liverpool", "real-madrid", "atletico-madrid", "fc-barcelona"];
   var _PIRAMIDE_TEXTO_2REF = [
     "1    Villarreal B          0   0   0   0   0   0   0",
     "2    AD Mérida*            0   0   0   0   0   0   0",

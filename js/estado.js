@@ -1417,7 +1417,7 @@
   // división correcta desde el primer momento, sin que el admin tenga que
   // pulsar 📌 manualmente para fijarla (un valor ya guardado en
   // localStorage SIGUE ganando siempre — ver obtenerDivisionClub).
-  var LIGA_DIVISION_DEFECTO_POR_CLUB = { psg: "ligue1", "manchester-city": "premier", "inter-milan": "seriea" };
+  var LIGA_DIVISION_DEFECTO_POR_CLUB = { psg: "ligue1", "manchester-city": "premier", "inter-milan": "seriea", "fc-barcelona": "easports" };
   // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
   // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
   // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este

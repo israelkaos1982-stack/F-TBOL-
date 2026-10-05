@@ -175,8 +175,12 @@
   function guardarEstado() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(_estado));
+      // Sube el cambio al servidor YA (ver Sync.pedirSincronizacion) en vez
+      // de esperar al siguiente ciclo de 10 s.
+      if (window.Sync && typeof window.Sync.pedirSincronizacion === "function") window.Sync.pedirSincronizacion();
       return true;
     } catch (err) {
+      if (window.Sync && typeof window.Sync.pedirSincronizacion === "function") window.Sync.pedirSincronizacion();
       console.error("[estado] no se pudo guardar en localStorage:", err);
       _avisarFalloGuardado(err);
       return false;

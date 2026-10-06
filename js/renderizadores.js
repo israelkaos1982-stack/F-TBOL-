@@ -102,7 +102,7 @@
         _rivalesRealesMap[r2.clave] = r2;
         // `nombresAlt`: otras grafías con las que el admin escribe el
         // club (castellano, abreviaturas) — identidad = la MISMA ficha.
-        (r2.nombresAlt || []).forEach(function (a) {
+        (r2.nombresAlt || []).concat([r2.nombre]).forEach(function (a) {
           var k1 = _normNombre(a), k2 = _normSinPuntuacion(a);
           if (k1) _rivalesAltMap[k1] = r2;
           if (k2) _rivalesAltMap[k2] = r2;

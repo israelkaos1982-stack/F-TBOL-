@@ -542,6 +542,86 @@
       });
   }
 
+  // ---------- Aviso PERSISTENTE de partidos sin subir ----------
+  // El aviso de error solo salía si el envío FALLABA; si el móvil se
+  // quedaba en segundo plano/sin red antes de intentarlo, nadie se enteraba
+  // y el partido se descubría perdido días después. Ahora, si hay partidos
+  // jugados sin confirmar en el servidor durante más de 25 s, el aviso se
+  // queda fijo hasta que suban.
+  var _sinSubirDesde = 0, _avisoSinSubir = false;
+  function _revisarSinSubir() {
+    try {
+      var info = null;
+      var act = _clavesLocales()[CLAVE_RESULTADOS];
+      if (typeof act === "string" && (_pendientes[CLAVE_RESULTADOS] || _hash(act) !== _snapshot[CLAVE_RESULTADOS])) info = _construirDelta(act);
+      var n = 0;
+      if (info) {
+        Object.keys(info.delta).forEach(function (id) { if (info.delta[id] && info.delta[id].jugado === true) n++; });
+      }
+      if (!n) {
+        _sinSubirDesde = 0;
+        if (_avisoSinSubir) { _avisoSinSubir = false; _badge("off"); }
+        return;
+      }
+      if (!_sinSubirDesde) _sinSubirDesde = Date.now();
+      if (Date.now() - _sinSubirDesde > 25000) {
+        _avisoSinSubir = true;
+        _badge("error", "⚠️ " + n + (n === 1 ? " partido sin subir" : " partidos sin subir") + " al servidor. Deja la app abierta con WiFi/datos hasta ver ✅.");
+      }
+    } catch (err) {}
+  }
+
+  // ---------- Versión nueva de la app ----------
+  // Un móvil que lleva la app abierta (o instalada en la pantalla de inicio)
+  // días sin recargar sigue ejecutando el código VIEJO aunque ya se haya
+  // desplegado el arreglo: sus partidos podían no subirse. Se compara el
+  // `?v=` de este script con el de la página publicada; si cambió y no hay
+  // partido en curso ni nada sin subir, se recarga sola (al volver a abrir
+  // la app); si no, se muestra un aviso para actualizar con un toque.
+  var _versionPropia = (function () {
+    try {
+      var sc = document.querySelector('script[src*="sync.js"]');
+      var m = sc && /[?&]v=(\d+)/.exec(sc.getAttribute("src") || "");
+      return m ? m[1] : null;
+    } catch (err) { return null; }
+  })();
+  function _hayPartidoEnCurso() {
+    var a = document.getElementById("partido-live-overlay");
+    var b = document.getElementById("previa-overlay");
+    var t = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    return !!((a && !a.hidden) || (b && !b.hidden) || t);
+  }
+  function _revisarVersion(permitirRecarga) {
+    if (!_versionPropia) return;
+    _fetchConTimeout("/?_=" + Date.now(), { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (html) {
+        var m = /js\/sync\.js\?v=(\d+)/.exec(html || "");
+        if (!m || m[1] === _versionPropia) return;
+        var libre = !_hayPartidoEnCurso() && !_pendientes[CLAVE_RESULTADOS] && Object.keys(_pendientes).length === 0;
+        if (permitirRecarga && libre) {
+          // Tope anti-bucle: como mucho una recarga automática cada 5 min.
+          var ult = 0;
+          try { ult = parseInt(sessionStorage.getItem("efsync_recarga_v") || "0", 10) || 0; } catch (err) {}
+          if (Date.now() - ult > 5 * 60 * 1000) {
+            try { sessionStorage.setItem("efsync_recarga_v", String(Date.now())); } catch (err) {}
+            location.reload();
+            return;
+          }
+        }
+        if (document.getElementById("ef7-version-aviso")) return;
+        var el = document.createElement("button");
+        el.id = "ef7-version-aviso";
+        el.type = "button";
+        el.textContent = "🔄 Hay una versión nueva — toca para actualizar";
+        el.style.cssText = "position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:99998;max-width:92vw;padding:10px 16px;" +
+          "border:0;border-radius:999px;background:#1d4ed8;color:#fff;font:600 14px/1.3 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.5)";
+        el.addEventListener("click", function () { location.reload(); });
+        document.body.appendChild(el);
+      })
+      .catch(function () {});
+  }
+
   function _empujarPendientes(actuales) {
     var pendientes = Object.keys(_pendientes);
     if (!pendientes.length) return Promise.resolve();
@@ -653,6 +733,44 @@
   // arranque (_ciclo, primer ciclo) lo usa para NO empujar nada a
   // ciegas si todavía no se ha podido confirmar nada contra el
   // servidor (ver nota FIX 2026 de la cabecera).
+  // Fusión por partido SOLO cuando `ef7_estado_liga_v1` está pendiente de
+  // subir (ver el comentario en _traerDelServidor). Reglas, por id de
+  // partido del servidor: (a) no existe aquí -> se añade; (b) existe y aquí
+  // NO ha cambiado desde el último envío confirmado -> el del servidor es
+  // más nuevo, se adopta; (c) existe y aquí SÍ ha cambiado (pendiente de
+  // subir) -> se conserva lo local. Nunca adopta un reseteo global (eso lo
+  // gestiona el flujo normal). Devuelve true si cambió algo.
+  function _fusionarResultadosDelServidor(valorLocal, valorServidor) {
+    try {
+      if (typeof valorLocal !== "string" || typeof valorServidor !== "string") return false;
+      var loc = JSON.parse(valorLocal), srv = JSON.parse(valorServidor);
+      if (!loc || !srv || typeof loc !== "object" || typeof srv !== "object") return false;
+      if ((typeof srv._resetGlobalEn === "number" ? srv._resetGlobalEn : 0) > (typeof loc._resetGlobalEn === "number" ? loc._resetGlobalEn : 0)) return false;
+      var resL = loc.resultados && typeof loc.resultados === "object" ? loc.resultados : (loc.resultados = {});
+      var resS = srv.resultados && typeof srv.resultados === "object" ? srv.resultados : {};
+      var meta = _metaRes();
+      var tomados = [];
+      Object.keys(resS).forEach(function (id) {
+        var eS = resS[id];
+        if (!eS || typeof eS !== "object") return;
+        var eL = resL[id];
+        if (!eL) { resL[id] = eS; tomados.push(id); return; }
+        var hL = _hashEntrada(eL);
+        if (hL === _hashEntrada(eS)) return;
+        if (meta && meta.m && meta.m[id] === hL) { resL[id] = eS; tomados.push(id); }
+      });
+      if (!tomados.length) return false;
+      var nuevo = JSON.stringify(loc);
+      localStorage.setItem(CLAVE_RESULTADOS, nuevo);
+      _marcarSubidos(JSON.stringify({ resultados: resS }), tomados);
+      if (window.Estado.invalidarCache) window.Estado.invalidarCache();
+      return true;
+    } catch (err) {
+      console.warn("[sync] fusión de resultados pendientes falló:", err);
+      return false;
+    }
+  }
+
   function _traerDelServidor() {
     return _fetchConTimeout(ENDPOINT)
       .then(function (r) { return r.ok ? r.json() : null; })
@@ -678,7 +796,18 @@
         var huboSnapshotNuevo = false;
         Object.keys(resp.claves).forEach(function (k) {
           if (k.indexOf(PREFIJO) !== 0) return;
-          if (_pendientes[k]) return; // hay un cambio local sin confirmar: el servidor NO lo pisa
+          if (_pendientes[k]) {
+            // Hay un cambio local sin confirmar: el servidor NO lo pisa. Pero
+            // para los RESULTADOS eso no puede significar "dejar de ver los
+            // partidos que juegan los demás": con un envío atascado este
+            // móvil no veía NINGÚN partido nuevo de otro mánager hasta que
+            // el suyo subiera. Se traen SOLO los partidos que faltan aquí
+            // (o que aquí no han cambiado) y lo local pendiente se respeta.
+            if (k === CLAVE_RESULTADOS && typeof resp.claves[k] === "string") {
+              if (_fusionarResultadosDelServidor(actuales[k], _normalizarJson(resp.claves[k]))) huboCambio = true;
+            }
+            return;
+          }
           var valorServidor = resp.claves[k];
           if (typeof valorServidor !== "string") return; // esta app solo guarda strings (igual que localStorage)
           if (k === CLAVE_RESULTADOS) valorServidor = _normalizarJson(valorServidor);
@@ -806,6 +935,7 @@
 
     return cadena.then(function () {
       _enVuelo = false;
+      _revisarSinSubir();
       if (_cicloPedidoMientrasVuelo) {
         _cicloPedidoMientrasVuelo = false;
         setTimeout(_ciclo, 0);
@@ -835,7 +965,10 @@
   document.addEventListener("DOMContentLoaded", function () {
     _ciclo();
     setInterval(_ciclo, INTERVALO_MS);
+    setTimeout(function () { _revisarVersion(true); }, 2500);
+    setInterval(function () { _revisarVersion(false); }, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") _revisarVersion(true);
       // Al pasar a segundo plano se intenta subir YA lo pendiente (la
       // petición normal suele alcanzar a salir antes de que el navegador
       // congele la pestaña); al volver, se sincroniza de inmediato.

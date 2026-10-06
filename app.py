@@ -6550,6 +6550,66 @@ def api_ef7_state_get():
     return resp
 
 
+@app.route("/api/ef7/diagnostico", methods=["GET"])
+def api_ef7_diagnostico():
+    """Diagnóstico LEGIBLE de qué partidos jugados tiene REALMENTE el servidor
+    (reporte usuario 2026-10-06: "Liverpool jugó 2 partidos desde su móvil y no
+    aparecen en mi calendario"). Sin esto no hay forma de saber si el partido
+    nunca llegó al servidor (fallo del móvil que lo jugó) o si llegó y es el
+    móvil que lo mira el que no lo muestra. Solo lectura; abrir en el
+    navegador: /api/ef7/diagnostico  (opcional ?club=liverpool&n=40)."""
+    fila = GlobalState.query.filter_by(clave=_EF7_ESTADO_LIGA_KEY).first()
+    res = {}
+    row_updated = None
+    if fila is not None and fila.valor_json:
+        row_updated = fila.updated_at
+        try:
+            texto = json.loads(fila.valor_json)
+            obj = json.loads(texto) if isinstance(texto, str) else texto
+            r = obj.get("resultados") if isinstance(obj, dict) else None
+            res = r if isinstance(r, dict) else {}
+        except (TypeError, ValueError):
+            res = {}
+    club = (request.args.get("club") or "").strip().lower()
+    try:
+        n = max(1, min(200, int(request.args.get("n", 30))))
+    except (TypeError, ValueError):
+        n = 30
+    filas_out = []
+    for mid, e in res.items():
+        if not isinstance(e, dict) or e.get("jugado") is not True:
+            continue
+        clubes = e.get("_clubes")
+        if club and club not in json.dumps([mid, clubes, e.get("_identidad")], ensure_ascii=False).lower():
+            continue
+        ts = e.get("_actualizadoEn")
+        ts = ts if isinstance(ts, (int, float)) else 0
+        jug = e.get("jug")
+        filas_out.append({
+            "id": mid,
+            "marcador": "%s-%s" % (e.get("golesLocal"), e.get("golesVisitante")),
+            "competicion": e.get("_competicion"),
+            "clubes": clubes,
+            "identidad": e.get("_identidad"),
+            "acta": len(jug) if isinstance(jug, list) else 0,
+            "actualizado": datetime.utcfromtimestamp(ts / 1000.0).strftime("%Y-%m-%d %H:%M:%S UTC") if ts else None,
+            "_ts": ts,
+        })
+    filas_out.sort(key=lambda x: x["_ts"], reverse=True)
+    for f in filas_out:
+        f.pop("_ts", None)
+    resp = jsonify({
+        "ok": True,
+        "ahora_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "fila_actualizada": row_updated,
+        "partidos_totales": len(res),
+        "partidos_jugados": sum(1 for e in res.values() if isinstance(e, dict) and e.get("jugado") is True),
+        "ultimos_jugados": filas_out[:n],
+    })
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
 @app.route("/api/ef7/state", methods=["POST"])
 def api_ef7_state_post():
     body = request.get_json(silent=True) or {}

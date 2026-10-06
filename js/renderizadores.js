@@ -58,6 +58,7 @@
   }
 
   var _estadiosLista = null; // caché síncrona para obtenerEstadioCorrelativoAjustado
+  var _rivalesAltMap = null; // nombre alternativo normalizado (ej. "club brujas") -> ficha
   var _rivalesRealesMap = null; // caché síncrona clave normalizada -> ficha, para resolverRivalPorNombre
 
   function cargarTodo() {
@@ -96,8 +97,16 @@
       };
       _estadiosLista = datos.estadios.estadios || [];
       _rivalesRealesMap = {};
+      _rivalesAltMap = {};
       (datos.rivalesReales.rivales || []).forEach(function (r2) {
         _rivalesRealesMap[r2.clave] = r2;
+        // `nombresAlt`: otras grafías con las que el admin escribe el
+        // club (castellano, abreviaturas) — identidad = la MISMA ficha.
+        (r2.nombresAlt || []).forEach(function (a) {
+          var k1 = _normNombre(a), k2 = _normSinPuntuacion(a);
+          if (k1) _rivalesAltMap[k1] = r2;
+          if (k2) _rivalesAltMap[k2] = r2;
+        });
       });
       return datos;
     });
@@ -1341,6 +1350,8 @@
   function _buscarRivalReal(norm) {
     if (!_rivalesRealesMap) return null;
     if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
+    if (_rivalesAltMap && _rivalesAltMap[norm]) return _rivalesAltMap[norm];
+    if (_rivalesAltMap && _rivalesAltMap[_normSinPuntuacion(norm)]) return _rivalesAltMap[_normSinPuntuacion(norm)];
     var claves = Object.keys(_rivalesRealesMap);
     // El filial NUNCA hereda el escudo del primer equipo (y viceversa):
     // "real sociedad b"/"villarreal b" SON claves propias, exactas, del

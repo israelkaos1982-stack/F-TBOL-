@@ -853,6 +853,17 @@
           var esRegresion = k === CLAVE_RESULTADOS
             ? _esRegresionResultados(actuales[k], valorServidor)
             : (k.indexOf("ef7_vivo_v1_") === 0 ? false : _esRegresionGrave(actuales[k], valorServidor));
+          // RECORTE DELIBERADO de otro dispositivo (reporte usuario 2026-10-06:
+          // "edito el calendario del FC Barcelona y al poco vuelven a salir los
+          // partidos de 1ª REF"). Este móvil NO ha tocado la clave desde la
+          // última vez que la confirmó con el servidor (hash local == snapshot)
+          // y el servidor dice que el admin la recortó a propósito (`forzados`):
+          // la versión corta es la buena. Sin esto, la tomaba por una "copia
+          // vieja", re-subía su texto largo antiguo y deshacía la edición.
+          if (esRegresion && k !== CLAVE_RESULTADOS && resp.forzados && resp.forzados[k] &&
+              typeof actuales[k] === "string" && _snapshot[k] !== undefined && _hash(actuales[k]) === _snapshot[k]) {
+            esRegresion = false;
+          }
           if (esRegresion && !_esReseteoGlobalLegitimo(k, actuales[k], valorServidor)) {
             _pendientes[k] = true;
             return;

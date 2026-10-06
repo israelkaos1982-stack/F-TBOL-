@@ -6545,7 +6545,7 @@ def api_ef7_state_get():
     # cada 10 s, haya o no cambios que subir) — es el punto más fiable
     # para disparar el snapshot perezoso, ver _ef7_tomar_snapshot_si_toca.
     _ef7_tomar_snapshot_si_toca()
-    resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados})
+    resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados, "forzados": _ef7_leer_forzados()})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp
 
@@ -6658,6 +6658,47 @@ def api_ef7_partido_get(pid):
     return resp
 
 
+# ── Recortes DELIBERADOS (reporte usuario 2026-10-06: "por más que edito el
+#    calendario del FC Barcelona, al poco vuelven a salir los partidos de 1ª REF").
+# Causa: un móvil que aún tenía el texto LARGO antiguo (sin editarlo) veía el
+# servidor con la versión corta del admin, la tomaba por una "copia vieja"
+# (js/sync.js::_esRegresionGrave) y RE-SUBÍA la larga — que el guard del servidor
+# acepta por ser mayor. El servidor recuerda aquí qué claves recibieron un
+# recorte confirmado por el admin (`forzar`) para que el resto de móviles lo
+# adopten en vez de deshacerlo. Fila fuera del prefijo ef7_ (no entra en el
+# GET de claves, ni en los snapshots, ni en las copias de seguridad).
+_EF7_META_FORZADOS_KEY = "efmeta_forzados_v1"
+_EF7_FORZADOS_VIDA_MS = 3 * 24 * 60 * 60 * 1000
+
+
+def _ef7_leer_forzados(ahora_ms=None):
+    ahora_ms = ahora_ms or int(time.time() * 1000)
+    try:
+        fila = GlobalState.query.filter_by(clave=_EF7_META_FORZADOS_KEY).first()
+        obj = json.loads(fila.valor_json) if fila is not None and fila.valor_json else {}
+    except (TypeError, ValueError):
+        obj = {}
+    if not isinstance(obj, dict):
+        return {}
+    return {k: v for k, v in obj.items() if isinstance(k, str) and isinstance(v, (int, float)) and ahora_ms - v <= _EF7_FORZADOS_VIDA_MS}
+
+
+def _ef7_anotar_forzados(claves, now):
+    """Añade `claves` a la fila de recortes deliberados (sin hacer commit: lo
+    hace el llamador junto con el resto del POST)."""
+    ahora_ms = int(time.time() * 1000)
+    actual = _ef7_leer_forzados(ahora_ms)
+    for k in claves:
+        actual[k] = ahora_ms
+    payload = json.dumps(actual, ensure_ascii=False)
+    fila = GlobalState.query.filter_by(clave=_EF7_META_FORZADOS_KEY).with_for_update().first()
+    if fila:
+        fila.valor_json = payload
+        fila.updated_at = now
+    else:
+        db.session.add(GlobalState(clave=_EF7_META_FORZADOS_KEY, valor_json=payload, updated_at=now))
+
+
 @app.route("/api/ef7/state", methods=["POST"])
 def api_ef7_state_post():
     body = request.get_json(silent=True) or {}
@@ -6729,6 +6770,9 @@ def api_ef7_state_post():
                 db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
             guardadas.append(key)
         if guardadas:
+            forzadas_ok = [k for k in guardadas if k in forzar and k != _EF7_ESTADO_LIGA_KEY]
+            if forzadas_ok:
+                _ef7_anotar_forzados(forzadas_ok, now)
             db.session.commit()
     finally:
         _ef7_state_lock_release(lock_fh)

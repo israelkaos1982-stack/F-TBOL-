@@ -776,6 +776,8 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (resp) {
         if (!resp || !resp.ok || !resp.claves) return false;
+        _ultimoPullOkMs = Date.now();
+        _pintarChip();
         var actuales = _clavesLocales();
         // RE-detecta cambios locales AQUÍ, con el valor recién leído —
         // no basta con lo que _detectarCambiosLocales ya marcó al
@@ -1019,5 +1021,71 @@
   // otro móvil hiciera nada especial).
   function estaSincronizado() { return _primerCicloHecho; }
 
-  window.Sync = { forzarCiclo: _ciclo, pedirSincronizacion: pedirSincronizacion, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar };
+  // ---------- Comprobación EXPLÍCITA de que un partido llegó al servidor ----------
+  // Reporte usuario 2026-10-06: partidos de otros humanos jugados desde su móvil
+  // (Acsa, Hypermotion J13/J14) no aparecían en el calendario del admin, y nadie
+  // sabía si fallaba la SUBIDA o la LECTURA. Tras confirmar un partido, el móvil
+  // fuerza un ciclo y LEE el servidor (/api/ef7/partido/<id>, ~200 bytes) para
+  // decirle al mánager, con certeza, si el resultado está de verdad en la nube.
+  // Resuelve siempre con {estado:"ok"|"falta"|"red", detalle}; nunca rechaza.
+  var _VERIF_ESPERAS_MS = [0, 2500, 6000, 12000];
+  function verificarPartido(id, golesL, golesV, alProgreso) {
+    var intento = 0, ultimoError = null;
+    function _paso() {
+      var espera = _VERIF_ESPERAS_MS[intento];
+      return new Promise(function (res) { setTimeout(res, espera); })
+        .then(function () { return _ciclo(); })
+        .then(function () {
+          return _fetchConTimeout("/api/ef7/partido/" + encodeURIComponent(id) + "?_=" + Date.now(), { cache: "no-store" });
+        })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)); })
+        .then(function (d) {
+          ultimoError = null;
+          if (d && d.jugado && !d.borrado) {
+            var esperado = (golesL != null && golesV != null) ? (golesL + "-" + golesV) : null;
+            if (!esperado || d.marcador === esperado) return { estado: "ok", detalle: d };
+            return { estado: "falta", detalle: d, motivo: "marcador distinto en el servidor (" + d.marcador + ")" };
+          }
+          intento++;
+          if (intento < _VERIF_ESPERAS_MS.length) { if (alProgreso) alProgreso(intento); return _paso(); }
+          return { estado: "falta", detalle: d, motivo: d && d.existe ? "el servidor lo tiene sin jugar" : "el servidor no lo tiene" };
+        }, function (err) {
+          ultimoError = err;
+          intento++;
+          if (intento < _VERIF_ESPERAS_MS.length) { if (alProgreso) alProgreso(intento); return _paso(); }
+          return { estado: "red", detalle: null, motivo: String((err && err.message) || err) };
+        });
+    }
+    return _paso().catch(function (err) { return { estado: "red", detalle: null, motivo: String((err && err.message) || err) }; });
+  }
+
+  // ---------- Chip permanente: versión + hora del último pull con éxito ----------
+  // Permite que una captura de pantalla de cualquier móvil diga si ese móvil
+  // lleva el JS viejo o lleva rato sin hablar con el servidor.
+  var _ultimoPullOkMs = 0;
+  function _versionJs() {
+    try {
+      var sc = document.querySelector('script[src*="sync.js"]');
+      var m = sc && /[?&]v=([^&]+)/.exec(sc.getAttribute("src") || "");
+      return m ? m[1] : "?";
+    } catch (err) { return "?"; }
+  }
+  function _pintarChip() {
+    try {
+      if (!document.body) return;
+      var el = document.getElementById("ef7-sync-chip");
+      if (!el) {
+        el = document.createElement("div");
+        el.id = "ef7-sync-chip";
+        el.style.cssText = "position:fixed;left:6px;bottom:4px;z-index:99990;padding:1px 6px;border-radius:6px;" +
+          "font:500 10px/1.4 system-ui,sans-serif;color:#cbd5e1;background:rgba(15,23,42,.55);pointer-events:none;opacity:.8";
+        document.body.appendChild(el);
+      }
+      var hora = _ultimoPullOkMs ? new Date(_ultimoPullOkMs).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "sin conexión aún";
+      el.textContent = "v" + _versionJs() + " · sync " + hora;
+    } catch (err) {}
+  }
+  document.addEventListener("DOMContentLoaded", function () { _pintarChip(); setInterval(_pintarChip, 15000); });
+
+  window.Sync = { forzarCiclo: _ciclo, pedirSincronizacion: pedirSincronizacion, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar, verificarPartido: verificarPartido };
 })();

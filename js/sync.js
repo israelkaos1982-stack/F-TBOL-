@@ -757,7 +757,19 @@
         if (!eL) { resL[id] = eS; tomados.push(id); return; }
         var hL = _hashEntrada(eL);
         if (hL === _hashEntrada(eS)) return;
-        if (meta && meta.m && meta.m[id] === hL) { resL[id] = eS; tomados.push(id); }
+        if (meta && meta.m && meta.m[id] === hL) { resL[id] = eS; tomados.push(id); return; }
+        // Reporte usuario 2026-10-06: el servidor tenía J13/J14 de Acsa JUGADOS,
+        // pero en el móvil del admin seguían como "📌 pospuesto"/PREVIA. Con un
+        // cambio local pendiente cualquiera, un pospuesto local sin confirmar
+        // bloqueaba para siempre el resultado jugado por OTRO mánager. Regla:
+        // un partido JUGADO en el servidor gana a una copia local NO jugada que
+        // no sea más reciente (mismo criterio que el guard de app.py: solo una
+        // tumba/pospuesto POSTERIOR al resultado puede des-jugarlo).
+        if (eS.jugado === true && eL.jugado !== true) {
+          var tS = typeof eS._actualizadoEn === "number" ? eS._actualizadoEn : 0;
+          var tL = typeof eL._actualizadoEn === "number" ? eL._actualizadoEn : 0;
+          if (tS >= tL) { resL[id] = eS; tomados.push(id); }
+        }
       });
       if (!tomados.length) return false;
       var nuevo = JSON.stringify(loc);

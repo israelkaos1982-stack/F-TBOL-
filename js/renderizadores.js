@@ -10259,6 +10259,59 @@
     return card;
   }
 
+  // ¿Esta competición es una SUPERCOPA de cualquier país, tecleada como la
+  // llame el admin? ("Supercopa España", "Supercoupe", "Supercup",
+  // "Supercoppa", "Community Shield"...). Reporte usuario 2026-10-06: las
+  // finales de Supercoupe/Supercoppa/Community/Supercup salían jugables
+  // (PREVIA) con las semis sin jugar — esos nombres no eran alias de
+  // "supercopa", así que no entraban en COMPS_ELIMINACION_DIRECTA y su final
+  // solo se bloqueaba si el rival era "?". Regla: la FINAL de una supercopa
+  // está bloqueada hasta que se GANAN las semis.
+  function _esSupercopaLike(compCruda) {
+    var n = _normNombre(compCruda || "");
+    return /super ?(cop|cup|coup)|community|charity|trophee des champions|supertaca/.test(n) ||
+      _resolverCompKeyBalon(compCruda) === "supercopa" || _resolverCompKeyBalon(compCruda) === "usc";
+  }
+  // Clave de agrupación para el bloqueo por rondas: la competición de
+  // eliminación directa conocida, o — para supercopas con otro nombre — el
+  // NOMBRE normalizado (así "Supercopa España" y "Supercup" siguen siendo 2
+  // eliminatorias independientes aunque convivan en el mismo calendario).
+  function _grupoEliminacionDe(compCruda) {
+    var k = _resolverCompKeyBalon(compCruda);
+    if (COMPS_ELIMINACION_DIRECTA[k]) return k;
+    return _esSupercopaLike(compCruda) ? "nombre:" + _normNombre(compCruda || "") : null;
+  }
+
+  // Orden del calendario (reporte usuario 2026-10-06, FC Barcelona): las
+  // SEMIFINALES de Copa del Rey se juegan ANTES que las semis/final de
+  // cualquier supercopa y que cualquier otra Final. El calendario sin fechas
+  // se ordena por el orden del texto, así que si el admin las pegó después,
+  // aquí se adelantan (estable: respeta el orden relativo de todo lo demás).
+  // Solo actúa si NINGÚN partido implicado tiene fecha real.
+  function _adelantarSemisCopa(lista) {
+    function normRonda(p) { return _normNombre(p.ronda || ""); }
+    function esSemiCopa(p) { return _resolverCompKeyBalon(p.competicion) === "copa" && /semi/.test(normRonda(p)); }
+    function esDisparador(p) {
+      if (_resolverCompKeyBalon(p.competicion) === "copa") return false;
+      return _esSupercopaLike(p.competicion) || /\bfinal\b/.test(normRonda(p));
+    }
+    var idxSemis = [], primeroDisp = -1;
+    for (var i = 0; i < lista.length; i++) {
+      if (esSemiCopa(lista[i])) idxSemis.push(i);
+      else if (primeroDisp < 0 && esDisparador(lista[i])) primeroDisp = i;
+    }
+    if (!idxSemis.length || primeroDisp < 0) return lista;
+    if (idxSemis[idxSemis.length - 1] < primeroDisp) return lista; // ya van antes
+    var implicados = lista.filter(function (p, k) { return idxSemis.indexOf(k) >= 0 || k === primeroDisp; });
+    if (implicados.some(function (p) { return !!p.fecha; })) return lista; // fechas reales: se respetan
+    var semis = lista.filter(function (p, k) { return idxSemis.indexOf(k) >= 0; });
+    var resto = lista.filter(function (p, k) { return idxSemis.indexOf(k) < 0; });
+    var posT = resto.indexOf(lista[primeroDisp]);
+    var posS = idxSemis[0]; // elementos no-semi antes de la primera semi (todos los anteriores a ella lo son)
+    var insertAt = Math.min(posT, posS);
+    return resto.slice(0, insertAt).concat(semis, resto.slice(insertAt));
+  }
+
   // Calendario COMPLETO de un club, en el MISMO orden cronológico que
   // pinta generarCalendarioLateralDerecho (idéntica fuente/filtro/sort/
   // _ordenClub — EXTRAÍDO de ahí, sin tocar una coma) — así
@@ -10284,6 +10337,7 @@
       var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
       return ta - tb;
     });
+    partidosDelClub = _adelantarSemisCopa(partidosDelClub);
     partidosDelClub.forEach(function (p, i) { p._ordenClub = i; p._totalClubCalendario = partidosDelClub.length; });
     return partidosDelClub;
   }
@@ -10438,8 +10492,8 @@
         // en paralelo) vía _estadoRondasEliminacion, ver comentario ahí.
         var partidosElimPorComp = {};
         partidosDelClub.forEach(function (p) {
-          var compKeyP = _resolverCompKeyBalon(p.competicion);
-          if (!COMPS_ELIMINACION_DIRECTA[compKeyP]) return;
+          var compKeyP = _grupoEliminacionDe(p.competicion);
+          if (!compKeyP) return;
           (partidosElimPorComp[compKeyP] = partidosElimPorComp[compKeyP] || []).push(p);
         });
         var idsEliminados = {};

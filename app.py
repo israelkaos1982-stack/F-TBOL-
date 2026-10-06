@@ -6610,6 +6610,54 @@ def api_ef7_diagnostico():
     return resp
 
 
+def _ef7_resultados_servidor():
+    """(dict de resultados, `updated_at` de la fila) tal cual los tiene AHORA el
+    servidor para `ef7_estado_liga_v1` — mismo parseo (doble JSON) que usa
+    /api/ef7/diagnostico. Devuelve ({}, None) si no hay fila o está corrupta."""
+    fila = GlobalState.query.filter_by(clave=_EF7_ESTADO_LIGA_KEY).first()
+    if fila is None or not fila.valor_json:
+        return {}, None
+    try:
+        texto = json.loads(fila.valor_json)
+        obj = json.loads(texto) if isinstance(texto, str) else texto
+        r = obj.get("resultados") if isinstance(obj, dict) else None
+        return (r if isinstance(r, dict) else {}), fila.updated_at
+    except (TypeError, ValueError):
+        return {}, fila.updated_at
+
+
+@app.route("/api/ef7/partido/<path:pid>", methods=["GET"])
+def api_ef7_partido_get(pid):
+    """Lectura mínima de UN partido (unos 200 bytes) para que el móvil que
+    acaba de confirmarlo compruebe, leyendo el SERVIDOR de verdad, que el
+    resultado llegó (reporte usuario 2026-10-06: partidos de otros humanos
+    jugados desde su móvil que no aparecen en el calendario del admin — sin
+    esta comprobación nadie sabía si fallaba la subida o la lectura).
+    Devuelve siempre 200 con `existe`/`jugado`/`marcador`/`borrado`."""
+    res, row_updated = _ef7_resultados_servidor()
+    e = res.get(pid)
+    if not isinstance(e, dict):
+        out = {"ok": True, "existe": False, "jugado": False, "partidos_totales": len(res)}
+    else:
+        jug = e.get("jug")
+        out = {
+            "ok": True,
+            "existe": True,
+            "jugado": e.get("jugado") is True,
+            "marcador": "%s-%s" % (e.get("golesLocal"), e.get("golesVisitante")) if e.get("jugado") is True else None,
+            "borrado": e.get("_borrado") is True,
+            "pospuesto": e.get("pospuesto") is True,
+            "acta": len(jug) if isinstance(jug, list) else 0,
+            "actualizado_ms": e.get("_actualizadoEn") if isinstance(e.get("_actualizadoEn"), (int, float)) else None,
+            "partidos_totales": len(res),
+        }
+    out["fila_actualizada"] = row_updated
+    out["ahora_ms"] = int(time.time() * 1000)
+    resp = jsonify(out)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
 @app.route("/api/ef7/state", methods=["POST"])
 def api_ef7_state_post():
     body = request.get_json(silent=True) or {}

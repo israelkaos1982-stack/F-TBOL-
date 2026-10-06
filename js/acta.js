@@ -279,6 +279,31 @@
   // ============================================================
   // 2. EL CIERRE DEFINITIVO — 4 pasos en cadena
   // ============================================================
+  function _verificarSubidaEnResumen(id, gl, gv, resultado) {
+    var el = document.getElementById("live-sync-estado");
+    if (!el) return;
+    if (resultado && resultado.guardadoOk === false) {
+      el.textContent = "⚠️ No se pudo guardar en este móvil. No cierres: reintenta Finalizar.";
+      el.style.color = "#fbbf24";
+      return;
+    }
+    if (!window.Sync || !window.Sync.verificarPartido) { el.textContent = ""; return; }
+    el.textContent = "☁️ Subiendo al servidor…";
+    el.style.color = "#93c5fd";
+    window.Sync.verificarPartido(id, gl, gv, function (n) {
+      el.textContent = "☁️ Subiendo al servidor… (reintento " + n + ")";
+    }).then(function (v) {
+      if (v.estado === "ok") {
+        el.textContent = "☁️ Guardado en el servidor ✅ — ya lo ven los demás móviles";
+        el.style.color = "#4ade80";
+      } else {
+        el.textContent = "⚠️ El servidor NO tiene este partido (" + (v.motivo || v.estado) + "). " +
+          "Déjalo abierto con conexión; se reintenta solo. Partido: " + id;
+        el.style.color = "#fbbf24";
+      }
+    });
+  }
+
   function finalizarYSubirPartido(idPartido, golesL, golesV) {
     var ctx = _partidoActivo;
     if (!ctx || ctx.partido.id !== idPartido) throw new Error("No hay un partido activo con id " + idPartido);
@@ -364,7 +389,8 @@
       golesL: golesL,
       golesV: golesV,
       clasificacion: clasificacion,
-      eliminatoria: resultadoEliminatoria
+      eliminatoria: resultadoEliminatoria,
+      guardadoOk: _guardadoOk !== false
     };
   }
 
@@ -837,6 +863,11 @@
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;
+
+    // ☁️ Comprobación REAL de que el resultado llegó al servidor (lee el
+    // servidor, no se fía de que "el POST salió"). Si no llega, se dice claro
+    // y con el id del partido para poder rastrearlo.
+    _verificarSubidaEnResumen(_partidoActivo.partido.id, r.golesLocal, r.golesVisitante, resultado);
 
     // 💾 Backup: se resalta el botón de guardado en vez de forzar una
     // descarga automática en cada partido (evitaría que el navegador

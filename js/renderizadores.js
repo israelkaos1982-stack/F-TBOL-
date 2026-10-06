@@ -13870,6 +13870,7 @@
     quitarDuplicadosLigaDeCalendarioExtraTexto: quitarDuplicadosLigaDeCalendarioExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,
+    claseComp: _claseComp,
     renderizarPlantillaClub: renderizarPlantillaClub,
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,

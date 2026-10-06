@@ -290,12 +290,14 @@
     if (!window.Sync || !window.Sync.verificarPartido) { el.textContent = ""; return; }
     el.textContent = "☁️ Subiendo al servidor…";
     el.style.color = "#93c5fd";
+    el.style.whiteSpace = "normal";
     window.Sync.verificarPartido(id, gl, gv, function (n) {
       el.textContent = "☁️ Subiendo al servidor… (reintento " + n + ")";
     }).then(function (v) {
       if (v.estado === "ok") {
         el.textContent = "☁️ Guardado en el servidor ✅ — ya lo ven los demás móviles";
         el.style.color = "#4ade80";
+        el.style.whiteSpace = "nowrap"; // el mensaje de éxito va en UNA línea (los avisos largos sí pueden partirse)
       } else {
         el.textContent = "⚠️ El servidor NO tiene este partido (" + (v.motivo || v.estado) + "). " +
           "Déjalo abierto con conexión; se reintenta solo. Partido: " + id;

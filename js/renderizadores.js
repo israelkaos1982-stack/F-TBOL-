@@ -10991,6 +10991,20 @@
     return !!(local && visitante && _esClubHumano(local.id, datos) && _esClubHumano(visitante.id, datos));
   }
 
+  // Inter y Chelsea juegan desde FIFA (no eFootball): contra un rival IA no
+  // hay estadio/clima/balón/forma de eFootball que respetar, así que esos
+  // 4 datos salen "Al Azar" (petición usuario 2026-10-06). Duración 8 min y
+  // nivel "Profesional". Contra otro HUMANO (incluido el otro club FIFA) se
+  // siguen las reglas normales de eFootball.
+  var _CLUBES_FIFA = { "inter-milan": true, "manchester-city": true };
+  function _esPartidoFifaVsIA(local, visitante, datos) {
+    if (!local || !visitante) return false;
+    var fifaL = !!_CLUBES_FIFA[local.id], fifaV = !!_CLUBES_FIFA[visitante.id];
+    if (fifaL === fifaV) return false; // ninguno, o los dos (FIFA vs FIFA = humano vs humano)
+    var rival = fifaL ? visitante : local;
+    return !_esClubHumano(rival.id, datos);
+  }
+
   // Determina qué lado del partido es "el equipo gestionado" (la caja
   // humana cuyo calendario está abierto) y cuál es "el rival" — Tiempo,
   // Nivel y Forma se calculan SIEMPRE en función del gestionado, sea
@@ -11042,6 +11056,9 @@
       formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
     } else {
       formaIconoTu = "🎲"; formaIconoRival = forma ? forma.icono : "➡️";
+    }
+    if (_esPartidoFifaVsIA(local, visitante, datos)) {
+      return { tiempo: "⏱️ 8 min", nivel: "🤖 Profesional", forma: "🔋 Al Azar" };
     }
     return {
       tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
@@ -11450,6 +11467,13 @@
 
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
+
+    // Inter/Chelsea (FIFA) vs IA: estadio, clima y balón "Al Azar".
+    if (_esPartidoFifaVsIA(local, visitante, datos)) {
+      document.getElementById("previa-estadio").textContent = "Al Azar";
+      document.getElementById("previa-clima").textContent = "Al Azar";
+      document.getElementById("previa-balon").textContent = "Al Azar";
+    }
 
     var metaPartido = _calcularMetaPartido(local, visitante, datos, _ultimoContexto, partido);
     document.getElementById("previa-tiempo").textContent = metaPartido.tiempo;

@@ -695,6 +695,12 @@
       prorroga: (esVueltaDecisiva || esFinalDeTorneo) ? true : !!(prorrogaChk && prorrogaChk.checked)
     };
 
+    // Mismo color de competición que la previa (clase .comp-XXX): sin esto la
+    // pantalla en vivo y la captura de WhatsApp salían siempre oscuras.
+    var _liveCardEl = document.querySelector("#partido-live-overlay .live-card");
+    if (_liveCardEl && R.claseComp && R.resolverCompKeyPartido) {
+      _liveCardEl.className = "live-card " + R.claseComp(R.resolverCompKeyPartido(partido.competicion));
+    }
     document.getElementById("live-comp").textContent =
       (R.COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));

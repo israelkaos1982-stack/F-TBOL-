@@ -737,6 +737,7 @@
     document.getElementById("live-entrada").hidden = false;
     document.getElementById("live-resumen").hidden = true;
     document.getElementById("partido-live-overlay").hidden = false;
+    if (R.ajustarTituloComp) R.ajustarTituloComp(document.getElementById("live-comp"));
     _persistirVivo();
     requestAnimationFrame(_ajustarFuenteEquiposEnVivo);
   }

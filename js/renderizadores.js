@@ -673,6 +673,23 @@
     selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones",
     superliga: "comp-superliga"
   };
+  // Título de competición GRANDE de la previa/pantalla en vivo: arranca en el
+  // tamaño del CSS (18 px) y se reduce solo lo justo para que quepa en UNA
+  // línea ("HYPERMOTION - 23ª JORNADA" es el más largo). Debe llamarse con el
+  // overlay ya visible (si no, no hay ancho que medir y se reintenta).
+  function _ajustarTituloComp(el, intentos) {
+    if (!el) return;
+    el.style.fontSize = "";
+    if (!el.clientWidth) {
+      if ((intentos || 0) < 5) setTimeout(function () { _ajustarTituloComp(el, (intentos || 0) + 1); }, 80);
+      return;
+    }
+    var tam = parseFloat(getComputedStyle(el).fontSize) || 18;
+    while (el.scrollWidth > el.clientWidth && tam > 10) {
+      tam -= 0.5;
+      el.style.fontSize = tam + "px";
+    }
+  }
   function _claseComp(competicion) {
     return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
   }
@@ -11459,6 +11476,7 @@
     }
 
     ov.hidden = false;
+    _ajustarTituloComp(document.getElementById("previa-comp"));
   }
 
   function cerrarPreviaPartido() {
@@ -13871,6 +13889,7 @@
     resolverRivalPorNombre: resolverRivalPorNombre,
     resolverCompKeyPartido: _resolverCompKeyBalon,
     claseComp: _claseComp,
+    ajustarTituloComp: _ajustarTituloComp,
     renderizarPlantillaClub: renderizarPlantillaClub,
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,

@@ -730,7 +730,7 @@
       _liveCardEl.className = "live-card " + R.claseComp(R.resolverCompKeyPartido(partido.competicion));
     }
     document.getElementById("live-comp").textContent =
-      (R.COMP_LABEL[partido.competicion] || partido.competicion) +
+      ((R.labelCompPartido ? R.labelCompPartido(partido) : null) || R.COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
 
     // El nombre de cada equipo ES el selector de "¿a quién le añado el

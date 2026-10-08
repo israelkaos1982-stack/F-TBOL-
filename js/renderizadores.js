@@ -781,6 +781,13 @@
     if (/community/.test(n)) return "Community Shield";
     return null;
   }
+  // Etiqueta corta de la competición de UN partido: COMP_LABEL, salvo en
+  // una supercopa nacional de PSG/Chelsea/Inter, que lleva su nombre real.
+  function _labelCompPartido(p) {
+    if (!p) return "";
+    var propio = p.competicion === "supercopa" ? _nombreSupercopaPropia(p._competicionCruda) : null;
+    return propio || COMP_LABEL[p.competicion] || p.competicion;
+  }
   function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
     if (compKeyResuelto === "verano") {
       return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : "");
@@ -942,7 +949,7 @@
     if (pNuevo) {
       var rivalIdNuevo = pNuevo.local === idEquipoHumanoActivo ? pNuevo.visitante : pNuevo.local;
       var eqRivalNuevo = buscarEquipoPorId(rivalIdNuevo, datos);
-      var compLabelNuevo = COMP_LABEL[pNuevo.competicion] || pNuevo.competicion;
+      var compLabelNuevo = _labelCompPartido(pNuevo);
       var rondaLabelNuevo = (typeof pNuevo.jornada === "number") ? (" · " + pNuevo.jornada + "ªJ") : (pNuevo.ronda ? " · " + pNuevo.ronda : "");
       etiquetaNuevo = " — ahora toca " + compLabelNuevo + rondaLabelNuevo +
         (eqRivalNuevo ? " vs " + eqRivalNuevo.nombre : "");
@@ -10045,7 +10052,7 @@
     var marcadorDesc = partido.resultado
       ? " (" + partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + ")"
       : "";
-    var etiquetaComp = COMP_LABEL[partido.competicion] || partido.competicion;
+    var etiquetaComp = _labelCompPartido(partido);
     return nomLocal + " vs " + nomVisitante + marcadorDesc +
       (partido.ronda ? " — " + etiquetaComp + " · " + partido.ronda : "");
   }
@@ -10211,7 +10218,7 @@
     // separador " - ", ver _etiquetaCompRondaTexto. Cualquier otra
     // competición mantiene el formato de siempre (compLabel + " · " +
     // ronda/jornada) — sin cambios.
-    var etiquetaCompTexto = _etiquetaCompRondaTexto(compKeyResuelto, partido.competicion, partido.ronda, partido.jornada);
+    var etiquetaCompTexto = _etiquetaCompRondaTexto(compKeyResuelto, partido._competicionCruda || partido.competicion, partido.ronda, partido.jornada);
 
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
     // icono, para que quepa siempre entre los 2 bloques de equipo), más
@@ -11564,7 +11571,7 @@
     var _previaCardEl = document.getElementById("previa-card");
     if (_previaCardEl) _previaCardEl.className = "previa-card " + _claseComp(_previaCompKey);
     document.getElementById("previa-comp").textContent =
-      (COMP_LABEL[_previaCompKey] || COMP_LABEL[partido.competicion] || partido.competicion) +
+      ((_previaCompKey === "supercopa" ? _labelCompPartido(partido) : COMP_LABEL[_previaCompKey]) || COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " - " + _uneRondaConGuion(_previaCompKey, partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));
 
     document.getElementById("previa-estadio").textContent = estadio
@@ -12915,7 +12922,7 @@
         function _textoMayorPartido(entry) {
           if (!entry) return null;
           var p = entry.p;
-          var compLabel = COMP_LABEL[p.competicion] || p.competicion;
+          var compLabel = _labelCompPartido(p);
           var rondaLabel = (typeof p.jornada === "number") ? (p.jornada + "ªJ") : (p.ronda || "");
           var cabecera = compLabel + (rondaLabel ? " · " + rondaLabel : "");
           var eqLocal = buscarEquipoPorId(p.local, datos);
@@ -14060,6 +14067,7 @@
     renderizarFACup: renderizarFACup,
     renderizarCoppaItalia: renderizarCoppaItalia,
     renderizarSupercopaPropia: renderizarSupercopaPropia,
+    labelCompPartido: _labelCompPartido,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,

@@ -510,9 +510,43 @@
         if (!window.confirm(avisoDup)) return;
       }
     }
-    if (!window.Estado.guardarCalendarioExtraTexto(clubId, ta.value)) return;
+    var textoGuardado = ta.value;
+    if (!window.Estado.guardarCalendarioExtraTexto(clubId, textoGuardado)) return;
+    _verificarCalendarioEnServidor(clubId, textoGuardado, 15000, true);
+    _verificarCalendarioEnServidor(clubId, textoGuardado, 90000, false);
     cerrarModalClub();
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);
+  }
+  // Comprueba contra el servidor que el Calendario extra recién guardado sigue
+  // siendo EL MISMO (reporte usuario 2026-10-08: "otra vez se ha colado la 1ª
+  // REF en el FC Barcelona" — otro dispositivo re-subía el texto antiguo sin
+  // que nadie se enterara). Si el servidor tiene otra cosa, se avisa con datos
+  // para localizar quién lo escribió (/api/ef7/log-calendario).
+  function _verificarCalendarioEnServidor(clubId, textoEsperado, esperaMs, confirmarOk) {
+    setTimeout(function () {
+      var clave = "ef7_club_calendario_extra_v1_" + clubId;
+      // Si el admin ya lo ha vuelto a editar, no hay nada que comparar.
+      if (!window.Estado || window.Estado.obtenerCalendarioExtraTexto(clubId) !== textoEsperado) return;
+      fetch("/api/ef7/clave?k=" + encodeURIComponent(clave), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (resp) {
+          if (!resp || !resp.ok) return;
+          if (resp.valor === textoEsperado) {
+            if (confirmarOk && window.Renderizadores && window.Renderizadores.mostrarAvisoFlotante) {
+              window.Renderizadores.mostrarAvisoFlotante("✅ Calendario guardado también en el servidor");
+            }
+            return;
+          }
+          var s = typeof resp.valor === "string" ? resp.valor : "";
+          window.alert(
+            "⚠️ El servidor NO tiene el calendario que acabas de guardar (" + (textoEsperado.split("\n").length) +
+            " líneas): tiene " + (s ? s.split("\n").length : 0) + " líneas, con " +
+            ((s.match(/1ª\s*REF/gi) || []).length) + " de 1ª REF.\n\nOtro dispositivo lo está pisando. " +
+            "Abre en el navegador /api/ef7/log-calendario y mándame lo que salga."
+          );
+        })
+        .catch(function () {});
+    }, esperaMs);
   }
   function cancelarCalendarioExtraClub() {
     cerrarModalClub();

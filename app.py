@@ -6704,6 +6704,69 @@ def _ef7_anotar_forzados(claves, now):
         db.session.add(GlobalState(clave=_EF7_META_FORZADOS_KEY, valor_json=payload, updated_at=now))
 
 
+# Registro de quién escribe el Calendario extra de cada club (reporte usuario
+# 2026-10-08: "otra vez se ha colado la 1ª REF en el FC Barcelona"). Sin esto no
+# hay forma de saber QUÉ dispositivo re-sube un texto antiguo. Últimas 60
+# entradas en una fila fuera del prefijo ef7_ (no se sincroniza ni se copia).
+# Verlo en el navegador: /api/ef7/log-calendario
+_EF7_LOG_CAL_KEY = "efmeta_log_cal_v1"
+
+
+def _ef7_anotar_log_calendario(entradas, now):
+    ua = (request.headers.get("User-Agent") or "")[:90]
+    nuevas = []
+    for key, value, forzado, aceptada in entradas:
+        texto = value if isinstance(value, str) else ""
+        nuevas.append({
+            "t": now, "clave": key[len(_EF7_PREFIJO_CAL_EXTRA):], "len": len(texto),
+            "lineas": texto.count("\n") + 1 if texto else 0,
+            "1ref": texto.count("1ª REF") + texto.count("1ª Ref") + texto.count("1a REF"),
+            "forzado": bool(forzado), "aceptada": bool(aceptada), "ua": ua,
+        })
+    fila = GlobalState.query.filter_by(clave=_EF7_LOG_CAL_KEY).with_for_update().first()
+    try:
+        actual = json.loads(fila.valor_json) if fila is not None and fila.valor_json else []
+    except (TypeError, ValueError):
+        actual = []
+    if not isinstance(actual, list):
+        actual = []
+    payload = json.dumps((actual + nuevas)[-60:], ensure_ascii=False)
+    if fila:
+        fila.valor_json = payload
+        fila.updated_at = now
+    else:
+        db.session.add(GlobalState(clave=_EF7_LOG_CAL_KEY, valor_json=payload, updated_at=now))
+
+
+@app.route("/api/ef7/log-calendario", methods=["GET"])
+def api_ef7_log_calendario():
+    fila = GlobalState.query.filter_by(clave=_EF7_LOG_CAL_KEY).first()
+    try:
+        datos = json.loads(fila.valor_json) if fila is not None and fila.valor_json else []
+    except (TypeError, ValueError):
+        datos = []
+    resp = jsonify({"ok": True, "ultimas": list(reversed(datos if isinstance(datos, list) else []))})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@app.route("/api/ef7/clave", methods=["GET"])
+def api_ef7_clave():
+    """Valor actual de UNA clave ef7_* (para comprobar tras guardar que el
+    servidor tiene lo mismo que el móvil)."""
+    k = request.args.get("k", "")
+    if not _ef7_key_is_valid(k):
+        return jsonify({"ok": False, "error": "clave no válida"}), 400
+    fila = GlobalState.query.filter_by(clave=k).first()
+    try:
+        valor = json.loads(fila.valor_json) if fila is not None and fila.valor_json else None
+    except (TypeError, ValueError):
+        valor = None
+    resp = jsonify({"ok": True, "existe": fila is not None, "valor": valor, "updated_at": fila.updated_at if fila else None})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/api/ef7/state", methods=["POST"])
 def api_ef7_state_post():
     body = request.get_json(silent=True) or {}
@@ -6729,7 +6792,7 @@ def api_ef7_state_post():
     # real si algún día se pasa a Postgres.
     lock_fh = _ef7_state_lock_acquire()
     try:
-        forzados_vigentes = _ef7_leer_forzados()
+        log_cal = []
         for key, value in entrantes.items():
             if not _ef7_key_is_valid(key):
                 continue
@@ -6738,10 +6801,12 @@ def api_ef7_state_post():
             # Calendario extra editado a propósito hace poco: un push SIN `forzar`
             # con un texto distinto es una copia vieja de otro móvil — se rechaza
             # (el móvil lo abandona tras unos ciclos y adopta el del servidor).
-            if (key.startswith(_EF7_PREFIJO_CAL_EXTRA) and key not in forzar and key in forzados_vigentes
-                    and row is not None and row.valor_json is not None
-                    and json.dumps(value, ensure_ascii=False) != row.valor_json):
-                continue
+            if key.startswith(_EF7_PREFIJO_CAL_EXTRA):
+                rechazar = (key not in forzar and row is not None and row.valor_json is not None
+                            and json.dumps(value, ensure_ascii=False) != row.valor_json)
+                log_cal.append((key, value, key in forzar, not rechazar))
+                if rechazar:
+                    continue
             # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
             # que este POST la sobreescriba entera — ver _ef7_merge_resultados
             # y el comentario "EXCEPCIÓN" más arriba.
@@ -6782,6 +6847,9 @@ def api_ef7_state_post():
             else:
                 db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
             guardadas.append(key)
+        if log_cal:
+            _ef7_anotar_log_calendario(log_cal, now)
+            db.session.commit()
         if guardadas:
             forzadas_ok = [k for k in guardadas if k in forzar and k != _EF7_ESTADO_LIGA_KEY]
             if forzadas_ok:

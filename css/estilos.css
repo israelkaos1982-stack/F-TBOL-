@@ -3937,12 +3937,12 @@ button { font-family: inherit; cursor: pointer; }
 .champions-tabs .liga-tab-box,
 .uel-tabs .liga-tab-box,
 .uecl-tabs .liga-tab-box {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 900;
-  letter-spacing: 0.3px;
-  padding: 13px 4px;
+  letter-spacing: 0.2px;
+  padding: 12px 4px;
   line-height: 1.15;
-  white-space: normal;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3955,3 +3955,19 @@ button { font-family: inherit; cursor: pointer; }
 .uecl-tabs .liga-tab-box--activa {
   box-shadow: inset 0 0 0 3px currentColor, 0 0 14px 0 currentColor;
 }
+
+/* "🔵 Fase Grupos" -> "🔵 Grupo" cuando no cabe entero en el botón (3
+   pestañas en fila: Champions/Europa League/Conference). El texto largo es
+   el normal; el corto solo aparece si el hueco del botón es menor que el
+   umbral (container query sobre .tab-cq). */
+.tab-cq { display: block; width: 100%; container-type: inline-size; text-align: center; }
+.tab-corto { display: none; }
+@container (max-width: 116px) {
+  .tab-largo { display: none; }
+  .tab-corto { display: inline; }
+}
+/* Las 3 pestañas de Champions/Europa/Conference reparten el ancho a partes
+   iguales (el contenedor .tab-cq no aporta ancho propio al botón). */
+.champions-tabs .liga-tab-box,
+.uel-tabs .liga-tab-box,
+.uecl-tabs .liga-tab-box { flex: 1 1 0; }

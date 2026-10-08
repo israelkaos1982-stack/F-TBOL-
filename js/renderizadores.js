@@ -6675,7 +6675,7 @@
       '" data-accion="champions-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--champions-grupos' +
       (_championsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="champions-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Fase Grupos</button>' +
+      '" data-accion="champions-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🔵 Fase Grupos</span><span class="tab-corto">🔵 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--champions-playoffs' +
       (_championsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="champions-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟣 Playoffs</button>' +
@@ -7451,7 +7451,7 @@
       '" data-accion="uel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-grupos' +
       (_uelTabActual === "grupos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🟠 Fase Grupos</button>' +
+      '" data-accion="uel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟠 Fase Grupos</span><span class="tab-corto">🟠 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-playoffs' +
       (_uelTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="uel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟧 Playoffs</button>' +
@@ -8152,7 +8152,7 @@
       '" data-accion="uecl-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uecl-grupos' +
       (_ueclTabActual === "grupos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uecl-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🟢 Fase Grupos</button>' +
+      '" data-accion="uecl-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟢 Fase Grupos</span><span class="tab-corto">🟢 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uecl-playoffs' +
       (_ueclTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="uecl-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟩 Playoffs</button>' +

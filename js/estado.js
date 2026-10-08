@@ -1017,7 +1017,12 @@
         return;
       }
       registro.clubes[p._origenClubId] = true;
-      if (prioridad(p) > prioridad(registro.partido)) {
+      // A igual estado (ninguna jugada), manda el club de mayor prioridad
+      // (Liverpool primero, ver SUPERLIGA_ORDEN_ID) en vez de "el primero que
+      // se lea": su calendario es el de referencia (reporte usuario 2026-10-08).
+      var iNuevo = SUPERLIGA_ORDEN_ID.indexOf(p._origenClubId), iViejo = SUPERLIGA_ORDEN_ID.indexOf(registro.partido._origenClubId);
+      var mejorClub = prioridad(p) === prioridad(registro.partido) && iNuevo !== -1 && (iViejo === -1 || iNuevo < iViejo);
+      if (prioridad(p) > prioridad(registro.partido) || mejorClub) {
         var idx = out.indexOf(registro.partido);
         if (idx !== -1) out[idx] = p;
         registro.partido = p;
@@ -1027,6 +1032,9 @@
     return out.map(function (p) {
       var copia = {};
       for (var k in p) if (p.hasOwnProperty(k) && k !== "_origenClubId") copia[k] = p[k];
+      // Se conserva QUÉ club tecleó la línea (solo lo lee
+      // _limitarDosPorParEnLigaFamilia, que lo quita antes de devolver).
+      copia._origenExtra = p._origenClubId;
       return copia;
     });
   }
@@ -1101,8 +1109,35 @@
       (grupos[clave] = grupos[clave] || []).push(p);
     });
     var aQuitar = {};
+    // PASO 1 — MÁXIMO 2 CRUCES por par en una liga (ida y vuelta). Reporte
+    // usuario 2026-10-08: "se ha duplicado algún partido Real Madrid vs
+    // Liverpool". Cada mánager tiene su propio Calendario extra en texto y
+    // pueden colocar el MISMO cruce en jornadas distintas (Liverpool: J9/J26;
+    // Real Madrid: J17/J18) — 4 entradas para un par que solo se enfrenta 2
+    // veces, y el recorte de jornadas pegadas de más abajo no las detecta
+    // (huecos grandes). Si hay más de 2, mandan las líneas del club de mayor
+    // prioridad (orden histórico de SUPERLIGA_ORDEN_ID: Liverpool primero) y
+    // se quitan las SIN JUGAR de los demás — nunca una jugada, y solo hasta
+    // quedar en 2. Corre ANTES del recorte por jornadas pegadas para que este
+    // no descarte por error la línea del club prioritario.
     Object.keys(grupos).forEach(function (clave) {
       var lista = grupos[clave];
+      if (lista.length <= 2) return;
+      var orden = function (p) {
+        var i = SUPERLIGA_ORDEN_ID.indexOf(p._origenExtra);
+        return p._origenExtra ? (i === -1 ? 99 : i) : -1; // sin origen (base/generado): intocable
+      };
+      var mejor = Math.min.apply(null, lista.map(orden));
+      var candidatos = lista.filter(function (p) { return orden(p) !== mejor && !p.jugado && !p.pospuesto; })
+        .sort(function (a, b) { return _numJornadaDe(b) - _numJornadaDe(a); });
+      var restantes = lista.length;
+      for (var c = 0; c < candidatos.length && restantes > 2; c++) {
+        aQuitar[candidatos[c].id] = true;
+        restantes--;
+      }
+    });
+    Object.keys(grupos).forEach(function (clave) {
+      var lista = grupos[clave].filter(function (p) { return !aQuitar[p.id]; });
       if (lista.length < 2) return;
       lista.sort(function (a, b) { return _numJornadaDe(a) - _numJornadaDe(b); });
       for (var i = 0; i < lista.length - 1; i++) {
@@ -1115,8 +1150,9 @@
         else aQuitar[b.id] = true; // ninguna jugada: se queda la de jornada menor (a)
       }
     });
-    if (!Object.keys(aQuitar).length) return resultado;
-    return resultado.filter(function (p) { return !aQuitar[p.id]; });
+    var salida = Object.keys(aQuitar).length ? resultado.filter(function (p) { return !aQuitar[p.id]; }) : resultado;
+    salida.forEach(function (p) { if (p._origenExtra !== undefined) delete p._origenExtra; });
+    return salida;
   }
 
   // ---------- SUPERLIGA — los clubes humanos, todos contra todos ----------
@@ -1804,6 +1840,12 @@
     [31, "Liverpool vs Real Sporting", "Liverpool vs Atlético Madrid"]
   ];
   function corregirCalendarioLiverpoolV1() {
+    // DESACTIVADA (2026-10-08): el admin pegó a mano el calendario del Liverpool
+    // (J9 y J26 contra el Real Madrid, J5/J30 contra el Atlético) y lo da por
+    // bueno — esta corrección lo habría reescrito al contrario en cuanto la
+    // sync pasara. Los cruces duplicados con los otros clubes los resuelve
+    // ahora _limitarDosPorParEnLigaFamilia dando prioridad al Liverpool.
+    if (true) return false;
     var clubId = "liverpool";
     var texto = obtenerCalendarioExtraTexto(clubId);
     if (!texto) return false;

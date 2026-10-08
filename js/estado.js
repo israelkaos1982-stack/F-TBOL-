@@ -1670,12 +1670,12 @@
   // edita a mano (candado 646), su edición (overridesFabrica) gana igual
   // que con cualquier otra tarjeta — este mapa solo sustituye el DEFAULT.
   var MENU_CLUB_BUILTIN_POR_CLUB = {
-    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" } },
+    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" }, supercopaespana: { icono: "🇫🇷", etiqueta: "Supercoupe" } },
     // Manchester City (Rubén) e Inter de Milán (Aléx) — 2026-09-25,
     // mismo mecanismo que PSG: su tarjeta "Copa del Rey" del menú pasa a
     // mostrar el nombre real de SU copa nacional.
-    "manchester-city": { copadelrey: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "FA Cup" } },
-    "inter-milan": { copadelrey: { icono: "🇮🇹", etiqueta: "Coppa Italia" } }
+    "manchester-city": { copadelrey: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "FA Cup" }, supercopaespana: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "Community Shield" } },
+    "inter-milan": { copadelrey: { icono: "🇮🇹", etiqueta: "Coppa Italia" }, supercopaespana: { icono: "🇮🇹", etiqueta: "Supercoppa" } }
   };
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }

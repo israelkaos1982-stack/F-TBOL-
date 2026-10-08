@@ -301,6 +301,15 @@
     "fa cup": "copa", "facup": "copa", "coppa italia": "copa", coppa: "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
     "supercopa espana": "supercopa",
+    // Supercopas NACIONALES de los 3 clubes humanos que no juegan en España
+    // (PSG: Supercoupe de France; Inter: Supercoppa Italiana; Chelsea:
+    // Community Shield) — mismo compKey "supercopa" (color, balón, final
+    // forzada, eliminación directa), pero cada una con SU nombre real en
+    // el menú y en las cards (ver _nombreSupercopaPropia).
+    supercoupe: "supercopa", "supercoupe de france": "supercopa", "super coupe": "supercopa",
+    "trophee des champions": "supercopa",
+    supercoppa: "supercopa", "supercoppa italiana": "supercopa", "supercoppa italia": "supercopa",
+    "community shield": "supercopa", "fa community shield": "supercopa", community: "supercopa",
     promocion: "promocion", "promocion de ascenso": "promocion", "promocion de descenso": "promocion",
     "promocion ascenso": "promocion", "promocion descenso": "promocion",
     champions: "champions", "champions league": "champions", "uefa champions league": "champions", ucl: "champions",
@@ -762,11 +771,22 @@
     var base = _renombrarRondaSiHaceFalta(compKeyResuelto, partes.base);
     return base ? (base + " - " + partes.leg) : partes.leg;
   }
+  // Nombre real de la supercopa nacional de PSG/Inter/Chelsea tal cual la
+  // tecleó el admin ("Supercoupe", "Supercoppa", "Community Shield") — null
+  // si es la Supercopa de España normal.
+  function _nombreSupercopaPropia(competicionCruda) {
+    var n = _normCompKey(competicionCruda || "");
+    if (/supercoupe|super coupe|trophee des champions/.test(n)) return "Supercoupe";
+    if (/supercoppa/.test(n)) return "Supercoppa";
+    if (/community/.test(n)) return "Community Shield";
+    return null;
+  }
   function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
     if (compKeyResuelto === "verano") {
       return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : "");
     }
     var compLabel = COMP_LABEL[compKeyResuelto] || competicionCruda;
+    if (compKeyResuelto === "supercopa") compLabel = _nombreSupercopaPropia(competicionCruda) || compLabel;
     // Guion " - " en vez de " · " para TODA competición (petición usuario,
     // "así con todos" — el separador con punto queda solo como legado en
     // el resto de sitios que aún no llaman a esta función, ver comentario
@@ -5690,8 +5710,45 @@
   // COMP_CLASE, FINALES_ACTIVADAS_COMPS, COMPS_ELIMINACION_DIRECTA, todos
   // más arriba), solo faltaban esta pestaña + su motor.
   // ============================================================
+  // La Supercopa de España la juegan SOLO los clubes humanos de España
+  // (Liverpool, Real Madrid, Atlético y FC Barcelona): PSG, Chelsea (id
+  // manchester-city) e Inter juegan su propia supercopa nacional
+  // (Supercoupe / Community Shield / Supercoppa, ver
+  // renderizarSupercopaPropia) y no salen en este cuadro.
+  var SCE_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
   function _sceEquiposHumanos(datos) {
-    return datos.equipos.equipos || [];
+    return (datos.equipos.equipos || []).filter(function (e) {
+      return SCE_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
+  }
+
+  // Supercopa nacional de UN solo club (PSG: Supercoupe; Chelsea:
+  // Community Shield; Inter: Supercoppa) — mismo motor que la Supercopa de
+  // España (_sceEstadoClub/_copaBloqueClubHTML), sin cuadro compartido ni
+  // pestañas, igual que renderizarCoupeFrancia en la copa.
+  function renderizarSupercopaPropia(contenedorId, clubId, emoji, nombre, nota) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var equipo = buscarEquipoPorId(clubId, datos);
+      var bloque = equipo ? _sceEstadoClub(datos, equipo) : null;
+
+      if (!bloque) {
+        contenedor.appendChild(nodoEstado(emoji, "Todavía no hay partidos de " + nombre + ". Añádelos desde el ✏️ de tu Calendario extra → Competición «" + nombre + "»."));
+        return;
+      }
+      contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(bloque, datos, clubId));
+
+      var notaEl = document.createElement("p");
+      notaEl.className = "liga1ref-leyenda-mini";
+      notaEl.style.marginTop = "10px";
+      notaEl.textContent = emoji + " " + nota;
+      contenedor.appendChild(notaEl);
+    });
   }
 
   // Partidos de Supercopa de España de UN club, ordenados por fecha —
@@ -14002,6 +14059,7 @@
     renderizarCoupeFrancia: renderizarCoupeFrancia,
     renderizarFACup: renderizarFACup,
     renderizarCoppaItalia: renderizarCoppaItalia,
+    renderizarSupercopaPropia: renderizarSupercopaPropia,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,

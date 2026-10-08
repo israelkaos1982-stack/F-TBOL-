@@ -1144,6 +1144,12 @@
         var a = lista[i], b = lista[i + 1];
         if (aQuitar[a.id] || aQuitar[b.id]) continue;
         if (Math.abs(_numJornadaDe(b) - _numJornadaDe(a)) > 1) continue;
+        // Reporte usuario 2026-10-08 ("me da error la jornada 18 en los 3
+        // calendarios"): J17 y J18 contra el MISMO rival (Cádiz, Zaragoza,
+        // Sporting — ida y vuelta seguidas en el giro de la temporada) son
+        // LEGÍTIMAS dentro del texto de UN club. Esta regla solo detecta el
+        // mismo cruce tecleado por 2 clubes DISTINTOS con 1 número de desajuste.
+        if (a._origenExtra && a._origenExtra === b._origenExtra) continue;
         if (a.jugado && b.jugado) continue; // las 2 jugadas: no se toca ninguna
         if (a.jugado) aQuitar[b.id] = true;
         else if (b.jugado) aQuitar[a.id] = true;

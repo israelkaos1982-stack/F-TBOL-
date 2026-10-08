@@ -1834,7 +1834,12 @@
     if (!forzar && !_confirmarSiEncogeMucho(clave, obtenerCalendarioExtraTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(clave, texto || "");
-      if (forzar && window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+      // SIEMPRE forzado: un guardado del editor es una decisión explícita del
+      // admin (no una copia vieja). El servidor lo recuerda y rechaza los
+      // pushes sin `forzar` de móviles con otra copia (ver app.py,
+      // _EF7_PREFIJO_CAL_EXTRA) — así el calendario recién pegado no vuelve
+      // al antiguo aunque algún móvil siga con código/texto viejo.
+      if (window.Sync && typeof window.Sync.marcarParaForzar === "function") {
         window.Sync.marcarParaForzar(clave);
       }
       return true;

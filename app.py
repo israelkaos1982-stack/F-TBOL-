@@ -6668,7 +6668,12 @@ def api_ef7_partido_get(pid):
 # adopten en vez de deshacerlo. Fila fuera del prefijo ef7_ (no entra en el
 # GET de claves, ni en los snapshots, ni en las copias de seguridad).
 _EF7_META_FORZADOS_KEY = "efmeta_forzados_v1"
-_EF7_FORZADOS_VIDA_MS = 3 * 24 * 60 * 60 * 1000
+_EF7_FORZADOS_VIDA_MS = 14 * 24 * 60 * 60 * 1000
+# Prefijo de las claves de Calendario extra por club: una edición EXPLÍCITA del
+# admin (siempre viaja con `forzar`) queda protegida durante la vida de arriba
+# frente a pushes SIN `forzar` de móviles con una copia distinta (típicamente
+# una copia larga antigua de un móvil sin actualizar).
+_EF7_PREFIJO_CAL_EXTRA = "ef7_club_calendario_extra_v1_"
 
 
 def _ef7_leer_forzados(ahora_ms=None):
@@ -6724,11 +6729,19 @@ def api_ef7_state_post():
     # real si algún día se pasa a Postgres.
     lock_fh = _ef7_state_lock_acquire()
     try:
+        forzados_vigentes = _ef7_leer_forzados()
         for key, value in entrantes.items():
             if not _ef7_key_is_valid(key):
                 continue
             row = GlobalState.query.filter_by(clave=key).with_for_update().first()
             value_a_guardar = value
+            # Calendario extra editado a propósito hace poco: un push SIN `forzar`
+            # con un texto distinto es una copia vieja de otro móvil — se rechaza
+            # (el móvil lo abandona tras unos ciclos y adopta el del servidor).
+            if (key.startswith(_EF7_PREFIJO_CAL_EXTRA) and key not in forzar and key in forzados_vigentes
+                    and row is not None and row.valor_json is not None
+                    and json.dumps(value, ensure_ascii=False) != row.valor_json):
+                continue
             # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
             # que este POST la sobreescriba entera — ver _ef7_merge_resultados
             # y el comentario "EXCEPCIÓN" más arriba.

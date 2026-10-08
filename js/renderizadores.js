@@ -10332,11 +10332,15 @@
       if (p.competicion === "liga") return p.liga === ligaActual;
       return true;
     });
-    partidosDelClub.sort(function (a, b) {
-      var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
-      var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
-      return ta - tb;
-    });
+    // Posición de cada partido SIN fecha en el texto de ESTE club: un cruce
+    // entre 2 humanos lo tecleó cada uno en su texto y solo sobrevive uno, que
+    // trae la posición de cada club en `_fallbackPorClub` (estado.js).
+    function _posClub(p) {
+      if (p.fecha) return new Date(p.fecha).getTime();
+      if (p._fallbackPorClub && typeof p._fallbackPorClub[clubId] === "number") return p._fallbackPorClub[clubId];
+      return p._fechaFallbackMs || 0;
+    }
+    partidosDelClub.sort(function (a, b) { return _posClub(a) - _posClub(b); });
     partidosDelClub = _adelantarSemisCopa(partidosDelClub);
     partidosDelClub.forEach(function (p, i) { p._ordenClub = i; p._totalClubCalendario = partidosDelClub.length; });
     return partidosDelClub;

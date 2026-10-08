@@ -1006,6 +1006,13 @@
       if (!registro) {
         registro = { partido: p, clubes: {} };
         registro.clubes[p._origenClubId] = true;
+        // Posición (en días de fallback) de ESTE cruce en el texto de CADA club
+        // que lo tecleó: el calendario de un club se ordena por la posición de
+        // SU propia línea, no por la del club que "gana" la deduplicación
+        // (reporte usuario 2026-10-08: la J26 del Real Madrid salía después de
+        // la J29 porque se ordenaba por el texto del Liverpool).
+        p._fallbackPorClub = {};
+        p._fallbackPorClub[p._origenClubId] = p._fechaFallbackMs;
         vistoPorClave[clave] = registro;
         out.push(p);
         return;
@@ -1017,6 +1024,8 @@
         return;
       }
       registro.clubes[p._origenClubId] = true;
+      var mapaPos = registro.partido._fallbackPorClub || {};
+      mapaPos[p._origenClubId] = p._fechaFallbackMs;
       // A igual estado (ninguna jugada), manda el club de mayor prioridad
       // (Liverpool primero, ver SUPERLIGA_ORDEN_ID) en vez de "el primero que
       // se lea": su calendario es el de referencia (reporte usuario 2026-10-08).
@@ -1025,6 +1034,7 @@
       if (prioridad(p) > prioridad(registro.partido) || mejorClub) {
         var idx = out.indexOf(registro.partido);
         if (idx !== -1) out[idx] = p;
+        p._fallbackPorClub = mapaPos;
         registro.partido = p;
       }
       // Si no gana prioridad, se descarta en silencio: es el duplicado.
@@ -1131,10 +1141,24 @@
       var candidatos = lista.filter(function (p) { return orden(p) !== mejor && !p.jugado && !p.pospuesto; })
         .sort(function (a, b) { return _numJornadaDe(b) - _numJornadaDe(a); });
       var restantes = lista.length;
+      var quitados = [];
       for (var c = 0; c < candidatos.length && restantes > 2; c++) {
         aQuitar[candidatos[c].id] = true;
+        quitados.push(candidatos[c]);
         restantes--;
       }
+      // El club al que se le quita su línea sigue viendo el cruce, pero en el
+      // hueco de SU texto: el i-ésimo quitado (por jornada) hereda su posición
+      // al i-ésimo superviviente de otro club (por jornada).
+      var supervivientes = lista.filter(function (p) { return !aQuitar[p.id] && p._origenExtra; })
+        .sort(function (a, b) { return _numJornadaDe(a) - _numJornadaDe(b); });
+      quitados.sort(function (a, b) { return _numJornadaDe(a) - _numJornadaDe(b); });
+      quitados.forEach(function (q, i) {
+        var sv = supervivientes[Math.min(i, supervivientes.length - 1)];
+        if (!sv || sv._origenExtra === q._origenExtra) return;
+        sv._fallbackPorClub = sv._fallbackPorClub || {};
+        if (sv._fallbackPorClub[q._origenExtra] === undefined) sv._fallbackPorClub[q._origenExtra] = q._fechaFallbackMs;
+      });
     });
     Object.keys(grupos).forEach(function (clave) {
       var lista = grupos[clave].filter(function (p) { return !aQuitar[p.id]; });
@@ -1151,9 +1175,13 @@
         // mismo cruce tecleado por 2 clubes DISTINTOS con 1 número de desajuste.
         if (a._origenExtra && a._origenExtra === b._origenExtra) continue;
         if (a.jugado && b.jugado) continue; // las 2 jugadas: no se toca ninguna
-        if (a.jugado) aQuitar[b.id] = true;
-        else if (b.jugado) aQuitar[a.id] = true;
-        else aQuitar[b.id] = true; // ninguna jugada: se queda la de jornada menor (a)
+        var quitado = a.jugado ? b : (b.jugado ? a : b); // ninguna jugada: se queda la de jornada menor (a)
+        var queda = quitado === a ? b : a;
+        aQuitar[quitado.id] = true;
+        if (quitado._origenExtra && queda._origenExtra) {
+          queda._fallbackPorClub = queda._fallbackPorClub || {};
+          if (queda._fallbackPorClub[quitado._origenExtra] === undefined) queda._fallbackPorClub[quitado._origenExtra] = quitado._fechaFallbackMs;
+        }
       }
     });
     var salida = Object.keys(aQuitar).length ? resultado.filter(function (p) { return !aQuitar[p.id]; }) : resultado;

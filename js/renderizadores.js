@@ -3331,15 +3331,9 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    // Zamora también en Copa — petición usuario 2026-10-03 ("Pichichis,
-    // MVP, Amarillas, Rojas y Zamora tanto en copa como en Liga"). Mismo
-    // criterio que la Zamora de Liga: media de goles encajados por partido
-    // del portero titular, de menor a mayor.
-    {
-      key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true,
-      placeholder: "1 Jan Oblak - Atlético Madrid  0.50"
-    }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    // Sin Zamora en Copa (petición usuario 2026-10-08, "En la Copa del Rey no
+    // queremos estadísticas de Zamora"): sustituye lo pedido el 2026-10-03.
   ];
 
   // PSG no juega la Copa del Rey — juega su propia Coupe de France (ni
@@ -3380,7 +3374,7 @@
   // js/acta.js::simularGoleadorAutomatorioIA — mismo criterio que Liga
   // 1ª REF, ver calcularLiga1RefStatsHumanos más arriba).
   function calcularCopaStatsHumanos(datos) {
-    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
     // Fuente de estadísticas (actas reales incluidas, ver
     // _partidosParaStats) — NO _copaPartidosDelClub, que sigue siendo la
     // del cuadro/calendario de la Copa y no debe cambiar.
@@ -3409,9 +3403,6 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-      var portero = _porteroPrincipalClub(e.id);
-      var zamoraEncajados = 0, zamoraPartidos = 0;
-
       todosStats.filter(function (p) {
         return p.jugado && p.competicion === "copa" && (p.local === e.id || p.visitante === e.id);
       }).forEach(function (p) {
@@ -3425,21 +3416,7 @@
             sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
           }
         });
-
-        if (!portero || !p.resultado) return;
-        zamoraEncajados += p.local === e.id ? p.resultado.golesVisitante : p.resultado.golesLocal;
-        zamoraPartidos++;
       });
-
-      // Zamora de Copa — mismo criterio exacto que la de Liga (ver
-      // calcularLiga1RefStatsHumanos): media de goles encajados por partido
-      // del portero titular del club.
-      if (portero && zamoraPartidos > 0) {
-        acumulado.zamora[portero.id] = {
-          nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
-          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
-        };
-      }
     });
 
     var salida = {};

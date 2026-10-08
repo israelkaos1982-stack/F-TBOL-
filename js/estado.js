@@ -3965,6 +3965,7 @@
       var huboAlgo = false;
       var huboFallo = false;
       var saltadas = [];
+      var importadas = [];
       Object.keys(obj.claves).forEach(function (key) {
         if (key.indexOf(PREFIJO_CLAVES) !== 0) return; // nunca escribas nada ajeno a esta app
         var valorBackup = obj.claves[key];
@@ -3977,6 +3978,7 @@
         try {
           localStorage.setItem(key, valorBackup);
           huboAlgo = true;
+          importadas.push(key);
         } catch (err) {
           console.error("[estado] no se pudo restaurar la clave " + key + ":", err);
           huboFallo = true;
@@ -3986,6 +3988,24 @@
       // son ~100 claves, y si falla por falta de espacio probablemente
       // fallarán varias seguidas): la restauración puede haber quedado A
       // MEDIAS (unas claves sí, otras no) sin que nada más lo indique.
+      // Reporte usuario 2026-10-08 ("el mío es el actual y el de los demás no
+      // está actualizado"): importar una copia debe PROPAGARSE a los demás
+      // móviles, no quedarse solo en este. Cada clave importada se marca
+      // para saltarse el guard de regresión del servidor (si no, el
+      // servidor rechaza en silencio cualquier clave que le parezca "más
+      // corta" que la suya) y se fuerza un ciclo de sync ya: el servidor
+      // anota esas claves como forzadas y los otros móviles las adoptan en
+      // su siguiente pull sin tratarlas como regresión.
+      if (importadas.length && window.Sync) {
+        try {
+          if (typeof window.Sync.marcarParaForzar === "function") {
+            importadas.forEach(function (k) { window.Sync.marcarParaForzar(k); });
+          }
+          if (typeof window.Sync.forzarCiclo === "function") {
+            window.setTimeout(function () { try { window.Sync.forzarCiclo(); } catch (e1) { /* se reintenta en el siguiente ciclo (10 s) */ } }, 400);
+          }
+        } catch (e2) { /* el ciclo normal de 10 s lo enviará igualmente */ }
+      }
       if (huboFallo) _avisarFalloGuardado(new Error("restauración de backup incompleta"));
       if (saltadas.length) {
         try {

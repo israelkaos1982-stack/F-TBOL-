@@ -96,7 +96,7 @@
         if (!ok0) { inputImportar.value = ""; return; }
         importarProgreso(file, function (ok) {
           if (ok) {
-            alert("✅ Progreso importado correctamente. Recarga la página para verlo reflejado en todas las pantallas.");
+            alert("✅ Progreso importado correctamente y enviándose al servidor: los demás móviles lo recibirán en unos segundos (deja esta pantalla abierta ~30 s con conexión). Recarga la página para verlo reflejado aquí.");
           } else {
             alert("⚠️ El archivo elegido no es una copia de seguridad válida.");
           }

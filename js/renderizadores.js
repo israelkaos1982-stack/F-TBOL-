@@ -10998,13 +10998,17 @@
   // pero 🎲 contra Ángel/Izan). Las FINALES de torneo siguen forzando
   // ⬆️-⬆️ por encima de esta tabla (ver _calcularMetaPartido, esFinal
   // sigue ganando) — esa regla NO cambia con esta petición.
+  // 2026-10-08: Liverpool / Real Madrid / Atlético Madrid con Real Madrid,
+  // Atlético, Liverpool, PSG, FC Barcelona e Inter (petición usuario). Arsenal
+  // no se tocó.
   var _FORMA_HVH = {
     liverpool: {
       arsenal: { tu: "⬆️", rival: "↗️" },
+      "real-madrid": { tu: "⬆️", rival: "🎲" },
       "atletico-madrid": { tu: "⬆️", rival: "🎲" },
-      "real-madrid": { tu: "⬆️", rival: "↗️" },
+      psg: { tu: "⬆️", rival: "⬆️" },
       "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      psg: { tu: "🎲", rival: "🎲" }
+      "inter-milan": { tu: "🎲", rival: "⬆️" }
     },
     arsenal: {
       liverpool: { tu: "↗️", rival: "⬆️" },
@@ -11015,17 +11019,19 @@
     },
     "real-madrid": {
       arsenal: { tu: "🎲", rival: "🎲" },
-      "atletico-madrid": { tu: "↗️", rival: "🎲" },
-      liverpool: { tu: "↗️", rival: "⬆️" },
+      liverpool: { tu: "🎲", rival: "⬆️" },
+      "atletico-madrid": { tu: "🎲", rival: "🎲" },
+      psg: { tu: "🎲", rival: "⬆️" },
       "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      psg: { tu: "🎲", rival: "↗️" }
+      "inter-milan": { tu: "🎲", rival: "⬆️" }
     },
     "atletico-madrid": {
       arsenal: { tu: "🎲", rival: "↗️" },
-      "real-madrid": { tu: "🎲", rival: "↗️" },
+      "real-madrid": { tu: "🎲", rival: "🎲" },
       liverpool: { tu: "🎲", rival: "⬆️" },
-      "fc-barcelona": { tu: "🎲", rival: "↗️" },
-      psg: { tu: "🎲", rival: "⬆️" }
+      psg: { tu: "🎲", rival: "⬆️" },
+      "fc-barcelona": { tu: "🎲", rival: "🎲" },
+      "inter-milan": { tu: "🎲", rival: "⬆️" }
     },
     "fc-barcelona": {
       arsenal: { tu: "🎲", rival: "🎲" },

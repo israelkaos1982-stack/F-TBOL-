@@ -708,6 +708,10 @@
         out.push({
           id: ex.id,
           competicion: compKey,
+          // Texto tal cual lo tecleó el admin — solo para mostrar el nombre
+          // real de una supercopa nacional ("Supercoupe", "Community
+          // Shield", "Supercoppa") aunque su compKey sea "supercopa".
+          _competicionCruda: ex.competicion,
           liga: compKey === "liga" ? club.ligaActual : null,
           ronda: ex.ronda,
           jornada: null,

@@ -271,6 +271,20 @@
       // placeholder "todavía no está disponible"). Sin exclusión de
       // club; solo 2 rondas (Semifinal→Final, 4 clubes).
       body.innerHTML = '<div id="sce-content"></div>';
+      // PSG, Chelsea e Inter no juegan la Supercopa de España: cada uno su
+      // supercopa nacional (el título ya sale de la propia tarjeta del menú,
+      // ver MENU_CLUB_BUILTIN_POR_CLUB en estado.js) — un solo club, sin
+      // cuadro compartido ni pestañas.
+      if (clubId === "psg") {
+        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🇫🇷", "Supercoupe", "Competición francesa — solo PSG la disputa, sin cuadro compartido con el resto de cajas.");
+        return;
+      } else if (clubId === "manchester-city") {
+        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Community Shield", "Competición inglesa — solo el Chelsea la disputa, sin cuadro compartido con el resto de cajas.");
+        return;
+      } else if (clubId === "inter-milan") {
+        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🇮🇹", "Supercoppa", "Competición italiana — solo Inter la disputa, sin cuadro compartido con el resto de cajas.");
+        return;
+      }
       _pintarTituloModalInfo(
         titulo, "Supercopa de España", "info-sce-formato", null,
         window.Renderizadores.obtenerFormatoSceTexto(), etiqueta

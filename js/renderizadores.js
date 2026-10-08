@@ -14068,6 +14068,7 @@
     renderizarCoppaItalia: renderizarCoppaItalia,
     renderizarSupercopaPropia: renderizarSupercopaPropia,
     labelCompPartido: _labelCompPartido,
+    mostrarAvisoFlotante: _mostrarAvisoFlotante,
     renderizarCopaStatDetalle: renderizarCopaStatDetalle,
     pintarEditorCopaStat: pintarEditorCopaStat,
     pintarEditorCopaPlayoff: pintarEditorCopaPlayoff,

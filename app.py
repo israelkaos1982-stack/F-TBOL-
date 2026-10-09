@@ -6712,16 +6712,40 @@ def _ef7_anotar_forzados(claves, now):
 _EF7_LOG_CAL_KEY = "efmeta_log_cal_v1"
 
 
+# Marca (ms) de la ÚLTIMA edición explícita aceptada de cada Calendario extra:
+# {clave: ts}. Fila fuera del prefijo ef7_ (no se sincroniza ni se copia).
+_EF7_META_CALED_KEY = "efmeta_caled_v1"
+
+
+def _ef7_leer_caled_meta():
+    try:
+        fila = GlobalState.query.filter_by(clave=_EF7_META_CALED_KEY).first()
+        obj = json.loads(fila.valor_json) if fila is not None and fila.valor_json else {}
+    except (TypeError, ValueError):
+        obj = {}
+    return {k: int(v) for k, v in obj.items() if isinstance(k, str) and isinstance(v, (int, float))} if isinstance(obj, dict) else {}
+
+
+def _ef7_guardar_caled_meta(meta, now):
+    payload = json.dumps(meta, ensure_ascii=False)
+    fila = GlobalState.query.filter_by(clave=_EF7_META_CALED_KEY).with_for_update().first()
+    if fila:
+        fila.valor_json = payload
+        fila.updated_at = now
+    else:
+        db.session.add(GlobalState(clave=_EF7_META_CALED_KEY, valor_json=payload, updated_at=now))
+
+
 def _ef7_anotar_log_calendario(entradas, now):
     ua = (request.headers.get("User-Agent") or "")[:90]
     nuevas = []
-    for key, value, forzado, aceptada in entradas:
+    for key, value, forzado, aceptada, ts_in, ts_old in entradas:
         texto = value if isinstance(value, str) else ""
         nuevas.append({
             "t": now, "clave": key[len(_EF7_PREFIJO_CAL_EXTRA):], "len": len(texto),
             "lineas": texto.count("\n") + 1 if texto else 0,
             "1ref": texto.count("1ª REF") + texto.count("1ª Ref") + texto.count("1a REF"),
-            "forzado": bool(forzado), "aceptada": bool(aceptada), "ua": ua,
+            "forzado": bool(forzado), "aceptada": bool(aceptada), "ts_in": ts_in, "ts_guardado": ts_old, "ua": ua,
         })
     fila = GlobalState.query.filter_by(clave=_EF7_LOG_CAL_KEY).with_for_update().first()
     try:
@@ -6793,6 +6817,14 @@ def api_ef7_state_post():
     lock_fh = _ef7_state_lock_acquire()
     try:
         log_cal = []
+        ediciones_raw = body.get("ediciones")
+        ediciones_in = {}
+        if isinstance(ediciones_raw, dict):
+            for k_, v_ in ediciones_raw.items():
+                if isinstance(k_, str) and isinstance(v_, (int, float)) and not isinstance(v_, bool):
+                    ediciones_in[k_] = int(v_)
+        caled_meta = _ef7_leer_caled_meta()
+        caled_meta_cambiada = False
         for key, value in entrantes.items():
             if not _ef7_key_is_valid(key):
                 continue
@@ -6802,11 +6834,23 @@ def api_ef7_state_post():
             # con un texto distinto es una copia vieja de otro móvil — se rechaza
             # (el móvil lo abandona tras unos ciclos y adopta el del servidor).
             if key.startswith(_EF7_PREFIJO_CAL_EXTRA):
-                rechazar = (key not in forzar and row is not None and row.valor_json is not None
+                # Gana SIEMPRE la edición explícita más reciente (ver
+                # _EF7_META_CALED_KEY): un push con un texto distinto solo se
+                # acepta si trae una marca de edición MÁS NUEVA que la última
+                # guardada. Cualquier otro (copia vieja de otro móvil/pestaña,
+                # fixup automático, import sin sellar) se rechaza, aunque vaya
+                # con `forzar` o sea más largo.
+                ts_in = ediciones_in.get(key, 0)
+                ts_old = caled_meta.get(key, 0)
+                distinto = (row is not None and row.valor_json is not None
                             and json.dumps(value, ensure_ascii=False) != row.valor_json)
-                log_cal.append((key, value, key in forzar, not rechazar))
+                rechazar = distinto and not (ts_in > ts_old)
+                log_cal.append((key, value, key in forzar, not rechazar, ts_in, ts_old))
                 if rechazar:
                     continue
+                if ts_in > ts_old:
+                    caled_meta[key] = ts_in
+                    caled_meta_cambiada = True
             # ef7_estado_liga_v1 se fusiona PARTIDO A PARTIDO en vez de dejar
             # que este POST la sobreescriba entera — ver _ef7_merge_resultados
             # y el comentario "EXCEPCIÓN" más arriba.
@@ -6847,6 +6891,8 @@ def api_ef7_state_post():
             else:
                 db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
             guardadas.append(key)
+        if caled_meta_cambiada:
+            _ef7_guardar_caled_meta(caled_meta, now)
         if log_cal:
             _ef7_anotar_log_calendario(log_cal, now)
             db.session.commit()

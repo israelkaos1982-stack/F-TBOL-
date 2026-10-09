@@ -1832,12 +1832,21 @@
       return "";
     }
   }
+  // Sella la hora de una edición EXPLÍCITA del Calendario extra (editor,
+  // importar copia, auto-limpieza de duplicados). El servidor solo acepta un
+  // cambio de texto con una marca más nueva que la última guardada — así una
+  // copia vieja de otro móvil/pestaña nunca puede pisar lo último que pegó el
+  // admin. NO empieza por "ef7_": no se sincroniza como clave de datos.
+  function sellarEdicionCalendarioExtra(clave) {
+    try { localStorage.setItem("efm_caled_" + clave, String(Date.now())); } catch (err) { /* sin marca: el servidor lo tratará como no editado */ }
+  }
   function guardarCalendarioExtraTexto(clubId, texto, opts) {
     var clave = _calendarioExtraKey(clubId);
     var forzar = !!(opts && opts.forzar);
     if (!forzar && !_confirmarSiEncogeMucho(clave, obtenerCalendarioExtraTexto(clubId), texto)) return false;
     try {
       localStorage.setItem(clave, texto || "");
+      if (!(opts && opts.sinSello)) sellarEdicionCalendarioExtra(clave);
       // SIEMPRE forzado: un guardado del editor es una decisión explícita del
       // admin (no una copia vieja). El servidor lo recuerda y rechaza los
       // pushes sin `forzar` de móviles con otra copia (ver app.py,
@@ -3986,6 +3995,7 @@
         }
         try {
           localStorage.setItem(key, valorBackup);
+          if (key.indexOf("ef7_club_calendario_extra_v1_") === 0) sellarEdicionCalendarioExtra(key);
           huboAlgo = true;
           importadas.push(key);
         } catch (err) {

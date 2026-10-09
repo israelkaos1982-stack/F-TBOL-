@@ -640,7 +640,7 @@
       var clubId = "atletico-madrid";
       var texto = window.Estado.obtenerCalendarioExtraTexto(clubId);
       var r = window.Estado.filtrarDivisionesAntiguasDeCalendarioExtraTexto(texto, clubId);
-      if (r.n > 0) window.Estado.guardarCalendarioExtraTexto(clubId, r.conservar.join("\n"), { forzar: true });
+      if (r.n > 0) window.Estado.guardarCalendarioExtraTexto(clubId, r.conservar.join("\n"), { forzar: true, sinSello: true });
       localStorage.setItem(FIXUP_ATLETI_DIVISIONES_ANTIGUAS_KEY, "1");
     } catch (err) {
       console.error("[main] fixup atleti-divisiones-antiguas:", err);

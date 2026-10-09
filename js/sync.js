@@ -647,6 +647,18 @@
 
     var cuerpoPeticion = { claves: cuerpo };
     if (forzar.length) cuerpoPeticion.forzar = forzar;
+    // Marca de la última EDICIÓN EXPLÍCITA (editor/import) de cada Calendario
+    // extra: el servidor solo deja que cambie su texto un push con marca más
+    // nueva que la guardada (ver app.py, _EF7_META_CALED_KEY).
+    var ediciones = {};
+    claves.forEach(function (k) {
+      if (k.indexOf("ef7_club_calendario_extra_v1_") !== 0) return;
+      try {
+        var ts = Number(localStorage.getItem("efm_caled_" + k));
+        if (ts > 0) ediciones[k] = ts;
+      } catch (e) { /* sin marca: el servidor lo tratará como copia no editada */ }
+    });
+    if (Object.keys(ediciones).length) cuerpoPeticion.ediciones = ediciones;
 
     return _fetchConTimeout(ENDPOINT, {
       method: "POST",

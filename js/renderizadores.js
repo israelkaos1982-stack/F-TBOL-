@@ -11224,8 +11224,8 @@
   // Petición usuario 2026-10-10: en los partidos de Liga, Superliga y fase
   // de grupos/liga de Champions-Europa-Conference, en el mismo sitio que
   // "Ida / Global" (encima del VS) se pintan 2 filas:
-  //   17  Nº  18      (puesto de cada equipo en ESE momento)
-  //   23  Pt  27      (sus puntos en ese momento)
+  //   4º  Pos  17º    (puesto de cada equipo en ESE momento)
+  //   51  Pts  23     (sus puntos en ese momento)
   // El de la izquierda es el local de este partido (mismo orden que los
   // escudos). Se calcula con la MISMA tabla que ve el admin en la pantalla
   // de la competición — nada que guardar. Si un equipo no aparece en la
@@ -11275,12 +11275,12 @@
   }
   function _htmlClasificacionDePartido(clas) {
     if (!clas) return "";
-    function d(x, campo) { return x ? x[campo] : "–"; }
+    function d(x, campo) { return x ? (campo === "pos" ? x.pos + "º" : x[campo]) : "–"; }
     function fila(campo, etiqueta) {
       return '<div class="previa-clas-fila"><span class="previa-clas-val previa-clas-val--izq">' + d(clas.local, campo) + "</span>" +
         '<span class="previa-clas-etq">' + etiqueta + '</span><span class="previa-clas-val previa-clas-val--der">' + d(clas.visitante, campo) + "</span></div>";
     }
-    return fila("pos", "Nº") + fila("pts", "Pt");
+    return fila("pos", "Pos") + fila("pts", "Pts");
   }
 
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga

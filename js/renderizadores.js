@@ -12951,10 +12951,30 @@
       .concat(Object.keys(porComp).filter(function (k) { return _ORDEN_COMPS_PLANTILLA.indexOf(k) === -1 && k !== "selecciones" && k !== "sel-clasif"; }));
     claves.forEach(function (k) {
       var lista = porComp[k];
-      var ib = _iconoYNombreCompPlantilla(clubId, k, _labelCompPartido(lista[0]));
+      // Competición conocida (Copa, Champions...) o TEXTO LIBRE que el
+      // admin tecleó en el Calendario extra ("☀️ T. Herrera", "⬆️ P.Ascenso
+      // EA Sports"): en ese caso su emoji inicial ES su icono y el resto
+      // su nombre.
+      var conocida = COMP_LABEL.hasOwnProperty(k) || k === "mundialito";
+      var ib;
+      if (conocida) {
+        ib = _iconoYNombreCompPlantilla(clubId, k, _labelCompPartido(lista[0]));
+      } else {
+        var mEmoji = String(k).match(/^((?:[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}]|\s)+)/u);
+        ib = {
+          emoji: mEmoji ? mEmoji[1].replace(/\s+/g, "") || "🏆" : "🏆",
+          nombre: (mEmoji ? String(k).slice(mEmoji[0].length) : String(k)).trim() || String(k)
+        };
+      }
       var nombre = ib.nombre;
+      var jugadosComp = lista.filter(function (p) { return p.jugado; }).length;
+      // Promociones de ascenso/descenso: solo se juegan si el club cae en
+      // esa zona — mientras no haya ni un partido jugado no son una
+      // competición de esta temporada (petición usuario).
+      if (!jugadosComp && /promoci|ascenso|descenso/.test(_normNombre(nombre))) return;
+      var tieneRondasKO = lista.some(function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(_normNombre(p.ronda || "")); });
       var r;
-      if (_COMPS_ELIM_PLANTILLA[k]) {
+      if (_COMPS_ELIM_PLANTILLA[k] || (!conocida && tieneRondasKO)) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
       } else if (EUROPA_FASE_GRUPOS_COMPS[k] || k === "mundialito") {
         // Mundialito: fase de grupos + cuadro final; mismo criterio que las
@@ -12970,6 +12990,7 @@
           : _estadoPuntosClub(clubId, grupos.length ? grupos : lista);
       } else {
         var jug = lista.filter(function (p) { return p.jugado; }).length;
+        if (!jug) return; // sin ningún partido jugado no hay nada que contar todavía
         r = { estado: jug + "/" + lista.length + " partidos" };
       }
       filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon });

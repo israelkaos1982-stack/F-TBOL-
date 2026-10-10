@@ -11161,7 +11161,12 @@
     var cruceHvH = esHvH && _FORMA_HVH[par.managed.id] && _FORMA_HVH[par.managed.id][par.rival.id];
     var forma = _FORMA_POR_CLUB[par.managed.id];
     var formaIconoTu, formaIconoRival;
-    if (esFinal) {
+    if (par.managed.id === "liverpool") {
+      // Petición usuario 2026-10-10: TODOS los partidos del Liverpool (liga,
+      // copa, Europa, HvH, finales...) van con Forma Tu🎲-🎲Rival. Gana por
+      // encima de la tabla HvH y de la regla de las finales.
+      formaIconoTu = "🎲"; formaIconoRival = "🎲";
+    } else if (esFinal) {
       formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
     } else if (cruceHvH) {
       formaIconoTu = cruceHvH.tu; formaIconoRival = cruceHvH.rival;

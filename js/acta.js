@@ -615,9 +615,12 @@
     // cada gol (el mismo bloque se ve en descanso y en el resumen final).
     var g = document.getElementById("live-global");
     if (g) {
-      g.innerHTML = _partidoActivo.ida && window.Renderizadores && window.Renderizadores.htmlIdaGlobal
-        ? window.Renderizadores.htmlIdaGlobal(_partidoActivo.ida, r.golesLocal, r.golesVisitante)
-        : "";
+      var RR = window.Renderizadores;
+      g.innerHTML = _partidoActivo.ida && RR && RR.htmlIdaGlobal
+        ? RR.htmlIdaGlobal(_partidoActivo.ida, r.golesLocal, r.golesVisitante)
+        // Liga/Superliga/grupos europeos: Nº y Pt de ANTES del partido (se
+        // calculan al arrancar y quedan fijos en acta, descanso y final).
+        : (RR && RR.htmlClasificacionDePartido ? RR.htmlClasificacionDePartido(_partidoActivo.clas) : "");
     }
   }
 
@@ -729,7 +732,8 @@
     _partidoActivo = {
       partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo,
       prorroga: (esVueltaDecisiva || esFinalDeTorneo) ? true : !!(prorrogaChk && prorrogaChk.checked),
-      ida: R.datosIdaDeVuelta ? R.datosIdaDeVuelta(partido, datos) : null
+      ida: R.datosIdaDeVuelta ? R.datosIdaDeVuelta(partido, datos) : null,
+      clas: R.clasificacionDePartido ? R.clasificacionDePartido(partido, datos, local, visitante) : null
     };
 
     // Mismo color de competición que la previa (clase .comp-XXX): sin esto la

@@ -11220,6 +11220,69 @@
     );
   }
 
+  // ---------- Nº (puesto) y Pt (puntos) en la clasificación ----------
+  // Petición usuario 2026-10-10: en los partidos de Liga, Superliga y fase
+  // de grupos/liga de Champions-Europa-Conference, en el mismo sitio que
+  // "Ida / Global" (encima del VS) se pintan 2 filas:
+  //   17  Nº  18      (puesto de cada equipo en ESE momento)
+  //   23  Pt  27      (sus puntos en ese momento)
+  // El de la izquierda es el local de este partido (mismo orden que los
+  // escudos). Se calcula con la MISMA tabla que ve el admin en la pantalla
+  // de la competición — nada que guardar. Si un equipo no aparece en la
+  // tabla (p. ej. un rival IA que el admin aún no ha pegado) sale "–".
+  function _filasClasificacionDePartido(partido, datos, local, visitante) {
+    var key = _resolverCompKeyBalon(partido.competicion);
+    if (key === "superliga") {
+      return calcularSuperliga(datos).map(function (f) { return { equipoId: f.equipo.id, nombre: f.equipo.nombre, pts: f.pts }; });
+    }
+    if (_COMPS_CLASIF_EUROPA[key] && _esFaseDeGruposEuropea(partido)) {
+      return key === "champions" ? calcularChampionsCombinada(datos) : (key === "uel" ? calcularUelCombinada(datos) : calcularUeclCombinada(datos));
+    }
+    var esLigaLegacy = partido.competicion === "liga";
+    var compNorm = _normNombre(partido.competicion);
+    var candidatas = LIGA_NAV_ORDEN.filter(function (id) {
+      var ck = _compKeyEsperadoParaDivision(id);
+      return esLigaLegacy ? ck === "liga" : ck === compNorm;
+    });
+    for (var i = 0; i < candidatas.length; i++) {
+      var ligaId = candidatas[i], filas = [];
+      try {
+        filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilasConHumano(ligaId, datos);
+      } catch (err) { filas = []; }
+      var conHumano = filas.some(function (f) { return f.equipoId && (f.equipoId === local.id || f.equipoId === visitante.id); });
+      if (conHumano) return filas;
+    }
+    return null;
+  }
+  var _COMPS_CLASIF_EUROPA = { champions: true, uel: true, uecl: true };
+  function _clasificacionDePartido(partido, datos, local, visitante) {
+    if (!partido || !datos || !local || !visitante) return null;
+    var filas = null;
+    try { filas = _filasClasificacionDePartido(partido, datos, local, visitante); } catch (err) { filas = null; }
+    if (!filas || !filas.length) return null;
+    function buscar(equipo) {
+      for (var i = 0; i < filas.length; i++) {
+        var f = filas[i];
+        if ((f.equipoId && f.equipoId === equipo.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, equipo.nombre))) {
+          return { pos: i + 1, pts: f.pts };
+        }
+      }
+      return null;
+    }
+    var l = buscar(local), v = buscar(visitante);
+    if (!l && !v) return null;
+    return { local: l, visitante: v };
+  }
+  function _htmlClasificacionDePartido(clas) {
+    if (!clas) return "";
+    function d(x, campo) { return x ? x[campo] : "–"; }
+    function fila(campo, etiqueta) {
+      return '<div class="previa-clas-fila"><span class="previa-clas-val previa-clas-val--izq">' + d(clas.local, campo) + "</span>" +
+        '<span class="previa-clas-etq">' + etiqueta + '</span><span class="previa-clas-val previa-clas-val--der">' + d(clas.visitante, campo) + "</span></div>";
+    }
+    return fila("pos", "Nº") + fila("pts", "Pt");
+  }
+
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga
   // y en eliminatorias a partido único. La prórroga SOLO puede decidirse
   // en el partido que cierra la eliminatoria: la vuelta (o el partido
@@ -11594,7 +11657,7 @@
       var idaPrevia = _datosIdaDeVuelta(partido, datos);
       globalEl.innerHTML = idaPrevia
         ? _htmlIdaGlobal(idaPrevia, partido.jugado ? partido.resultado.golesLocal : 0, partido.jugado ? partido.resultado.golesVisitante : 0)
-        : "";
+        : _htmlClasificacionDePartido(_clasificacionDePartido(partido, datos, local, visitante));
     }
 
     // Mismo nombre acortado + guion " - " (y el mismo renombrado de
@@ -14432,6 +14495,8 @@
     faseIdaVuelta: _faseIdaVuelta,
     datosIdaDeVuelta: _datosIdaDeVuelta,
     htmlIdaGlobal: _htmlIdaGlobal,
+    clasificacionDePartido: _clasificacionDePartido,
+    htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,
     cargarTodo: cargarTodo,
     buscarEquipoPorId: buscarEquipoPorId,

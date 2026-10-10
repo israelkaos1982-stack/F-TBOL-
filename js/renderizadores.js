@@ -11314,7 +11314,7 @@
   function _esFaseDeGruposEuropea(partido) {
     if (!partido.competicion || !EUROPA_FASE_GRUPOS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
     var rondaNorm = _normNombre(partido.ronda || "");
-    return !/dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
+    return !/play-?offs?|dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
   }
 
   // FINALES de torneo (petición usuario): Copa del Rey, Champions League,
@@ -12987,6 +12987,36 @@
     });
     return { estado: "Fase Grupos · " + jugados + "/" + partidos.length + " jornadas · " + pts + " pts" };
   }
+  // Champions / Europa League / Conference League (fase de liga única de 8
+  // partidos y 36 equipos): mientras se juega, el puesto actual en la
+  // clasificación; al terminar los 8 partidos, del 25º en adelante el
+  // equipo queda ELIMINADO; del 1º al 24º pasa a Playoffs y se muestra la
+  // ronda en la que se encuentra (los 8 primeros entran directos a Octavos,
+  // del 9º al 24º juegan el Play-off previo).
+  var EUROPA_ELIMINADOS_DESDE = 25;
+  function _estadoEuropeaClub(clubId, compKey, grupos, ko, datos) {
+    var tabla = [];
+    try {
+      tabla = compKey === "champions" ? calcularChampionsCombinada(datos)
+        : (compKey === "uel" ? calcularUelCombinada(datos) : calcularUeclCombinada(datos));
+    } catch (err) { tabla = []; }
+    var idx = -1;
+    for (var i = 0; i < tabla.length; i++) { if (tabla[i].equipoId === clubId) { idx = i; break; } }
+    var jugados = grupos.filter(function (p) { return p.jugado; }).length;
+    var gruposCompletos = grupos.length > 0 && (jugados >= 8 || jugados === grupos.length);
+    if (idx < 0) {
+      return (ko.length && gruposCompletos) ? _estadoEliminatoriaClub(clubId, compKey, ko, datos) : _estadoPuntosClub(clubId, grupos.length ? grupos : ko);
+    }
+    var pos = idx + 1;
+    if (!gruposCompletos && !ko.length) return { estado: "Fase Grupos · " + _posicionOrdinal(pos) };
+    if (pos >= EUROPA_ELIMINADOS_DESDE) return { estado: "Eliminado · Fase Grupos (" + _posicionOrdinal(pos) + ")", eliminado: true };
+    if (ko.length) {
+      var r = _estadoEliminatoriaClub(clubId, compKey, ko, datos);
+      if (r.eliminado || r.campeon) return r;
+      return { estado: /^play-?offs?$/i.test(_normNombre(r.estado)) ? "Playoffs" : "Playoffs · " + r.estado };
+    }
+    return { estado: "Playoffs · " + (pos <= 8 ? "Octavos" : "Play-off") };
+  }
   function _filasCompeticionesClub(clubId, datos) {
     var filas = [];
     var pos = _posicionLigaClub(clubId, datos);
@@ -13048,9 +13078,13 @@
         var grupos = lista.filter(esGrupos);
         var ko = lista.filter(function (p) { return !esGrupos(p); });
         var gruposCompletos = grupos.length && grupos.every(function (p) { return p.jugado; });
-        r = (ko.length && (gruposCompletos || !grupos.length))
-          ? _estadoEliminatoriaClub(clubId, k, ko, datos)
-          : _estadoPuntosClub(clubId, grupos.length ? grupos : lista);
+        if (k !== "mundialito") {
+          r = _estadoEuropeaClub(clubId, k, grupos, ko, datos);
+        } else {
+          r = (ko.length && (gruposCompletos || !grupos.length))
+            ? _estadoEliminatoriaClub(clubId, k, ko, datos)
+            : _estadoPuntosClub(clubId, grupos.length ? grupos : lista);
+        }
       } else {
         var jug = lista.filter(function (p) { return p.jugado; }).length;
         if (!jug) return; // sin ningún partido jugado no hay nada que contar todavía

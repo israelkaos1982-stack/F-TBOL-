@@ -12806,6 +12806,137 @@
     return null;
   }
 
+  // ---------- "Competiciones" de la Plantilla de un club humano ----------
+  // Una fila por competición que juega el club: Liga -> posición actual en
+  // su clasificación; eliminatorias (Copa, Supercopa, Recopa, playoffs
+  // europeos...) -> ronda en la que está, o "Eliminado" + la ronda donde
+  // cayó; fase de grupos/liga europea -> jornadas y puntos. Todo se deriva
+  // del calendario del propio club (mismo origen que el resto de la
+  // Plantilla) — el club solo conoce SUS partidos, así que en las fases
+  // de grupos se muestran sus puntos, no una posición.
+  var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true };
+  var _ORDEN_COMPS_PLANTILLA = ["copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "verano", "promocion"];
+  function _emojiCompPlantilla(compKey) {
+    if (compKey === "champions" || compKey === "uel" || compKey === "uecl" || compKey === "ucl-previa") return "🇪🇺";
+    return "🏆";
+  }
+  function _posicionOrdinal(n) { return n + "º"; }
+  // Posición del club en la clasificación de SU división actual (la misma
+  // tabla que muestra la pantalla de Liga). null si no aparece en ninguna.
+  function _posicionLigaClub(clubId, datos) {
+    for (var i = 0; i < LIGA_NAV_ORDEN.length; i++) {
+      var ligaId = LIGA_NAV_ORDEN[i];
+      var filas = [];
+      try {
+        filas = ligaId === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilasConHumano(ligaId, datos);
+      } catch (err) { filas = []; }
+      for (var k = 0; k < filas.length; k++) {
+        if (filas[k].equipoId === clubId) {
+          var meta = LIGA_NAV_META[ligaId] || {};
+          var esEspanola = !meta.chip;
+          return { emoji: esEspanola ? "🇪🇸" : meta.chip, nombre: meta.corta || "Liga", pos: k + 1, total: filas.length };
+        }
+      }
+    }
+    return null;
+  }
+  function _nombreRondaPlantilla(compKey, p) {
+    var base = p.ronda ? (_dividirRondaEnLegs(p.ronda) || { base: p.ronda }).base || p.ronda : (p.jornada ? "J" + p.jornada : "");
+    return _renombrarRondaSiHaceFalta(compKey, base);
+  }
+  // Resultado de UNA ronda de eliminatoria para `clubId`: "gana" | "pierde"
+  // | null (sin decidir todavía). `legs` = sus partidos (1 si es a partido
+  // único, 2 si es ida+vuelta).
+  function _resultadoRondaClub(clubId, legs, datos) {
+    var todosJugados = legs.every(function (p) { return p.jugado && p.resultado; });
+    if (!todosJugados) return null;
+    var grupo = legs[0].eliminatoria && legs[0].eliminatoria.grupoId;
+    if (grupo && legs.length > 1 && window.SistemaTemporadas) {
+      var res = window.SistemaTemporadas.resolverEliminatoria(grupo, datos);
+      if (res && res.ganador) return res.ganador === clubId ? "gana" : "pierde";
+      return null;
+    }
+    var propios = 0, rival = 0, penPropios = 0, penRival = 0;
+    legs.forEach(function (p) {
+      var esLocal = p.local === clubId;
+      propios += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      rival += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      penPropios += esLocal ? (p.penL || 0) : (p.penV || 0);
+      penRival += esLocal ? (p.penV || 0) : (p.penL || 0);
+    });
+    if (propios !== rival) return propios > rival ? "gana" : "pierde";
+    if (penPropios !== penRival) return penPropios > penRival ? "gana" : "pierde";
+    return null;
+  }
+  function _estadoEliminatoriaClub(clubId, compKey, partidos, datos) {
+    var rondas = [], porClave = {};
+    partidos.forEach(function (p) {
+      var clave = p.ronda ? _rondaBaseSinLeg(p.ronda) : ("j" + (p.jornada || ""));
+      if (!porClave[clave]) { porClave[clave] = { nombre: _nombreRondaPlantilla(compKey, p), legs: [] }; rondas.push(porClave[clave]); }
+      porClave[clave].legs.push(p);
+    });
+    var ultimaSuperada = null;
+    for (var i = 0; i < rondas.length; i++) {
+      var r = rondas[i];
+      var res = _resultadoRondaClub(clubId, r.legs, datos);
+      if (res === "pierde") return { estado: "Eliminado · " + r.nombre, eliminado: true };
+      if (res === "gana") { ultimaSuperada = r; continue; }
+      return { estado: r.nombre };
+    }
+    if (ultimaSuperada && /\bfinal\b/.test(_normNombre(ultimaSuperada.nombre)) && !/semi/.test(_normNombre(ultimaSuperada.nombre))) {
+      return { estado: "Campeón 🏆", campeon: true };
+    }
+    return { estado: ultimaSuperada ? ultimaSuperada.nombre + " superada" : "—" };
+  }
+  // Fase de grupos / liga europea / torneo sin eliminación: jornadas
+  // jugadas y puntos del propio club.
+  function _estadoPuntosClub(clubId, partidos) {
+    var jugados = 0, pts = 0;
+    partidos.forEach(function (p) {
+      if (!p.jugado || !p.resultado) return;
+      jugados++;
+      var esLocal = p.local === clubId;
+      var gp = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var gr = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      pts += gp > gr ? 3 : (gp === gr ? 1 : 0);
+    });
+    return { estado: "Fase Grupos · " + jugados + "/" + partidos.length + " jornadas · " + pts + " pts" };
+  }
+  function _filasCompeticionesClub(clubId, datos) {
+    var filas = [];
+    var pos = _posicionLigaClub(clubId, datos);
+    if (pos) {
+      filas.push({ emoji: pos.emoji, nombre: pos.nombre, estado: _posicionOrdinal(pos.pos) + " de " + pos.total });
+    }
+    var porComp = {};
+    _partidosOrdenadosDelClub(clubId, datos).forEach(function (p) {
+      if (p.competicion === "liga") return; // la Liga va por su tabla (arriba)
+      (porComp[p.competicion] = porComp[p.competicion] || []).push(p);
+    });
+    var claves = _ORDEN_COMPS_PLANTILLA.filter(function (k) { return porComp[k]; })
+      .concat(Object.keys(porComp).filter(function (k) { return _ORDEN_COMPS_PLANTILLA.indexOf(k) === -1 && k !== "selecciones" && k !== "sel-clasif"; }));
+    claves.forEach(function (k) {
+      var lista = porComp[k];
+      var nombre = _labelCompPartido(lista[0]);
+      var r;
+      if (_COMPS_ELIM_PLANTILLA[k]) {
+        r = _estadoEliminatoriaClub(clubId, k, lista, datos);
+      } else if (EUROPA_FASE_GRUPOS_COMPS[k]) {
+        var grupos = lista.filter(_esFaseDeGruposEuropea);
+        var ko = lista.filter(function (p) { return !_esFaseDeGruposEuropea(p); });
+        var gruposCompletos = grupos.length && grupos.every(function (p) { return p.jugado; });
+        r = (ko.length && (gruposCompletos || !grupos.length))
+          ? _estadoEliminatoriaClub(clubId, k, ko, datos)
+          : _estadoPuntosClub(clubId, grupos.length ? grupos : lista);
+      } else {
+        var jug = lista.filter(function (p) { return p.jugado; }).length;
+        r = { estado: jug + "/" + lista.length + " partidos" };
+      }
+      filas.push({ emoji: _emojiCompPlantilla(k), nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon });
+    });
+    return filas;
+  }
+
   function renderizarPlantillaClub(idEquipoHumanoActivo) {
     var contenedor = document.getElementById("plantilla-content");
     if (!contenedor) return;
@@ -12935,7 +13066,7 @@
         // usuario). 0 KB nuevos: reutiliza Estado.listarPartidosResueltos
         // (ya agrega base + Calendario extra + generados), solo se
         // recorre aquí — no se guarda nada adicional.
-        var totalesEquipo = { pj: 0, pg: 0 };
+        var totalesEquipo = { pj: 0, pg: 0, pe: 0, pp: 0 };
         // Mayor Goleada / Mayor Derrota (petición usuario) — el partido con
         // el MARGEN de goles más grande a favor/en contra del equipo, en el
         // MISMO barrido de arriba (excluyendo Superliga igual que 👤/%).
@@ -12952,6 +13083,8 @@
             var golesPropios = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
             var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
             if (golesPropios > golesRival) totalesEquipo.pg++;
+            else if (golesPropios === golesRival) totalesEquipo.pe++;
+            else totalesEquipo.pp++;
             var margen = golesPropios - golesRival;
             if (margen > 0 && (!mejorGoleada || margen > mejorGoleada.margen)) mejorGoleada = { p: p, margen: margen };
             if (margen < 0 && (!mayorDerrota || margen < mayorDerrota.margen)) mayorDerrota = { p: p, margen: margen };
@@ -12987,15 +13120,18 @@
         tituloTotal.className = "plantilla-grupo-titulo";
         tituloTotal.innerHTML =
           '<span class="plantilla-grupo-nombre">Totales</span>' +
-          '<span class="plantilla-grupo-iconos plantilla-grupo-iconos--6">' +
-          "<span>👤</span><span>%</span><span>⚽</span><span>⭐</span><span>🟨</span><span>🟥</span></span>";
+          '<span class="plantilla-grupo-iconos plantilla-grupo-iconos--9">' +
+          "<span>J</span><span>G</span><span>E</span><span>P</span><span>%</span><span>⚽</span><span>⭐</span><span>🟨</span><span>🟥</span></span>";
         grupoTotal.appendChild(tituloTotal);
         var filaTotal = document.createElement("div");
-        filaTotal.className = "plantilla-jugador plantilla-jugador--total plantilla-jugador--6";
+        filaTotal.className = "plantilla-jugador plantilla-jugador--total plantilla-jugador--9";
         filaTotal.innerHTML =
           '<span class="plantilla-dorsal"></span>' +
           '<span class="plantilla-nombre">TOTAL</span>' +
           '<span class="plantilla-stat">' + totalesEquipo.pj + "</span>" +
+          '<span class="plantilla-stat">' + totalesEquipo.pg + "</span>" +
+          '<span class="plantilla-stat">' + totalesEquipo.pe + "</span>" +
+          '<span class="plantilla-stat">' + totalesEquipo.pp + "</span>" +
           '<span class="plantilla-stat">' + pctVictorias + "</span>" +
           '<span class="plantilla-stat">' + totales.goles + "</span>" +
           '<span class="plantilla-stat">' + totales.mvp + "</span>" +
@@ -13072,6 +13208,32 @@
             : "0-0"
         ));
         frag.appendChild(grupoLideres);
+
+        // "Competiciones" (petición usuario 2026-10-10) — debajo de los
+        // líderes: una línea por cada competición que juega el club, con la
+        // posición actual en Liga o la ronda de la eliminatoria (y
+        // "Eliminado" + ronda si ya cayó). Se deriva en caliente del
+        // calendario del club — nada que guardar ni mantener a mano.
+        var filasComp = [];
+        try { filasComp = _filasCompeticionesClub(idEquipoHumanoActivo, datos); } catch (errComp) { console.error("[renderizadores] competiciones:", errComp); }
+        if (filasComp.length) {
+          var grupoComp = document.createElement("div");
+          grupoComp.className = "plantilla-grupo plantilla-grupo--total plantilla-grupo--competiciones";
+          var tituloComp = document.createElement("div");
+          tituloComp.className = "plantilla-grupo-titulo";
+          tituloComp.innerHTML = '<span class="plantilla-grupo-nombre">Competiciones</span>';
+          grupoComp.appendChild(tituloComp);
+          filasComp.forEach(function (f) {
+            var linea = document.createElement("div");
+            linea.className = "plantilla-comp-linea" + (f.eliminado ? " plantilla-comp-linea--eliminado" : "") + (f.campeon ? " plantilla-comp-linea--campeon" : "");
+            linea.innerHTML =
+              '<span class="plantilla-lider-emoji">' + f.emoji + "</span>" +
+              '<span class="plantilla-comp-nombre">' + escapeHTML(f.nombre) + ":</span> " +
+              '<span class="plantilla-comp-estado">' + escapeHTML(f.estado) + "</span>";
+            grupoComp.appendChild(linea);
+          });
+          frag.appendChild(grupoComp);
+        }
 
         // "🚑 Sanciones y Lesiones" (petición usuario) — desplegable
         // colapsado por defecto, DEBAJO de la plantilla de CUALQUIER club

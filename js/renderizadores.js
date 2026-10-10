@@ -11025,9 +11025,10 @@
     "real-madrid": { icono: "🎲", label: "Impredecible" },
     "atletico-madrid": { icono: "🎲", label: "Impredecible" },
     "fc-barcelona": { icono: "↘️", label: "Irregular" },
-    // Inter y PSG: Forma "Tu🎲-🎲Rival" en partidos contra IA (petición
-    // usuario 2026-10-05).
-    psg: { icono: "🎲", label: "Impredecible" },
+    // Inter: Forma "Tu🎲-🎲Rival" en partidos contra IA (petición usuario
+    // 2026-10-05). PSG: Tu🎲-↘️Rival (petición usuario 2026-10-10: el PSG
+    // en 🎲 y el rival en ↘️).
+    psg: { icono: "↘️", label: "Irregular" },
     "inter-milan": { icono: "🎲", label: "Impredecible" }
   };
   // Forma en partidos HUMANO vs HUMANO (petición usuario 2026-09-15) —

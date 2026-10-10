@@ -839,7 +839,7 @@
   function _legDeRondaExtra(ronda, competicion) {
     var n = _normTxtExtra(ronda || "");
     if (/\bida\b/.test(n)) return "ida";
-    if (/\bvuelta\b/.test(n)) return "vuelta";
+    if (/\b(?:vuelta|vta)\b/.test(n)) return "vuelta";
     if (_COMPS_LIGA_JORNADA_FALLBACK[_normTxtExtra(competicion)]) {
       var mJor = n.match(/\d+/);
       return mJor ? ("j" + mJor[0]) : n;
@@ -945,9 +945,9 @@
   function _detectarEliminatoria(competicion, ronda, localId, visitanteId) {
     var rondaNorm = _normTxtExtra(ronda);
     var esIda = /\bida\b/.test(rondaNorm);
-    var esVuelta = /\bvuelta\b/.test(rondaNorm);
+    var esVuelta = /\b(?:vuelta|vta)\b/.test(rondaNorm);
     if (!esIda && !esVuelta) return null;
-    var rondaBase = rondaNorm.replace(/\bida\b/g, "").replace(/\bvuelta\b/g, "").replace(/\s+/g, " ").trim();
+    var rondaBase = rondaNorm.replace(/\bida\b/g, "").replace(/\b(?:vuelta|vta)\b\.?/g, "").replace(/\s+/g, " ").trim();
     var par = [localId, visitanteId].slice().sort().join("|");
     return {
       grupoId: "grp-" + _hashStrExtra(_normTxtExtra(competicion) + "|" + rondaBase + "|" + par),

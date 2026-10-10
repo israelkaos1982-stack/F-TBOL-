@@ -13003,13 +13003,17 @@
     var idx = -1;
     for (var i = 0; i < tabla.length; i++) { if (tabla[i].equipoId === clubId) { idx = i; break; } }
     var jugados = grupos.filter(function (p) { return p.jugado; }).length;
-    var gruposCompletos = grupos.length > 0 && (jugados >= 8 || jugados === grupos.length);
+    // Fase de liga completa = 8 partidos jugados: los de ESTE calendario o
+    // los que cuenta la clasificación (el admin puede haber pegado solo
+    // algunos partidos del club y el resto vivir en el texto de la tabla).
+    var pjTabla = idx >= 0 ? (Number(tabla[idx].pj) || 0) : 0;
+    var gruposCompletos = grupos.length > 0 && (jugados >= 8 || pjTabla >= 8);
     if (idx < 0) {
       return (ko.length && gruposCompletos) ? _estadoEliminatoriaClub(clubId, compKey, ko, datos) : _estadoPuntosClub(clubId, grupos.length ? grupos : ko);
     }
     var pos = idx + 1;
     if (!gruposCompletos && !ko.length) return { estado: "Fase Grupos · " + _posicionOrdinal(pos) };
-    if (pos >= EUROPA_ELIMINADOS_DESDE) return { estado: "Eliminado · Fase Grupos (" + _posicionOrdinal(pos) + ")", eliminado: true };
+    if (pos >= EUROPA_ELIMINADOS_DESDE) return { estado: "Eliminado · Grupo (" + _posicionOrdinal(pos) + ")", eliminado: true };
     if (ko.length) {
       var r = _estadoEliminatoriaClub(clubId, compKey, ko, datos);
       if (r.eliminado || r.campeon) return r;

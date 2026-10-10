@@ -6545,7 +6545,8 @@ def api_ef7_state_get():
     # cada 10 s, haya o no cambios que subir) — es el punto más fiable
     # para disparar el snapshot perezoso, ver _ef7_tomar_snapshot_si_toca.
     _ef7_tomar_snapshot_si_toca()
-    resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados, "forzados": _ef7_leer_forzados()})
+    resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados, "forzados": _ef7_leer_forzados(),
+                    "caled_meta": _ef7_leer_caled_meta()})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp
 

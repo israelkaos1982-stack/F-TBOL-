@@ -862,6 +862,29 @@
           // 2026-09-13). Basta con que falte UN SOLO id de partido ya
           // conocido aquí para bloquear la adopción, sea cual sea el
           // tamaño relativo del resto del blob.
+          // CALENDARIO EXTRA editado a mano en ESTE dispositivo: si el servidor
+          // difiere y la marca de la última edición explícita de aquí es MÁS
+          // NUEVA que la que el servidor tiene registrada (o no tiene ninguna:
+          // reinicio/borrado de su base de datos, o una copia vieja de otro
+          // móvil/pestaña que llegó primero), la copia del servidor es la
+          // vieja — NO se adopta, se vuelve a subir la de aquí con su marca
+          // (reporte usuario: "otra vez se ha jodido el calendario del FC
+          // Barcelona, pasa todos los días"). Si la marca del servidor es
+          // mayor (otro dispositivo editó después), se adopta y se copia su
+          // marca para no discutir otra vez.
+          if (k.indexOf("ef7_club_calendario_extra_v1_") === 0) {
+            var marcaLocal = 0, marcaServ = 0;
+            try { marcaLocal = Number(localStorage.getItem("efm_caled_" + k)) || 0; } catch (e0) { marcaLocal = 0; }
+            marcaServ = Number(resp.caled_meta && resp.caled_meta[k]) || 0;
+            if (marcaLocal > marcaServ && typeof actuales[k] === "string") {
+              _pendientes[k] = true;
+              _forzar[k] = true;
+              return;
+            }
+            if (marcaServ > marcaLocal) {
+              try { localStorage.setItem("efm_caled_" + k, String(marcaServ)); } catch (e1) { /* sin marca local */ }
+            }
+          }
           var esRegresion = k === CLAVE_RESULTADOS
             ? _esRegresionResultados(actuales[k], valorServidor)
             : (k.indexOf("ef7_vivo_v1_") === 0 ? false : _esRegresionGrave(actuales[k], valorServidor));

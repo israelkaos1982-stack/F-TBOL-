@@ -745,7 +745,7 @@
   function _dividirRondaEnLegs(ronda) {
     var texto = String(ronda || "").trim();
     if (!texto) return null;
-    var m = texto.match(/\b(ida|vuelta)\b/i);
+    var m = texto.match(/\b(ida|vuelta|vta)\b\.?/i);
     if (!m) return null;
     var base = (texto.slice(0, m.index) + texto.slice(m.index + m[0].length))
       .replace(/[·\-]+$/, "").replace(/^[·\-]+/, "").replace(/\s+/g, " ").trim();
@@ -818,10 +818,10 @@
   // su vuelta exacta, sea cual sea el resto del texto que haya alrededor.
   function _rondaEsIdaOVuelta(ronda) {
     var n = _normNombre(ronda || "");
-    return /\bida\b/.test(n) || /\bvuelta\b/.test(n);
+    return /\bida\b/.test(n) || /\b(?:vuelta|vta)\b/.test(n);
   }
   function _rondaBaseSinLeg(ronda) {
-    return _normNombre(ronda || "").replace(/\bida\b/g, "").replace(/\bvuelta\b/g, "").replace(/\s+/g, " ").trim();
+    return _normNombre(ronda || "").replace(/\bida\b/g, "").replace(/\b(?:vuelta|vta)\b\.?/g, "").replace(/\s+/g, " ").trim();
   }
 
   // ¿El rival de este partido (visto desde `clubId`) es "?" — todavía sin

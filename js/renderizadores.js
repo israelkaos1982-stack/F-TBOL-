@@ -12815,7 +12815,7 @@
   // Plantilla) — el club solo conoce SUS partidos, así que en las fases
   // de grupos se muestran sus puntos, no una posición.
   var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true };
-  var _ORDEN_COMPS_PLANTILLA = ["copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "verano", "promocion"];
+  var _ORDEN_COMPS_PLANTILLA = ["copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "mundialito", "verano", "promocion"];
   // Icono + nombre de cada competición = los de SU tarjeta del menú del club
   // (🇪🇺 Champions, 🟠 E. League, 🟢 Conference, 🥈 Recopa, 🌎 Intercontinental,
   // ☀️ Verano, 🛡️ Supercopa Europa, 🏅 Supercopa España, 🍇 Superliga y, en
@@ -12829,6 +12829,10 @@
     recopa: "recopa", usc: "usc", intercontinental: "intercontinental", verano: "verano"
   };
   function _iconoYNombreCompPlantilla(clubId, compKey, nombreDefecto) {
+    // Iconos fijos pedidos por el usuario (2026-10-10): 👥️ Superliga y
+    // 🟡 Mundialito de Clubes — ganan sobre el icono del menú.
+    if (compKey === "superliga") return { emoji: "👥️", nombre: nombreDefecto };
+    if (compKey === "mundialito") return { emoji: "🟡", nombre: "Mundialito Clubes" };
     var id = _MENU_ID_POR_COMP_PLANTILLA[compKey];
     var tarjeta = null;
     if (id && window.Estado && window.Estado.obtenerMenuClub) {
@@ -12934,8 +12938,13 @@
       filas.push({ emoji: ibS.emoji, nombre: ibS.nombre, estado: _posicionOrdinal(idxSuper + 1) + " de " + ordenSuper.length });
     }
     var porComp = {};
+    // Los partidos de una división (Hypermotion, Ea Sports, 2ª Ref...) ya
+    // van por la fila de Liga de arriba (su posición en la tabla) — sin
+    // esto saldrían DUPLICADOS como una competición más.
+    var clavesDivision = {};
+    LIGA_NAV_ORDEN.forEach(function (id) { clavesDivision[_compKeyEsperadoParaDivision(id)] = true; });
     _partidosOrdenadosDelClub(clubId, datos).forEach(function (p) {
-      if (p.competicion === "liga") return; // la Liga va por su tabla (arriba)
+      if (p.competicion === "liga" || clavesDivision[p.competicion]) return; // la Liga va por su tabla (arriba)
       (porComp[p.competicion] = porComp[p.competicion] || []).push(p);
     });
     var claves = _ORDEN_COMPS_PLANTILLA.filter(function (k) { return porComp[k]; })
@@ -12947,9 +12956,14 @@
       var r;
       if (_COMPS_ELIM_PLANTILLA[k]) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
-      } else if (EUROPA_FASE_GRUPOS_COMPS[k]) {
-        var grupos = lista.filter(_esFaseDeGruposEuropea);
-        var ko = lista.filter(function (p) { return !_esFaseDeGruposEuropea(p); });
+      } else if (EUROPA_FASE_GRUPOS_COMPS[k] || k === "mundialito") {
+        // Mundialito: fase de grupos + cuadro final; mismo criterio que las
+        // europeas (rondas con palabra de eliminatoria = cuadro final).
+        var esGrupos = k === "mundialito"
+          ? function (p) { return !/dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(_normNombre(p.ronda || "")); }
+          : _esFaseDeGruposEuropea;
+        var grupos = lista.filter(esGrupos);
+        var ko = lista.filter(function (p) { return !esGrupos(p); });
         var gruposCompletos = grupos.length && grupos.every(function (p) { return p.jugado; });
         r = (ko.length && (gruposCompletos || !grupos.length))
           ? _estadoEliminatoriaClub(clubId, k, ko, datos)

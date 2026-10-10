@@ -11183,6 +11183,38 @@
     };
   }
 
+  // ---------- IDA + GLOBAL de una eliminatoria a doble partido ----------
+  // Petición usuario 2026-10-10: en la VUELTA (previa, partido en vivo,
+  // descanso y final) se ve arriba, encima del marcador, "Ida X-Y" y
+  // "Global X-Y". Los números van en el MISMO orden que los escudos de la
+  // card (izquierda = local de ESTE partido), nunca en el orden de la ida
+  // — así se leen de un vistazo sin cruzar equipos. Devuelve null si el
+  // partido no es una vuelta o su ida todavía no se ha jugado.
+  function _datosIdaDeVuelta(partido, datos) {
+    if (!partido || !window.Estado || !partido.eliminatoria) return null;
+    if (partido.eliminatoria.fase !== "vuelta" || !partido.eliminatoria.grupoId) return null;
+    var ida = window.Estado.listarPartidosResueltos(datos).filter(function (p) {
+      return p.eliminatoria && p.eliminatoria.grupoId === partido.eliminatoria.grupoId &&
+        p.eliminatoria.fase === "ida" && p.jugado && p.resultado;
+    })[0];
+    if (!ida) return null;
+    var golesIda = {};
+    golesIda[ida.local] = ida.resultado.golesLocal;
+    golesIda[ida.visitante] = ida.resultado.golesVisitante;
+    var l = golesIda[partido.local], v = golesIda[partido.visitante];
+    if (typeof l !== "number" || typeof v !== "number") return null;
+    return { local: l, visitante: v };
+  }
+  // golesLocal/golesVisitante = lo que lleva ESTE partido (0-0 en la previa).
+  function _htmlIdaGlobal(ida, golesLocal, golesVisitante) {
+    if (!ida) return "";
+    return (
+      '<div class="previa-global-fila">Ida ' + ida.local + "-" + ida.visitante + "</div>" +
+      '<div class="previa-global-fila previa-global-fila--total">Global ' +
+      (ida.local + (golesLocal || 0)) + "-" + (ida.visitante + (golesVisitante || 0)) + "</div>"
+    );
+  }
+
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga
   // y en eliminatorias a partido único. La prórroga SOLO puede decidirse
   // en el partido que cierra la eliminatoria: la vuelta (o el partido
@@ -11407,11 +11439,11 @@
       '<span>Activar Prórroga y Penaltis</span></label>';
     var checkboxObligatorioVueltaHtml =
       '<label class="live-checkbox-row live-checkbox-row--fuego"><input type="checkbox" id="live-prorroga-toggle" data-obligatoria="vuelta">' +
-      '<span>⏱️ Prórroga y penaltis SIEMPRE disponibles en este partido si hacen falta — actívalo para continuar</span></label>';
+      '<span>Activar Prórroga y Penaltis</span></label>';
     // Mismo aviso, corto, tanto en ida como en vuelta (petición usuario —
     // antes tenían textos distintos y más largos por fase).
     var avisoGolVisitante =
-      '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ El gol marcado fuera cuenta doble en caso de empate global.</p>';
+      '<p class="live-eliminatoria live-eliminatoria--pendiente">⚠️ Gol como visitante valor doble</p>';
     if (modo === "eliminatoria-unica") {
       // FINAL de torneo (Copa/Champions/UEL/UECL/Recopa/Supercopa España/
       // Supercopa Europa/Intercontinental/Mundialito/Verano) — petición
@@ -11550,6 +11582,15 @@
 
     document.getElementById("previa-marcador").textContent =
       partido.jugado ? (partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante) : "VS";
+
+    // Vuelta de una eliminatoria: "Ida X-Y / Global X-Y" encima del VS.
+    var globalEl = document.getElementById("previa-global");
+    if (globalEl) {
+      var idaPrevia = _datosIdaDeVuelta(partido, datos);
+      globalEl.innerHTML = idaPrevia
+        ? _htmlIdaGlobal(idaPrevia, partido.jugado ? partido.resultado.golesLocal : 0, partido.jugado ? partido.resultado.golesVisitante : 0)
+        : "";
+    }
 
     // Mismo nombre acortado + guion " - " (y el mismo renombrado de
     // Dieciseisavos->Repesca en Champions/Europa League/Conference) que el
@@ -13866,7 +13907,7 @@
         }
         if (chkObligatorio.dataset.obligatoria === "vuelta") {
           window.alert(
-            "⏱️ Antes de empezar, activa la casilla «Prórroga y penaltis SIEMPRE disponibles» — " +
+            "⏱️ Antes de empezar, activa la casilla «Activar Prórroga y Penaltis» — " +
             "este partido de VUELTA puede decidir la eliminatoria si hay empate global."
           );
         }
@@ -14161,6 +14202,8 @@
     resolverPartidoPorId: _resolverPartidoPorId,
     detectarModoPartido: detectarModoPartido,
     faseIdaVuelta: _faseIdaVuelta,
+    datosIdaDeVuelta: _datosIdaDeVuelta,
+    htmlIdaGlobal: _htmlIdaGlobal,
     esFinalDeTorneo: _esFinalDeTorneo,
     cargarTodo: cargarTodo,
     buscarEquipoPorId: buscarEquipoPorId,

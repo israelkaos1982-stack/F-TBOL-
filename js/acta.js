@@ -611,6 +611,14 @@
     // Formato compacto "0-1" (sin espacios, petición usuario) — así cabe
     // de sobra entre los 2 escudos sin empujarlos ni cortar el nombre.
     m.textContent = r.golesLocal + "-" + r.golesVisitante;
+    // Vuelta de una eliminatoria: Ida fija + Global que se actualiza con
+    // cada gol (el mismo bloque se ve en descanso y en el resumen final).
+    var g = document.getElementById("live-global");
+    if (g) {
+      g.innerHTML = _partidoActivo.ida && window.Renderizadores && window.Renderizadores.htmlIdaGlobal
+        ? window.Renderizadores.htmlIdaGlobal(_partidoActivo.ida, r.golesLocal, r.golesVisitante)
+        : "";
+    }
   }
 
   // Los 2 botones .live-team-nombre (local + visitante) van SIEMPRE en
@@ -720,7 +728,8 @@
     var prorrogaChk = document.getElementById("live-prorroga-toggle");
     _partidoActivo = {
       partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo,
-      prorroga: (esVueltaDecisiva || esFinalDeTorneo) ? true : !!(prorrogaChk && prorrogaChk.checked)
+      prorroga: (esVueltaDecisiva || esFinalDeTorneo) ? true : !!(prorrogaChk && prorrogaChk.checked),
+      ida: R.datosIdaDeVuelta ? R.datosIdaDeVuelta(partido, datos) : null
     };
 
     // Mismo color de competición que la previa (clase .comp-XXX): sin esto la

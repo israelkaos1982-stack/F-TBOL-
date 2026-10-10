@@ -12816,9 +12816,27 @@
   // de grupos se muestran sus puntos, no una posición.
   var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true };
   var _ORDEN_COMPS_PLANTILLA = ["copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "verano", "promocion"];
-  function _emojiCompPlantilla(compKey) {
-    if (compKey === "champions" || compKey === "uel" || compKey === "uecl" || compKey === "ucl-previa") return "🇪🇺";
-    return "🏆";
+  // Icono + nombre de cada competición = los de SU tarjeta del menú del club
+  // (🇪🇺 Champions, 🟠 E. League, 🟢 Conference, 🥈 Recopa, 🌎 Intercontinental,
+  // ☀️ Verano, 🛡️ Supercopa Europa, 🏅 Supercopa España, 🍇 Superliga y, en
+  // PSG/Chelsea/Inter, sus copas nacionales con su bandera) — así la
+  // Plantilla usa EXACTAMENTE los mismos iconos que ya ve el admin en el
+  // menú de cada caja, incluidas sus ediciones. La Copa del Rey lleva 🏆
+  // (su tarjeta de fábrica usa 🔹, que no dice nada).
+  var _MENU_ID_POR_COMP_PLANTILLA = {
+    copa: "copadelrey", supercopa: "supercopaespana", superliga: "superliga",
+    champions: "champions", "ucl-previa": "champions", uel: "uel", uecl: "uecl",
+    recopa: "recopa", usc: "usc", intercontinental: "intercontinental", verano: "verano"
+  };
+  function _iconoYNombreCompPlantilla(clubId, compKey, nombreDefecto) {
+    var id = _MENU_ID_POR_COMP_PLANTILLA[compKey];
+    var tarjeta = null;
+    if (id && window.Estado && window.Estado.obtenerMenuClub) {
+      tarjeta = window.Estado.obtenerMenuClub(clubId).filter(function (c) { return c.id === id; })[0] || null;
+    }
+    var icono = tarjeta && tarjeta.icono ? tarjeta.icono : "🏆";
+    if (id === "copadelrey" && icono === "🔹") icono = "🏆";
+    return { emoji: icono, nombre: (tarjeta && tarjeta.etiqueta) || nombreDefecto };
   }
   function _posicionOrdinal(n) { return n + "º"; }
   // Posición del club en la clasificación de SU división actual (la misma
@@ -12908,6 +12926,13 @@
     if (pos) {
       filas.push({ emoji: pos.emoji, nombre: pos.nombre, estado: _posicionOrdinal(pos.pos) + " de " + pos.total });
     }
+    // Superliga (liguilla de los humanos, tabla propia) — posición actual.
+    var ordenSuper = calcularSuperliga(datos);
+    var idxSuper = ordenSuper.findIndex(function (f) { return f.equipo.id === clubId; });
+    if (idxSuper >= 0 && _superligaPartidosDelClub(datos, clubId).length) {
+      var ibS = _iconoYNombreCompPlantilla(clubId, "superliga", "Superliga");
+      filas.push({ emoji: ibS.emoji, nombre: ibS.nombre, estado: _posicionOrdinal(idxSuper + 1) + " de " + ordenSuper.length });
+    }
     var porComp = {};
     _partidosOrdenadosDelClub(clubId, datos).forEach(function (p) {
       if (p.competicion === "liga") return; // la Liga va por su tabla (arriba)
@@ -12917,7 +12942,8 @@
       .concat(Object.keys(porComp).filter(function (k) { return _ORDEN_COMPS_PLANTILLA.indexOf(k) === -1 && k !== "selecciones" && k !== "sel-clasif"; }));
     claves.forEach(function (k) {
       var lista = porComp[k];
-      var nombre = _labelCompPartido(lista[0]);
+      var ib = _iconoYNombreCompPlantilla(clubId, k, _labelCompPartido(lista[0]));
+      var nombre = ib.nombre;
       var r;
       if (_COMPS_ELIM_PLANTILLA[k]) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
@@ -12932,7 +12958,7 @@
         var jug = lista.filter(function (p) { return p.jugado; }).length;
         r = { estado: jug + "/" + lista.length + " partidos" };
       }
-      filas.push({ emoji: _emojiCompPlantilla(k), nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon });
+      filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon });
     });
     return filas;
   }

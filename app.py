@@ -6953,33 +6953,57 @@ def api_ef7_state_post():
     return jsonify({"ok": True, "guardadas": guardadas, "updated_at": now})
 
 
-# Registro EN MEMORIA de los últimos envíos de partidos recibidos (se vacía al
-# reiniciar). Sirve para saber con certeza si el POST de un móvil LLEGÓ al
-# servidor y qué hizo con él (guardado / rechazado y por qué) — reporte
-# usuario 2026-10-11: "Liverpool finalizó el partido y a los pocos minutos el
-# admin lo vio sin jugar". Verlo en el navegador: /api/ef7/envios
-from collections import deque as _deque
-_EF7_ULTIMOS_ENVIOS = _deque(maxlen=40)
+# Registro de los últimos envíos de partidos recibidos, GUARDADO EN LA BASE DE
+# DATOS (con 2 workers de gunicorn un registro en memoria solo vería la mitad
+# de las peticiones). Sirve para saber con certeza si el POST de un móvil
+# LLEGÓ al servidor y qué hizo con él — reporte usuario 2026-10-11:
+# "Liverpool finalizó el partido y a los pocos minutos el admin lo vio sin
+# jugar". Verlo en el navegador: /api/ef7/envios
+# Clave con prefijo `efmeta_` (NO `ef7_`): no viaja a los móviles en el GET.
+_EF7_ENVIOS_KEY = "efmeta_envios_log_v1"
 
 
 def _ef7_anotar_envio(origen, ids, estado, detalle=""):
     try:
-        _EF7_ULTIMOS_ENVIOS.append({
+        entrada = {
             "hora_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
             "origen": origen,
             "ids": list(ids)[:8],
             "estado": estado,
             "detalle": detalle,
             "ua": (request.headers.get("User-Agent") or "")[:80],
-        })
+        }
+        fila = GlobalState.query.filter_by(clave=_EF7_ENVIOS_KEY).with_for_update().first()
+        try:
+            actual = json.loads(fila.valor_json) if fila is not None and fila.valor_json else []
+        except (TypeError, ValueError):
+            actual = []
+        if not isinstance(actual, list):
+            actual = []
+        payload = json.dumps((actual + [entrada])[-40:], ensure_ascii=False)
+        now = utc_now_iso()
+        if fila:
+            fila.valor_json = payload
+            fila.updated_at = now
+        else:
+            db.session.add(GlobalState(clave=_EF7_ENVIOS_KEY, valor_json=payload, updated_at=now))
+        db.session.commit()
     except Exception:
-        pass
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 @app.route("/api/ef7/envios", methods=["GET"])
 def api_ef7_envios():
+    fila = GlobalState.query.filter_by(clave=_EF7_ENVIOS_KEY).first()
+    try:
+        datos = json.loads(fila.valor_json) if fila is not None and fila.valor_json else []
+    except (TypeError, ValueError):
+        datos = []
     return jsonify({"ok": True, "ahora_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-                    "envios": list(reversed(_EF7_ULTIMOS_ENVIOS))})
+                    "envios": list(reversed(datos if isinstance(datos, list) else []))})
 
 
 @app.route("/api/ef7/resultado", methods=["POST"])

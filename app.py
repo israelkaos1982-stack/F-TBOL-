@@ -6314,6 +6314,25 @@ def _ef7_merge_resultados(existing_row_value, incoming_value):
             # ambos o ninguno traen acta: sin señal objetiva — se conserva
             # el criterio de siempre (recencia).
 
+        # GUARD "un partido JUGADO nunca pierde contra uno NO jugado solo por el
+        # reloj" (reporte usuario 2026-10-11: la ida de Copa del Rey de Liverpool
+        # se jugó y el móvil mostró "Subiendo…", pero el servidor no la tenía y
+        # solo apareció cuando el admin la volvió a meter a mano). Antes, si el
+        # servidor ya tenía ese partido como NO jugado (pospuesto/placeholder) con
+        # un `_actualizadoEn` mayor — algo normal si el reloj del móvil de quien
+        # lo jugó va atrasado unos minutos —, el resultado entrante se descartaba
+        # EN SILENCIO y el servidor respondía ok: el móvil lo daba por subido y
+        # nunca lo reenviaba. Un partido jugado solo puede perder contra una
+        # TUMBA deliberada (`_borrado:true`, "reiniciar partido") más reciente.
+        if (
+            isinstance(incoming_entry, dict)
+            and incoming_entry.get("jugado") is True
+            and existing_entry.get("jugado") is not True
+            and existing_entry.get("_borrado") is not True
+        ):
+            merged_res[match_id] = incoming_entry
+            continue
+
         merged_res[match_id] = incoming_entry if ts_in >= ts_ex else existing_entry
 
     merged = dict(incoming)  # version/partidosGenerados/etc. del entrante mandan tal cual

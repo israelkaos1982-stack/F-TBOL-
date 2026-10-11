@@ -212,6 +212,15 @@
         window.Renderizadores.obtenerFormatoUeclTexto(), etiqueta
       );
       window.Renderizadores.irUeclTab(clubId, "humanos");
+    } else if (vista === "nations") {
+      // Nations Cup (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="nations-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Nations Cup", "info-nations-formato", null,
+        window.Renderizadores.obtenerFormatoNationsTexto(), etiqueta
+      );
+      window.Renderizadores.irNationsTab(clubId, "humanos");
     } else if (vista === "recopa") {
       // Mismo patrón EXACTO que "copadelrey" (Humanos + Eliminatorias,
       // sin fase de grupos) — petición usuario: "vamos a crear la recopa
@@ -805,6 +814,18 @@
       });
     }, "🔒 Corregir estadísticas", "Introduce el PIN de administrador.");
   }
+  // 🏳️ Alterna la plantilla entre el club y su selección (id "sel-<club>").
+  function plantillaCambiarVista(id) {
+    if (window.Renderizadores) window.Renderizadores.renderizarPlantillaClub(id);
+  }
+  // ✏️ Roster de la selección (PIN 646): mismo editor que el del club.
+  function editarRosterPlantillaInline(id) {
+    if (!id || !window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("plantilla-content");
+      if (cont) window.Renderizadores.pintarEditorPlantillaClub(id, cont);
+    }, "🔒 Plantilla de la selección", "Introduce el PIN de administrador.");
+  }
   function guardarStatsPlantilla(clubId) {
     var ta = document.getElementById("stats-plantilla-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
@@ -1088,7 +1109,8 @@
     sce: function (clubId, categoria) { window.Renderizadores.renderizarSceStatDetalle("sce-content", clubId, categoria); },
     champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
-    uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); }
+    uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); },
+    nations: function (clubId, categoria) { window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria); }
   };
   // `d` es el dataset del propio botón ✏️ pintado en la fila (comp/
   // ligaId/clubId/categoria/nombre/equipo/cantidad/decimales/label) — se
@@ -1573,6 +1595,71 @@
   function mostrarInfoUecl() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUeclTexto(), "uecl", mostrarInfoUecl);
+  }
+
+  // ---------- Nations Cup — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "nations-content".
+  function irNationsTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irNationsTab(clubId, tab);
+  }
+  function editarNationsInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("nations-content");
+      if (cont) window.Renderizadores.pintarEditorNations(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarNations(clubId) {
+    var ta = document.getElementById("nations-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarNationsTexto(ta.value)) return;
+    window.Renderizadores.renderizarNations("nations-content", clubId);
+  }
+  function cancelarNations(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarNations("nations-content", clubId);
+  }
+  function verNationsStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria);
+  }
+  function volverNations(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarNations("nations-content", clubId);
+  }
+  function editarNationsStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("nations-content");
+      if (cont) window.Renderizadores.pintarEditorNationsStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarNationsStat(clubId, categoria) {
+    var ta = document.getElementById("nations-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarNationsStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria);
+  }
+  function cancelarNationsStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria);
+  }
+  function editarNationsPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("nations-content");
+      if (cont) window.Renderizadores.pintarEditorNationsPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarNationsPlayoff(clubId, ronda) {
+    var ta = document.getElementById("nations-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarNationsPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarNations("nations-content", clubId);
+  }
+  function cancelarNationsPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarNations("nations-content", clubId);
+  }
+  function mostrarInfoNations() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoNationsTexto(), "nations", mostrarInfoNations);
   }
 
   // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
@@ -2298,6 +2385,8 @@
         case "quitar-duplicados-liga-calendario-extra-club": quitarDuplicadosLigaCalendarioExtraClub(d.clubId); break;
         case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
         case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
+        case "plantilla-cambiar-vista": plantillaCambiarVista(d.clubId); break;
+        case "editar-roster-plantilla-inline": editarRosterPlantillaInline(d.clubId); break;
         case "editar-stats-plantilla-inline": editarStatsPlantillaInline(d.clubId); break;
         case "guardar-stats-plantilla": guardarStatsPlantilla(d.clubId); break;
         case "cancelar-stats-plantilla": cancelarStatsPlantilla(d.clubId); break;
@@ -2418,6 +2507,19 @@
         case "guardar-uecl-playoff": guardarUeclPlayoff(d.clubId, d.ronda); break;
         case "cancelar-uecl-playoff": cancelarUeclPlayoff(d.clubId); break;
         case "info-uecl-formato": mostrarInfoUecl(); break;
+        case "nations-tab-ir": irNationsTab(d.clubId, d.tab); break;
+        case "editar-nations-inline": editarNationsInline(d.clubId); break;
+        case "guardar-nations": guardarNations(d.clubId); break;
+        case "cancelar-nations": cancelarNations(d.clubId); break;
+        case "ver-nations-stat": verNationsStat(d.clubId, d.categoria); break;
+        case "volver-nations": volverNations(d.clubId); break;
+        case "editar-nations-stat-inline": editarNationsStatInline(d.clubId, d.categoria); break;
+        case "guardar-nations-stat": guardarNationsStat(d.clubId, d.categoria); break;
+        case "cancelar-nations-stat": cancelarNationsStat(d.clubId, d.categoria); break;
+        case "editar-nations-playoff-inline": editarNationsPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-nations-playoff": guardarNationsPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-nations-playoff": cancelarNationsPlayoff(d.clubId); break;
+        case "info-nations-formato": mostrarInfoNations(); break;
         case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
         case "volver-superliga": volverSuperliga(d.clubId); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;

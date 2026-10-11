@@ -3936,7 +3936,8 @@ button { font-family: inherit; cursor: pointer; }
 .copa-tabs .liga-tab-box,
 .champions-tabs .liga-tab-box,
 .uel-tabs .liga-tab-box,
-.uecl-tabs .liga-tab-box {
+.uecl-tabs .liga-tab-box,
+.nations-tabs .liga-tab-box {
   font-size: 13px;
   font-weight: 900;
   letter-spacing: 0.2px;
@@ -3952,7 +3953,8 @@ button { font-family: inherit; cursor: pointer; }
 .copa-tabs .liga-tab-box--activa,
 .champions-tabs .liga-tab-box--activa,
 .uel-tabs .liga-tab-box--activa,
-.uecl-tabs .liga-tab-box--activa {
+.uecl-tabs .liga-tab-box--activa,
+.nations-tabs .liga-tab-box--activa {
   box-shadow: inset 0 0 0 3px currentColor, 0 0 14px 0 currentColor;
 }
 
@@ -3970,7 +3972,8 @@ button { font-family: inherit; cursor: pointer; }
    iguales (el contenedor .tab-cq no aporta ancho propio al botón). */
 .champions-tabs .liga-tab-box,
 .uel-tabs .liga-tab-box,
-.uecl-tabs .liga-tab-box { flex: 1 1 0; }
+.uecl-tabs .liga-tab-box,
+.nations-tabs .liga-tab-box { flex: 1 1 0; }
 
 /* Vuelta de una eliminatoria: "Ida X-Y / Global X-Y" centrado encima del
    VS/marcador (previa y partido en vivo). Vacío -> no ocupa nada. */
@@ -4000,3 +4003,33 @@ button { font-family: inherit; cursor: pointer; }
 .previa-clas-val--izq { justify-self: end; margin-right: 4px; }
 .previa-clas-val--der { justify-self: start; margin-left: 4px; }
 .previa-clas-etq { text-align: center; font-size: 11px; font-weight: 800; color: var(--neon); text-shadow: var(--neon-glow); }
+
+
+/* ============================================================
+   NATIONS CUP (selecciones) — color violeta; pestañas 👥️ Humanos / 🔵 Grupos /
+   🟣 Eliminatorias, igual que Champions/Europa/Conference. */
+.liga-tab-box--nations-humanos { background: rgba(179, 136, 255, 0.14); border-color: rgba(179, 136, 255, 0.4); color: #b388ff; }
+.liga-tab-box--nations-grupos { background: rgba(68, 138, 255, 0.16); border-color: rgba(68, 138, 255, 0.4); color: #448aff; }
+.liga-tab-box--nations-playoffs { background: rgba(124, 77, 255, 0.22); border-color: rgba(124, 77, 255, 0.5); color: #9575ff; }
+.nations-tabs { margin-bottom: 14px; }
+.nations-grupo-titulo { margin: 14px 0 6px; text-align: left; color: #b388ff; }
+.match-card-comp.comp-nations { color: #b388ff; text-shadow: 0 0 8px rgba(179, 136, 255, 0.4); }
+.match-card.comp-nations { border-color: rgba(179, 136, 255, 0.4); border-left-color: #b388ff; }
+#previa-card.comp-nations { border-color: rgba(179, 136, 255, 0.4); background-image: linear-gradient(180deg, rgba(179, 136, 255, 0.2) 0%, rgba(179, 136, 255, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#previa-card.comp-nations .previa-comp { color: #b388ff; text-shadow: 0 0 8px rgba(179, 136, 255, 0.4); }
+#partido-live-overlay .live-card.comp-nations { border-color: rgba(179, 136, 255, 0.4); background-image: linear-gradient(180deg, rgba(179, 136, 255, 0.2) 0%, rgba(179, 136, 255, 0) 55%), linear-gradient(180deg, var(--bg-2), var(--bg-1)); }
+#partido-live-overlay .live-card.comp-nations .previa-comp { color: #b388ff; text-shadow: 0 0 8px rgba(179, 136, 255, 0.4); }
+
+/* Selecciones: el "escudo" es la bandera del país. */
+.escudo--bandera {
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  overflow: hidden;
+}
+.escudo--bandera .escudo-bandera-emoji { font-size: 26px; line-height: 1; }
+.escudo--sm.escudo--bandera .escudo-bandera-emoji { font-size: 17px; }
+.escudo--lg.escudo--bandera .escudo-bandera-emoji { font-size: 46px; }
+.plantilla-sel-toggle { margin-right: auto; width: auto; padding-left: 10px; padding-right: 10px; font-weight: 700; color: #b388ff; border-color: rgba(179, 136, 255, 0.5); }
+.plantilla-sel-toggle { border-radius: 14px; white-space: nowrap; }

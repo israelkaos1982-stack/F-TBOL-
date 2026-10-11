@@ -315,6 +315,7 @@
     champions: "champions", "champions league": "champions", "uefa champions league": "champions", ucl: "champions",
     uel: "uel", "europa league": "uel", "uefa europa league": "uel",
     uecl: "uecl", "conference league": "uecl", "uefa conference league": "uecl",
+    nations: "nations", "nations cup": "nations", "nations league": "nations", "liga de naciones": "nations",
     recopa: "recopa", "recopa de europa": "recopa",
     usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc", "supercopa europa": "usc",
     "ucl-previa": "ucl-previa", previa: "ucl-previa", "previa champions": "ucl-previa", "fase previa champions": "ucl-previa",
@@ -409,7 +410,119 @@
   // cualquier estadística.
   var _sinteticosExtra = {};
 
+  // ---------- SELECCIONES (Nations Cup) ----------
+  // Cada club humano con selección dirige TAMBIÉN a su selección nacional
+  // (Barcelona no tiene). La selección es un EQUIPO PROPIO con id
+  // "sel-<clubId>": sus partidos (competicion "nations"), su plantilla
+  // (Estado.obtenerRosterTexto("sel-<clubId>")) y sus estadísticas son
+  // SEPARADOS de los del club. Los rivales (selecciones IA) se resuelven por
+  // nombre con su bandera (ver _banderaDePais).
+  var SELECCIONES_HUMANAS_POR_CLUB = {
+    liverpool: { nombre: "Francia", bandera: "🇫🇷", siglas: "FRA", c1: "#0055a4", c2: "#ef4135" },
+    "real-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" },
+    "atletico-madrid": { nombre: "Noruega", bandera: "🇳🇴", siglas: "NOR", c1: "#ba0c2f", c2: "#00205b" },
+    psg: { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#c60b1e", c2: "#ffc400" },
+    "manchester-city": { nombre: "Portugal", bandera: "🇵🇹", siglas: "POR", c1: "#006600", c2: "#ff0000" },
+    "inter-milan": { nombre: "Italia", bandera: "🇮🇹", siglas: "ITA", c1: "#009246", c2: "#ce2b37" }
+  };
+  function _idSeleccionDeClub(clubId) {
+    return SELECCIONES_HUMANAS_POR_CLUB[clubId] ? "sel-" + clubId : null;
+  }
+  // "sel-liverpool" -> "liverpool" (para tablas que están por id de CLUB:
+  // forma, nivel, FIFA...). Cualquier otro id se devuelve igual.
+  function _idClubDeEquipoId(id) {
+    return typeof id === "string" && id.indexOf("sel-") === 0 && SELECCIONES_HUMANAS_POR_CLUB[id.slice(4)] ? id.slice(4) : id;
+  }
+  function _esIdSeleccionHumana(id) {
+    return typeof id === "string" && id.indexOf("sel-") === 0 && !!SELECCIONES_HUMANAS_POR_CLUB[id.slice(4)];
+  }
+  function _entidadSeleccionHumana(clubId, datos) {
+    var def = SELECCIONES_HUMANAS_POR_CLUB[clubId];
+    if (!def) return null;
+    var club = (datos.equipos.equipos || []).filter(function (e) { return e.id === clubId; })[0] || {};
+    return {
+      id: "sel-" + clubId,
+      nombre: def.nombre,
+      siglas: def.siglas,
+      colorPrimario: def.c1,
+      colorSecundario: def.c2,
+      bandera: def.bandera,
+      esSeleccion: true,
+      clubId: clubId,
+      // `mister` = marca de "equipo humano" en todo el código (escudo, playoffs...).
+      mister: club.mister || "Mánager",
+      misterEmoji: club.misterEmoji || "",
+      valoracionPoder: club.valoracionPoder || 90,
+      ligaActual: null
+    };
+  }
+  function _seleccionesHumanasEntidades(datos) {
+    return Object.keys(SELECCIONES_HUMANAS_POR_CLUB)
+      .map(function (clubId) { return _entidadSeleccionHumana(clubId, datos); })
+      .filter(Boolean);
+  }
+  // Banderas de países (nombre normalizado sin tildes -> emoji). Código ISO de 2
+  // letras -> bandera; las 3 naciones británicas llevan su propia secuencia.
+  var _PAISES_ISO = {
+    alemania: "de", francia: "fr", italia: "it", espana: "es", portugal: "pt", "paises bajos": "nl", holanda: "nl",
+    belgica: "be", suiza: "ch", austria: "at", dinamarca: "dk", suecia: "se", noruega: "no", finlandia: "fi",
+    islandia: "is", irlanda: "ie", polonia: "pl", "republica checa": "cz", chequia: "cz", eslovaquia: "sk",
+    hungria: "hu", rumania: "ro", bulgaria: "bg", grecia: "gr", turquia: "tr", croacia: "hr", serbia: "rs",
+    bosnia: "ba", "bosnia y herzegovina": "ba", eslovenia: "si", montenegro: "me", "macedonia del norte": "mk",
+    macedonia: "mk", albania: "al", kosovo: "xk", ucrania: "ua", rusia: "ru", bielorrusia: "by", georgia: "ge",
+    armenia: "am", azerbaiyan: "az", kazajistan: "kz", israel: "il", chipre: "cy", malta: "mt", luxemburgo: "lu",
+    estonia: "ee", letonia: "lv", lituania: "lt", moldavia: "md", andorra: "ad", "san marino": "sm",
+    gibraltar: "gi", "islas feroe": "fo", feroe: "fo", liechtenstein: "li",
+    brasil: "br", argentina: "ar", uruguay: "uy", colombia: "co", chile: "cl", peru: "pe", ecuador: "ec",
+    paraguay: "py", bolivia: "bo", venezuela: "ve", mexico: "mx", "estados unidos": "us", eeuu: "us", usa: "us",
+    canada: "ca", "costa rica": "cr", panama: "pa", jamaica: "jm", honduras: "hn", "el salvador": "sv",
+    guatemala: "gt", haiti: "ht", cuba: "cu", "trinidad y tobago": "tt",
+    marruecos: "ma", senegal: "sn", nigeria: "ng", egipto: "eg", argelia: "dz", tunez: "tn", camerun: "cm",
+    ghana: "gh", "costa de marfil": "ci", mali: "ml", "rd congo": "cd", "sudafrica": "za", "cabo verde": "cv",
+    gabon: "ga", angola: "ao", "burkina faso": "bf", guinea: "gn", zambia: "zm", uganda: "ug", kenia: "ke",
+    japon: "jp", "corea del sur": "kr", corea: "kr", iran: "ir", "arabia saudi": "sa", "arabia saudita": "sa",
+    australia: "au", qatar: "qa", catar: "qa", china: "cn", irak: "iq", uzbekistan: "uz", jordania: "jo",
+    emiratos: "ae", "emiratos arabes": "ae", india: "in", tailandia: "th", vietnam: "vn", indonesia: "id",
+    "nueva zelanda": "nz", omán: "om", oman: "om", siria: "sy", libano: "lb", palestina: "ps", kuwait: "kw"
+  };
+  var _PAISES_BRITANICOS = {
+    inglaterra: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", escocia: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", gales: "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "irlanda del norte": "🇬🇧"
+  };
+  function _banderaDePais(nombre) {
+    var n = _normNombre(nombre);
+    if (_PAISES_BRITANICOS[n]) return _PAISES_BRITANICOS[n];
+    var iso = _PAISES_ISO[n];
+    if (!iso) return "🏳️";
+    return String.fromCodePoint(0x1F1E6 + iso.charCodeAt(0) - 97, 0x1F1E6 + iso.charCodeAt(1) - 97);
+  }
+  // Selección IA (rival) a partir de su nombre — bandera por país.
+  function _crearSeleccionIA(nombre) {
+    var norm = _normNombre(nombre);
+    var siglas = (norm.replace(/[^a-z]/g, "").slice(0, 3) || "?").toUpperCase();
+    return {
+      id: "sel-ia-" + norm.replace(/[^a-z0-9]+/g, "-"),
+      nombre: nombre, siglas: siglas, esSeleccion: true,
+      bandera: _banderaDePais(nombre),
+      colorPrimario: "#2b2f36", colorSecundario: "#101114",
+      valoracionPoder: 75, mostrarSiglas: true
+    };
+  }
+  // Resuelve el nombre de una selección escrito en el Calendario extra de la
+  // Nations Cup: una selección humana (Francia, España...) -> su equipo "sel-*";
+  // cualquier otra -> selección IA con bandera.
+  function resolverSeleccionPorNombre(nombre, datos) {
+    var norm = _normNombre(nombre);
+    var humanas = Object.keys(SELECCIONES_HUMANAS_POR_CLUB);
+    for (var i = 0; i < humanas.length; i++) {
+      if (_normNombre(SELECCIONES_HUMANAS_POR_CLUB[humanas[i]].nombre) === norm) return _entidadSeleccionHumana(humanas[i], datos);
+    }
+    var id = "sel-ia-" + norm.replace(/[^a-z0-9]+/g, "-");
+    if (!_sinteticosExtra[id]) _sinteticosExtra[id] = _crearSeleccionIA(nombre.trim());
+    return _sinteticosExtra[id];
+  }
+
   function buscarEquipoPorId(id, datos) {
+    if (_esIdSeleccionHumana(id)) return _entidadSeleccionHumana(id.slice(4), datos);
     var humano = (datos.equipos.equipos || []).find(function (e) { return e.id === id; });
     if (humano) return humano;
     var bloques = datos.equiposIA.bloques || {};
@@ -440,6 +553,15 @@
       return (
         '<div class="escudo escudo--desconocido ' + claseTamano + '">' +
         '<span class="escudo-siglas">❓️</span>' +
+        "</div>"
+      );
+    }
+
+    // Selecciones (Nations Cup): su "escudo" es la bandera del país.
+    if (equipo.bandera) {
+      return (
+        '<div class="escudo escudo--bandera ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' +
+        '<span class="escudo-bandera-emoji">' + equipo.bandera + "</span>" +
         "</div>"
       );
     }
@@ -662,7 +784,7 @@
     liga: "Liga", hypermotion: "Hypermotion", copa: "Copa Rey", supercopa: "Supercopa España",
     promocion: "Promoción",
     champions: "Champions", "ucl-previa": "Previa Champions",
-    uel: "Europa", uecl: "Conference",
+    uel: "Europa", uecl: "Conference", nations: "Nations Cup",
     recopa: "Recopa", usc: "Supercopa Europa",
     intercontinental: "Intercontinental",
     verano: "Torneo de Verano",
@@ -684,7 +806,7 @@
     liga: "comp-liga", hypermotion: "comp-hypermotion", copa: "comp-copa", supercopa: "comp-supercopa",
     promocion: "comp-promocion",
     champions: "comp-champions", "ucl-previa": "comp-previa",
-    uel: "comp-uel", uecl: "comp-uecl",
+    uel: "comp-uel", uecl: "comp-uecl", nations: "comp-nations",
     recopa: "comp-recopa", usc: "comp-usc",
     intercontinental: "comp-intercontinental",
     verano: "comp-verano",
@@ -830,7 +952,7 @@
   // no depende de COMPS_ELIMINACION_DIRECTA ni de ningún cálculo por orden
   // de ronda.
   function _rivalDesconocido(p, clubId, datos) {
-    var esLocalP = p.local === clubId;
+    var esLocalP = p.local === clubId || p.local === "sel-" + clubId;
     var rival = buscarEquipoPorId(esLocalP ? p.visitante : p.local, datos);
     return !!(rival && rival.desconocido);
   }
@@ -2302,6 +2424,7 @@
       case "champions": return window.Estado.obtenerChampionsStatTexto(categoria);
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
       case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
+      case "nations": return window.Estado.obtenerNationsStatTexto(categoria);
       default: return "";
     }
   }
@@ -2321,6 +2444,7 @@
       case "champions": window.Estado.guardarChampionsStatTexto(categoria, texto); break;
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
       case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
+      case "nations": window.Estado.guardarNationsStatTexto(categoria, texto); break;
     }
   }
 
@@ -8531,6 +8655,689 @@
     return override || FORMATO_UECL_TEXTO;
   }
 
+  // ============================================================
+  // NATIONS CUP — selecciones: 👥️ Humanos + 🔵 Grupos (11 grupos de 5, ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "nations"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var NATIONS_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var NATIONS_PLAYOFF_RONDAS = [
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _nationsEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _nationsIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _nationsZona(pos) {
+    if (pos === 1) return "octavos";
+    if (pos === 2) return "dieciseisavos";
+    return "";
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearNationsGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        actual = { nombre: "Grupo " + m[1].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularNationsGrupos(datos) {
+    var humanos = _nationsEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearNationsGruposTexto(window.Estado ? window.Estado.obtenerNationsTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "nations" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="nations".
+  function calcularNationsStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _nationsEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "nations" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularNationsStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerNationsStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularNationsStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="nations".
+  function _nationsPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "nations" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _nationsRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _nationsEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _nationsPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerNationsPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Nations Cup — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularNationsPlayoffTodasLasRondas(datos) {
+    return {
+      octavos: _nationsRondaDesdeTexto(datos, "octavos"),
+      cuartos: _nationsRondaDesdeTexto(datos, "cuartos"),
+      semis: _nationsRondaDesdeTexto(datos, "semis"),
+      final: _nationsRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _nationsTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _nationsTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_nationsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="nations-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_nationsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="nations-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="nations-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Nations Cup de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _nationsPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "nations" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _nationsEstadoClub(datos, e) {
+    var partidos = _nationsPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Nations Cup de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _nationsPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarNationsHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _nationsIdActivo(idClubActivo);
+    var equiposHumanos = _nationsEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _nationsEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Nations Cup. Añádelos desde el ✏️ de cada caja (Calendario extra → «Nations Cup - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _nationsPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _nationsAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _nationsAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = NATIONS_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-nations-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarNationsGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularNationsGrupos(datos);
+    var idActivo = _nationsIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Nations Cup · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-nations-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 11 grupos de 5 selecciones."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _nationsZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º de grupo: directo a Octavos (11)</span><span>🟨 2º: los 5 mejores segundos pasan a Octavos</span></div>'
+      ));
+    }
+
+    _nationsAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarNationsPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularNationsPlayoffTodasLasRondas(datos);
+
+    NATIONS_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-nations-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _nationsIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _nationsAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarNations(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _nationsTabsHTML(idClubActivo));
+
+      if (_nationsTabActual === "playoffs") _renderizarNationsPlayoffs(contenedor, datos, idClubActivo);
+      else if (_nationsTabActual === "grupos") _renderizarNationsGrupos(contenedor, datos, idClubActivo);
+      else _renderizarNationsHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irNationsTab(idClubActivo, tab) {
+    _nationsTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarNations("nations-content", idClubActivo);
+  }
+
+  function renderizarNationsStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = NATIONS_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-nations" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-nations-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularNationsStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _nationsIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("nations", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorNations(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 11 grupos juntos. Cada grupo empieza con una línea «Grupo A» (o «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, Inglaterra, " +
+      "Noruega, España, Portugal, Italia) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "nations-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerNationsTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-nations" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-nations" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorNationsStat(contenedor, idClubActivo, categoria) {
+    var meta = NATIONS_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Nations " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "nations-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerNationsStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-nations-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-nations-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorNationsPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = NATIONS_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria — " +
+      "vale «-» o «vs»: «Alemania 3-1 Brasil» o «Alemania 3 vs 1 Brasil». Si una selección humana ya tiene " +
+      "sus propios partidos de Nations Cup jugados en esta ronda (Calendario extra), su cruce se calcula solo " +
+      "y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "nations-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerNationsPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-nations-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-nations-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Nations Cup — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoNations).
+  var FORMATO_NATIONS_TEXTO = [
+    "📋FORMATO NATIONS CUP:",
+    "Fase de Grupos: 11 grupos de 5 selecciones, todos contra todos a ida y vuelta (8 partidos por selección).",
+    "",
+    "🏁RESOLUCIÓN FASE DE GRUPOS:",
+    " 🟦 1º de cada grupo (11): clasificación DIRECTA a Octavos de Final.",
+    "",
+    " 🟨 Los 5 mejores segundos: también pasan a Octavos (16 selecciones en total).",
+    "",
+    " ⬛️ El resto: eliminadas.",
+    "",
+    "👥️ELIMINATORIAS:",
+    "Octavos → Cuartos → Semifinales → Final, todo a ida y vuelta.",
+    "Cada ronda se pega en texto por separado — los cruces de una selección humana se auto-computan desde el Calendario extra.",
+    "",
+    "🌍SELECCIONES HUMANAS:",
+    "Liverpool = Francia · Real Madrid = Inglaterra · Atlético Madrid = Noruega · PSG = España · Chelsea = Portugal · Inter = Italia. Cada una tiene su propia plantilla y estadísticas (botón con su bandera en la Plantilla del club).",
+    "",
+    "📊ESTADÍSTICAS:",
+    "Pichichi/MVP/T.Amarillas/T.Rojas suman Fase de Grupos + Eliminatorias juntos, sin distinguir fase."
+  ].join("\n");
+  function obtenerFormatoNationsTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("nations") : "";
+    return override || FORMATO_NATIONS_TEXTO;
+  }
+
 
   // ============================================================
   // SUPERLIGA — los clubes humanos, todos contra todos (calendario
@@ -10110,10 +10917,14 @@
   }
 
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado, esBloqueado) {
-    var esLocal = partido.local === idActivo;
+    // Partido de la SELECCIÓN del club (Nations Cup): el lado "activo" es
+    // "sel-<clubId>", no el club.
+    var idLado = idActivo;
+    if (partido.local === "sel-" + idActivo || partido.visitante === "sel-" + idActivo) idLado = "sel-" + idActivo;
+    var esLocal = partido.local === idLado;
     var rivalId = esLocal ? partido.visitante : partido.local;
     var rival = buscarEquipoPorId(rivalId, datos);
-    var activo = buscarEquipoPorId(idActivo, datos);
+    var activo = buscarEquipoPorId(idLado, datos);
 
     var local = esLocal ? activo : rival;
     var visitante = esLocal ? rival : activo;
@@ -10360,14 +11171,15 @@
   // anterior/siguiente en el calendario" de un jugador con la MISMA
   // definición exacta que ya usa la pantalla de calendario, en vez de
   // arriesgarse a que una copia paralela de este filtro/orden diverja.
-  function _partidosOrdenadosDelClub(clubId, datos) {
+  function _partidosOrdenadosDelClub(clubId, datos, incluirSeleccion) {
+    var selId = incluirSeleccion ? _idSeleccionDeClub(clubId) : null;
     var equipo = buscarEquipoPorId(clubId, datos);
     var ligaActual = equipo ? equipo.ligaActual : null;
     var todosLosPartidos = window.Estado
       ? window.Estado.listarPartidosResueltos(datos)
       : (datos.partidos.partidos || []);
     var partidosDelClub = todosLosPartidos.filter(function (p) {
-      var esSuyo = p.local === clubId || p.visitante === clubId;
+      var esSuyo = p.local === clubId || p.visitante === clubId || (selId && (p.local === selId || p.visitante === selId));
       if (!esSuyo) return false;
       if (p.competicion === "superliga") return false;
       if (p.competicion === "liga") return p.liga === ligaActual;
@@ -10482,7 +11294,7 @@
         // volver a parsearlo/resolverlo aquí, filtrar por "es de este
         // club" ya basta, y así la clasificación/estadísticas ven
         // EXACTAMENTE los mismos partidos que pinta esta pantalla.
-        var partidosDelClub = _partidosOrdenadosDelClub(idEquipoHumanoActivo, datos);
+        var partidosDelClub = _partidosOrdenadosDelClub(idEquipoHumanoActivo, datos, true);
 
         if (!partidosDelClub.length) {
           // Sin partidos locales Y la sincronización con el servidor
@@ -11091,6 +11903,7 @@
     }
   };
   function _esClubHumano(id, datos) {
+    if (_esIdSeleccionHumana(id)) return true;
     return (datos.equipos.equipos || []).some(function (e) { return e.id === id; });
   }
 
@@ -11116,7 +11929,7 @@
   var _CLUBES_FIFA = { "inter-milan": true, "manchester-city": true };
   function _esPartidoFifaVsIA(local, visitante, datos) {
     if (!local || !visitante) return false;
-    var fifaL = !!_CLUBES_FIFA[local.id], fifaV = !!_CLUBES_FIFA[visitante.id];
+    var fifaL = !!_CLUBES_FIFA[_idClubDeEquipoId(local.id)], fifaV = !!_CLUBES_FIFA[_idClubDeEquipoId(visitante.id)];
     if (fifaL === fifaV) return false; // ninguno, o los dos (FIFA vs FIFA = humano vs humano)
     var rival = fifaL ? visitante : local;
     return !_esClubHumano(rival.id, datos);
@@ -11128,7 +11941,8 @@
   // local o visitante en ESTE partido concreto.
   function _resolverGestionadoYRival(local, visitante, contexto) {
     var managedId = contexto && contexto.equipo ? contexto.equipo.id : null;
-    if (visitante.id === managedId) return { managed: visitante, rival: local };
+    // Partido de la SELECCIÓN del club activo ("sel-<clubId>").
+    if (visitante.id === managedId || (managedId && visitante.id === "sel-" + managedId)) return { managed: visitante, rival: local };
     return { managed: local, rival: visitante }; // default: cubre el caso normal + cualquier id inesperado
   }
 
@@ -11159,10 +11973,11 @@
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
     var esHvH = _esPartidoHvH(local, visitante, datos);
     var esFinal = !!partido && _esFinalDeTorneo(partido);
-    var cruceHvH = esHvH && _FORMA_HVH[par.managed.id] && _FORMA_HVH[par.managed.id][par.rival.id];
-    var forma = _FORMA_POR_CLUB[par.managed.id];
+    var midClub = _idClubDeEquipoId(par.managed.id), ridClub = _idClubDeEquipoId(par.rival.id);
+    var cruceHvH = esHvH && _FORMA_HVH[midClub] && _FORMA_HVH[midClub][ridClub];
+    var forma = _FORMA_POR_CLUB[midClub];
     var formaIconoTu, formaIconoRival;
-    if (par.managed.id === "liverpool") {
+    if (midClub === "liverpool") {
       // Petición usuario 2026-10-10: TODOS los partidos del Liverpool (liga,
       // copa, Europa, HvH, finales...) van con Forma Tu🎲-🎲Rival. Gana por
       // encima de la tabla HvH y de la regla de las finales.
@@ -11184,7 +11999,7 @@
     }
     return {
       tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
-      nivel: "🤖 " + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
+      nivel: "🤖 " + (midClub === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
       forma: "🔋 Tu" + formaIconoTu + "-" + formaIconoRival + "Rival"
     };
   }
@@ -12879,7 +13694,7 @@
   // Plantilla) — el club solo conoce SUS partidos, así que en las fases
   // de grupos se muestran sus puntos, no una posición.
   var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true };
-  var _ORDEN_COMPS_PLANTILLA = ["copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "mundialito", "verano", "promocion"];
+  var _ORDEN_COMPS_PLANTILLA = ["nations", "copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "mundialito", "verano", "promocion"];
   // Icono + nombre de cada competición = los de SU tarjeta del menú del club
   // (🇪🇺 Champions, 🟠 E. League, 🟢 Conference, 🥈 Recopa, 🌎 Intercontinental,
   // ☀️ Verano, 🛡️ Supercopa Europa, 🏅 Supercopa España, 🍇 Superliga y, en
@@ -12890,7 +13705,7 @@
   var _MENU_ID_POR_COMP_PLANTILLA = {
     copa: "copadelrey", supercopa: "supercopaespana", superliga: "superliga",
     champions: "champions", "ucl-previa": "champions", uel: "uel", uecl: "uecl",
-    recopa: "recopa", usc: "usc", intercontinental: "intercontinental", verano: "verano"
+    recopa: "recopa", usc: "usc", intercontinental: "intercontinental", verano: "verano", nations: "nations"
   };
   function _iconoYNombreCompPlantilla(clubId, compKey, nombreDefecto) {
     // Iconos fijos pedidos por el usuario (2026-10-10): 👥️ Superliga y
@@ -13074,6 +13889,26 @@
       var r;
       if (_COMPS_ELIM_PLANTILLA[k] || (!conocida && tieneRondasKO)) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
+      } else if (k === "nations") {
+        // Nations Cup (selecciones): jornadas de grupo (11 grupos de 5) y
+        // cuadro final desde Octavos. Fase de grupos -> puesto dentro de SU
+        // grupo; al empezar el cuadro, la ronda / "Eliminado" / "Campeón".
+        var esKoN = function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(_normNombre(p.ronda || "")); };
+        var gruposN = lista.filter(function (p) { return !esKoN(p); });
+        var koN = lista.filter(esKoN);
+        if (koN.length) {
+          r = _estadoEliminatoriaClub(clubId, k, koN, datos);
+        } else {
+          var posN = null;
+          try {
+            calcularNationsGrupos(datos).some(function (g) {
+              var ix = g.filas.findIndex(function (f) { return f.equipoId === clubId; });
+              if (ix >= 0) { posN = ix + 1; return true; }
+              return false;
+            });
+          } catch (errN) { posN = null; }
+          r = posN ? { estado: "Fase Grupos · " + _posicionOrdinal(posN) } : _estadoPuntosClub(clubId, gruposN.length ? gruposN : lista);
+        }
       } else if (EUROPA_FASE_GRUPOS_COMPS[k] || k === "mundialito") {
         // Mundialito: fase de grupos + cuadro final; mismo criterio que las
         // europeas (rondas con palabra de eliminatoria = cuadro final).
@@ -13114,6 +13949,20 @@
 
         if (!jugadores.length) {
           contenedor.appendChild(nodoEstado("👕", "Todavía no hay plantilla. Pulsa ✏️ Editar menú → 👕 Plantilla para pegarla."));
+          // Sin plantilla (club o selección): igualmente hay que poder cambiar
+          // de vista y, en la selección, pegar su roster.
+          var _cbV = _idClubDeEquipoId(idEquipoHumanoActivo);
+          var _dfV = SELECCIONES_HUMANAS_POR_CLUB[_cbV];
+          if (_dfV) {
+            var _enSelV = _esIdSeleccionHumana(idEquipoHumanoActivo);
+            var nv = document.createElement("div");
+            nv.className = "plantilla-header-acciones";
+            nv.innerHTML =
+              '<button type="button" class="plantilla-stats-pin-btn plantilla-sel-toggle" data-accion="plantilla-cambiar-vista" data-club-id="' +
+              escapeHTML(_enSelV ? _cbV : "sel-" + _cbV) + '">' + (_enSelV ? "⬅️ Club" : _dfV.bandera + " " + escapeHTML(_dfV.nombre)) + "</button>" +
+              (_enSelV ? '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar la plantilla de la selección">✏️</button>' : "");
+            contenedor.insertBefore(nv, contenedor.firstChild);
+          }
           return;
         }
 
@@ -13141,6 +13990,26 @@
           // quedó con el nombre viejo.
           '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-renombres-plantilla-inline" ' +
           'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Renombrar jugadores de esta plantilla">🔁</button>';
+        // 🏳️ Botón con la BANDERA de la selección del club (Nations Cup) —
+        // alterna entre la plantilla del club y la de su selección (id
+        // "sel-<club>", plantilla/estadísticas PROPIAS). En la vista de la
+        // selección el botón es el escudo del club para volver, y aparece
+        // ✏️ para pegar el roster de la selección (PIN).
+        var _clubBasePl = _idClubDeEquipoId(idEquipoHumanoActivo);
+        var _defSelPl = SELECCIONES_HUMANAS_POR_CLUB[_clubBasePl];
+        if (_defSelPl) {
+          var _enSelPl = _esIdSeleccionHumana(idEquipoHumanoActivo);
+          var _clubEntPl = buscarEquipoPorId(_clubBasePl, datos);
+          pinWrap.insertAdjacentHTML("afterbegin",
+            '<button type="button" class="plantilla-stats-pin-btn plantilla-sel-toggle" data-accion="plantilla-cambiar-vista" ' +
+            'data-club-id="' + escapeHTML(_enSelPl ? _clubBasePl : "sel-" + _clubBasePl) + '" ' +
+            'title="' + escapeHTML(_enSelPl ? "Ver la plantilla de " + (_clubEntPl ? _clubEntPl.nombre : "tu club") : "Ver la plantilla de " + _defSelPl.nombre) + '">' +
+            (_enSelPl ? "⬅️ " + escapeHTML(_clubEntPl ? _clubEntPl.nombre : "Club") : _defSelPl.bandera + " " + escapeHTML(_defSelPl.nombre)) + "</button>" +
+            (_enSelPl
+              ? '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" ' +
+                'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar/editar la plantilla de ' + escapeHTML(_defSelPl.nombre) + '">✏️</button>'
+              : ""));
+        }
         contenedor.appendChild(pinWrap);
 
         var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
@@ -14494,6 +15363,18 @@
     obtenerFormatoUelTexto: obtenerFormatoUelTexto,
     calcularUelCombinada: calcularUelCombinada,
     calcularUelPlayoffTodasLasRondas: calcularUelPlayoffTodasLasRondas,
+    renderizarNations: renderizarNations,
+    irNationsTab: irNationsTab,
+    renderizarNationsStatDetalle: renderizarNationsStatDetalle,
+    pintarEditorNations: pintarEditorNations,
+    pintarEditorNationsStat: pintarEditorNationsStat,
+    pintarEditorNationsPlayoff: pintarEditorNationsPlayoff,
+    obtenerFormatoNationsTexto: obtenerFormatoNationsTexto,
+    calcularNationsGrupos: calcularNationsGrupos,
+    calcularNationsPlayoffTodasLasRondas: calcularNationsPlayoffTodasLasRondas,
+    resolverSeleccionPorNombre: resolverSeleccionPorNombre,
+    seleccionHumanaDeClub: function (clubId) { return SELECCIONES_HUMANAS_POR_CLUB[clubId] || null; },
+    idSeleccionDeClub: _idSeleccionDeClub,
     renderizarUecl: renderizarUecl,
     irUeclTab: irUeclTab,
     renderizarUeclStatDetalle: renderizarUeclStatDetalle,

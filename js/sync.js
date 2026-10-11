@@ -518,6 +518,7 @@
       .then(function (resp) {
         if (!resp || !resp.ok) throw new Error("respuesta no válida");
         var enviados = Object.keys(info.delta);
+        _ultimoEnvio = { ok: true, ms: Date.now() };
         _marcarSubidos(valorActual, enviados);
         if (info.gCambio) {
           var meta = _metaRes();
@@ -534,6 +535,7 @@
       })
       .catch(function (err) {
         console.warn("[sync] envío incremental falló:", err);
+        _ultimoEnvio = { ok: false, ms: Date.now(), motivo: String((err && err.message) || err).slice(0, 40) };
         _intentosFallidos[K] = (_intentosFallidos[K] || 0) + 1;
         if (info.reciente || _intentosFallidos[K] >= 2) {
           _badge("error", "⚠️ Sin conexión: el partido está guardado en este móvil y se subirá solo. No borres los datos del navegador.");
@@ -1082,12 +1084,14 @@
         .then(function (resp) {
           if (!resp || !resp.ok) throw new Error("respuesta no válida");
           _marcarSubidos(act, Object.keys(info.delta));
+          _ultimoEnvio = { ok: true, ms: Date.now() };
           _directoEnVuelo = false;
           try { _badge("ok", "✅ Partido guardado en el servidor"); } catch (e) {}
           _ciclo(); // reconcilia snapshot/pendientes sin red extra
         })
-        .catch(function () {
+        .catch(function (errD) {
           clearTimeout(t);
+          _ultimoEnvio = { ok: false, ms: Date.now(), motivo: String((errD && errD.message) || errD).slice(0, 40) };
           if (intento < 4) {
             setTimeout(function () { _empujarResultadosDirecto(intento + 1); }, [1500, 3000, 6000, 12000][intento]);
           } else {
@@ -1215,6 +1219,7 @@
   // lleva el JS viejo o lleva rato sin hablar con el servidor.
   var _ultimoPullOkMs = 0;
   var _infoServidor = null; // { persistente, arranque } — lo manda el servidor en cada pull
+  var _ultimoEnvio = null;  // { ok, ms, motivo } — resultado del último intento de subir un partido
   function _versionJs() {
     try {
       var sc = document.querySelector('script[src*="sync.js"]');
@@ -1235,6 +1240,10 @@
       }
       var hora = _ultimoPullOkMs ? new Date(_ultimoPullOkMs).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "sin conexión aún";
       var base = "v" + _versionJs() + " · sync " + hora;
+      if (_ultimoEnvio) {
+        var hEnv = new Date(_ultimoEnvio.ms).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        base += _ultimoEnvio.ok ? " · envío ✅ " + hEnv : " · envío ❌ " + hEnv + " (" + (_ultimoEnvio.motivo || "?") + ")";
+      }
       if (_infoServidor && _infoServidor.persistente === false) {
         // Aviso fijo: sin disco persistente el servidor pierde TODOS los
         // partidos en cada reinicio (Render duerme el servicio al rato sin uso).

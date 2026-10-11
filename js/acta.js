@@ -296,8 +296,12 @@
     }).then(function (v) {
       if (v.estado === "ok") {
         el.textContent = "☁️ Guardado en el servidor ✅ — ya lo ven los demás móviles";
+        if (window.Sync && window.Sync.servidorSinDisco && window.Sync.servidorSinDisco()) {
+          el.textContent += " · ⚠️ servidor sin disco: se borra al reiniciar";
+          el.style.whiteSpace = "normal";
+        }
         el.style.color = "#4ade80";
-        el.style.whiteSpace = "nowrap"; // el mensaje de éxito va en UNA línea (los avisos largos sí pueden partirse)
+        if (!(window.Sync && window.Sync.servidorSinDisco && window.Sync.servidorSinDisco())) el.style.whiteSpace = "nowrap"; // el mensaje de éxito va en UNA línea (los avisos largos sí pueden partirse)
       } else {
         el.textContent = "⚠️ El servidor NO tiene este partido (" + (v.motivo || v.estado) + "). " +
           "Déjalo abierto con conexión; se reintenta solo. Partido: " + id;

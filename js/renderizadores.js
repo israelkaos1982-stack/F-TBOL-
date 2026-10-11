@@ -13935,6 +13935,27 @@
     return filas;
   }
 
+  // Título del modal de la Plantilla: "👕 [AT. MADRID] [🇳🇴 NORUEGA]" — los dos
+  // son botones que alternan entre la plantilla del club y la de su
+  // selección (la activa va resaltada). Un club sin selección (Barcelona)
+  // conserva el título normal.
+  var _NOMBRE_CORTO_TITULO_PLANTILLA = { "atletico-madrid": "AT. MADRID" };
+  function _pintarTituloPlantilla(idActivo, datos) {
+    var tituloEl = document.getElementById("club-modal-title");
+    if (!tituloEl) return;
+    var clubBase = _idClubDeEquipoId(idActivo);
+    var def = SELECCIONES_HUMANAS_POR_CLUB[clubBase];
+    if (!def) return;
+    var club = buscarEquipoPorId(clubBase, datos);
+    var nombreClub = _NOMBRE_CORTO_TITULO_PLANTILLA[clubBase] || String(club ? club.nombre : clubBase).toUpperCase();
+    var enSel = _esIdSeleccionHumana(idActivo);
+    tituloEl.innerHTML =
+      "👕 " +
+      '<button type="button" class="plantilla-titulo-btn' + (enSel ? "" : " plantilla-titulo-btn--activo") + '" data-accion="plantilla-cambiar-vista" data-club-id="' + escapeHTML(clubBase) + '">' + escapeHTML(nombreClub) + "</button>" +
+      '<button type="button" class="plantilla-titulo-btn plantilla-titulo-btn--sel' + (enSel ? " plantilla-titulo-btn--activo" : "") + '" data-accion="plantilla-cambiar-vista" data-club-id="sel-' + escapeHTML(clubBase) + '">' +
+      def.bandera + " " + escapeHTML(def.nombre.toUpperCase()) + "</button>";
+  }
+
   function renderizarPlantillaClub(idEquipoHumanoActivo) {
     var contenedor = document.getElementById("plantilla-content");
     if (!contenedor) return;
@@ -13945,22 +13966,16 @@
     cargarTodo()
       .then(function (datos) {
         contenedor.innerHTML = "";
+        _pintarTituloPlantilla(idEquipoHumanoActivo, datos);
         var jugadores = obtenerJugadoresClub(idEquipoHumanoActivo);
 
         if (!jugadores.length) {
           contenedor.appendChild(nodoEstado("👕", "Todavía no hay plantilla. Pulsa ✏️ Editar menú → 👕 Plantilla para pegarla."));
-          // Sin plantilla (club o selección): igualmente hay que poder cambiar
-          // de vista y, en la selección, pegar su roster.
-          var _cbV = _idClubDeEquipoId(idEquipoHumanoActivo);
-          var _dfV = SELECCIONES_HUMANAS_POR_CLUB[_cbV];
-          if (_dfV) {
-            var _enSelV = _esIdSeleccionHumana(idEquipoHumanoActivo);
+          // Selección sin plantilla: hay que poder pegar su roster desde aquí.
+          if (_esIdSeleccionHumana(idEquipoHumanoActivo)) {
             var nv = document.createElement("div");
             nv.className = "plantilla-header-acciones";
-            nv.innerHTML =
-              '<button type="button" class="plantilla-stats-pin-btn plantilla-sel-toggle" data-accion="plantilla-cambiar-vista" data-club-id="' +
-              escapeHTML(_enSelV ? _cbV : "sel-" + _cbV) + '">' + (_enSelV ? "⬅️ Club" : _dfV.bandera + " " + escapeHTML(_dfV.nombre)) + "</button>" +
-              (_enSelV ? '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar la plantilla de la selección">✏️</button>' : "");
+            nv.innerHTML = '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar la plantilla de la selección">✏️</button>';
             contenedor.insertBefore(nv, contenedor.firstChild);
           }
           return;
@@ -13990,25 +14005,12 @@
           // quedó con el nombre viejo.
           '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-renombres-plantilla-inline" ' +
           'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Renombrar jugadores de esta plantilla">🔁</button>';
-        // 🏳️ Botón con la BANDERA de la selección del club (Nations Cup) —
-        // alterna entre la plantilla del club y la de su selección (id
-        // "sel-<club>", plantilla/estadísticas PROPIAS). En la vista de la
-        // selección el botón es el escudo del club para volver, y aparece
-        // ✏️ para pegar el roster de la selección (PIN).
-        var _clubBasePl = _idClubDeEquipoId(idEquipoHumanoActivo);
-        var _defSelPl = SELECCIONES_HUMANAS_POR_CLUB[_clubBasePl];
-        if (_defSelPl) {
-          var _enSelPl = _esIdSeleccionHumana(idEquipoHumanoActivo);
-          var _clubEntPl = buscarEquipoPorId(_clubBasePl, datos);
+        // ✏️ Roster de la selección (PIN) — el cambio club/selección vive en el
+        // título del modal (ver _pintarTituloPlantilla).
+        if (_esIdSeleccionHumana(idEquipoHumanoActivo)) {
           pinWrap.insertAdjacentHTML("afterbegin",
-            '<button type="button" class="plantilla-stats-pin-btn plantilla-sel-toggle" data-accion="plantilla-cambiar-vista" ' +
-            'data-club-id="' + escapeHTML(_enSelPl ? _clubBasePl : "sel-" + _clubBasePl) + '" ' +
-            'title="' + escapeHTML(_enSelPl ? "Ver la plantilla de " + (_clubEntPl ? _clubEntPl.nombre : "tu club") : "Ver la plantilla de " + _defSelPl.nombre) + '">' +
-            (_enSelPl ? "⬅️ " + escapeHTML(_clubEntPl ? _clubEntPl.nombre : "Club") : _defSelPl.bandera + " " + escapeHTML(_defSelPl.nombre)) + "</button>" +
-            (_enSelPl
-              ? '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" ' +
-                'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar/editar la plantilla de ' + escapeHTML(_defSelPl.nombre) + '">✏️</button>'
-              : ""));
+            '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" ' +
+            'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar/editar la plantilla de la selección">✏️</button>');
         }
         contenedor.appendChild(pinWrap);
 

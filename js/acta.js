@@ -288,11 +288,11 @@
       return;
     }
     if (!window.Sync || !window.Sync.verificarPartido) { el.textContent = ""; return; }
-    el.textContent = "☁️ Subiendo al servidor…";
+    el.textContent = "☁️ Subiendo al servidor… NO cambies de app hasta ver ✅";
     el.style.color = "#93c5fd";
     el.style.whiteSpace = "normal";
     window.Sync.verificarPartido(id, gl, gv, function (n) {
-      el.textContent = "☁️ Subiendo al servidor… (reintento " + n + ")";
+      el.textContent = "☁️ Subiendo al servidor… NO cambies de app hasta ver ✅ (reintento " + n + ")";
     }).then(function (v) {
       if (v.estado === "ok") {
         el.textContent = "☁️ Guardado en el servidor ✅ — ya lo ven los demás móviles";

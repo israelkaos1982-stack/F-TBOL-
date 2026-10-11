@@ -179,6 +179,32 @@ if not _db_url:
 # sobrevivir a un deploy/restart. Si dice "EPHEMERAL", los cambios
 # del admin se perderán en el próximo deploy y hay que mover SQLite a
 # un volumen persistente o configurar DATABASE_URL.
+_EF7_ARRANQUE_MS = int(time.time() * 1000)
+
+
+def _ef7_info_persistencia():
+    """¿Los datos de este servidor sobreviven a un reinicio? Lo muestra el chip
+    de sincronización de cada móvil: con un disco efímero (Render sin disco,
+    Railway sin volumen) TODOS los partidos guardados se pierden en cada
+    reinicio/suspensión y los móviles que no los reenvían dejan de verlos."""
+    try:
+        if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
+            persistente = True
+        else:
+            persistente = bool(
+                os.path.ismount(instance_dir)
+                or instance_dir.startswith("/data")
+                or os.environ.get("LIGA_DATA_DIR")
+                or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+            )
+            # OJO: `.render-volume-marker` está commiteado en el repo, así que
+            # NO prueba que haya disco montado (por eso no se usa aquí).
+    except Exception:
+        persistente = True  # ante la duda, no alarmar
+    return {"persistente": persistente, "arranque": _EF7_ARRANQUE_MS}
+
+
+
 def _persistence_diagnostic():
     if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
         return "PERSISTENT (Postgres via DATABASE_URL)"
@@ -6546,7 +6572,8 @@ def api_ef7_state_get():
     # para disparar el snapshot perezoso, ver _ef7_tomar_snapshot_si_toca.
     _ef7_tomar_snapshot_si_toca()
     resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados, "forzados": _ef7_leer_forzados(),
-                    "caled_meta": _ef7_leer_caled_meta()})
+                    "caled_meta": _ef7_leer_caled_meta(),
+                    "servidor": _ef7_info_persistencia()})
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp
 

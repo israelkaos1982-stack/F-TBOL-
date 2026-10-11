@@ -12507,7 +12507,7 @@
       clima.estacion + " · " + clima.icono + " " + clima.label;
 
     document.getElementById("previa-balon").innerHTML =
-      balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
+      balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">- Nieve</span>' : "");
 
     // Inter/Chelsea (FIFA) vs IA: estadio, clima y balón "Al Azar".
     if (_esPartidoFifaVsIA(local, visitante, datos)) {

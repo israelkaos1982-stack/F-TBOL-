@@ -914,6 +914,43 @@
           }
         });
 
+        // AUTO-REPARACIÓN DE RESULTADOS — el envío de partidos es INCREMENTAL
+        // (solo viaja lo que `efsync_res_v1` no da por ya subido). Si el
+        // servidor PIERDE después esos partidos (reinicio/borrado de su base de
+        // datos, restauración de una copia vieja), este móvil seguía creyendo
+        // que estaban subidos y NUNCA los volvía a mandar: el partido jugado
+        // quedaba solo en este móvil y el resto de dispositivos no lo veían
+        // jamás (reporte usuario: "Liverpool jugó la ida de Copa del Rey y a mí
+        // no me sale"). Ahora, si el servidor no trae un partido JUGADO que
+        // aquí se da por subido, se olvida que estaba subido y se vuelve a
+        // enviar (el servidor fusiona partido a partido, nunca pisa algo mejor).
+        try {
+          var KR = CLAVE_RESULTADOS;
+          var locRaw = _clavesLocales()[KR];
+          if (typeof locRaw === "string" && resp.claves) {
+            var locObj = JSON.parse(locRaw);
+            var locRes = locObj && locObj.resultados && typeof locObj.resultados === "object" ? locObj.resultados : {};
+            var jugadosLocales = Object.keys(locRes).filter(function (id) { return locRes[id] && locRes[id].jugado === true; });
+            if (jugadosLocales.length) {
+              if (!Object.prototype.hasOwnProperty.call(resp.claves, KR)) {
+                // El servidor no tiene NI el blob: envío completo.
+                try { localStorage.removeItem(META_RES_KEY); } catch (e2) {}
+                _pendientes[KR] = true;
+              } else if (typeof resp.claves[KR] === "string") {
+                var srvObj = JSON.parse(_normalizarJson(resp.claves[KR]));
+                var srvRes = srvObj && srvObj.resultados && typeof srvObj.resultados === "object" ? srvObj.resultados : {};
+                var metaR = _metaRes();
+                var olvidar = jugadosLocales.filter(function (id) { return !srvRes[id] && metaR && metaR.m && metaR.m[id]; });
+                if (olvidar.length) {
+                  olvidar.forEach(function (id) { delete metaR.m[id]; });
+                  _guardarMetaRes(metaR);
+                  _pendientes[KR] = true;
+                }
+              }
+            }
+          }
+        } catch (errRep) { console.warn("[sync] auto-reparación de resultados falló:", errRep); }
+
         // AUTO-REPARACIÓN — si `_snapshot` cree que una clave YA está
         // confirmada con el servidor (mismo hash reconciliado en un ciclo
         // anterior) pero el servidor, AHORA, no la tiene en absoluto (se

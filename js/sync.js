@@ -1044,6 +1044,59 @@
     });
   }
 
+  // ---------- Envío DIRECTO de partidos jugados (independiente del ciclo) ----------
+  // Reporte usuario 2026-10-11: la ida de Copa del Rey de Liverpool se jugó y
+  // "FINALIZADO" salió en el móvil de su mánager, pero al servidor solo llegó
+  // ~15 min después (el servidor guarda bien: disco persistente verificado en
+  // /api/debug). Mientras tanto el admin lo veía sin jugar. Causa: el envío
+  // dependía del ciclo general, que espera si hay otra petición en vuelo (hasta
+  // 45 s) y deja de correr en cuanto el móvil pasa a segundo plano (típico:
+  // compartir el acta por WhatsApp). Ahora, en cuanto hay un partido jugado
+  // sin subir, se envía AL INSTANTE con su propia petición `keepalive` (que el
+  // navegador completa aunque la pestaña se congele), con reintentos, sin
+  // esperar a ningún ciclo. El servidor fusiona partido a partido, así que
+  // enviarlo dos veces (aquí y por el ciclo normal) es inofensivo.
+  var _directoEnVuelo = false;
+  function _empujarResultadosDirecto(intento) {
+    try {
+      intento = intento || 0;
+      if (_directoEnVuelo && intento === 0) return;
+      var act = _clavesLocales()[CLAVE_RESULTADOS];
+      if (typeof act !== "string") return;
+      var info = _construirDelta(act);
+      if (!info || !info.n) { _directoEnVuelo = false; return; } // nada nuevo (o hace falta envío completo: lo hace el ciclo)
+      var jugados = Object.keys(info.delta).filter(function (id) { return info.delta[id] && info.delta[id].jugado === true; });
+      if (!jugados.length) { _directoEnVuelo = false; return; }
+      _directoEnVuelo = true;
+      var texto = JSON.stringify({ partidos: info.delta });
+      var ctl = (typeof AbortController === "function") ? new AbortController() : null;
+      var t = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, 20000);
+      fetch(ENDPOINT_RES, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: texto,
+        keepalive: texto.length < 60000,
+        signal: ctl ? ctl.signal : undefined
+      })
+        .then(function (r) { clearTimeout(t); return r.ok ? r.json() : null; })
+        .then(function (resp) {
+          if (!resp || !resp.ok) throw new Error("respuesta no válida");
+          _marcarSubidos(act, Object.keys(info.delta));
+          _directoEnVuelo = false;
+          try { _badge("ok", "✅ Partido guardado en el servidor"); } catch (e) {}
+          _ciclo(); // reconcilia snapshot/pendientes sin red extra
+        })
+        .catch(function () {
+          clearTimeout(t);
+          if (intento < 4) {
+            setTimeout(function () { _empujarResultadosDirecto(intento + 1); }, [1500, 3000, 6000, 12000][intento]);
+          } else {
+            _directoEnVuelo = false; // lo seguirá intentando el ciclo normal cada 10 s
+          }
+        });
+    } catch (err) { _directoEnVuelo = false; }
+  }
+
   // Sincronización INMEDIATA tras un cambio local (ver Estado.guardarEstado).
   // Antes un partido confirmado esperaba al siguiente tick de 10 s, y en el
   // móvil el siguiente paso típico (compartir el acta por WhatsApp) manda la
@@ -1053,6 +1106,7 @@
   // confirma, con la app todavía en primer plano.
   var _temporizadorPeticion = null;
   function pedirSincronizacion() {
+    _empujarResultadosDirecto(0); // el partido sale YA, sin esperar al debounce ni al ciclo
     if (_temporizadorPeticion) return;
     _temporizadorPeticion = setTimeout(function () {
       _temporizadorPeticion = null;
@@ -1070,9 +1124,10 @@
       // Al pasar a segundo plano se intenta subir YA lo pendiente (la
       // petición normal suele alcanzar a salir antes de que el navegador
       // congele la pestaña); al volver, se sincroniza de inmediato.
+      _empujarResultadosDirecto(0);
       _ciclo();
     });
-    window.addEventListener("pagehide", function () { _ciclo(); });
+    window.addEventListener("pagehide", function () { _empujarResultadosDirecto(0); _ciclo(); });
     window.addEventListener("beforeunload", function () {
       // Best-effort — no bloqueante, no hay garantía de que llegue, pero
       // reduce la ventana de "cerré la app antes del próximo ciclo".

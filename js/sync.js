@@ -801,6 +801,7 @@
       .then(function (resp) {
         if (!resp || !resp.ok || !resp.claves) return false;
         _ultimoPullOkMs = Date.now();
+        _infoServidor = resp.servidor && typeof resp.servidor === "object" ? resp.servidor : _infoServidor;
         _pintarChip();
         var actuales = _clavesLocales();
         // RE-detecta cambios locales AQUÍ, con el valor recién leído —
@@ -1158,6 +1159,7 @@
   // Permite que una captura de pantalla de cualquier móvil diga si ese móvil
   // lleva el JS viejo o lleva rato sin hablar con el servidor.
   var _ultimoPullOkMs = 0;
+  var _infoServidor = null; // { persistente, arranque } — lo manda el servidor en cada pull
   function _versionJs() {
     try {
       var sc = document.querySelector('script[src*="sync.js"]');
@@ -1177,7 +1179,19 @@
         document.body.appendChild(el);
       }
       var hora = _ultimoPullOkMs ? new Date(_ultimoPullOkMs).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "sin conexión aún";
-      el.textContent = "v" + _versionJs() + " · sync " + hora;
+      var base = "v" + _versionJs() + " · sync " + hora;
+      if (_infoServidor && _infoServidor.persistente === false) {
+        // Aviso fijo: sin disco persistente el servidor pierde TODOS los
+        // partidos en cada reinicio (Render duerme el servicio al rato sin uso).
+        el.textContent = base + " · ⚠️ SERVIDOR SIN DISCO: se borra al reiniciar";
+        el.style.background = "rgba(185,28,28,.92)";
+        el.style.color = "#fff";
+        el.style.fontWeight = "700";
+        el.style.fontSize = "11px";
+        el.style.opacity = "1";
+      } else {
+        el.textContent = base;
+      }
     } catch (err) {}
   }
   document.addEventListener("DOMContentLoaded", function () { _pintarChip(); setInterval(_pintarChip, 15000); });

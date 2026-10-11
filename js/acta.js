@@ -402,6 +402,8 @@
   var _partidoActivo = null; // { partido, local, visitante, datos, lado, modo, prorroga }
 
   function esEquipoHumano(equipoId, datos) {
+    if (typeof equipoId === "string" && equipoId.indexOf("sel-") === 0 && window.Renderizadores &&
+      window.Renderizadores.seleccionHumanaDeClub && window.Renderizadores.seleccionHumanaDeClub(equipoId.slice(4))) return true;
     return (datos.equipos.equipos || []).some(function (e) { return e.id === equipoId; });
   }
 

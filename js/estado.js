@@ -238,6 +238,13 @@
     (datos.equipos.equipos || []).forEach(function (c) {
       if (c.id === partido.local || c.id === partido.visitante) vistos[c.id] = true;
     });
+    // Selecciones humanas (Nations Cup): "sel-<clubId>".
+    [partido.local, partido.visitante].forEach(function (id) {
+      if (typeof id === "string" && id.indexOf("sel-") === 0 && window.Renderizadores &&
+        window.Renderizadores.seleccionHumanaDeClub && window.Renderizadores.seleccionHumanaDeClub(id.slice(4))) {
+        vistos[id] = true;
+      }
+    });
     return Object.keys(vistos);
   }
 
@@ -701,10 +708,34 @@
     (datos.equipos.equipos || []).forEach(function (club) {
       var texto = obtenerCalendarioExtraTexto(club.id);
       R.parsearPartidosExtraTexto(texto, club.nombre).forEach(function (ex, i) {
-        var rival = R.resolverRivalPorNombre(ex.rivalNombre, datos, club.ligaActual);
         var compKey = resolverCompKey(ex.competicion);
-        var localId = ex.esVisitante ? rival.id : club.id;
-        var visitanteId = ex.esVisitante ? club.id : rival.id;
+        // NATIONS CUP: el equipo del mánager es SU SELECCIÓN ("sel-<clubId>",
+        // con su propia plantilla y estadísticas), no el club — y el rival es
+        // otra selección (con su bandera). Un club sin selección (Barcelona)
+        // no juega la Nations Cup: esa línea se ignora.
+        var ladoId = club.id, rival, esVisitanteLado = ex.esVisitante;
+        if (compKey === "nations") {
+          var selId = R.idSeleccionDeClub ? R.idSeleccionDeClub(club.id) : null;
+          if (!selId || !R.resolverSeleccionPorNombre) return;
+          ladoId = selId;
+          // «Francia vs Alemania»: el parser solo conoce el nombre del CLUB
+          // (Liverpool), así que aquí se decide el lado por el nombre de la
+          // SELECCIÓN (Francia).
+          var rivalTxt = ex.rivalNombre, esVisN = ex.esVisitante;
+          var mVsN = rivalTxt.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+          var defSel = R.seleccionHumanaDeClub ? R.seleccionHumanaDeClub(club.id) : null;
+          if (mVsN && defSel) {
+            var selNorm = _normTxtExtra(defSel.nombre), lA = _normTxtExtra(mVsN[1]), lB = _normTxtExtra(mVsN[2]);
+            if (lA === selNorm && lB !== selNorm) { rivalTxt = mVsN[2].trim(); esVisN = false; }
+            else if (lB === selNorm && lA !== selNorm) { rivalTxt = mVsN[1].trim(); esVisN = true; }
+          }
+          rival = R.resolverSeleccionPorNombre(rivalTxt, datos);
+          esVisitanteLado = esVisN;
+        } else {
+          rival = R.resolverRivalPorNombre(ex.rivalNombre, datos, club.ligaActual);
+        }
+        var localId = esVisitanteLado ? rival.id : ladoId;
+        var visitanteId = esVisitanteLado ? ladoId : rival.id;
         out.push({
           id: ex.id,
           competicion: compKey,
@@ -729,8 +760,8 @@
           _origenClubId: club.id,
           jugado: ex.jugado,
           resultado: ex.jugado ? {
-            golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
-            golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
+            golesLocal: esVisitanteLado ? ex.golesRival : ex.golesClub,
+            golesVisitante: esVisitanteLado ? ex.golesClub : ex.golesRival
           } : null,
           // null en cualquier partido normal — solo se rellena cuando la
           // ronda es "... IDA"/"... VUELTA" (ver _detectarEliminatoria):
@@ -1665,8 +1696,16 @@
     // renderizadores.js: _BALON_COMP_ALIAS, COMP_LABEL, COMP_CLASE,
     // FINALES_ACTIVADAS_COMPS, y css/estilos.css ya tenía .comp-usc
     // estilizado en plata), solo faltaba esta tarjeta + su motor.
-    { id: "usc", icono: "🛡️", etiqueta: "Supercopa Europa" }
+    { id: "usc", icono: "🛡️", etiqueta: "Supercopa Europa" },
+    // Petición usuario ("vamos a montar las selecciones"): Nations Cup
+    // (11 grupos de 5 + eliminatorias desde Octavos, todo ida y vuelta).
+    // Tarjeta builtin en todas las cajas MENOS Barcelona (sin selección):
+    // ver MENU_CLUB_EXCLUIDOS_POR_CLUB.
+    { id: "nations", icono: "🌐", etiqueta: "Nations Cup" }
   ];
+  // Tarjetas de fábrica que NO existen para un club concreto (Barcelona no
+  // dirige ninguna selección, así que no tiene Nations Cup).
+  var MENU_CLUB_EXCLUIDOS_POR_CLUB = { "fc-barcelona": { nations: true } };
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
   // Coupe de France (ver COPA_HUMANOS_EXCLUIDOS/renderizarCoupeFrancia en
@@ -1723,6 +1762,9 @@
     MENU_CLUB_BUILTIN.forEach(function (c) {
       if (orden.indexOf(c.id) === -1) orden.push(c.id);
     });
+
+    var excluidas = MENU_CLUB_EXCLUIDOS_POR_CLUB[clubId] || {};
+    orden = orden.filter(function (id) { return !excluidas[id]; });
 
     return orden.map(function (id) {
       if (builtinPorId[id]) {
@@ -3553,6 +3595,78 @@
   }
 
 
+  // ---------- Nations Cup — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularNationsCombinada.
+  var NATIONS_TEXTO_KEY = "ef7_nations_clasificacion_v1";
+  function obtenerNationsTexto() {
+    try {
+      return localStorage.getItem(NATIONS_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarNationsTexto(texto) {
+    if (!_confirmarSiEncogeMucho(NATIONS_TEXTO_KEY, obtenerNationsTexto(), texto)) return false;
+    try {
+      localStorage.setItem(NATIONS_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Nations Cup:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _nationsStatKey(categoria) {
+    return "ef7_nations_stat_" + categoria + "_v1";
+  }
+  function obtenerNationsStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_nationsStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarNationsStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_nationsStatKey(categoria), obtenerNationsStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_nationsStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Nations Cup:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _nationsPlayoffKey(ronda) {
+    return "ef7_nations_playoff_" + ronda + "_v1";
+  }
+  function obtenerNationsPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_nationsPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarNationsPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_nationsPlayoffKey(ronda), obtenerNationsPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_nationsPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Nations Cup:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+
   // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
   // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
   // app simula — el admin ha comparado, equipo a equipo, nivel/escudo/
@@ -4159,6 +4273,12 @@
     guardarSceStatTexto: guardarSceStatTexto,
     obtenerScePlayoffTexto: obtenerScePlayoffTexto,
     guardarScePlayoffTexto: guardarScePlayoffTexto,
+    obtenerNationsTexto: obtenerNationsTexto,
+    guardarNationsTexto: guardarNationsTexto,
+    obtenerNationsStatTexto: obtenerNationsStatTexto,
+    guardarNationsStatTexto: guardarNationsStatTexto,
+    obtenerNationsPlayoffTexto: obtenerNationsPlayoffTexto,
+    guardarNationsPlayoffTexto: guardarNationsPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

@@ -1244,7 +1244,9 @@
         var hEnv = new Date(_ultimoEnvio.ms).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         base += _ultimoEnvio.ok ? " · envío ✅ " + hEnv : " · envío ❌ " + hEnv + " (" + (_ultimoEnvio.motivo || "?") + ")";
       }
-      if (_infoServidor && _infoServidor.persistente === false) {
+      // El aviso rojo SOLO sale en los 15 min siguientes a guardar un partido
+      // (que es cuando importa); el resto del tiempo el chip va discreto.
+      if (_infoServidor && _infoServidor.persistente === false && _ultimoEnvio && Date.now() - _ultimoEnvio.ms < 15 * 60 * 1000) {
         // Aviso fijo: sin disco persistente el servidor pierde TODOS los
         // partidos en cada reinicio (Render duerme el servicio al rato sin uso).
         el.textContent = base + " · ⚠️ SERVIDOR SIN DISCO: se borra al reiniciar";
@@ -1260,5 +1262,5 @@
   }
   document.addEventListener("DOMContentLoaded", function () { _pintarChip(); setInterval(_pintarChip, 15000); });
 
-  window.Sync = { forzarCiclo: _ciclo, pedirSincronizacion: pedirSincronizacion, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar, verificarPartido: verificarPartido };
+  window.Sync = { servidorSinDisco: function () { return !!(_infoServidor && _infoServidor.persistente === false); }, forzarCiclo: _ciclo, pedirSincronizacion: pedirSincronizacion, estaSincronizado: estaSincronizado, marcarParaForzar: marcarParaForzar, verificarPartido: verificarPartido };
 })();

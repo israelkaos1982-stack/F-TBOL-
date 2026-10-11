@@ -6953,6 +6953,35 @@ def api_ef7_state_post():
     return jsonify({"ok": True, "guardadas": guardadas, "updated_at": now})
 
 
+# Registro EN MEMORIA de los últimos envíos de partidos recibidos (se vacía al
+# reiniciar). Sirve para saber con certeza si el POST de un móvil LLEGÓ al
+# servidor y qué hizo con él (guardado / rechazado y por qué) — reporte
+# usuario 2026-10-11: "Liverpool finalizó el partido y a los pocos minutos el
+# admin lo vio sin jugar". Verlo en el navegador: /api/ef7/envios
+from collections import deque as _deque
+_EF7_ULTIMOS_ENVIOS = _deque(maxlen=40)
+
+
+def _ef7_anotar_envio(origen, ids, estado, detalle=""):
+    try:
+        _EF7_ULTIMOS_ENVIOS.append({
+            "hora_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "origen": origen,
+            "ids": list(ids)[:8],
+            "estado": estado,
+            "detalle": detalle,
+            "ua": (request.headers.get("User-Agent") or "")[:80],
+        })
+    except Exception:
+        pass
+
+
+@app.route("/api/ef7/envios", methods=["GET"])
+def api_ef7_envios():
+    return jsonify({"ok": True, "ahora_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "envios": list(reversed(_EF7_ULTIMOS_ENVIOS))})
+
+
 @app.route("/api/ef7/resultado", methods=["POST"])
 def api_ef7_resultado_post():
     """Sube SOLO los partidos nuevos/modificados (unos cientos de bytes) en vez
@@ -6968,6 +6997,7 @@ def api_ef7_resultado_post():
     body = request.get_json(silent=True) or {}
     partidos = body.get("partidos")
     if not isinstance(partidos, dict):
+        _ef7_anotar_envio("resultado", [], "RECHAZADO", "falta `partidos`")
         return jsonify({"ok": False, "error": "falta `partidos`"}), 400
     limpios = {
         pid: entry for pid, entry in partidos.items()
@@ -6996,6 +7026,7 @@ def api_ef7_resultado_post():
                 f"limite={_EF7_ESTADO_LIGA_MAX_BYTES}",
                 flush=True,
             )
+            _ef7_anotar_envio("resultado", limpios.keys(), "RECHAZADO", f"demasiado grande ({payload_bytes} bytes)")
             return jsonify({"ok": False, "error": "demasiado grande"}), 413
         if row:
             row.valor_json = payload
@@ -7005,6 +7036,12 @@ def api_ef7_resultado_post():
         db.session.commit()
     finally:
         _ef7_state_lock_release(lock_fh)
+    _ef7_anotar_envio(
+        "resultado", limpios.keys(), "GUARDADO",
+        ", ".join(
+            f"{pid[-8:]}:{'jugado' if e.get('jugado') is True else 'no-jugado'}" for pid, e in list(limpios.items())[:4]
+        ),
+    )
     return jsonify({"ok": True, "guardados": list(limpios.keys()), "updated_at": now})
 
 

@@ -10548,6 +10548,7 @@
 
   // Todos los puntos de UN club, repartidos por clasificación.
   // → { espana: {total, filas:[{nombre, txt, base, mult, pts}]}, europa:…, seleccion:… }
+  var RANK_LIGAS_EXTRANJERAS = ["ligue1", "premier", "seriea"];
   function calcularPuntosRankingClub(clubId, datos) {
     _rankFns();
     var out = { espana: { total: 0, filas: [] }, europa: { total: 0, filas: [] }, seleccion: { total: 0, filas: [] } };
@@ -10564,7 +10565,9 @@
         if (f.rkLiga) {
           var L = f.rkLiga, mult = RANK_MULT_LIGA[L.ligaId];
           if (!mult || !L.pj) return; // sin partidos jugados la posición es solo orden alfabético
-          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
+          // ESPAÑA = Liga + Copa + Supercopa de España; las ligas extranjeras (Ligue 1,
+          // Premier, Serie A) de los humanos no españoles cuentan en EUROPA.
+          sumar(RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1 ? "europa" : "espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
           return;
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];
@@ -10730,9 +10733,14 @@
     if (clubId && ids.indexOf(clubId) === -1) ids.push(clubId);
     return ids;
   }
+  // En ESPAÑA solo van los humanos que juegan las competiciones españolas: el único
+  // extranjero que juega la Liga es el Liverpool (Inter, PSG, Chelsea no).
+  function _rankingJuegaEspana(h) {
+    return h === "liverpool" || RANK_LIGAS_EXTRANJERAS.indexOf(_divisionActualClub(h)) === -1;
+  }
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
-    var humanos = _rankingHumanos(clubId);
+    var humanos = _rankingHumanos(clubId).filter(function (h) { return tipo !== "espana" || _rankingJuegaEspana(h); });
     var hayLista = filas.some(function (f) { return !f.sep; });
     var maxPos = filas.reduce(function (m, f) { return f.sep ? m : Math.max(m, f.pos); }, 0);
     var filaDe = {}, nombreDe = {};

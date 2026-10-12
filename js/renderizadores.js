@@ -10706,50 +10706,71 @@
   // Estado de UN ranking para un club: puesto actual, objetivo y si se cumple.
   // Los puntos de los objetivos logrados se SUMAN a la fila del club y la
   // lista se reordena (el puesto sube si adelanta a otros).
+  // Los clubes humanos (todos los de la app) aparecen SIEMPRE en las 3
+  // listas, con sus puntos calculados: así las listas son idénticas en las
+  // cajas de todos los mister. El club activo es solo el que se resalta.
+  var _rankingHumanosIds = [];
+  function _rankingHumanos(clubId) {
+    var ids = _rankingHumanosIds.slice();
+    if (clubId && ids.indexOf(clubId) === -1) ids.push(clubId);
+    return ids;
+  }
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
-    var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId))[tipo] || {};
-    var nombre = cfg.nombre || _rankingNombreDefecto(tipo, clubId);
-    var fila = nombre ? _rankingBuscarFila(filas, nombre) : null;
-    var sintetica = false;
-    // La lista pegada solo trae los equipos IA: si el club no está, se
-    // añade su fila (0 puntos + lo que le suman sus competiciones/objetivos).
-    var reales0 = filas.filter(function (f) { return !f.sep; });
-    if (!fila && nombre && reales0.length) {
-      var maxPos = reales0.reduce(function (m, f) { return Math.max(m, f.pos); }, 0);
-      fila = { pos: maxPos + 1, texto: nombre, norm: _rankingNorm(nombre), pts: "0", ptsNum: 0, sintetica: true };
-      filas = filas.concat([fila]);
-      sintetica = true;
-    }
-    var bonus = fila ? _rankingBonusClub(tipo, clubId) : 0;
-    if (fila && bonus > 0) {
-      var reales = filas.filter(function (f) { return !f.sep; });
-      if (reales.every(function (f) { return _ptsNum(f) !== null; })) {
-        var totalPts = _ptsNum(fila) + bonus;
-        var propia = { pos: fila.pos, texto: fila.texto, norm: fila.norm, ptsNum: totalPts, pts: _fmtPts(totalPts), bonus: bonus };
-        var posiciones = reales.map(function (f) { return f.pos; }).sort(function (a, b) { return a - b; });
-        var nuevas = reales.map(function (f) { return f === fila ? propia : f; });
-        nuevas = nuevas
-          .map(function (f, i) { return { f: f, i: i }; })
-          .sort(function (a, b) { return (_ptsNum(b.f) - _ptsNum(a.f)) || (a.i - b.i); })
-          .map(function (x) { return x.f; });
-        var copias = nuevas.map(function (f, i) {
-          if (f === propia) { propia.pos = posiciones[i]; return propia; }
-          return { pos: posiciones[i], texto: f.texto, norm: f.norm, pts: f.pts, ptsNum: f.ptsNum };
-        });
-        var k = 0;
-        filas = filas.map(function (f) { return f.sep ? f : copias[k++]; });
-        fila = propia;
+    var humanos = _rankingHumanos(clubId);
+    var hayLista = filas.some(function (f) { return !f.sep; });
+    var maxPos = filas.reduce(function (m, f) { return f.sep ? m : Math.max(m, f.pos); }, 0);
+    var filaDe = {}, nombreDe = {};
+    // 1) localizar (o añadir) la fila de cada club humano — la lista pegada
+    //    solo trae los equipos IA.
+    humanos.forEach(function (h) {
+      var cfgH = parsearRankingClub(window.Estado.obtenerRankingClubTexto(h))[tipo] || {};
+      var nombreH = cfgH.nombre || _rankingNombreDefecto(tipo, h);
+      nombreDe[h] = nombreH;
+      var f = nombreH ? _rankingBuscarFila(filas, nombreH) : null;
+      if (f && Object.keys(filaDe).some(function (o) { return filaDe[o] === f; })) f = null; // la fila ya es de otro humano
+      if (!f && nombreH && hayLista) {
+        maxPos++;
+        f = { pos: maxPos, texto: nombreH, norm: _rankingNorm(nombreH), pts: "0", ptsNum: 0, sintetica: true };
+        filas.push(f);
       }
+      filaDe[h] = f || null;
+    });
+    // 2) sumar a cada humano lo suyo y reordenar toda la lista.
+    var reales = filas.filter(function (f) { return !f.sep; });
+    if (reales.every(function (f) { return f.sintetica || _ptsNum(f) !== null; })) {
+      var reemplazo = new Map();
+      humanos.forEach(function (h) {
+        var f = filaDe[h];
+        if (!f) return;
+        var bonus = _rankingBonusClub(tipo, h);
+        var total = _ptsNum(f) + bonus;
+        var nueva = { pos: f.pos, texto: f.texto, norm: f.norm, ptsNum: total, pts: _fmtPts(total), bonus: bonus, humano: true };
+        reemplazo.set(f, nueva);
+        filaDe[h] = nueva;
+      });
+      var posiciones = reales.map(function (f) { return f.pos; }).sort(function (a, b) { return a - b; });
+      var orden = reales
+        .map(function (f, i) { return { f: reemplazo.get(f) || f, i: i }; })
+        .sort(function (a, b) { return (_ptsNum(b.f) - _ptsNum(a.f)) || (a.i - b.i); })
+        .map(function (x) { return x.f; });
+      var copias = orden.map(function (f, i) {
+        if (f.humano) { f.pos = posiciones[i]; return f; }
+        return { pos: posiciones[i], texto: f.texto, norm: f.norm, pts: f.pts, ptsNum: f.ptsNum };
+      });
+      var k = 0;
+      filas = filas.map(function (f) { return f.sep ? f : copias[k++]; });
     }
+    var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId))[tipo] || {};
+    var fila = filaDe[clubId] || null;
     var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
     return {
       filas: filas,
-      nombre: nombre,
+      nombre: nombreDe[clubId] || "",
       fila: fila,
       puesto: fila ? fila.pos : null,
       objetivo: objetivo,
-      bonus: bonus,
+      bonus: fila ? _rankingBonusClub(tipo, clubId) : 0,
       bonusObj: fila ? _rankingBonusObjetivos(tipo, clubId) : 0,
       comp: fila ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
       cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
@@ -10810,7 +10831,7 @@
       var nombre = cols[0], extra = cols.slice(1).join(" ");
       var propia = est.fila === f;
       html +=
-        '<div class="ranking-fila' + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") + '">' +
+        '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") + '">' +
         '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
@@ -10871,15 +10892,21 @@
     // segundo plano y, si cambian, se repinta UNA vez.
     if (!_sinRecalculo && idClubActivo) {
       cargarTodo().then(function (datos) {
-        var nuevo;
+        var antes = JSON.stringify([_rankingPuntosCache, _rankingNombresClub, _rankingHumanosIds]);
         try {
-          var eq = buscarEquipoPorId(idClubActivo, datos);
-          if (eq && eq.nombre) _rankingNombresClub[idClubActivo] = eq.nombre;
-          nuevo = calcularPuntosRankingClub(idClubActivo, datos);
-        } catch (err) { console.error("[ranking] cálculo:", err); return; }
-        var antes = JSON.stringify([_rankingPuntosCache[idClubActivo] || null, _rankingNombresClub[idClubActivo] || null]);
-        _rankingPuntosCache[idClubActivo] = nuevo;
-        if (antes !== JSON.stringify([nuevo, _rankingNombresClub[idClubActivo] || null]) && document.getElementById(contenedorId)) {
+          var equipos = (datos && datos.equipos && datos.equipos.equipos) || [];
+          var ids = equipos.map(function (e) { return e.id; });
+          if (ids.indexOf(idClubActivo) === -1) ids.push(idClubActivo);
+          _rankingHumanosIds = ids;
+          ids.forEach(function (h) {
+            var eq = buscarEquipoPorId(h, datos);
+            if (eq && eq.nombre) _rankingNombresClub[h] = eq.nombre;
+            try { _rankingPuntosCache[h] = calcularPuntosRankingClub(h, datos); }
+            catch (err) { console.error("[ranking] cálculo de", h, err); }
+          });
+        } catch (err2) { console.error("[ranking] cálculo:", err2); return; }
+        var despues = JSON.stringify([_rankingPuntosCache, _rankingNombresClub, _rankingHumanosIds]);
+        if (antes !== despues && document.getElementById(contenedorId)) {
           renderizarRanking(contenedorId, idClubActivo, true);
         }
       });

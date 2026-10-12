@@ -10338,8 +10338,8 @@
       '<span class="obj-card-tag">' + escapeHTML(seccion) + "</span>" +
       '<span class="obj-card-icono">' + _objIcono(seccion) + "</span>" +
       '<span class="obj-card-cuerpo">' + cuerpo + "</span>" +
-      '<span class="obj-card-rec"><span class="obj-card-rec-tit">RECOMPENSA</span>' +
-      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙 " + escapeHTML(o.recompensa) : "—") + "</span></span>" +
+      '<span class="obj-card-rec">' +
+      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙<br>" + escapeHTML(o.recompensa) : "—") + "</span></span>" +
       "</button>"
     );
   }
@@ -10578,7 +10578,8 @@
     if (!est.filas.length) {
       return '<p class="objetivos-vacio">Lista vacía. Pulsa ✏️ y pega la clasificación tal cual sale del juego.</p>';
     }
-    var html = "";
+    var html = '<div class="ranking-fila ranking-fila--cab"><span class="ranking-fila-pos">Nº</span>' +
+      '<span class="ranking-fila-nom">Club</span><span class="ranking-fila-pts">Puntos</span></div>';
     var marcaPuesta = false;
     var ultimaConPuesto = -1;
     est.filas.forEach(function (f, i) { if (!f.sep && est.objetivo !== null && f.pos <= est.objetivo) ultimaConPuesto = i; });

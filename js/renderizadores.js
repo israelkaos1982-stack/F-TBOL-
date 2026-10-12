@@ -10283,10 +10283,10 @@
   //   Gana o empata 8 partidos - 10K - 4/8      <- progreso opcional
   // Tocar una tarjeta la marca como lograda (sin PIN).
   // ============================================================
-  var OBJETIVOS_MAX_POR_COMP = 2;
+  var OBJETIVOS_MAX_POR_COMP = 50;
   var _OBJ_ICONOS = [
-    ["espana", "🏆"], ["liga", "🏆"], ["copa", "🏅"], ["supercopa", "🏅"], ["champions", "🇪🇺"],
-    ["europa", "🟠"], ["conference", "🟢"], ["recopa", "🥈"], ["superliga", "🍇"], ["seleccion", "🌍"]
+    ["champions", "🇪🇺"], ["conference", "🟢"], ["europa", "🟠"], ["recopa", "🥈"], ["superliga", "🍇"],
+    ["seleccion", "🌍"], ["espana", "🇪🇸"], ["liga", "🇪🇸"], ["supercopa", "🏆"], ["copa", "🏆"]
   ];
   function _objIcono(nombre) {
     var n = _rankingNorm(nombre);
@@ -10361,7 +10361,7 @@
     if (!parseo.orden.length) {
       var vacio = document.createElement("p");
       vacio.className = "objetivos-vacio";
-      vacio.textContent = 'Sin objetivos todavía. Pulsa ✏️ y escribe "# LIGA" y debajo hasta 2 objetivos.';
+      vacio.textContent = 'Sin objetivos todavía. Pulsa ✏️ y escribe "# LIGA" y debajo sus objetivos.';
       contenedor.appendChild(vacio);
       return;
     }
@@ -10371,7 +10371,7 @@
     });
     html += "</div>";
     if (parseo.sobrantes) {
-      html += '<p class="objetivos-vacio">Solo se muestran 2 objetivos por competición (' + parseo.sobrantes +
+      html += '<p class="objetivos-vacio">Hay demasiados objetivos en una competición (' + parseo.sobrantes +
         (parseo.sobrantes === 1 ? " línea sobra" : " líneas sobran") + ").</p>";
     }
     var host = document.createElement("div");
@@ -10384,7 +10384,7 @@
     nota.className = "admin-nota";
     nota.textContent =
       'Una línea "# NOMBRE" abre una competición (LIGA, COPA, CHAMPIONS…) y debajo van sus objetivos, ' +
-      'SOLO 2 por competición. Formato: "Texto del objetivo - RECOMPENSA", p.ej. "Gana la liga - 20K". ' +
+      'los que quieras. Formato: "Texto del objetivo - RECOMPENSA", p.ej. "Gana la liga - 20K". ' +
       'Para una barra de progreso añade al final "- 4/8": "Gana o empata 8 partidos - 10K - 4/8".';
     contenedor.appendChild(nota);
     var textarea = document.createElement("textarea");
@@ -10464,10 +10464,68 @@
     return null;
   }
   // Estado de UN ranking para un club: puesto actual, objetivo y si se cumple.
+  // Qué ranking suma un objetivo según el nombre de su competición.
+  function _objetivoRankingTipo(seccion) {
+    var n = _rankingNorm(seccion);
+    if (/seleccion|mundial|nations/.test(n)) return "seleccion";
+    if (/champions|conference|europa|uefa|recopa|intercontinental/.test(n)) return "europa";
+    if (/espana|liga|copa|supercopa|hypermotion|1 ref|primera/.test(n)) return "espana";
+    return null;
+  }
+  // "5 pt" -> 5 · "20K" -> 20000
+  function _objetivoPuntos(recompensa) {
+    var m = String(recompensa || "").match(/(\d[\d.,]*)\s*(k)?/i);
+    if (!m) return 0;
+    var v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
+    if (isNaN(v)) return 0;
+    return m[2] ? v * 1000 : v;
+  }
+  // Puntos de los objetivos YA logrados del club que suman a este ranking.
+  function _rankingBonusClub(tipo, clubId) {
+    var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(clubId));
+    var logrados = {};
+    window.Estado.obtenerObjetivosLogrados(clubId).forEach(function (c) { logrados[c] = true; });
+    var total = 0;
+    parseo.orden.forEach(function (sec) {
+      if (_objetivoRankingTipo(sec) !== tipo) return;
+      parseo.secciones[sec].forEach(function (o) {
+        var completo = logrados[o.clave] || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
+        if (completo) total += _objetivoPuntos(o.recompensa);
+      });
+    });
+    return total;
+  }
+  function _ptsNum(f) {
+    var v = parseFloat(String(f.pts || "").replace(/[.,]/g, ""));
+    return isNaN(v) ? null : v;
+  }
+  // Estado de UN ranking para un club: puesto actual, objetivo y si se cumple.
+  // Los puntos de los objetivos logrados se SUMAN a la fila del club y la
+  // lista se reordena (el puesto sube si adelanta a otros).
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
     var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId))[tipo] || {};
     var fila = cfg.nombre ? _rankingBuscarFila(filas, cfg.nombre) : null;
+    var bonus = fila ? _rankingBonusClub(tipo, clubId) : 0;
+    if (fila && bonus > 0) {
+      var reales = filas.filter(function (f) { return !f.sep; });
+      if (reales.every(function (f) { return _ptsNum(f) !== null; })) {
+        var propia = { pos: fila.pos, texto: fila.texto, norm: fila.norm, pts: String(_ptsNum(fila) + bonus), bonus: bonus };
+        var posiciones = reales.map(function (f) { return f.pos; }).sort(function (a, b) { return a - b; });
+        var nuevas = reales.map(function (f) { return f === fila ? propia : f; });
+        nuevas = nuevas
+          .map(function (f, i) { return { f: f, i: i }; })
+          .sort(function (a, b) { return (_ptsNum(b.f) - _ptsNum(a.f)) || (a.i - b.i); })
+          .map(function (x) { return x.f; });
+        var copias = nuevas.map(function (f, i) {
+          if (f === propia) { propia.pos = posiciones[i]; return propia; }
+          return { pos: posiciones[i], texto: f.texto, norm: f.norm, pts: f.pts };
+        });
+        var k = 0;
+        filas = filas.map(function (f) { return f.sep ? f : copias[k++]; });
+        fila = propia;
+      }
+    }
     var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
     return {
       filas: filas,
@@ -10475,6 +10533,7 @@
       fila: fila,
       puesto: fila ? fila.pos : null,
       objetivo: objetivo,
+      bonus: bonus,
       cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
     };
   }
@@ -10535,7 +10594,8 @@
         '<div class="ranking-fila' + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") + '">' +
         '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
-        '<span class="ranking-fila-pts">' + escapeHTML(f.pts) + "</span></div>";
+        '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
+        (f.bonus ? ' <span class="ranking-fila-bonus">(+' + f.bonus + ")</span>" : "") + "</span></div>";
       if (!marcaPuesta && i === ultimaConPuesto) {
         marcaPuesta = true;
         html += '<div class="ranking-meta">🎯 OBJETIVO: puesto ' + est.objetivo + "</div>";

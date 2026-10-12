@@ -12198,7 +12198,7 @@
   // empezar el partido.
   function _filaJugadorLista(entrada, tipo) {
     return (
-      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) + "</span>" +
+      '<div class="live-acta-item' + (tipo === "lesionados" ? " live-acta-item--lesion" : "") + '"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) + "</span>" +
       '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-entrada-id="' + escapeHTML(entrada.id) + '" aria-label="Quitar">✕</button></div>'
     );
   }

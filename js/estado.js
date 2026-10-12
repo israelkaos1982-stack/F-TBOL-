@@ -2312,10 +2312,83 @@
     return flags;
   }
 
+  // ---------- Objetivos (estilo "Patrocinadores", candado 646) ----------
+  // Pantalla que se abre con el 🎯 de la cabecera (petición usuario
+  // 2026-10-12): por cada competición (una caja "# NOMBRE") como MÁXIMO 2
+  // objetivos, cada uno con su texto y su recompensa, todo editable como
+  // texto. El parseo/dibujo vive en js/renderizadores.js::
+  // parsearObjetivosTexto / renderizarObjetivos. Claves v2 NUEVAS: no
+  // reutilizan el texto de los antiguos Objetivos (v1), que ya no se usa.
+  var OBJETIVOS_DEFAULT_TEXTO = [
+    "# LIGA",
+    "Gana la liga - 20K",
+    "Termina la liga con el máximo goleador - 12K",
+    "",
+    "# COPA",
+    "Termina la copa nacional con el máximo goleador - 30K",
+    "Marca 7 goles - 14K"
+  ].join("\n");
+  function _objetivosTextoKey(clubId) { return "ef7_objetivos_v2_" + clubId; }
+  function obtenerObjetivosTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_objetivosTextoKey(clubId));
+      return v !== null ? v : OBJETIVOS_DEFAULT_TEXTO;
+    } catch (err) {
+      return OBJETIVOS_DEFAULT_TEXTO;
+    }
+  }
+  function guardarObjetivosTexto(clubId, texto) {
+    if (!_confirmarSiEncogeMucho(_objetivosTextoKey(clubId), obtenerObjetivosTexto(clubId), texto)) return false;
+    try {
+      localStorage.setItem(_objetivosTextoKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar los objetivos del club:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+  // Objetivos ya LOGRADOS (se marcan tocando la tarjeta, sin PIN). Se
+  // guardan por CLAVE de texto del objetivo.
+  function _objetivosLogradosKey(clubId) { return "ef7_objetivos_logrados_v2_" + clubId; }
+  function obtenerObjetivosLogrados(clubId) {
+    try {
+      var raw = localStorage.getItem(_objetivosLogradosKey(clubId));
+      var lista = raw ? JSON.parse(raw) : [];
+      return Array.isArray(lista) ? lista : [];
+    } catch (err) {
+      return [];
+    }
+  }
+  function toggleObjetivoLogrado(clubId, clave) {
+    var lista = obtenerObjetivosLogrados(clubId);
+    var idx = lista.indexOf(clave);
+    if (idx === -1) lista.push(clave); else lista.splice(idx, 1);
+    try {
+      localStorage.setItem(_objetivosLogradosKey(clubId), JSON.stringify(lista));
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el progreso de objetivos:", err);
+      _avisarFalloGuardado(err);
+    }
+    return lista;
+  }
+  // Vacía lo LOGRADO de un club al "🔄 Reiniciar temporada de este club".
+  function reiniciarObjetivosLogrados(clubId) {
+    try {
+      localStorage.setItem(_objetivosLogradosKey(clubId), "[]");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo reiniciar el progreso de objetivos:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Ranking (3 clasificaciones globales, candado 646) ----------
   // Sustituye a los antiguos Objetivos + 💼 (petición usuario 2026-10-12:
   // "vamos a quitar los objetivos porque dan errores y vamos a poner
-  // Ranking"). Hay 3 clasificaciones — LIGA, EUROPA y SELECCIÓN — y cada
+  // Ranking"). Hay 3 clasificaciones — ESPAÑA (engloba Liga + Copa +
+  // Supercopa), EUROPA y SELECCIÓN — y cada
   // club tiene que conseguir un puesto concreto en cada una.
   //  · Las 3 LISTAS son COMPARTIDAS por todas las cajas (se pegan una vez,
   //    como texto, tal cual salen del juego: "1. Bayern ALEMANIA 422").
@@ -2324,7 +2397,7 @@
   // Todo es texto editable; el parseo real vive en
   // js/renderizadores.js::parsearRankingLista / parsearRankingClub.
   var RANKING_TIPOS = [
-    { id: "liga", icono: "🏆", etiqueta: "LIGA" },
+    { id: "espana", icono: "🇪🇸", etiqueta: "ESPAÑA" },
     { id: "europa", icono: "🇪🇺", etiqueta: "EUROPA" },
     { id: "seleccion", icono: "🌍", etiqueta: "SELECCIÓN" }
   ];
@@ -4102,6 +4175,11 @@
     capearListaJugadoresAbierta: capearListaJugadoresAbierta,
     obtenerTarjetaFlags: obtenerTarjetaFlags,
     limpiarTarjetaFlag: limpiarTarjetaFlag,
+    obtenerObjetivosTexto: obtenerObjetivosTexto,
+    guardarObjetivosTexto: guardarObjetivosTexto,
+    obtenerObjetivosLogrados: obtenerObjetivosLogrados,
+    toggleObjetivoLogrado: toggleObjetivoLogrado,
+    reiniciarObjetivosLogrados: reiniciarObjetivosLogrados,
     RANKING_TIPOS: RANKING_TIPOS,
     obtenerRankingLista: obtenerRankingLista,
     guardarRankingLista: guardarRankingLista,

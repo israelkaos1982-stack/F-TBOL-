@@ -10275,6 +10275,133 @@
   }
 
   // ============================================================
+  // OBJETIVOS (estilo "Patrocinadores") — se abren con el 🎯 de la
+  // cabecera. Por cada competición ("# NOMBRE") como MÁXIMO 2 objetivos,
+  // cada uno con su recompensa. Texto editable (PIN):
+  //   # LIGA
+  //   Gana la liga - 20K
+  //   Gana o empata 8 partidos - 10K - 4/8      <- progreso opcional
+  // Tocar una tarjeta la marca como lograda (sin PIN).
+  // ============================================================
+  var OBJETIVOS_MAX_POR_COMP = 2;
+  var _OBJ_ICONOS = [
+    ["espana", "🏆"], ["liga", "🏆"], ["copa", "🏅"], ["supercopa", "🏅"], ["champions", "🇪🇺"],
+    ["europa", "🟠"], ["conference", "🟢"], ["recopa", "🥈"], ["superliga", "🍇"], ["seleccion", "🌍"]
+  ];
+  function _objIcono(nombre) {
+    var n = _rankingNorm(nombre);
+    for (var i = 0; i < _OBJ_ICONOS.length; i++) if (n.indexOf(_OBJ_ICONOS[i][0]) !== -1) return _OBJ_ICONOS[i][1];
+    return "🎯";
+  }
+  function parsearObjetivosTexto(texto) {
+    var secciones = {}, orden = [], sobrantes = 0, actual = null;
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.replace(/\r/g, "").trim();
+      if (!l) return;
+      if (l.charAt(0) === "#") {
+        var nombre = l.replace(/^#+\s*/, "").trim() || "GENERAL";
+        actual = nombre.toUpperCase();
+        if (!secciones[actual]) { secciones[actual] = []; orden.push(actual); }
+        return;
+      }
+      if (!actual) { actual = "GENERAL"; secciones[actual] = []; orden.push(actual); }
+      var partes = l.split(/\s+-\s+/);
+      var progreso = null, recompensa = "";
+      if (partes.length > 1) {
+        var mp = partes[partes.length - 1].trim().match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (mp) { progreso = { actual: parseInt(mp[1], 10), total: parseInt(mp[2], 10) }; partes.pop(); }
+      }
+      if (partes.length > 1) {
+        var rec = partes[partes.length - 1].trim();
+        if (rec.length <= 14) { recompensa = rec; partes.pop(); }
+      }
+      var txt = partes.join(" - ").trim();
+      if (!txt) return;
+      if (secciones[actual].length >= OBJETIVOS_MAX_POR_COMP) { sobrantes++; return; }
+      secciones[actual].push({ texto: txt, recompensa: recompensa, progreso: progreso, clave: _rankingNorm(actual + " " + txt) });
+    });
+    return { secciones: secciones, orden: orden, sobrantes: sobrantes };
+  }
+  function _objTarjetaHTML(seccion, o, logrado, idClub) {
+    var completo = logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
+    var clase = "obj-card" + (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : ""));
+    var cuerpo = '<span class="obj-card-texto">' + escapeHTML(o.texto) + "</span>";
+    if (o.progreso && o.progreso.total > 0) {
+      var pct = Math.max(0, Math.min(100, Math.round(o.progreso.actual * 100 / o.progreso.total)));
+      cuerpo += '<span class="obj-card-prog-txt">' + o.progreso.actual + " / " + o.progreso.total + "</span>" +
+        '<span class="obj-card-barra"><span class="obj-card-barra-rel" style="width:' + pct + '%"></span></span>';
+    }
+    if (completo) cuerpo += '<span class="obj-card-logrado">✅ LOGRADO</span>';
+    return (
+      '<button type="button" class="' + clase + '" data-accion="toggle-objetivo" data-club-id="' + (idClub || "") +
+      '" data-clave="' + escapeHTML(o.clave) + '">' +
+      '<span class="obj-card-tag">' + escapeHTML(seccion) + "</span>" +
+      '<span class="obj-card-icono">' + _objIcono(seccion) + "</span>" +
+      '<span class="obj-card-cuerpo">' + cuerpo + "</span>" +
+      '<span class="obj-card-rec"><span class="obj-card-rec-tit">RECOMPENSA</span>' +
+      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙 " + escapeHTML(o.recompensa) : "—") + "</span></span>" +
+      "</button>"
+    );
+  }
+  function renderizarObjetivos(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor || !window.Estado) return;
+    contenedor.innerHTML = "";
+    var header = document.createElement("div");
+    header.className = "liga1ref-header";
+    header.innerHTML =
+      '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos">Toca un objetivo para marcarlo como logrado</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
+    contenedor.appendChild(header);
+
+    var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(idClubActivo));
+    var logrados = {};
+    window.Estado.obtenerObjetivosLogrados(idClubActivo).forEach(function (c) { logrados[c] = true; });
+    if (!parseo.orden.length) {
+      var vacio = document.createElement("p");
+      vacio.className = "objetivos-vacio";
+      vacio.textContent = 'Sin objetivos todavía. Pulsa ✏️ y escribe "# LIGA" y debajo hasta 2 objetivos.';
+      contenedor.appendChild(vacio);
+      return;
+    }
+    var html = '<div class="obj-lista">';
+    parseo.orden.forEach(function (sec) {
+      parseo.secciones[sec].forEach(function (o) { html += _objTarjetaHTML(sec, o, !!logrados[o.clave], idClubActivo); });
+    });
+    html += "</div>";
+    if (parseo.sobrantes) {
+      html += '<p class="objetivos-vacio">Solo se muestran 2 objetivos por competición (' + parseo.sobrantes +
+        (parseo.sobrantes === 1 ? " línea sobra" : " líneas sobran") + ").</p>";
+    }
+    var host = document.createElement("div");
+    host.innerHTML = html;
+    contenedor.appendChild(host);
+  }
+  function pintarEditorObjetivos(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      'Una línea "# NOMBRE" abre una competición (LIGA, COPA, CHAMPIONS…) y debajo van sus objetivos, ' +
+      'SOLO 2 por competición. Formato: "Texto del objetivo - RECOMPENSA", p.ej. "Gana la liga - 20K". ' +
+      'Para una barra de progreso añade al final "- 4/8": "Gana o empata 8 partidos - 10K - 4/8".';
+    contenedor.appendChild(nota);
+    var textarea = document.createElement("textarea");
+    textarea.id = "objetivos-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 16;
+    textarea.value = window.Estado.obtenerObjetivosTexto(idClubActivo);
+    contenedor.appendChild(textarea);
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-objetivos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-objetivos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
   // RANKING — 3 clasificaciones GLOBALES (LIGA · EUROPA · SELECCIÓN) que
   // sustituyen a los antiguos Objetivos + 💼 (petición usuario 2026-10-12).
   // Las 3 LISTAS son comunes a todas las cajas y se pegan como texto tal
@@ -10284,7 +10411,7 @@
   // sola el puesto actual y dice si el objetivo está cumplido (puesto igual
   // o MEJOR que el objetivo).
   // ============================================================
-  var _rankingTabActual = "liga"; // "liga" | "europa" | "seleccion" — no se persiste
+  var _rankingTabActual = "espana"; // "espana" | "europa" | "seleccion" — no se persiste
 
   function _rankingNorm(s) {
     return _normNombre(s).replace(/[^a-z0-9ñ]+/g, " ").trim();
@@ -10308,17 +10435,19 @@
     });
     return filas;
   }
-  // "LIGA - Mersey Reds - 50" -> { liga: { nombre: "Mersey Reds", objetivo: 50 } }
+  // "ESPAÑA - Mersey Reds - 50" -> { espana: { nombre: "Mersey Reds", objetivo: 50 } }
+  // (también acepta "LIGA" como sinónimo de ESPAÑA).
   function parsearRankingClub(texto) {
     var out = {};
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
-      var m = _normNombre(l).match(/^(liga|europa|seleccion)\s*[-:]\s*/);
+      var m = _normNombre(l).match(/^(espana|liga|europa|seleccion)\s*[-:]\s*/);
       if (!m) return;
+      var tipoClave = m[1] === "liga" ? "espana" : m[1];
       var resto = l.slice(l.search(/[-:]/) + 1).trim();
       var mo = resto.match(/^(.*?)\s*[-–]\s*(\d+)\s*$/);
-      out[m[1]] = mo
+      out[tipoClave] = mo
         ? { nombre: mo[1].trim(), objetivo: parseInt(mo[2], 10) }
         : { nombre: resto, objetivo: null };
     });
@@ -10443,7 +10572,7 @@
   }
   function irRankingTab(clubId, tab) {
     var valido = window.Estado.RANKING_TIPOS.some(function (t) { return t.id === tab; });
-    _rankingTabActual = valido ? tab : "liga";
+    _rankingTabActual = valido ? tab : "espana";
     renderizarRanking("ranking-content", clubId);
   }
 
@@ -10479,13 +10608,13 @@
     nota.className = "admin-nota";
     nota.textContent =
       "Una línea por clasificación: TIPO - nombre de tu equipo TAL COMO SALE EN LA LISTA - puesto objetivo. " +
-      "Ejemplo: LIGA - Mersey Reds - 50. Se cumple si estás en ese puesto o en uno mejor.";
+      "Ejemplo: ESPAÑA - Mersey Reds - 50. Se cumple si estás en ese puesto o en uno mejor.";
     contenedor.appendChild(nota);
     var textarea = document.createElement("textarea");
     textarea.id = "ranking-club-textarea";
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 6;
-    textarea.placeholder = "LIGA - Nombre en la lista - 50\nEUROPA - Nombre en la lista - 20\nSELECCIÓN - Nombre en la lista - 10";
+    textarea.placeholder = "ESPAÑA - Nombre en la lista - 50\nEUROPA - Nombre en la lista - 20\nSELECCIÓN - Nombre en la lista - 10";
     textarea.value = window.Estado.obtenerRankingClubTexto(idClubActivo);
     contenedor.appendChild(textarea);
     var acciones = document.createElement("div");
@@ -11457,6 +11586,8 @@
     if (window.Estado.reiniciarResultadosDeClub) {
       n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, incluirHvH);
     }
+    // 🎯 Objetivos LOGRADOS: se vacían al reiniciar la temporada del club.
+    if (window.Estado.reiniciarObjetivosLogrados) window.Estado.reiniciarObjetivosLogrados(clubId);
     generarCalendarioLateralDerecho(clubId);
     return n;
   }
@@ -15313,6 +15444,9 @@
     renderizarTitulosTemporada: renderizarTitulosTemporada,
     pintarEditorTitulosTemporada: pintarEditorTitulosTemporada,
     parsearTitulosTexto: parsearTitulosTexto,
+    renderizarObjetivos: renderizarObjetivos,
+    pintarEditorObjetivos: pintarEditorObjetivos,
+    parsearObjetivosTexto: parsearObjetivosTexto,
     renderizarRanking: renderizarRanking,
     irRankingTab: irRankingTab,
     pintarEditorRankingLista: pintarEditorRankingLista,

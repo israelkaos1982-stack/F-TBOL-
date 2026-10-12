@@ -1090,58 +1090,6 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
 }
 
-/* 💼 Valoración del club (solo lectura — se edita desde ✏️ Editar menú,
-   no aquí). Ancho FIJO — SIEMPRE el mismo tamaño en las 6 cajas; quien
-   absorbe el hueco libre/sobrante es .club-header-meta (nombre+mister,
-   flex:1 arriba), recortándose con elipsis si el nombre del club no
-   cabe. Números en VERTICAL, tipo fracción — icono a la izquierda,
-   logrado arriba / raya / objetivo abajo (petición usuario, fotos
-   "Atl. Madr…"/"FC Barce…" recortados: con los 2 números en horizontal
-   el ancho fijo no dejaba sitio de sobra para el nombre). Apilarlos
-   reduce el ancho mínimo del propio 💼 (88px -> 64px), liberando ese
-   hueco para el nombre completo.
-   Estilo "HUD de videojuego" ATENUADO (petición usuario: la 1ª versión
-   pintaba el degradado del escudo A TODA POTENCIA + un halo de brillo
-   muy vivo, "desentona" con el resto de la web — mucho más oscura y
-   sobria). El fondo es SIEMPRE oscuro (var(--bg-2), igual que el resto
-   de paneles) con solo un TINTE suave del color del escudo
-   (--club-primary-rgb, ya lo fija abrirClub() sobre #screen-club) mezclado
-   encima — sigue habiendo identidad de club, pero sin saturar. Sin halo
-   exterior (box-shadow solo interior, apenas visible). */
-.club-valoracion-badge {
-  flex: none;
-  width: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  min-height: 32px;
-  min-width: 30px;
-  padding: 3px 5px;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--club-primary-rgb, 57, 130, 255), 0.3);
-  background:
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 9px),
-    linear-gradient(135deg, rgba(var(--club-primary-rgb, 57, 130, 255), 0.22) 0%, var(--bg-2) 65%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-weight: 800;
-  white-space: nowrap;
-}
-.club-valoracion-icono { font-size: 12px; flex-shrink: 0; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5)); }
-/* Columna "fracción": logrado / raya / objetivo, centrados */
-.club-valoracion-fraccion { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
-/* Objetivos CONSEGUIDOS en verde --neon (petición usuario, foto: "1"
-   blanco se perdía dentro del badge) — no el color del club
-   (--club-primary-rgb, la propia badge lo usa de fondo y puede ser
-   rojo/azul/lo que sea según el club activo): el verde SIEMPRE
-   contrasta contra ese fondo, sea cual sea el club, con el mismo
-   significado "conseguido/activo" que ya usa el resto de la app
-   (ver .live-resumen-titulo--fin). El objetivo (denominador) se queda
-   neutro — es la meta, no el logro. */
-.club-valoracion-num { font-size: 11.5px; font-weight: 900; color: var(--neon); text-shadow: 0 0 6px rgba(57, 255, 106, 0.65), 0 1px 2px rgba(0, 0, 0, 0.6); }
-.club-valoracion-sep { width: 100%; height: 1px; margin: 1.5px 0; background: rgba(255, 255, 255, 0.45); }
-.club-valoracion-obj { font-size: 10px; color: rgba(255, 255, 255, 0.7); font-weight: 700; }
 
 /* Editor del menú (candado 646) — dos pestañas dentro del modal genérico */
 .editor-club-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
@@ -2472,82 +2420,52 @@ button { font-family: inherit; cursor: pointer; }
    texto 0/16 puntos conseguidos un 20% mas grande". 9.5px * 1.2 = 11.4px. */
 .liga1ref-leyenda-mini--objetivos { font-size: 11.4px; }
 
-.objetivos-seccion-caja { margin-bottom: 10px; }
-.objetivos-seccion-caja:last-of-type { margin-bottom: 0; }
-.objetivos-seccion-cabecera {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
-  background: var(--bg-3);
-}
-/* El icono se edita con este botón (candado 646); el nombre de la caja
-   sale LITERAL del texto que el admin escriba tras "# " en el editor
-   de Objetivos (p.ej. "# Champions League" → título "Champions
-   League") — cualquier título nuevo abre su PROPIA caja (catálogo
-   abierto, ver parsearObjetivosTexto), no hay lista cerrada de
-   nombres. Mismo tamaño de tap-target que el resto de ✏️ circulares
-   del proyecto, sin parecer un botón genérico. */
-.objetivos-seccion-icono {
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  font-size: 18px;
-  line-height: 1;
-  padding: 2px;
-}
-.objetivos-seccion-nombre {
-  flex: 1;
-  min-width: 0;
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--text-hi);
-  /* Petición usuario: el título de cada caja SIEMPRE en mayúsculas,
-     aunque el admin lo teclee en minúsculas/mixto en el editor — solo
-     cambia cómo se VE, el texto guardado (y la identidad de la caja
-     para el progreso marcado) conserva la grafía tal cual se escribió. */
-  text-transform: uppercase;
-}
-.objetivos-seccion-pts {
-  flex-shrink: 0;
-  font-size: 11.5px;
-  font-weight: 900;
-  color: var(--neon);
-  white-space: nowrap;
-}
-
-.objetivos-seccion-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .objetivos-vacio { font-size: 11px; color: var(--text-lo); padding: 4px 4px 2px; }
 
-.objetivos-fila {
+/* ---------- Ranking (LIGA · EUROPA · SELECCIÓN) ---------- */
+.ranking-cards { display: flex; gap: 6px; margin-bottom: 10px; }
+.ranking-card {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+  text-align: center;
+}
+.ranking-card--ok { border-color: rgba(57, 255, 106, 0.55); background: rgba(57, 255, 106, 0.1); }
+.ranking-card--no { border-color: rgba(255, 59, 92, 0.55); background: rgba(255, 59, 92, 0.1); }
+.ranking-card-tit { font-size: 9.5px; font-weight: 800; color: var(--text-lo); letter-spacing: 0.3px; }
+.ranking-card-puesto { font-size: 20px; font-weight: 900; color: var(--text-hi); line-height: 1.2; margin: 2px 0; }
+.ranking-card--ok .ranking-card-puesto { color: var(--neon); }
+.ranking-card--no .ranking-card-puesto { color: var(--accent-2); }
+.ranking-card-det { font-size: 9px; color: var(--text-lo); line-height: 1.25; }
+.ranking-card-estado { font-size: 9.5px; font-weight: 800; margin-top: 3px; color: var(--text-hi); }
+
+.liga-tab-box--ranking-liga { background: rgba(255, 176, 80, 0.14); border-color: rgba(255, 176, 80, 0.45); color: #ffb050; }
+.liga-tab-box--ranking-europa { background: rgba(90, 140, 255, 0.16); border-color: rgba(90, 140, 255, 0.5); color: #8fb2ff; }
+.liga-tab-box--ranking-seleccion { background: rgba(176, 127, 224, 0.16); border-color: rgba(176, 127, 224, 0.5); color: #c9a2f0; }
+
+.ranking-lista { display: flex; flex-direction: column; gap: 2px; }
+.ranking-fila {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 11.5px;
   background: var(--bg-2);
-  color: var(--text-hi);
-  text-align: left;
-  font: inherit;
 }
-.objetivos-fila-check { font-size: 14px; line-height: 1; flex-shrink: 0; }
-.objetivos-fila-texto { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 700; line-height: 1.3; }
-.objetivos-fila-pts {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--text-lo);
-  background: var(--bg-3);
-  border-radius: 10px;
-  padding: 3px 8px;
-}
-.objetivos-fila--logrado { border-color: rgba(57, 255, 106, 0.45); background: rgba(57, 255, 106, 0.08); }
-.objetivos-fila--logrado .objetivos-fila-texto { color: var(--neon); }
-.objetivos-fila--logrado .objetivos-fila-pts { background: rgba(57, 255, 106, 0.18); color: var(--neon); }
+.ranking-fila-pos { flex: 0 0 30px; font-weight: 800; color: var(--text-lo); text-align: right; }
+.ranking-fila-nom { flex: 1; min-width: 0; font-weight: 700; color: var(--text-hi); overflow: hidden; text-overflow: ellipsis; }
+.ranking-fila-extra { font-size: 9.5px; font-weight: 700; color: var(--text-lo); text-transform: uppercase; }
+.ranking-fila-pts { flex: 0 0 auto; font-weight: 800; color: var(--text-hi); }
+.ranking-fila--propia { background: rgba(255, 59, 92, 0.18); box-shadow: inset 3px 0 0 var(--accent-2); }
+.ranking-fila--propia-ok { background: rgba(57, 255, 106, 0.16); box-shadow: inset 3px 0 0 var(--neon); }
+.ranking-fila--propia .ranking-fila-nom, .ranking-fila--propia .ranking-fila-pos { color: var(--accent-2); }
+.ranking-fila--propia-ok .ranking-fila-nom, .ranking-fila--propia-ok .ranking-fila-pos { color: var(--neon); }
+.ranking-sep { margin: 6px 0 2px; padding: 4px 8px; font-size: 10px; font-weight: 800; color: var(--neon); text-align: center; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line); }
+.ranking-meta { margin: 4px 0; padding: 4px 8px; font-size: 10.5px; font-weight: 800; text-align: center; color: var(--gold); border-top: 2px dashed var(--gold); }
 
 /* ---------- 6g. DERBYS — Humano vs Humano (GLOBAL + 5 rivales) ----------
    Reutiliza .clasificacion-tabla/.clasificacion-wrap/.clasificacion-equipo

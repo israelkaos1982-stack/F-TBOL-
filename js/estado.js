@@ -2446,6 +2446,12 @@
   function guardarRankingClubTexto(clubId, texto) {
     try {
       localStorage.setItem(_rankingClubKey(clubId), texto || "");
+      // Son 1-3 líneas que el admin edita a propósito (con PIN): acortarlas
+      // ("ESPAÑA - Atlético Madrid - 30" -> "ESPAÑA - 30") es un recorte
+      // legítimo que el guard de regresión del servidor rechazaría.
+      if (window.Sync && typeof window.Sync.marcarParaForzar === "function") {
+        window.Sync.marcarParaForzar(_rankingClubKey(clubId));
+      }
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el objetivo de ranking del club:", err);

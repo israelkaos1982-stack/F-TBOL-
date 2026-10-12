@@ -10619,7 +10619,7 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
-      var m = _normNombre(l).match(/^(espana|liga|europa|seleccion)\s*[-:]\s*/);
+      var m = _normNombre(l).match(/^(espana|liga|europa|global|seleccion)\s*[-:]\s*/);
       if (!m) return;
       var tipoClave = m[1] === "liga" ? "espana" : m[1];
       var resto = l.slice(l.search(/[-:]/) + 1).trim();
@@ -10719,6 +10719,7 @@
     return ids;
   }
   function _rankingEstado(tipo, clubId) {
+    if (tipo === "global") return _rankingEstadoGlobal(clubId);
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
     var humanos = _rankingHumanos(clubId);
     var hayLista = filas.some(function (f) { return !f.sep; });
@@ -10737,6 +10738,7 @@
         f = { pos: maxPos, texto: nombreH, norm: _rankingNorm(nombreH), pts: "0", ptsNum: 0, sintetica: true };
         filas.push(f);
       }
+      if (f) f.hid = h;
       filaDe[h] = f || null;
     });
     // 2) sumar a cada humano lo suyo y reordenar toda la lista.
@@ -10748,7 +10750,7 @@
         if (!f) return;
         var bonus = _rankingBonusClub(tipo, h);
         var total = _ptsNum(f) + bonus;
-        var nueva = { pos: f.pos, texto: f.texto, norm: f.norm, ptsNum: total, pts: _fmtPts(total), bonus: bonus, humano: true };
+        var nueva = { pos: f.pos, texto: f.texto, norm: f.norm, ptsNum: total, pts: _fmtPts(total), bonus: bonus, humano: true, hid: h };
         reemplazo.set(f, nueva);
         filaDe[h] = nueva;
       });
@@ -10776,7 +10778,70 @@
       bonus: fila ? _rankingBonusClub(tipo, clubId) : 0,
       bonusObj: fila ? _rankingBonusObjetivos(tipo, clubId) : 0,
       comp: fila ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
-      cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
+      cumplido: !!fila && objetivo !== null && fila.pos <= objetivo,
+      porHumano: filaDe,
+      nombreDe: nombreDe
+    };
+  }
+
+  // GLOBAL = suma de las otras 3 clasificaciones. Cada club humano suma
+  // ESPAÑA + EUROPA + los de su SELECCIÓN en una sola fila (la selección no
+  // sale aparte); el resto de equipos de las listas se suman por nombre.
+  function _rankingEstadoGlobal(clubId) {
+    var tipos = ["espana", "europa", "seleccion"];
+    var ests = tipos.map(function (t) { return _rankingEstado(t, clubId); });
+    var mapa = {}, orden = [];
+    function fila(key, texto, hid) {
+      if (!mapa[key]) { mapa[key] = { texto: texto, norm: key, ptsNum: 0, hid: hid || undefined, partes: {} }; orden.push(key); }
+      return mapa[key];
+    }
+    ests.forEach(function (est, i) {
+      est.filas.forEach(function (f) {
+        if (f.sep || f.hid) return;
+        var v = _ptsNum(f);
+        if (v === null) return;
+        var cols = String(f.texto || "").split(/\t| {2,}/);
+        var r = fila("e:" + f.norm, cols[0]);
+        r.ptsNum += v;
+      });
+    });
+    var humanos = _rankingHumanos(clubId);
+    humanos.forEach(function (h) {
+      var total = 0, hay = false, nombre = "", partes = {};
+      ests.forEach(function (est, i) {
+        var f = est.porHumano[h];
+        if (!f) return;
+        hay = true;
+        var v = _ptsNum(f) || 0;
+        total += v;
+        partes[tipos[i]] = v;
+        if (!nombre && tipos[i] !== "seleccion") nombre = est.nombreDe[h];
+      });
+      if (!hay) return;
+      var r = fila("h:" + h, nombre || _rankingNombreDefecto("espana", h), h);
+      r.ptsNum = total; r.humano = true; r.partes = partes;
+    });
+    var filas = orden.map(function (k, i) { return { f: mapa[k], i: i }; })
+      .sort(function (a, b) { return (b.f.ptsNum - a.f.ptsNum) || (a.i - b.i); })
+      .map(function (x, i) {
+        var f = x.f;
+        f.pos = i + 1; f.pts = _fmtPts(f.ptsNum);
+        return f;
+      });
+    var propia = filas.filter(function (f) { return f.hid === clubId; })[0] || null;
+    var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId)).global || {};
+    var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
+    var nombres = { espana: "ESPAÑA", europa: "EUROPA", seleccion: "SELECCIÓN" };
+    var compFilas = [];
+    if (propia) {
+      tipos.forEach(function (t) {
+        if (propia.partes[t] !== undefined) compFilas.push({ nombre: nombres[t], txt: "", pts: propia.partes[t], solo: true });
+      });
+    }
+    return {
+      filas: filas, nombre: propia ? propia.texto : "", fila: propia, puesto: propia ? propia.pos : null,
+      objetivo: objetivo, bonus: 0, bonusObj: 0, comp: { total: 0, filas: compFilas },
+      cumplido: !!propia && objetivo !== null && propia.pos <= objetivo, global: true
     };
   }
 
@@ -10801,8 +10866,8 @@
     } else if (!est.fila) {
       puesto = "?";
       detalle = est.nombre
-        ? "No encuentro «" + escapeHTML(est.nombre) + "» en la lista"
-        : "Falta el nombre de tu equipo en la lista";
+        ? "Lista vacía"
+        : "Falta tu equipo";
     } else {
       puesto = est.puesto + "º";
       detalle = est.objetivo === null ? "Sin objetivo" : "Puesto " + est.objetivo;
@@ -10850,12 +10915,12 @@
   // Desglose de los puntos que se suman al club en la pestaña activa.
   function _rankingDesgloseHTML(est) {
     if (!est.fila || !(est.comp.filas.length || est.bonusObj)) return "";
-    var html = '<div class="ranking-desglose"><div class="ranking-desglose-tit">🧮 Puntos de mi club</div>';
+    var html = '<div class="ranking-desglose"><div class="ranking-desglose-tit">🧮 ' + (est.global ? "Puntos de mi club por clasificación" : "Puntos de mi club") + '</div>';
     est.comp.filas.forEach(function (f) {
       html += '<div class="ranking-desglose-fila"><span class="ranking-desglose-nom">' + escapeHTML(f.nombre) +
         ' <span class="ranking-desglose-txt">' + escapeHTML(f.txt) + '</span></span>' +
-        '<span class="ranking-desglose-calc">' + _fmtPts(f.base) + " × " + f.mult + '</span>' +
-        '<span class="ranking-desglose-pts">+' + _fmtPts(f.pts) + "</span></div>";
+        '<span class="ranking-desglose-calc">' + (f.solo ? "" : _fmtPts(f.base) + " × " + f.mult) + '</span>' +
+        '<span class="ranking-desglose-pts">' + (f.solo ? "" : "+") + _fmtPts(f.pts) + "</span></div>";
     });
     if (est.bonusObj) {
       html += '<div class="ranking-desglose-fila"><span class="ranking-desglose-nom">🎯 Objetivos</span><span class="ranking-desglose-calc"></span>' +
@@ -10875,8 +10940,9 @@
       '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos">Puesto actual y objetivo</span>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-club" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Mi equipo y mi objetivo">🎯</button>' +
-      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-lista" data-tab="' + _rankingTabActual +
-      '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
+      (_rankingTabActual === "global" ? "" :
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-lista" data-tab="' + _rankingTabActual +
+        '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>');
     contenedor.appendChild(header);
 
     var tarjetas = '<div class="ranking-cards">';
@@ -10959,7 +11025,7 @@
     textarea.id = "ranking-club-textarea";
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 6;
-    textarea.placeholder = "ESPAÑA - Nombre en la lista - 50\nEUROPA - Nombre en la lista - 20\nSELECCIÓN - Nombre en la lista - 10";
+    textarea.placeholder = "ESPAÑA - 30\nEUROPA - 80\nGLOBAL - 50\nSELECCIÓN - 10";
     textarea.value = window.Estado.obtenerRankingClubTexto(idClubActivo);
     contenedor.appendChild(textarea);
     var acciones = document.createElement("div");

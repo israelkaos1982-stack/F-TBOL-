@@ -10618,9 +10618,11 @@
       var tipoClave = m[1] === "liga" ? "espana" : m[1];
       var resto = l.slice(l.search(/[-:]/) + 1).trim();
       var mo = resto.match(/^(.*?)\s*[-–]\s*(\d+)\s*$/);
-      out[tipoClave] = mo
-        ? { nombre: mo[1].trim(), objetivo: parseInt(mo[2], 10) }
-        : { nombre: resto, objetivo: null };
+      out[tipoClave] = /^\d+$/.test(resto)
+        ? { nombre: "", objetivo: parseInt(resto, 10) } // "ESPAÑA - 30": solo el puesto, el nombre es el del club
+        : (mo
+          ? { nombre: mo[1].trim(), objetivo: parseInt(mo[2], 10) }
+          : { nombre: resto, objetivo: null });
     });
     return out;
   }
@@ -10650,6 +10652,17 @@
     var v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
     if (isNaN(v)) return 0;
     return m[2] ? v * 1000 : v;
+  }
+  // Nombre con el que buscar al club en la lista cuando el texto no lo dice
+  // ("ESPAÑA - 30"): el del club (o el de su selección en SELECCIÓN).
+  var _rankingNombresClub = {};
+  function _rankingNombreDefecto(tipo, clubId) {
+    if (tipo === "seleccion") {
+      var def = SELECCIONES_HUMANAS_POR_CLUB[clubId];
+      return def ? def.nombre : "";
+    }
+    if (_rankingNombresClub[clubId]) return _rankingNombresClub[clubId];
+    return String(clubId || "").replace(/-/g, " ");
   }
   // Cache de los puntos por competición de cada club (se calcula en
   // segundo plano al abrir el Ranking, ver renderizarRanking).
@@ -10693,7 +10706,18 @@
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
     var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId))[tipo] || {};
-    var fila = cfg.nombre ? _rankingBuscarFila(filas, cfg.nombre) : null;
+    var nombre = cfg.nombre || _rankingNombreDefecto(tipo, clubId);
+    var fila = nombre ? _rankingBuscarFila(filas, nombre) : null;
+    var sintetica = false;
+    // La lista pegada solo trae los equipos IA: si el club no está, se
+    // añade su fila (0 puntos + lo que le suman sus competiciones/objetivos).
+    var reales0 = filas.filter(function (f) { return !f.sep; });
+    if (!fila && nombre && reales0.length) {
+      var maxPos = reales0.reduce(function (m, f) { return Math.max(m, f.pos); }, 0);
+      fila = { pos: maxPos + 1, texto: nombre, norm: _rankingNorm(nombre), pts: "0", ptsNum: 0, sintetica: true };
+      filas = filas.concat([fila]);
+      sintetica = true;
+    }
     var bonus = fila ? _rankingBonusClub(tipo, clubId) : 0;
     if (fila && bonus > 0) {
       var reales = filas.filter(function (f) { return !f.sep; });
@@ -10718,7 +10742,7 @@
     var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
     return {
       filas: filas,
-      nombre: cfg.nombre || "",
+      nombre: nombre,
       fila: fila,
       puesto: fila ? fila.pos : null,
       objetivo: objetivo,
@@ -10845,10 +10869,14 @@
     if (!_sinRecalculo && idClubActivo) {
       cargarTodo().then(function (datos) {
         var nuevo;
-        try { nuevo = calcularPuntosRankingClub(idClubActivo, datos); } catch (err) { console.error("[ranking] cálculo:", err); return; }
-        var antes = JSON.stringify(_rankingPuntosCache[idClubActivo] || null);
+        try {
+          var eq = buscarEquipoPorId(idClubActivo, datos);
+          if (eq && eq.nombre) _rankingNombresClub[idClubActivo] = eq.nombre;
+          nuevo = calcularPuntosRankingClub(idClubActivo, datos);
+        } catch (err) { console.error("[ranking] cálculo:", err); return; }
+        var antes = JSON.stringify([_rankingPuntosCache[idClubActivo] || null, _rankingNombresClub[idClubActivo] || null]);
         _rankingPuntosCache[idClubActivo] = nuevo;
-        if (antes !== JSON.stringify(nuevo) && document.getElementById(contenedorId)) {
+        if (antes !== JSON.stringify([nuevo, _rankingNombresClub[idClubActivo] || null]) && document.getElementById(contenedorId)) {
           renderizarRanking(contenedorId, idClubActivo, true);
         }
       });

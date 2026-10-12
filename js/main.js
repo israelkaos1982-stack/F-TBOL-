@@ -130,7 +130,7 @@
     for (var i = 0; i < tarjetas.length; i++) {
       if (tarjetas[i].id === vista) { def = tarjetas[i]; break; }
     }
-    var etiqueta = def ? (def.icono + " " + def.etiqueta) : vista;
+    var etiqueta = vista === "objetivos" ? "🎯 Objetivos" : (def ? (def.icono + " " + def.etiqueta) : vista);
 
     var ov = document.getElementById("club-modal-overlay");
     var titulo = document.getElementById("club-modal-title");
@@ -302,6 +302,9 @@
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
+    } else if (vista === "objetivos") {
+      body.innerHTML = '<div id="objetivos-content"></div>';
+      window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
     } else if (vista === "ranking") {
       body.innerHTML = '<div id="ranking-content"></div>';
       window.Renderizadores.renderizarRanking("ranking-content", clubId);
@@ -1689,7 +1692,31 @@
     if (window.Renderizadores) window.Renderizadores.renderizarTitulos("titulos-content", clubId);
   }
 
-  // ---------- Ranking (LIGA · EUROPA · SELECCIÓN) ----------
+  // ---------- Objetivos (🎯 de la cabecera) ----------
+  // Editar con PIN; marcar un objetivo como logrado NO lleva PIN.
+  function editarObjetivosInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("objetivos-content");
+      if (cont) window.Renderizadores.pintarEditorObjetivos(cont, clubId);
+    }, "🔒 Editar objetivos", "Introduce el PIN de administrador.");
+  }
+  function guardarObjetivos(clubId) {
+    var ta = document.getElementById("objetivos-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarObjetivosTexto(clubId, ta.value)) return;
+    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+  function cancelarObjetivos(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+  function toggleObjetivo(clubId, clave) {
+    if (!clubId || !clave || !window.Estado || !window.Renderizadores) return;
+    window.Estado.toggleObjetivoLogrado(clubId, clave);
+    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  }
+
+  // ---------- Ranking (ESPAÑA · EUROPA · SELECCIÓN) ----------
   // Con PIN: las 3 listas son compartidas por todas las cajas y el
   // objetivo de cada club es texto libre, igual que Calendario extra.
   function editarRankingLista(clubId, tab) {
@@ -2183,6 +2210,9 @@
       btnTitulosTempVolver.addEventListener("click", function () { mostrarPantalla("inicio"); });
     }
 
+    var btnObjetivosClub = document.getElementById("btn-objetivos-club");
+    if (btnObjetivosClub) btnObjetivosClub.addEventListener("click", function () { abrirModalClub("objetivos"); });
+
     var btnEditarClub = document.getElementById("btn-editar-club-menu");
     if (btnEditarClub) btnEditarClub.addEventListener("click", abrirCandadoEditorClub);
 
@@ -2452,6 +2482,10 @@
         case "editar-titulos-temporada-inline": editarTitulosTemporadaInline(); break;
         case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
         case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;
+        case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;
+        case "guardar-objetivos": guardarObjetivos(d.clubId); break;
+        case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;
+        case "toggle-objetivo": toggleObjetivo(d.clubId, d.clave); break;
         case "editar-ranking-lista": editarRankingLista(d.clubId, d.tab); break;
         case "guardar-ranking-lista": guardarRankingLista(d.clubId, d.tab); break;
         case "editar-ranking-club": editarRankingClub(d.clubId); break;

@@ -10449,11 +10449,14 @@
     recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", mundialito: "Mundialito", nations: "Nations Cup"
   };
 
-  function _rankBaseLiga(pos, total) {
-    if (!pos || !total) return 0;
-    if (total >= 20) return pos <= 17 ? RANK_ESCALA_B[pos - 1] : Math.max(0, 35 - 2 * (pos - 18));
-    if (pos <= total - 3) return RANK_ESCALA_B[pos - 1] || 0;
-    return 35 - 2 * (pos - (total - 2));
+  // Puestos 1.º-17.º de la Escala B; del 18.º en adelante baja de 35 en 2 en
+  // 2 (35, 33, 31, 29, 27…), sea cual sea el nº de equipos de la liga
+  // (comprobado con la tabla de Hypermotion de 18 equipos: 14.º = 74 =
+  // 49 × 1,5 y 18.º = 53 = 35 × 1,5).
+  function _rankBaseLiga(pos) {
+    if (!pos) return 0;
+    if (pos <= 17) return RANK_ESCALA_B[pos - 1];
+    return Math.max(0, 35 - 2 * (pos - 18));
   }
   // Tipo de ronda a partir del nombre libre que usa la app.
   function _rankKindRonda(nombre) {
@@ -10547,7 +10550,7 @@
     var out = { espana: { total: 0, filas: [] }, europa: { total: 0, filas: [] }, seleccion: { total: 0, filas: [] } };
     function sumar(tab, nombre, txt, base, mult) {
       if (!base) return;
-      var pts = Math.round(base * mult * 100) / 100;
+      var pts = Math.round(base * mult); // enteros, redondeo .5 hacia arriba (262,5 → 263)
       out[tab].filas.push({ nombre: nombre, txt: txt, base: base, mult: mult, pts: pts });
       out[tab].total += pts;
     }
@@ -10558,7 +10561,7 @@
         if (f.rkLiga) {
           var L = f.rkLiga, mult = RANK_MULT_LIGA[L.ligaId];
           if (!mult || !L.pj) return; // sin partidos jugados la posición es solo orden alfabético
-          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos, L.total), mult);
+          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
           return;
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];

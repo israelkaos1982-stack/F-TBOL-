@@ -10417,6 +10417,161 @@
     contenedor.appendChild(acciones);
   }
 
+
+  // ============================================================
+  // RANKING — PUNTOS POR COMPETICIÓN (sistema de puntuación universal)
+  // Puntos = Puntos BASE (por puesto / ronda alcanzada) × MULTIPLICADOR de
+  // la competición. Se calculan SOLOS para los clubes humanos a partir de
+  // lo que ya sabe la app de cada competición (la misma fuente de las
+  // "Competiciones" de la Plantilla) y se SUMAN a la fila del club en la
+  // lista pegada (que solo trae los partidos IA vs IA). Es PROGRESIVO: el
+  // puesto de liga cuenta ya con lo jugado, y en una eliminatoria cuenta lo
+  // MÍNIMO asegurado de la ronda en la que está (sube al ganar, se fija al
+  // caer).
+  // ============================================================
+  // Escala A (eliminatorias): [mejor, 2.º] de cada ronda.
+  var RANK_ESCALA_A = { campeon: 200, final: 175, semis: [150, 125], cuartos: [100, 90], octavos: [80, 70], primera: 60 };
+  // Escala B (ligas), puestos 1.º-17.º; el descenso baja de 35 en 2 en 2.
+  var RANK_ESCALA_B = [200, 175, 150, 125, 100, 90, 80, 75, 70, 65, 61, 57, 53, 49, 45, 41, 37];
+  // Multiplicadores. 1ª REF / 2ª REF y Nations NO vienen en el manual: son
+  // valores PROVISIONALES editables aquí.
+  var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 1.5, "1ref": 1.0, "2ref": 0.5 };
+  var RANK_MULT_COMP = {
+    copa: 1.0, supercopa: 0.6, champions: 3.0, uel: 1.2, uecl: 0.7, recopa: 1.5,
+    intercontinental: 2.0, usc: 0.8, mundialito: 2.8, nations: 4.0
+  };
+  var RANK_TAB_COMP = {
+    copa: "espana", supercopa: "espana", champions: "europa", uel: "europa", uecl: "europa", recopa: "europa",
+    intercontinental: "europa", usc: "europa", mundialito: "europa", nations: "seleccion"
+  };
+  var RANK_NOMBRE_COMP = {
+    copa: "Copa", supercopa: "Supercopa", champions: "Champions", uel: "Europa League", uecl: "Conference",
+    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", mundialito: "Mundialito", nations: "Nations Cup"
+  };
+
+  function _rankBaseLiga(pos, total) {
+    if (!pos || !total) return 0;
+    if (total >= 20) return pos <= 17 ? RANK_ESCALA_B[pos - 1] : Math.max(0, 35 - 2 * (pos - 18));
+    if (pos <= total - 3) return RANK_ESCALA_B[pos - 1] || 0;
+    return 35 - 2 * (pos - (total - 2));
+  }
+  // Tipo de ronda a partir del nombre libre que usa la app.
+  function _rankKindRonda(nombre) {
+    var t = _normNombre(nombre || "");
+    if (/semi|1\s*\/\s*2\b/.test(t)) return "semis";
+    if (/cuartos|1\s*\/\s*4\b/.test(t)) return "cuartos";
+    if (/octavos|1\s*\/\s*8\b/.test(t)) return "octavos";
+    if (/1\s*\/\s*\d+|dieciseisavos|treintaidosavos|play-?off|previa/.test(t)) return "primera";
+    if (/\bfinal\b/.test(t)) return "final";
+    return "primera";
+  }
+  var _RANK_SIGUIENTE = { primera: "octavos", octavos: "cuartos", cuartos: "semis", semis: "final" };
+  var _RANK_FN_ELIM = {
+    copa: "calcularCopaPlayoffTodasLasRondas", supercopa: "calcularScePlayoffTodasLasRondas",
+    champions: "calcularChampionsPlayoffTodasLasRondas", uel: "calcularUelPlayoffTodasLasRondas",
+    uecl: "calcularUeclPlayoffTodasLasRondas", recopa: "calcularRecopaPlayoffTodasLasRondas",
+    intercontinental: "calcularInterPlayoffTodasLasRondas", usc: "calcularUscPlayoffTodasLasRondas"
+  };
+  // ¿El club eliminado en esta ronda está entre los "mejores" perdedores de
+  // la ronda (mitad superior por diferencia/goles del cruce)? Si no se
+  // puede saber (competición sin cuadro en texto) → false (2.º nivel).
+  function _rankEsMejorPerdedor(compKey, kind, clubId, datos) {
+    try {
+      var fn = _RANK_FN_ELIM[compKey];
+      var todas = fn && _RANK_FNS[fn] ? _RANK_FNS[fn](datos) : null;
+      var ties = todas && todas[kind];
+      if (!ties || ties.length < 2) return false;
+      var perdedores = [], mio = null;
+      ties.forEach(function (t) {
+        var gA = Number(t.golA) || 0, gB = Number(t.golB) || 0, lado;
+        if (gA !== gB) lado = gA > gB ? "B" : "A";
+        else if (t.penA !== undefined && t.penB !== undefined && t.penA !== t.penB) lado = t.penA > t.penB ? "B" : "A";
+        else return;
+        var dg = lado === "A" ? gA - gB : gB - gA;
+        var gf = lado === "A" ? gA : gB;
+        var obj = lado === "A" ? t.equipoAObj : t.equipoBObj;
+        var item = { dg: dg, gf: gf, id: obj ? obj.id : null };
+        perdedores.push(item);
+        if (item.id === clubId) mio = item;
+      });
+      if (!mio || perdedores.length < 2) return false;
+      perdedores.sort(function (a, b) { return (b.dg - a.dg) || (b.gf - a.gf); });
+      return perdedores.indexOf(mio) < Math.ceil(perdedores.length / 2);
+    } catch (err) {
+      return false;
+    }
+  }
+  var _RANK_FNS = null; // se rellena perezosamente (las funciones se declaran más arriba/abajo del IIFE)
+  function _rankFns() {
+    if (_RANK_FNS) return;
+    _RANK_FNS = {
+      calcularCopaPlayoffTodasLasRondas: calcularCopaPlayoffTodasLasRondas,
+      calcularScePlayoffTodasLasRondas: calcularScePlayoffTodasLasRondas,
+      calcularChampionsPlayoffTodasLasRondas: calcularChampionsPlayoffTodasLasRondas,
+      calcularUelPlayoffTodasLasRondas: calcularUelPlayoffTodasLasRondas,
+      calcularUeclPlayoffTodasLasRondas: calcularUeclPlayoffTodasLasRondas,
+      calcularRecopaPlayoffTodasLasRondas: calcularRecopaPlayoffTodasLasRondas,
+      calcularInterPlayoffTodasLasRondas: calcularInterPlayoffTodasLasRondas,
+      calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas
+    };
+  }
+  // Puntos BASE de una eliminatoria según su estado estructurado (`rk`).
+  function _rankBaseElim(rk, compKey, clubId, datos) {
+    if (!rk || rk.kind === "none") return { base: 0, txt: "" };
+    var A = RANK_ESCALA_A;
+    if (rk.kind === "champ") return { base: A.campeon, txt: "Campeón" };
+    if (rk.kind === "part") return { base: A.primera, txt: "Participa" };
+    var kind = _rankKindRonda(rk.ronda);
+    if (rk.kind === "superada") {
+      var sig = _RANK_SIGUIENTE[kind];
+      if (!sig) return { base: A.primera, txt: "Participa" };
+      kind = sig;
+      return _rankBaseDeRonda(kind, false, null, compKey, clubId, datos);
+    }
+    return _rankBaseDeRonda(kind, rk.kind === "elim", rk.ronda, compKey, clubId, datos);
+  }
+  function _rankBaseDeRonda(kind, eliminado, nombreRonda, compKey, clubId, datos) {
+    var A = RANK_ESCALA_A;
+    var etiqueta = { final: "Final", semis: "Semifinales", cuartos: "Cuartos", octavos: "Octavos", primera: "Primera ronda" }[kind];
+    if (kind === "final") return { base: A.final, txt: eliminado ? "Subcampeón" : "En la final" };
+    if (kind === "primera") return { base: A.primera, txt: eliminado ? "Eliminado · " + (nombreRonda || etiqueta) : "En " + etiqueta };
+    var par = A[kind];
+    var mejor = eliminado ? _rankEsMejorPerdedor(compKey, kind, clubId, datos) : false;
+    return { base: mejor ? par[0] : par[1], txt: (eliminado ? "Eliminado · " : "En ") + etiqueta };
+  }
+
+  // Todos los puntos de UN club, repartidos por clasificación.
+  // → { espana: {total, filas:[{nombre, txt, base, mult, pts}]}, europa:…, seleccion:… }
+  function calcularPuntosRankingClub(clubId, datos) {
+    _rankFns();
+    var out = { espana: { total: 0, filas: [] }, europa: { total: 0, filas: [] }, seleccion: { total: 0, filas: [] } };
+    function sumar(tab, nombre, txt, base, mult) {
+      if (!base) return;
+      var pts = Math.round(base * mult * 100) / 100;
+      out[tab].filas.push({ nombre: nombre, txt: txt, base: base, mult: mult, pts: pts });
+      out[tab].total += pts;
+    }
+    var filas = [];
+    try { filas = _filasCompeticionesClub(clubId, datos); } catch (err) { console.error("[ranking] puntos:", err); }
+    filas.forEach(function (f) {
+      try {
+        if (f.rkLiga) {
+          var L = f.rkLiga, mult = RANK_MULT_LIGA[L.ligaId];
+          if (!mult || !L.pj) return; // sin partidos jugados la posición es solo orden alfabético
+          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos, L.total), mult);
+          return;
+        }
+        var k = f.compKey, mc = RANK_MULT_COMP[k];
+        if (!mc || !f.rk) return;
+        var r = _rankBaseElim(f.rk, k, clubId, datos);
+        sumar(RANK_TAB_COMP[k], RANK_NOMBRE_COMP[k] || f.nombre, r.txt, r.base, mc);
+      } catch (err2) {
+        console.error("[ranking] puntos de", f.nombre, err2);
+      }
+    });
+    return out;
+  }
+
   // ============================================================
   // RANKING — 3 clasificaciones GLOBALES (LIGA · EUROPA · SELECCIÓN) que
   // sustituyen a los antiguos Objetivos + 💼 (petición usuario 2026-10-12).
@@ -10496,8 +10651,15 @@
     if (isNaN(v)) return 0;
     return m[2] ? v * 1000 : v;
   }
+  // Cache de los puntos por competición de cada club (se calcula en
+  // segundo plano al abrir el Ranking, ver renderizarRanking).
+  var _rankingPuntosCache = {};
+  function _rankingPuntosComp(tipo, clubId) {
+    var c = _rankingPuntosCache[clubId];
+    return c && c[tipo] ? c[tipo] : { total: 0, filas: [] };
+  }
   // Puntos de los objetivos YA logrados del club que suman a este ranking.
-  function _rankingBonusClub(tipo, clubId) {
+  function _rankingBonusObjetivos(tipo, clubId) {
     var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(clubId));
     var logrados = {};
     window.Estado.obtenerObjetivosLogrados(clubId).forEach(function (c) { logrados[c] = true; });
@@ -10514,7 +10676,14 @@
     });
     return total;
   }
+  function _rankingBonusClub(tipo, clubId) {
+    return _rankingBonusObjetivos(tipo, clubId) + _rankingPuntosComp(tipo, clubId).total;
+  }
+  function _fmtPts(n) {
+    return (Math.round(n * 10) / 10).toString();
+  }
   function _ptsNum(f) {
+    if (typeof f.ptsNum === "number") return f.ptsNum;
     var v = parseFloat(String(f.pts || "").replace(/[.,]/g, ""));
     return isNaN(v) ? null : v;
   }
@@ -10529,7 +10698,8 @@
     if (fila && bonus > 0) {
       var reales = filas.filter(function (f) { return !f.sep; });
       if (reales.every(function (f) { return _ptsNum(f) !== null; })) {
-        var propia = { pos: fila.pos, texto: fila.texto, norm: fila.norm, pts: String(_ptsNum(fila) + bonus), bonus: bonus };
+        var totalPts = _ptsNum(fila) + bonus;
+        var propia = { pos: fila.pos, texto: fila.texto, norm: fila.norm, ptsNum: totalPts, pts: _fmtPts(totalPts), bonus: bonus };
         var posiciones = reales.map(function (f) { return f.pos; }).sort(function (a, b) { return a - b; });
         var nuevas = reales.map(function (f) { return f === fila ? propia : f; });
         nuevas = nuevas
@@ -10538,7 +10708,7 @@
           .map(function (x) { return x.f; });
         var copias = nuevas.map(function (f, i) {
           if (f === propia) { propia.pos = posiciones[i]; return propia; }
-          return { pos: posiciones[i], texto: f.texto, norm: f.norm, pts: f.pts };
+          return { pos: posiciones[i], texto: f.texto, norm: f.norm, pts: f.pts, ptsNum: f.ptsNum };
         });
         var k = 0;
         filas = filas.map(function (f) { return f.sep ? f : copias[k++]; });
@@ -10553,6 +10723,8 @@
       puesto: fila ? fila.pos : null,
       objetivo: objetivo,
       bonus: bonus,
+      bonusObj: fila ? _rankingBonusObjetivos(tipo, clubId) : 0,
+      comp: fila ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
       cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
     };
   }
@@ -10615,7 +10787,7 @@
         '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
-        (f.bonus ? ' <span class="ranking-fila-bonus">(+' + f.bonus + ")</span>" : "") + "</span></div>";
+        (f.bonus ? ' <span class="ranking-fila-bonus">(+' + _fmtPts(f.bonus) + ")</span>" : "") + "</span></div>";
       if (!marcaPuesta && i === ultimaConPuesto) {
         marcaPuesta = true;
         html += '<div class="ranking-meta">🎯 OBJETIVO: puesto ' + est.objetivo + "</div>";
@@ -10624,7 +10796,24 @@
     return html;
   }
 
-  function renderizarRanking(contenedorId, idClubActivo) {
+  // Desglose de los puntos que se suman al club en la pestaña activa.
+  function _rankingDesgloseHTML(est) {
+    if (!est.fila || !(est.comp.filas.length || est.bonusObj)) return "";
+    var html = '<div class="ranking-desglose"><div class="ranking-desglose-tit">🧮 Puntos de mi club</div>';
+    est.comp.filas.forEach(function (f) {
+      html += '<div class="ranking-desglose-fila"><span class="ranking-desglose-nom">' + escapeHTML(f.nombre) +
+        ' <span class="ranking-desglose-txt">' + escapeHTML(f.txt) + '</span></span>' +
+        '<span class="ranking-desglose-calc">' + _fmtPts(f.base) + " × " + f.mult + '</span>' +
+        '<span class="ranking-desglose-pts">+' + _fmtPts(f.pts) + "</span></div>";
+    });
+    if (est.bonusObj) {
+      html += '<div class="ranking-desglose-fila"><span class="ranking-desglose-nom">🎯 Objetivos</span><span class="ranking-desglose-calc"></span>' +
+        '<span class="ranking-desglose-pts">+' + _fmtPts(est.bonusObj) + "</span></div>";
+    }
+    return html + "</div>";
+  }
+
+  function renderizarRanking(contenedorId, idClubActivo, _sinRecalculo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor || !window.Estado) return;
     contenedor.innerHTML = "";
@@ -10647,8 +10836,23 @@
 
     var tabsHost = document.createElement("div");
     tabsHost.innerHTML = tarjetas + _rankingTabsHTML(idClubActivo) +
-      '<div class="ranking-lista">' + _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
+      '<div class="ranking-lista">' + _rankingDesgloseHTML(_rankingEstado(_rankingTabActual, idClubActivo)) +
+      _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
     contenedor.appendChild(tabsHost);
+
+    // Los puntos por competición necesitan cargar los datos: se calculan en
+    // segundo plano y, si cambian, se repinta UNA vez.
+    if (!_sinRecalculo && idClubActivo) {
+      cargarTodo().then(function (datos) {
+        var nuevo;
+        try { nuevo = calcularPuntosRankingClub(idClubActivo, datos); } catch (err) { console.error("[ranking] cálculo:", err); return; }
+        var antes = JSON.stringify(_rankingPuntosCache[idClubActivo] || null);
+        _rankingPuntosCache[idClubActivo] = nuevo;
+        if (antes !== JSON.stringify(nuevo) && document.getElementById(contenedorId)) {
+          renderizarRanking(contenedorId, idClubActivo, true);
+        }
+      });
+    }
   }
   function irRankingTab(clubId, tab) {
     var valido = window.Estado.RANKING_TIPOS.some(function (t) { return t.id === tab; });
@@ -13865,7 +14069,7 @@
         if (filas[k].equipoId === clubId) {
           var meta = LIGA_NAV_META[ligaId] || {};
           var esEspanola = !meta.chip;
-          return { emoji: esEspanola ? "🇪🇸" : meta.chip, nombre: meta.corta || "Liga", pos: k + 1, total: filas.length };
+          return { emoji: esEspanola ? "🇪🇸" : meta.chip, nombre: meta.corta || "Liga", pos: k + 1, total: filas.length, ligaId: ligaId, pj: Number(filas[k].pj) || 0 };
         }
       }
     }
@@ -13910,14 +14114,17 @@
     for (var i = 0; i < rondas.length; i++) {
       var r = rondas[i];
       var res = _resultadoRondaClub(clubId, r.legs, datos);
-      if (res === "pierde") return { estado: "Eliminado · " + r.nombre, eliminado: true };
+      if (res === "pierde") return { estado: "Eliminado · " + r.nombre, eliminado: true, rk: { kind: "elim", ronda: r.nombre } };
       if (res === "gana") { ultimaSuperada = r; continue; }
-      return { estado: r.nombre };
+      return { estado: r.nombre, rk: { kind: "alive", ronda: r.nombre } };
     }
     if (ultimaSuperada && /\bfinal\b/.test(_normNombre(ultimaSuperada.nombre)) && !/semi/.test(_normNombre(ultimaSuperada.nombre))) {
-      return { estado: "Campeón 🏆", campeon: true };
+      return { estado: "Campeón 🏆", campeon: true, rk: { kind: "champ" } };
     }
-    return { estado: ultimaSuperada ? ultimaSuperada.nombre + " superada" : "—" };
+    return {
+      estado: ultimaSuperada ? ultimaSuperada.nombre + " superada" : "—",
+      rk: ultimaSuperada ? { kind: "superada", ronda: ultimaSuperada.nombre } : { kind: "none" }
+    };
   }
   // Fase de grupos / liga europea / torneo sin eliminación: jornadas
   // jugadas y puntos del propio club.
@@ -13931,7 +14138,7 @@
       var gr = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
       pts += gp > gr ? 3 : (gp === gr ? 1 : 0);
     });
-    return { estado: "Fase Grupos · " + jugados + "/" + partidos.length + " jornadas · " + pts + " pts" };
+    return { estado: "Fase Grupos · " + jugados + "/" + partidos.length + " jornadas · " + pts + " pts", rk: jugados ? { kind: "part" } : { kind: "none" } };
   }
   // Champions / Europa League / Conference League (fase de liga única de 8
   // partidos y 36 equipos): mientras se juega, el puesto actual en la
@@ -13958,20 +14165,20 @@
       return (ko.length && gruposCompletos) ? _estadoEliminatoriaClub(clubId, compKey, ko, datos) : _estadoPuntosClub(clubId, grupos.length ? grupos : ko);
     }
     var pos = idx + 1;
-    if (!gruposCompletos && !ko.length) return { estado: "Fase Grupos · " + _posicionOrdinal(pos) };
-    if (pos >= EUROPA_ELIMINADOS_DESDE) return { estado: "Eliminado · Grupo (" + _posicionOrdinal(pos) + ")", eliminado: true };
+    if (!gruposCompletos && !ko.length) return { estado: "Fase Grupos · " + _posicionOrdinal(pos), rk: (jugados || pjTabla) ? { kind: "part" } : { kind: "none" } };
+    if (pos >= EUROPA_ELIMINADOS_DESDE) return { estado: "Eliminado · Grupo (" + _posicionOrdinal(pos) + ")", eliminado: true, rk: { kind: "part" } };
     if (ko.length) {
       var r = _estadoEliminatoriaClub(clubId, compKey, ko, datos);
       if (r.eliminado || r.campeon) return r;
-      return { estado: /^play-?offs?$/i.test(_normNombre(r.estado)) ? "Playoffs" : "Playoffs · " + r.estado };
+      return { estado: /^play-?offs?$/i.test(_normNombre(r.estado)) ? "Playoffs" : "Playoffs · " + r.estado, rk: r.rk };
     }
-    return { estado: "Playoffs · " + (pos <= 8 ? "Octavos" : "Play-off") };
+    return { estado: "Playoffs · " + (pos <= 8 ? "Octavos" : "Play-off"), rk: { kind: "alive", ronda: pos <= 8 ? "Octavos" : "Play-off" } };
   }
   function _filasCompeticionesClub(clubId, datos) {
     var filas = [];
     var pos = _posicionLigaClub(clubId, datos);
     if (pos) {
-      filas.push({ emoji: pos.emoji, nombre: pos.nombre, estado: _posicionOrdinal(pos.pos) + " de " + pos.total });
+      filas.push({ emoji: pos.emoji, nombre: pos.nombre, estado: _posicionOrdinal(pos.pos) + " de " + pos.total, rkLiga: pos });
     }
     // Superliga (liguilla de los humanos, tabla propia) — posición actual.
     var ordenSuper = calcularSuperliga(datos);
@@ -14037,7 +14244,7 @@
               return false;
             });
           } catch (errN) { posN = null; }
-          r = posN ? { estado: "Fase Grupos · " + _posicionOrdinal(posN) } : _estadoPuntosClub(clubId, gruposN.length ? gruposN : lista);
+          r = posN ? { estado: "Fase Grupos · " + _posicionOrdinal(posN), rk: { kind: "part" } } : _estadoPuntosClub(clubId, gruposN.length ? gruposN : lista);
         }
       } else if (EUROPA_FASE_GRUPOS_COMPS[k] || k === "mundialito") {
         // Mundialito: fase de grupos + cuadro final; mismo criterio que las
@@ -14060,7 +14267,7 @@
         if (!jug) return; // sin ningún partido jugado no hay nada que contar todavía
         r = { estado: jug + "/" + lista.length + " partidos" };
       }
-      filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon });
+      filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon, compKey: k, rk: r.rk || null });
     });
     return filas;
   }

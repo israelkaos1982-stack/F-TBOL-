@@ -10433,9 +10433,12 @@
   var RANK_ESCALA_A = { campeon: 200, final: 175, semis: [150, 125], cuartos: [100, 90], octavos: [80, 70], primera: 60 };
   // Escala B (ligas), puestos 1.º-17.º; el descenso baja de 35 en 2 en 2.
   var RANK_ESCALA_B = [200, 175, 150, 125, 100, 90, 80, 75, 70, 65, 61, 57, 53, 49, 45, 41, 37];
-  // Multiplicadores. 1ª REF / 2ª REF y Nations NO vienen en el manual: son
-  // valores PROVISIONALES editables aquí.
-  var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 1.5, "1ref": 1.0, "2ref": 0.5 };
+  // Multiplicadores (fórmula "v2": Hypermotion ×0,5 para que el campeón de
+  // 2.ª — 100 — quede por debajo de la zona media de 1.ª, p.ej. 8.º = 187,5).
+  // 1ª REF / 2ª REF / Nations NO vienen en el manual: son valores
+  // PROVISIONALES editables aquí (las divisiones inferiores van por debajo
+  // de Hypermotion).
+  var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 0.5, "1ref": 0.3, "2ref": 0.15 };
   var RANK_MULT_COMP = {
     copa: 1.0, supercopa: 0.6, champions: 3.0, uel: 1.2, uecl: 0.7, recopa: 1.5,
     intercontinental: 2.0, usc: 0.8, mundialito: 2.8, nations: 4.0

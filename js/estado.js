@@ -2412,6 +2412,7 @@
   var RANKING_TIPOS = [
     { id: "espana", icono: "🇪🇸", etiqueta: "ESPAÑA" },
     { id: "europa", icono: "🇪🇺", etiqueta: "EUROPA" },
+    { id: "global", icono: "🌐", etiqueta: "GLOBAL" },
     { id: "seleccion", icono: "🌍", etiqueta: "SELECCIÓN" }
   ];
   function _rankingListaKey(tipo) { return "ef7_ranking_lista_v1_" + tipo; }

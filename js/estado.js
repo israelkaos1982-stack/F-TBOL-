@@ -2351,7 +2351,9 @@
   // Objetivos ya LOGRADOS (se marcan tocando la tarjeta, sin PIN). Se
   // guardan por CLAVE de texto del objetivo.
   function _objetivosLogradosKey(clubId) { return "ef7_objetivos_logrados_v2_" + clubId; }
-  function obtenerObjetivosLogrados(clubId) {
+  // La lista guarda "clave" = logrado y "!clave" = fallado (misma clave de
+  // almacenamiento, así sigue exenta del guard de regresión del servidor).
+  function _objetivosLista(clubId) {
     try {
       var raw = localStorage.getItem(_objetivosLogradosKey(clubId));
       var lista = raw ? JSON.parse(raw) : [];
@@ -2360,10 +2362,21 @@
       return [];
     }
   }
+  function obtenerObjetivosLogrados(clubId) {
+    return _objetivosLista(clubId).filter(function (c) { return String(c).charAt(0) !== "!"; });
+  }
+  function obtenerObjetivosFallados(clubId) {
+    return _objetivosLista(clubId)
+      .filter(function (c) { return String(c).charAt(0) === "!"; })
+      .map(function (c) { return String(c).slice(1); });
+  }
+  // 1 toque = logrado · 2 toques = fallado · 3 toques = sin marcar.
   function toggleObjetivoLogrado(clubId, clave) {
-    var lista = obtenerObjetivosLogrados(clubId);
-    var idx = lista.indexOf(clave);
-    if (idx === -1) lista.push(clave); else lista.splice(idx, 1);
+    var lista = _objetivosLista(clubId);
+    var iOk = lista.indexOf(clave), iKo = lista.indexOf("!" + clave);
+    if (iOk !== -1) { lista.splice(iOk, 1); lista.push("!" + clave); }
+    else if (iKo !== -1) { lista.splice(iKo, 1); }
+    else { lista.push(clave); }
     try {
       localStorage.setItem(_objetivosLogradosKey(clubId), JSON.stringify(lista));
     } catch (err) {
@@ -4178,6 +4191,7 @@
     obtenerObjetivosTexto: obtenerObjetivosTexto,
     guardarObjetivosTexto: guardarObjetivosTexto,
     obtenerObjetivosLogrados: obtenerObjetivosLogrados,
+    obtenerObjetivosFallados: obtenerObjetivosFallados,
     toggleObjetivoLogrado: toggleObjetivoLogrado,
     reiniciarObjetivosLogrados: reiniciarObjetivosLogrados,
     RANKING_TIPOS: RANKING_TIPOS,

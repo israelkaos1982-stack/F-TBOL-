@@ -10335,16 +10335,17 @@
     });
     return { secciones: secciones, orden: orden, sobrantes: sobrantes };
   }
-  function _objTarjetaHTML(seccion, o, logrado, idClub) {
-    var completo = logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
-    var clase = "obj-card " + _objColorClase(seccion) + (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : ""));
+  function _objTarjetaHTML(seccion, o, logrado, idClub, fallado) {
+    var completo = !fallado && (logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total));
+    var clase = "obj-card " + _objColorClase(seccion) + (fallado ? " obj-card--ko" : (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : "")));
     var cuerpo = '<span class="obj-card-texto">' + escapeHTML(o.texto) + "</span>";
     if (o.progreso && o.progreso.total > 0) {
       var pct = Math.max(0, Math.min(100, Math.round(o.progreso.actual * 100 / o.progreso.total)));
       cuerpo += '<span class="obj-card-prog-txt">' + o.progreso.actual + " / " + o.progreso.total + "</span>" +
         '<span class="obj-card-barra"><span class="obj-card-barra-rel" style="width:' + pct + '%"></span></span>';
     }
-    if (completo) cuerpo += '<span class="obj-card-logrado">✅ LOGRADO</span>';
+    if (fallado) cuerpo += '<span class="obj-card-fallado">❌ FALLADO</span>';
+    else if (completo) cuerpo += '<span class="obj-card-logrado">✅ LOGRADO</span>';
     return (
       '<button type="button" class="' + clase + '" data-accion="toggle-objetivo" data-club-id="' + (idClub || "") +
       '" data-clave="' + escapeHTML(o.clave) + '">' +
@@ -10371,6 +10372,8 @@
     var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(idClubActivo));
     var logrados = {};
     window.Estado.obtenerObjetivosLogrados(idClubActivo).forEach(function (c) { logrados[c] = true; });
+    var fallados = {};
+    window.Estado.obtenerObjetivosFallados(idClubActivo).forEach(function (c) { fallados[c] = true; });
     if (!parseo.orden.length) {
       var vacio = document.createElement("p");
       vacio.className = "objetivos-vacio";
@@ -10380,7 +10383,7 @@
     }
     var html = '<div class="obj-lista">';
     parseo.orden.forEach(function (sec) {
-      parseo.secciones[sec].forEach(function (o) { html += _objTarjetaHTML(sec, o, !!logrados[o.clave], idClubActivo); });
+      parseo.secciones[sec].forEach(function (o) { html += _objTarjetaHTML(sec, o, !!logrados[o.clave], idClubActivo, !!fallados[o.clave]); });
     });
     html += "</div>";
     if (parseo.sobrantes) {
@@ -10498,10 +10501,13 @@
     var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(clubId));
     var logrados = {};
     window.Estado.obtenerObjetivosLogrados(clubId).forEach(function (c) { logrados[c] = true; });
+    var fallados = {};
+    window.Estado.obtenerObjetivosFallados(clubId).forEach(function (c) { fallados[c] = true; });
     var total = 0;
     parseo.orden.forEach(function (sec) {
       if (_objetivoRankingTipo(sec) !== tipo) return;
       parseo.secciones[sec].forEach(function (o) {
+        if (fallados[o.clave]) return;
         var completo = logrados[o.clave] || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
         if (completo) total += _objetivoPuntos(o.recompensa);
       });

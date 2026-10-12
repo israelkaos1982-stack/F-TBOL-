@@ -10288,6 +10288,19 @@
     ["champions", "🇪🇺"], ["conference", "🟢"], ["europa", "🟠"], ["recopa", "🥈"], ["superliga", "🍇"],
     ["seleccion", "🌍"], ["espana", "🇪🇸"], ["liga", "🇪🇸"], ["supercopa", "🏆"], ["copa", "🏆"]
   ];
+  // Color del borde de la tarjeta según su competición.
+  function _objColorClase(nombre) {
+    var n = _rankingNorm(nombre);
+    if (/global|general|titulo/.test(n)) return "obj-card--c-global";
+    if (/champions/.test(n)) return "obj-card--c-champions";
+    if (/conference/.test(n)) return "obj-card--c-conference";
+    if (/europa|uefa/.test(n)) return "obj-card--c-europa";
+    if (/recopa|intercontinental/.test(n)) return "obj-card--c-europa";
+    if (/seleccion|mundial|nations/.test(n)) return "obj-card--c-seleccion";
+    if (/supercopa|copa/.test(n)) return "obj-card--c-copa";
+    if (/espana|liga|hypermotion|primera/.test(n)) return "obj-card--c-liga";
+    return "";
+  }
   function _objIcono(nombre) {
     var n = _rankingNorm(nombre);
     for (var i = 0; i < _OBJ_ICONOS.length; i++) if (n.indexOf(_OBJ_ICONOS[i][0]) !== -1) return _OBJ_ICONOS[i][1];
@@ -10324,7 +10337,7 @@
   }
   function _objTarjetaHTML(seccion, o, logrado, idClub) {
     var completo = logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
-    var clase = "obj-card" + (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : ""));
+    var clase = "obj-card " + _objColorClase(seccion) + (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : ""));
     var cuerpo = '<span class="obj-card-texto">' + escapeHTML(o.texto) + "</span>";
     if (o.progreso && o.progreso.total > 0) {
       var pct = Math.max(0, Math.min(100, Math.round(o.progreso.actual * 100 / o.progreso.total)));

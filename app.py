@@ -6440,7 +6440,7 @@ _EF7_REGRESION_LEN_MINIMO = 20  # por debajo de esto no merece la pena proteger 
 # `ef7_vivo_v1_<clubId>` = borrador del partido EN CURSO de ese club (ver
 # js/acta.js): al terminar el partido pasa a una "tumba" de pocos bytes, así
 # que encoger de golpe es lo NORMAL, nunca una copia vieja pisando a la buena.
-_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_", "ef7_objetivos_logrados_v2_", "ef7_plantilla_stats_base_v1_", "ef7_vivo_v1_")
+_EF7_REGRESION_EXENTA_PREFIJOS = ("ef7_objetivos_logrados_v1_", "ef7_objetivos_logrados_v2_", "ef7_ranking_club_v1_", "ef7_plantilla_stats_base_v1_", "ef7_vivo_v1_")
 
 
 def _ef7_valor_como_texto(v):

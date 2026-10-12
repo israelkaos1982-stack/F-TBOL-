@@ -10496,7 +10496,7 @@
     var puesto, detalle;
     if (est.objetivo === null && !est.nombre) {
       puesto = "—";
-      detalle = "Sin configurar — pulsa 🎯 y escribe tu equipo y tu objetivo";
+      detalle = "";
     } else if (!est.fila) {
       puesto = "?";
       detalle = est.nombre
@@ -10504,14 +10504,14 @@
         : "Falta el nombre de tu equipo en la lista";
     } else {
       puesto = est.puesto + "º";
-      detalle = est.objetivo === null ? "Sin objetivo" : "Objetivo: puesto " + est.objetivo + " o mejor";
+      detalle = est.objetivo === null ? "Sin objetivo" : "puesto " + est.objetivo + " o mejor";
     }
     if (est.fila && est.objetivo !== null) clase += est.cumplido ? " ranking-card--ok" : " ranking-card--no";
     return (
       '<div class="' + clase + '"><div class="ranking-card-tit">' + t.icono + " " + t.etiqueta + "</div>" +
       '<div class="ranking-card-puesto">' + puesto + "</div>" +
       '<div class="ranking-card-det">' + detalle + "</div>" +
-      (est.fila && est.objetivo !== null ? '<div class="ranking-card-estado">' + (est.cumplido ? "✅ Conseguido" : "❌ Por debajo") + "</div>" : "") +
+      (est.fila && est.objetivo !== null ? '<div class="ranking-card-estado">' + (est.cumplido ? "✅ Conseguido" : "❌ Pendiente") + "</div>" : "") +
       "</div>"
     );
   }

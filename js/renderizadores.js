@@ -10504,7 +10504,7 @@
         : "Falta el nombre de tu equipo en la lista";
     } else {
       puesto = est.puesto + "º";
-      detalle = est.objetivo === null ? "Sin objetivo" : "puesto " + est.objetivo + " o mejor";
+      detalle = est.objetivo === null ? "Sin objetivo" : "Puesto " + est.objetivo;
     }
     if (est.fila && est.objetivo !== null) clase += est.cumplido ? " ranking-card--ok" : " ranking-card--no";
     return (

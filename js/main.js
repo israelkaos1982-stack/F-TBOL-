@@ -302,13 +302,9 @@
     } else if (vista === "titulos") {
       body.innerHTML = '<div id="titulos-content"></div>';
       window.Renderizadores.renderizarTitulos("titulos-content", clubId);
-    } else if (vista === "objetivos") {
-      body.innerHTML = '<div id="objetivos-content"></div>';
-      window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
-      // Pone al día el 💼 con lo YA marcado (no solo lo que se marque de
-      // ahora en adelante) — por si había objetivos logrados antes de
-      // que esta sincronización existiera.
-      _sincronizarValoracionConObjetivos(clubId);
+    } else if (vista === "ranking") {
+      body.innerHTML = '<div id="ranking-content"></div>';
+      window.Renderizadores.renderizarRanking("ranking-content", clubId);
     } else if (vista === "derbys") {
       body.innerHTML = '<div id="derbys-content"></div>';
       window.Renderizadores.renderizarDerbys("derbys-content", clubId);
@@ -339,7 +335,6 @@
   function abrirClub(teamId, box) {
     window._idManagerActivo = teamId;
     activarCaja(box);
-    _pintarValoracionClub(teamId);
 
     if (window.Renderizadores && typeof window.Renderizadores.cargarTodo === "function") {
       window.Renderizadores.cargarTodo().then(function (datos) {
@@ -1694,37 +1689,37 @@
     if (window.Renderizadores) window.Renderizadores.renderizarTitulos("titulos-content", clubId);
   }
 
-  // ---------- Objetivos del Club ----------
-  // Con PIN: a diferencia de Títulos (catálogo cerrado, solo se cambia
-  // un número), aquí el admin teclea texto libre — puede añadir/quitar
-  // objetivos enteros — así que hereda la misma protección que
-  // Calendario extra/Roster.
-  function editarObjetivosInline(clubId) {
+  // ---------- Ranking (LIGA · EUROPA · SELECCIÓN) ----------
+  // Con PIN: las 3 listas son compartidas por todas las cajas y el
+  // objetivo de cada club es texto libre, igual que Calendario extra.
+  function editarRankingLista(clubId, tab) {
     if (!window.Renderizadores) return;
     abrirCandado(ADMIN_PASSWORD, function () {
-      var cont = document.getElementById("objetivos-content");
-      if (cont) window.Renderizadores.pintarEditorObjetivos(cont, clubId);
-    }, "🔒 Editar objetivos", "Introduce el PIN de administrador.");
+      var cont = document.getElementById("ranking-content");
+      if (cont) window.Renderizadores.pintarEditorRankingLista(cont, clubId, tab);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
   }
-  function guardarObjetivos(clubId) {
-    var ta = document.getElementById("objetivos-textarea");
+  function guardarRankingLista(clubId, tab) {
+    var ta = document.getElementById("ranking-lista-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    if (!window.Estado.guardarObjetivosTexto(clubId, ta.value)) return;
-    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
-    _sincronizarValoracionConObjetivos(clubId);
+    if (!window.Estado.guardarRankingLista(tab, ta.value)) return;
+    window.Renderizadores.irRankingTab(clubId, tab);
   }
-  function cancelarObjetivos(clubId) {
-    if (window.Renderizadores) window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
+  function editarRankingClub(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("ranking-content");
+      if (cont) window.Renderizadores.pintarEditorRankingClub(cont, clubId);
+    }, "🔒 Mi equipo y mi objetivo", "Introduce el PIN de administrador.");
   }
-  // Marcar/desmarcar un objetivo como logrado — SIN PIN, es el propio
-  // progreso del mánager tocando su fila, no la estructura de cajas.
-  // Los puntos logrados se SUMAN AL INSTANTE al 💼 de la cabecera
-  // (petición usuario) — ver _sincronizarValoracionConObjetivos.
-  function toggleObjetivo(clubId, clave) {
-    if (!clubId || !clave || !window.Estado || !window.Renderizadores) return;
-    window.Estado.toggleObjetivoLogrado(clubId, clave);
-    window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
-    _sincronizarValoracionConObjetivos(clubId);
+  function guardarRankingClub(clubId) {
+    var ta = document.getElementById("ranking-club-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRankingClubTexto(clubId, ta.value)) return;
+    window.Renderizadores.renderizarRanking("ranking-content", clubId);
+  }
+  function cancelarRanking(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRanking("ranking-content", clubId);
   }
 
   // ---------- Derbys (Humano vs Humano) ----------
@@ -1748,77 +1743,6 @@
   }
   function cancelarDerbys(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarDerbys("derbys-content", clubId);
-  }
-
-  // ---------- 💼 Valoración del club ----------
-  // "Logrado" YA NO se teclea a mano: se SUMA SOLO desde los puntos
-  // marcados en 🎯 Objetivos (petición usuario) — ver
-  // _sincronizarValoracionConObjetivos, llamada tras cada toggle/guardado
-  // de Objetivos. Solo "objetivo" (la meta para seguir la temporada que
-  // viene) lo teclea el mánager, no hay forma de derivarlo de nada.
-  function _fmtNumValoracion(n) {
-    n = Number(n) || 0;
-    return (n % 1 === 0) ? String(n) : String(Math.round(n * 100) / 100);
-  }
-  // El OBJETIVO (la meta a conseguir) va SIEMPRE con 2 decimales, aunque
-  // sea un número redondo (9 -> "9.00") — petición usuario. Distinto de
-  // _fmtNumValoracion (usado para "logrado", que sí colapsa los .00).
-  function _fmtObjetivoValoracion(n) {
-    return (Number(n) || 0).toFixed(2);
-  }
-  // Estilo "HUD de videojuego" (petición usuario): 4 spans separados en
-  // vez de un textContent plano, para poder resaltar el nº logrado más
-  // que el objetivo — el degradado de fondo con los colores del escudo
-  // (--club-primary/--club-secondary) ya los fija abrirClub() sobre
-  // #screen-club, este badge solo los CONSUME vía CSS (var(...)).
-  function _pintarValoracionClub(clubId) {
-    var badge = document.getElementById("club-valoracion");
-    if (!badge || !window.Estado || !clubId) return;
-    var v = window.Estado.obtenerValoracionClub(clubId);
-    // Logrado/objetivo en VERTICAL, tipo fracción (petición usuario:
-    // los nombres largos se recortaban con el 💼 en horizontal). El
-    // "/" pasa a ser una raya horizontal (.club-valoracion-sep, ver CSS).
-    badge.innerHTML =
-      '<span class="club-valoracion-icono">💼</span>' +
-      '<span class="club-valoracion-fraccion">' +
-      '<span class="club-valoracion-num">' + _fmtNumValoracion(v.logrado) + "</span>" +
-      '<span class="club-valoracion-sep"></span>' +
-      '<span class="club-valoracion-obj">' + _fmtObjetivoValoracion(v.objetivo) + "</span>" +
-      "</span>";
-  }
-  // Puntos LOGRADOS = SIEMPRE los mismos que muestra la pantalla
-  // Objetivos (window.Renderizadores.calcularObjetivosPuntos) — nunca
-  // pueden desincronizarse, porque no hay otra vía de ponerlos.
-  function _sincronizarValoracionConObjetivos(clubId) {
-    if (!clubId || !window.Estado || !window.Renderizadores || !window.Renderizadores.calcularObjetivosPuntos) return;
-    var puntos = window.Renderizadores.calcularObjetivosPuntos(clubId);
-    var actual = window.Estado.obtenerValoracionClub(clubId);
-    if (!window.Estado.guardarValoracionClub(clubId, puntos.ptsLogrados, actual.objetivo)) return;
-    _pintarValoracionClub(clubId);
-  }
-  function editarValoracionClub(clubId) {
-    if (!clubId || !window.Estado) return;
-    var actual = window.Estado.obtenerValoracionClub(clubId);
-    var objetivoStr = window.prompt("💼 Puntos objetivo (para seguir la temporada que viene):", _fmtObjetivoValoracion(actual.objetivo));
-    if (objetivoStr === null) return; // cancelado
-    var objetivo = parseFloat(String(objetivoStr).replace(",", "."));
-    if (!window.Estado.guardarValoracionClub(clubId, actual.logrado, isNaN(objetivo) ? 0 : objetivo)) return;
-    _pintarValoracionClub(clubId);
-    repintarMenuClub(clubId);
-  }
-
-  // ---------- 🎯 Icono de una caja de Objetivos ----------
-  // Solo el icono es editable (candado 646) — el nombre de las 4 cajas
-  // (Liga/Copa/Superliga/Globales) es fijo.
-  function editarObjetivosIcono(clubId, seccion) {
-    if (!clubId || !seccion || !window.Estado || !window.Renderizadores) return;
-    abrirCandado(ADMIN_PASSWORD, function () {
-      var actuales = window.Estado.obtenerObjetivosIconos(clubId);
-      var nuevo = window.prompt("Icono/emoji para esta caja:", actuales[seccion] || "");
-      if (nuevo === null || !nuevo.trim()) return;
-      if (!window.Estado.guardarObjetivosIconoSeccion(clubId, seccion, nuevo.trim())) return;
-      window.Renderizadores.renderizarObjetivos("objetivos-content", clubId);
-    }, "🔒 Editar icono", "Introduce el PIN de administrador.");
   }
 
   function salirDelClub() {
@@ -2528,15 +2452,15 @@
         case "editar-titulos-temporada-inline": editarTitulosTemporadaInline(); break;
         case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
         case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;
-        case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;
-        case "guardar-objetivos": guardarObjetivos(d.clubId); break;
-        case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;
-        case "toggle-objetivo": toggleObjetivo(d.clubId, d.clave); break;
+        case "editar-ranking-lista": editarRankingLista(d.clubId, d.tab); break;
+        case "guardar-ranking-lista": guardarRankingLista(d.clubId, d.tab); break;
+        case "editar-ranking-club": editarRankingClub(d.clubId); break;
+        case "guardar-ranking-club": guardarRankingClub(d.clubId); break;
+        case "cancelar-ranking": cancelarRanking(d.clubId); break;
+        case "ranking-tab-ir": if (window.Renderizadores) window.Renderizadores.irRankingTab(d.clubId, d.tab); break;
         case "editar-derbys-inline": editarDerbysInline(d.clubId); break;
         case "guardar-derbys": guardarDerbys(d.clubId); break;
         case "cancelar-derbys": cancelarDerbys(d.clubId); break;
-        case "editar-objetivos-icono": editarObjetivosIcono(d.clubId, d.seccion); break;
-        case "editar-valoracion-club": editarValoracionClub(d.clubId); break;
       }
     });
 

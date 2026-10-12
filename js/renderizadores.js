@@ -10275,270 +10275,224 @@
   }
 
   // ============================================================
-  // OBJETIVOS DEL CLUB — catálogo ABIERTO de cajas (una por cada línea
-  // "# Título" que el admin escriba, en el orden en que aparezcan),
-  // iguales para los 6 humanos pero cada uno con su propio texto/número
-  // (candado 646, texto libre — a diferencia de Títulos, aquí el admin
-  // SÍ puede añadir/quitar objetivos enteros, no solo tocar un número de
-  // un catálogo cerrado). Cada objetivo vale 1 o 2 puntos; tocar la fila
-  // la marca LOGRADA (sin PIN — es el progreso del propio mánager). La
-  // suma real para "seguir en el club la temporada que viene" la lleva
-  // el usuario a mano en el 💼 de la cabecera (ver
-  // Estado.obtenerValoracionClub/guardarValoracionClub) — estos puntos
-  // son solo un contador de referencia, no se suman solos al 💼.
+  // RANKING — 3 clasificaciones GLOBALES (LIGA · EUROPA · SELECCIÓN) que
+  // sustituyen a los antiguos Objetivos + 💼 (petición usuario 2026-10-12).
+  // Las 3 LISTAS son comunes a todas las cajas y se pegan como texto tal
+  // cual salen del juego ("1. Bayern ALEMANIA 422"); cada club solo guarda
+  // cómo se llama su equipo en esas listas y el PUESTO que tiene que
+  // conseguir en cada una (texto "LIGA - Mersey Reds - 50"). La app busca
+  // sola el puesto actual y dice si el objetivo está cumplido (puesto igual
+  // o MEJOR que el objetivo).
   // ============================================================
-  // Iconos por defecto de las cajas "de fábrica" (las que trae
-  // OBJETIVOS_DEFAULT_TEXTO en js/estado.js) — SOLO se usan si Estado no
-  // está disponible, o como default de una caja que el admin nunca ha
-  // personalizado con su propio icono; la fuente real (editable por el
-  // admin, candado 646) es Estado.obtenerObjetivosIconos/
-  // guardarObjetivosIconoSeccion, que YA acepta cualquier clave — no
-  // solo estas 5. Una caja NUEVA que el admin invente (p.ej. "RECOPA")
-  // cae al fallback genérico 🎯 hasta que le ponga su propio icono.
-  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", CHAMPIONS: "🇪🇺", SUPERLIGA: "🌟", GLOBALES: "🌍" };
-  var OBJETIVOS_ICONO_FALLBACK = "🎯";
+  var _rankingTabActual = "liga"; // "liga" | "europa" | "seleccion" — no se persiste
 
-  // Alias de la PRIMERA palabra de la cabecera — SOLO para las 2 cajas
-  // domésticas (Liga/Copa), cuyo nombre real cambia de club a club (el
-  // PSG juega "Ligue 1"/"Coupe [de France]", Manchester City "Premier
-  // League"/"FA Cup", Inter "Serie A"/"Coppa Italia"): todas caen en la
-  // MISMA caja LIGA/COPA sin tener que reescribir el nombre real de su
-  // competición. Se comprueba por PREFIJO con límite de palabra (igual
-  // que la clave propia, más abajo), así que tolera texto extra detrás
-  // — "Coupe Framce" (con errata) sigue reconociéndose porque empieza
-  // por "COUPE", igual que "Ligue 1" empieza por "LIGUE".
-  //
-  // CUALQUIER OTRA cabecera ("# Champions League", "# Recopa Europa",
-  // "# Superliga", o lo que sea) NO necesita estar aquí — abre su
-  // PROPIA caja automáticamente por su primera palabra (ver
-  // _objetivosClaveDeHeader). Antes "CHAMPIONS" forzaba a "RECOPA" a
-  // compartir la MISMA caja (pensado para un club que solo juega una
-  // competición europea a la vez) — bug 2026-09 (usuario: "La CHAMPIONS
-  // y RECOPA están mezclados"): un club que juega AMBAS a la vez (p.ej.
-  // el PSG con Champions League Y Recopa Europa) necesita 2 cajas
-  // DISTINTAS, no 1 compartida — el catálogo abierto ya lo resuelve
-  // solo, sin alias especial.
-  var OBJETIVOS_SECCION_ALIAS_PREFIJO = {
-    // "PREMIER" (Manchester City, Premier League) y "SERIE" (Inter de
-    // Milán, Serie A) — mismo mecanismo que "LIGUE" (PSG, Ligue 1).
-    LIGA: ["LIGA", "LIGUE", "PREMIER", "SERIE"],
-    // "FA" (Manchester City, FA Cup) y "COPPA" (Inter de Milán, Coppa
-    // Italia) — mismo mecanismo que "COUPE" (PSG, Coupe de France).
-    COPA: ["COPA", "COUPE", "FA", "COPPA"]
-  };
-
-  // Identidad (clave estable) de una cabecera "# Título" ya normalizada
-  // a MAYÚSCULAS. Primero prueba los alias de Liga/Copa (arriba); si no
-  // casa con ninguno, la clave es la PRIMERA PALABRA del propio título
-  // tal cual — así "# Champions League" y "# Champions" son SIEMPRE la
-  // misma caja (cambiar el texto de después no pierde el progreso ya
-  // marcado), y "# Recopa Europa" abre una caja aparte, independiente,
-  // la primera vez que se escriba. Catálogo 100% abierto: no hay límite
-  // de cuántas cajas nuevas puede crear el admin.
-  function _objetivosClaveDeHeader(norm) {
-    for (var k in OBJETIVOS_SECCION_ALIAS_PREFIJO) {
-      var alias = OBJETIVOS_SECCION_ALIAS_PREFIJO[k];
-      var casa = alias.some(function (a) { return new RegExp("^" + a + "\\b").test(norm); });
-      if (casa) return k;
-    }
-    var mPrimera = norm.match(/^([^\s]+)/);
-    return mPrimera ? mPrimera[1] : norm;
+  function _rankingNorm(s) {
+    return _normNombre(s).replace(/[^a-z0-9ñ]+/g, " ").trim();
   }
-
-  // "# Título" (cualquiera — ver _objetivosClaveDeHeader) abre caja;
-  // toda línea siguiente "Texto - N" (N del 1 al 5; cualquier otro
-  // valor, o si falta, cae a 1) es un objetivo de esa caja. `clave`
-  // identifica el objetivo para el progreso marcado — por sección+texto,
-  // así cambiar solo el nº de puntos de una línea no borra el progreso
-  // ya tocado. `orden` es el orden real en que aparecen las cabeceras en
-  // el texto — las cajas se pintan en ESE orden, no uno fijo.
-  //
-  // La cabecera admite texto EXTRA tras la palabra clave/alias (p.ej.
-  // "# LIGA 1ª REF" o "# COPA DEL REY") y el texto COMPLETO que el
-  // admin escriba (con su grafía tal cual, sin tocar mayúsculas — el
-  // mayusculeo es solo visual, vía CSS) se guarda como TÍTULO visible
-  // de la caja.
-  //
-  // La línea de objetivo tolera espacios irregulares alrededor del
-  // guion y que falte el número de puntos: se busca el ÚLTIMO "-" de la
-  // línea; si no hay número válido detrás (vacío, sin espacio, mal
-  // escrito, o fuera de 1-5) el objetivo se guarda igual con 1 punto por
-  // defecto, en vez de descartarse en silencio como antes.
-  function parsearObjetivosTexto(texto) {
-    var secciones = {}, etiquetas = {}, orden = [];
-    var actual = null;
+  // Lista pegada -> filas. Una fila con puesto es "N. Nombre PAÍS PUNTOS"
+  // (los puntos son opcionales); cualquier otra línea no vacía (títulos como
+  // "REPUTACIÓN: NACIONAL") se conserva como separador visual.
+  function parsearRankingLista(texto) {
+    var filas = [];
     (texto || "").split("\n").forEach(function (linea) {
-      var l = linea.trim();
+      var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
-      var mHeader = l.match(/^#\s*(.+)$/);
-      if (mHeader) {
-        var etiqueta = mHeader[1].trim();
-        var norm = etiqueta.toUpperCase();
-        var clave = _objetivosClaveDeHeader(norm);
-        actual = clave;
-        if (!secciones[clave]) { secciones[clave] = []; orden.push(clave); }
-        etiquetas[clave] = etiqueta;
-        return;
-      }
-      if (!actual) return;
-      var idx = l.lastIndexOf("-");
-      var objTexto, puntos;
-      if (idx === -1) {
-        objTexto = l;
-        puntos = 1;
-      } else {
-        objTexto = l.slice(0, idx).trim();
-        var ptsNum = parseInt(l.slice(idx + 1).trim(), 10);
-        puntos = (ptsNum >= 1 && ptsNum <= 5) ? ptsNum : 1;
-      }
-      if (!objTexto) return;
-      secciones[actual].push({ texto: objTexto, puntos: puntos, clave: actual + "::" + objTexto });
-    });
-    return { secciones: secciones, etiquetas: etiquetas, orden: orden };
-  }
-
-  // Puntos LOGRADOS / TOTALES de los objetivos de un club — extraído de
-  // renderizarObjetivos para poder reutilizarlo desde fuera (js/main.js
-  // sincroniza el 💼 de la cabecera con este mismo cálculo cada vez que
-  // se marca/desmarca un objetivo, para que nunca puedan desincronizarse).
-  function calcularObjetivosPuntos(idClubActivo) {
-    var texto = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
-    var parseo = parsearObjetivosTexto(texto);
-    var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
-    var logradosSet = {};
-    logrados.forEach(function (c) { logradosSet[c] = true; });
-    var totalPts = 0, ptsLogrados = 0;
-    parseo.orden.forEach(function (s) {
-      (parseo.secciones[s] || []).forEach(function (o) {
-        totalPts += o.puntos;
-        if (logradosSet[o.clave]) ptsLogrados += o.puntos;
+      var m = l.match(/^(\d+)\s*[.)]?\s+(.*?)\s+(\d[\d.,]*)\s*$/) || l.match(/^(\d+)\s*[.)]?\s+(.+)$/);
+      if (!m) { filas.push({ sep: true, texto: l }); return; }
+      filas.push({
+        pos: parseInt(m[1], 10),
+        texto: m[2].trim(),
+        pts: m[3] !== undefined ? m[3] : "",
+        norm: _rankingNorm(m[2])
       });
     });
-    return { totalPts: totalPts, ptsLogrados: ptsLogrados };
+    return filas;
+  }
+  // "LIGA - Mersey Reds - 50" -> { liga: { nombre: "Mersey Reds", objetivo: 50 } }
+  function parsearRankingClub(texto) {
+    var out = {};
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.replace(/\r/g, "").trim();
+      if (!l) return;
+      var m = _normNombre(l).match(/^(liga|europa|seleccion)\s*[-:]\s*/);
+      if (!m) return;
+      var resto = l.slice(l.search(/[-:]/) + 1).trim();
+      var mo = resto.match(/^(.*?)\s*[-–]\s*(\d+)\s*$/);
+      out[m[1]] = mo
+        ? { nombre: mo[1].trim(), objetivo: parseInt(mo[2], 10) }
+        : { nombre: resto, objetivo: null };
+    });
+    return out;
+  }
+  function _rankingBuscarFila(filas, nombre) {
+    var n = _rankingNorm(nombre);
+    if (!n) return null;
+    var pad = " " + n + " ";
+    for (var i = 0; i < filas.length; i++) {
+      if (filas[i].sep) continue;
+      if ((" " + filas[i].norm + " ").indexOf(pad) !== -1) return filas[i];
+    }
+    return null;
+  }
+  // Estado de UN ranking para un club: puesto actual, objetivo y si se cumple.
+  function _rankingEstado(tipo, clubId) {
+    var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
+    var cfg = parsearRankingClub(window.Estado.obtenerRankingClubTexto(clubId))[tipo] || {};
+    var fila = cfg.nombre ? _rankingBuscarFila(filas, cfg.nombre) : null;
+    var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
+    return {
+      filas: filas,
+      nombre: cfg.nombre || "",
+      fila: fila,
+      puesto: fila ? fila.pos : null,
+      objetivo: objetivo,
+      cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
+    };
   }
 
-  function renderizarObjetivos(contenedorId, idClubActivo) {
+  function _rankingTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes ranking-tabs">' +
+      window.Estado.RANKING_TIPOS.map(function (t) {
+        return '<button type="button" class="liga-tab-box liga-tab-box--ranking-' + t.id +
+          (_rankingTabActual === t.id ? " liga-tab-box--activa" : "") +
+          '" data-accion="ranking-tab-ir" data-tab="' + t.id + '" data-club-id="' + (idClubActivo || "") + '">' +
+          t.icono + " " + t.etiqueta + "</button>";
+      }).join("") +
+      "</div>"
+    );
+  }
+  function _rankingTarjetaHTML(t, est) {
+    var clase = "ranking-card";
+    var puesto, detalle;
+    if (est.objetivo === null && !est.nombre) {
+      puesto = "—";
+      detalle = "Sin configurar — pulsa 🎯 y escribe tu equipo y tu objetivo";
+    } else if (!est.fila) {
+      puesto = "?";
+      detalle = est.nombre
+        ? "No encuentro «" + escapeHTML(est.nombre) + "» en la lista"
+        : "Falta el nombre de tu equipo en la lista";
+    } else {
+      puesto = est.puesto + "º";
+      detalle = est.objetivo === null ? "Sin objetivo" : "Objetivo: puesto " + est.objetivo + " o mejor";
+    }
+    if (est.fila && est.objetivo !== null) clase += est.cumplido ? " ranking-card--ok" : " ranking-card--no";
+    return (
+      '<div class="' + clase + '"><div class="ranking-card-tit">' + t.icono + " " + t.etiqueta + "</div>" +
+      '<div class="ranking-card-puesto">' + puesto + "</div>" +
+      '<div class="ranking-card-det">' + detalle + "</div>" +
+      (est.fila && est.objetivo !== null ? '<div class="ranking-card-estado">' + (est.cumplido ? "✅ Conseguido" : "❌ Por debajo") + "</div>" : "") +
+      "</div>"
+    );
+  }
+  function _rankingListaHTML(est) {
+    if (!est.filas.length) {
+      return '<p class="objetivos-vacio">Lista vacía. Pulsa ✏️ y pega la clasificación tal cual sale del juego.</p>';
+    }
+    var html = "";
+    var marcaPuesta = false;
+    var ultimaConPuesto = -1;
+    est.filas.forEach(function (f, i) { if (!f.sep && est.objetivo !== null && f.pos <= est.objetivo) ultimaConPuesto = i; });
+    est.filas.forEach(function (f, i) {
+      if (f.sep) {
+        html += '<div class="ranking-sep">' + escapeHTML(f.texto) + "</div>";
+        return;
+      }
+      var cols = f.texto.split(/\t| {2,}/);
+      var nombre = cols[0], extra = cols.slice(1).join(" ");
+      var propia = est.fila === f;
+      html +=
+        '<div class="ranking-fila' + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") + '">' +
+        '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
+        '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
+        '<span class="ranking-fila-pts">' + escapeHTML(f.pts) + "</span></div>";
+      if (!marcaPuesta && i === ultimaConPuesto) {
+        marcaPuesta = true;
+        html += '<div class="ranking-meta">🎯 OBJETIVO: puesto ' + est.objetivo + "</div>";
+      }
+    });
+    return html;
+  }
+
+  function renderizarRanking(contenedorId, idClubActivo) {
     var contenedor = document.getElementById(contenedorId);
-    if (!contenedor) return;
+    if (!contenedor || !window.Estado) return;
     contenedor.innerHTML = "";
 
-    var puntos = calcularObjetivosPuntos(idClubActivo);
-
-    // El resumen "N / M puntos conseguidos" va en la MISMA fila que el
-    // ✏️ (petición usuario: "subirlo a la altura del ✏️") — así todas las
-    // cajas de sección quedan una fila más arriba, sin scroll de más.
     var header = document.createElement("div");
     header.className = "liga1ref-header";
     header.innerHTML =
-      '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos"><b>' + puntos.ptsLogrados + "</b> / " + puntos.totalPts +
-      " puntos conseguidos</span>" +
-      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-objetivos-inline" data-club-id="' +
-      (idClubActivo || "") + '" aria-label="Editar objetivos">✏️</button>';
+      '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos">Puesto actual y objetivo</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-club" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Mi equipo y mi objetivo">🎯</button>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-lista" data-tab="' + _rankingTabActual +
+      '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
     contenedor.appendChild(header);
 
-    var texto = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
-    var parseo = parsearObjetivosTexto(texto);
-    var secciones = parseo.secciones;
-    var etiquetas = parseo.etiquetas;
-    var logrados = window.Estado ? window.Estado.obtenerObjetivosLogrados(idClubActivo) : [];
-    var logradosSet = {};
-    logrados.forEach(function (c) { logradosSet[c] = true; });
-
-    var iconos = window.Estado ? window.Estado.obtenerObjetivosIconos(idClubActivo) : OBJETIVOS_ICONOS_DEFAULT;
-
-    if (!parseo.orden.length) {
-      var vacioGlobal = document.createElement("p");
-      vacioGlobal.className = "objetivos-vacio";
-      vacioGlobal.textContent = 'Sin objetivos todavía. Pulsa ✏️ y añade "# Título" para crear la primera caja.';
-      contenedor.appendChild(vacioGlobal);
-      return;
-    }
-
-    // Catálogo ABIERTO (ver parsearObjetivosTexto): una caja por cada
-    // "# Título" que aparezca en el texto, en el orden en que se
-    // escribieron — ya no hay una lista fija de 5 nombres.
-    parseo.orden.forEach(function (s) {
-      var lista = secciones[s];
-      var sub = 0, subTotal = 0;
-      lista.forEach(function (o) { subTotal += o.puntos; if (logradosSet[o.clave]) sub += o.puntos; });
-
-      // Caja SIEMPRE abierta (petición usuario) — ya no es un <details>
-      // plegable, es un bloque fijo con cabecera + lista debajo.
-      var caja = document.createElement("div");
-      caja.className = "objetivos-seccion-caja";
-
-      var cab = document.createElement("div");
-      cab.className = "objetivos-seccion-cabecera";
-      cab.innerHTML =
-        '<button type="button" class="objetivos-seccion-icono" data-accion="editar-objetivos-icono" data-club-id="' +
-        (idClubActivo || "") + '" data-seccion="' + escapeHTML(s) + '" aria-label="Editar icono">' +
-        (iconos[s] || OBJETIVOS_ICONOS_DEFAULT[s] || OBJETIVOS_ICONO_FALLBACK) + "</button>" +
-        '<span class="objetivos-seccion-nombre">' + escapeHTML(etiquetas[s] || s) + "</span>" +
-        '<span class="objetivos-seccion-pts">' + sub + "/" + subTotal + "</span>";
-      caja.appendChild(cab);
-
-      var body = document.createElement("div");
-      body.className = "objetivos-seccion-lista";
-      if (!lista.length) {
-        var vacio = document.createElement("p");
-        vacio.className = "objetivos-vacio";
-        vacio.textContent = "Sin objetivos todavía. Pulsa ✏️ para añadir alguno.";
-        body.appendChild(vacio);
-      } else {
-        lista.forEach(function (o) {
-          var logrado = !!logradosSet[o.clave];
-          var fila = document.createElement("button");
-          fila.type = "button";
-          fila.className = "objetivos-fila" + (logrado ? " objetivos-fila--logrado" : "");
-          fila.dataset.accion = "toggle-objetivo";
-          fila.dataset.clubId = idClubActivo || "";
-          fila.dataset.clave = o.clave;
-          fila.innerHTML =
-            '<span class="objetivos-fila-check">' + (logrado ? "✅" : "⬜") + "</span>" +
-            '<span class="objetivos-fila-texto">' + escapeHTML(o.texto) + "</span>" +
-            '<span class="objetivos-fila-pts">' + o.puntos + (o.puntos === 1 ? " pt" : " pts") + "</span>";
-          body.appendChild(fila);
-        });
-      }
-      caja.appendChild(body);
-      contenedor.appendChild(caja);
+    var tarjetas = '<div class="ranking-cards">';
+    window.Estado.RANKING_TIPOS.forEach(function (t) {
+      tarjetas += _rankingTarjetaHTML(t, _rankingEstado(t.id, idClubActivo));
     });
+    tarjetas += "</div>";
+
+    var tabsHost = document.createElement("div");
+    tabsHost.innerHTML = tarjetas + _rankingTabsHTML(idClubActivo) +
+      '<div class="ranking-lista">' + _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
+    contenedor.appendChild(tabsHost);
+  }
+  function irRankingTab(clubId, tab) {
+    var valido = window.Estado.RANKING_TIPOS.some(function (t) { return t.id === tab; });
+    _rankingTabActual = valido ? tab : "liga";
+    renderizarRanking("ranking-content", clubId);
   }
 
-  // Editor de texto libre por caja (candado 646) — a diferencia de
-  // Títulos (catálogo cerrado, solo números), aquí el admin puede
-  // añadir/quitar objetivos enteros, así que sí necesita la misma
-  // protección que Calendario extra/Roster.
-  function pintarEditorObjetivos(contenedor, idClubActivo) {
+  // Editor de la lista COMPARTIDA de una clasificación (candado 646).
+  function pintarEditorRankingLista(contenedor, idClubActivo, tipo) {
     contenedor.innerHTML = "";
-
+    var info = window.Estado.RANKING_TIPOS.filter(function (t) { return t.id === tipo; })[0] || window.Estado.RANKING_TIPOS[0];
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      'Una línea "# Título" abre una caja nueva — pon el que quieras (p.ej. "# Champions League", ' +
-      '"# Recopa Europa", "# Superliga"), no hay límite de cuántas ni tienen que llamarse de una forma ' +
-      'concreta; se ve SIEMPRE en mayúsculas aunque lo escribas en minúsculas. "# Liga"/"# Ligue 1"/' +
-      '"# Premier League"/"# Serie A" van todas a la misma caja Liga, y "# Copa"/"# Coupe ..."/' +
-      '"# FA Cup"/"# Coppa Italia" a la misma caja Copa (puedes añadir texto detrás, p.ej. ' +
-      '"# Ligue 1 Francia", y se queda como título). Debajo de cada "#", un objetivo por línea con ' +
-      '"- N" al final (N del 1 al 5, los puntos que vale); si te dejas el número o el guion mal ' +
-      "puesto, el objetivo se guarda igual con 1 punto, nunca desaparece. Añade, edita o borra líneas " +
-      "libremente.";
+      "Clasificación " + info.etiqueta + " — la misma para todas las cajas. Pega la lista tal cual sale del " +
+      'juego, una línea por equipo: "1. Bayern ALEMANIA 422". Cualquier línea sin número delante ' +
+      '(p.ej. "REPUTACIÓN: NACIONAL") se queda como separador.';
     contenedor.appendChild(nota);
-
-    var textoGuardado = window.Estado ? window.Estado.obtenerObjetivosTexto(idClubActivo) : "";
     var textarea = document.createElement("textarea");
-    textarea.id = "objetivos-textarea";
+    textarea.id = "ranking-lista-textarea";
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 26;
-    textarea.value = textoGuardado;
+    textarea.value = window.Estado.obtenerRankingLista(info.id);
     contenedor.appendChild(textarea);
-
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-objetivos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-objetivos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+      '<button type="button" class="btn-ghost" data-accion="cancelar-ranking" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-ranking-lista" data-tab="' + info.id +
+      '" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+  // Editor de MI equipo + MI objetivo en cada clasificación (candado 646).
+  function pintarEditorRankingClub(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Una línea por clasificación: TIPO - nombre de tu equipo TAL COMO SALE EN LA LISTA - puesto objetivo. " +
+      "Ejemplo: LIGA - Mersey Reds - 50. Se cumple si estás en ese puesto o en uno mejor.";
+    contenedor.appendChild(nota);
+    var textarea = document.createElement("textarea");
+    textarea.id = "ranking-club-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 6;
+    textarea.placeholder = "LIGA - Nombre en la lista - 50\nEUROPA - Nombre en la lista - 20\nSELECCIÓN - Nombre en la lista - 10";
+    textarea.value = window.Estado.obtenerRankingClubTexto(idClubActivo);
+    contenedor.appendChild(textarea);
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-ranking" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-ranking-club" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -11502,25 +11456,6 @@
     // esta 2ª pasada simplemente no lo vuelve a encontrar.
     if (window.Estado.reiniciarResultadosDeClub) {
       n += window.Estado.reiniciarResultadosDeClub(clubId, undefined, incluirHvH);
-    }
-    // 🎯 Objetivos LOGRADOS — reporte usuario ("los objetivos... salen
-    // marcados varios del año pasado, aunque los desmarque estos vuelven
-    // a salir"): el catálogo de objetivos (Liga/Copa/Superliga/Globales)
-    // es el MISMO texto cada temporada salvo que el admin lo edite a
-    // mano, así que un objetivo marcado el año pasado seguía apareciendo
-    // YA marcado el primer día de la temporada nueva — nada limpiaba
-    // `ef7_objetivos_logrados_v1_<clubId>` al reiniciar. El texto de los
-    // objetivos en sí NO se toca — solo el progreso de qué se ha logrado.
-    if (window.Estado.reiniciarObjetivosLogrados) window.Estado.reiniciarObjetivosLogrados(clubId);
-    // El 💼 "logrado" de la cabecera es SIEMPRE la suma de lo marcado en
-    // Objetivos (ver js/main.js::_sincronizarValoracionConObjetivos) —
-    // se pone a 0 aquí mismo para que el badge no se quede mostrando un
-    // nº de la temporada anterior hasta que el admin vuelva a abrir
-    // Objetivos. El "objetivo" (meta para la temporada que viene) NO se
-    // toca — es la única parte de la Valoración pensada para persistir.
-    if (window.Estado.obtenerValoracionClub && window.Estado.guardarValoracionClub) {
-      var _valActual = window.Estado.obtenerValoracionClub(clubId);
-      if (_valActual.logrado) window.Estado.guardarValoracionClub(clubId, 0, _valActual.objetivo);
     }
     generarCalendarioLateralDerecho(clubId);
     return n;
@@ -13102,22 +13037,6 @@
   // markup .admin-list-item que Stadium Hub/Ball Storage.
   function pintarEditorMenuClub(clubId, contenedor) {
     contenedor.innerHTML = "";
-
-    // 💼 Valoración — 2 números sueltos que el mánager teclea a mano (la
-    // suma real de Objetivos la lleva él aparte). Vive aquí, dentro del
-    // editor ya protegido por PIN, en vez de un ✏️ suelto en la cabecera.
-    var v = window.Estado ? window.Estado.obtenerValoracionClub(clubId) : { logrado: 0, objetivo: 0 };
-    var filaValoracion = document.createElement("div");
-    filaValoracion.className = "admin-list-item";
-    filaValoracion.innerHTML =
-      '<div class="admin-list-item-main">' +
-      '<span class="admin-list-item-title">💼 Valoración: ' + escapeHTML(String(v.logrado)) + "/" + escapeHTML((Number(v.objetivo) || 0).toFixed(2)) + "</span>" +
-      '<span class="admin-list-item-sub">Suma manual — para seguir en el club la próxima temporada</span>' +
-      "</div>" +
-      '<div class="admin-list-item-actions">' +
-      '<button type="button" class="admin-list-item-btn" data-accion="editar-valoracion-club" data-club-id="' + clubId + '" aria-label="Editar valoración">✏️</button>' +
-      "</div>";
-    contenedor.appendChild(filaValoracion);
 
     var nota = document.createElement("p");
     nota.className = "admin-nota";
@@ -15394,10 +15313,10 @@
     renderizarTitulosTemporada: renderizarTitulosTemporada,
     pintarEditorTitulosTemporada: pintarEditorTitulosTemporada,
     parsearTitulosTexto: parsearTitulosTexto,
-    renderizarObjetivos: renderizarObjetivos,
-    pintarEditorObjetivos: pintarEditorObjetivos,
-    parsearObjetivosTexto: parsearObjetivosTexto,
-    calcularObjetivosPuntos: calcularObjetivosPuntos,
+    renderizarRanking: renderizarRanking,
+    irRankingTab: irRankingTab,
+    pintarEditorRankingLista: pintarEditorRankingLista,
+    pintarEditorRankingClub: pintarEditorRankingClub,
     renderizarDerbys: renderizarDerbys,
     pintarEditorDerbys: pintarEditorDerbys,
     parsearDerbysTexto: parsearDerbysTexto,

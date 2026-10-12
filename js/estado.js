@@ -1630,7 +1630,7 @@
   var MENU_CLUB_BUILTIN = [
     { id: "titulos", icono: "🏆", etiqueta: "Títulos" },
     { id: "derbys", icono: "⚔️", etiqueta: "Derbys" },
-    { id: "objetivos", icono: "🎯", etiqueta: "Objetivos" },
+    { id: "ranking", icono: "📊", etiqueta: "Ranking" },
     { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
     { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
@@ -1754,7 +1754,9 @@
     var builtinPorId = {};
     MENU_CLUB_BUILTIN.forEach(function (c) { builtinPorId[c.id] = c; });
 
-    var orden = ov.orden.slice();
+    // "Objetivos" desapareció y su hueco lo ocupa "Ranking" (misma posición
+    // en el orden que el admin ya hubiera guardado).
+    var orden = ov.orden.map(function (id) { return id === "objetivos" ? "ranking" : id; });
     // Cualquier tarjeta de fábrica NUEVA (añadida en una versión futura de
     // la app) que el admin todavía no tenga en su orden guardado se añade
     // al final automáticamente — nunca desaparece solo por haber editado
@@ -2310,177 +2312,57 @@
     return flags;
   }
 
-  // ---------- Objetivos del Club (texto libre, candado 646) ----------
-  // Mismo patrón que Calendario extra/Títulos: UN textarea de texto
-  // libre por club. Formato: una línea "# SECCIÓN" (LIGA/COPA/SUPERLIGA/
-  // GLOBALES) abre sección, y cada línea siguiente hasta la próxima
-  // "# " es "Texto del objetivo - N" (N = 1 o 2 puntos, editable). El
-  // parseo real vive en js/renderizadores.js::parsearObjetivosTexto —
-  // aquí solo se guarda/lee el texto tal cual, 0 KB de estructura extra.
-  // Los 6 clubes arrancan con la MISMA plantilla de ejemplo (editable
-  // por separado, cada uno la suya, sin tocar las de los demás).
-  var OBJETIVOS_DEFAULT_TEXTO = [
-    "# LIGA",
-    "Ascender - 2",
-    "Quedar delante de X equipo - 1",
-    "Marcar más de X goles - 1",
-    "1 jugador marca X goles o más - 1",
-    "1 jugador entre los 15 máximos MVP - 1",
-    "",
-    "# COPA",
-    "Llegar a Cuartos - 2",
-    "1 jugador entre los 15 máximos Goleadores - 1",
-    "1 jugador entre los 15 máximos MVP - 1",
-    "",
-    "# SUPERLIGA",
-    "Ganar 4 partidos - 2",
-    "Quedar delante de X - 1",
-    "",
-    "# GLOBALES",
-    "Marcar 1 hat-trick - 1",
-    "Marcar 5 o más goles en 1 partido - 2",
-    "6 porterías imbatidas - 2"
-  ].join("\n");
-  function _objetivosTextoKey(clubId) { return "ef7_objetivos_v1_" + clubId; }
-  function obtenerObjetivosTexto(clubId) {
+  // ---------- Ranking (3 clasificaciones globales, candado 646) ----------
+  // Sustituye a los antiguos Objetivos + 💼 (petición usuario 2026-10-12:
+  // "vamos a quitar los objetivos porque dan errores y vamos a poner
+  // Ranking"). Hay 3 clasificaciones — LIGA, EUROPA y SELECCIÓN — y cada
+  // club tiene que conseguir un puesto concreto en cada una.
+  //  · Las 3 LISTAS son COMPARTIDAS por todas las cajas (se pegan una vez,
+  //    como texto, tal cual salen del juego: "1. Bayern ALEMANIA 422").
+  //  · Cada club guarda aparte SU línea por clasificación: cómo se llama su
+  //    equipo en esa lista y el puesto objetivo ("LIGA - Mersey Reds - 50").
+  // Todo es texto editable; el parseo real vive en
+  // js/renderizadores.js::parsearRankingLista / parsearRankingClub.
+  var RANKING_TIPOS = [
+    { id: "liga", icono: "🏆", etiqueta: "LIGA" },
+    { id: "europa", icono: "🇪🇺", etiqueta: "EUROPA" },
+    { id: "seleccion", icono: "🌍", etiqueta: "SELECCIÓN" }
+  ];
+  function _rankingListaKey(tipo) { return "ef7_ranking_lista_v1_" + tipo; }
+  function obtenerRankingLista(tipo) {
     try {
-      var v = localStorage.getItem(_objetivosTextoKey(clubId));
-      return v !== null ? v : OBJETIVOS_DEFAULT_TEXTO;
+      var v = localStorage.getItem(_rankingListaKey(tipo));
+      return v !== null ? v : "";
     } catch (err) {
-      return OBJETIVOS_DEFAULT_TEXTO;
+      return "";
     }
   }
-  function guardarObjetivosTexto(clubId, texto) {
-    if (!_confirmarSiEncogeMucho(_objetivosTextoKey(clubId), obtenerObjetivosTexto(clubId), texto)) return false;
+  function guardarRankingLista(tipo, texto) {
+    if (!_confirmarSiEncogeMucho(_rankingListaKey(tipo), obtenerRankingLista(tipo), texto)) return false;
     try {
-      localStorage.setItem(_objetivosTextoKey(clubId), texto || "");
+      localStorage.setItem(_rankingListaKey(tipo), texto || "");
       return true;
     } catch (err) {
-      console.error("[estado] no se pudo guardar los objetivos del club:", err);
+      console.error("[estado] no se pudo guardar la clasificación del ranking:", err);
       _avisarFalloGuardado(err);
       return false;
     }
   }
-
-  // Objetivos ya LOGRADOS (marcados a mano, tocando la propia fila —
-  // sin PIN, es el progreso del mánager, no la estructura). Se guardan
-  // por CLAVE de texto (el objetivo SIN el " - N" de puntos), así
-  // cambiar solo el nº de puntos de una línea no borra el progreso ya
-  // marcado — solo cambiar el TEXTO del objetivo lo hace (mismo criterio
-  // que el resto de listas por-nombre de este archivo).
-  function _objetivosLogradosKey(clubId) { return "ef7_objetivos_logrados_v1_" + clubId; }
-  function obtenerObjetivosLogrados(clubId) {
+  function _rankingClubKey(clubId) { return "ef7_ranking_club_v1_" + clubId; }
+  function obtenerRankingClubTexto(clubId) {
     try {
-      var raw = localStorage.getItem(_objetivosLogradosKey(clubId));
-      var lista = raw ? JSON.parse(raw) : [];
-      return Array.isArray(lista) ? lista : [];
+      var v = localStorage.getItem(_rankingClubKey(clubId));
+      return v !== null ? v : "";
     } catch (err) {
-      return [];
+      return "";
     }
   }
-  function toggleObjetivoLogrado(clubId, clave) {
-    var lista = obtenerObjetivosLogrados(clubId);
-    var idx = lista.indexOf(clave);
-    if (idx === -1) lista.push(clave); else lista.splice(idx, 1);
+  function guardarRankingClubTexto(clubId, texto) {
     try {
-      localStorage.setItem(_objetivosLogradosKey(clubId), JSON.stringify(lista));
-    } catch (err) {
-      console.error("[estado] no se pudo guardar el progreso de objetivos:", err);
-      _avisarFalloGuardado(err);
-    }
-    return lista;
-  }
-  // Vacía el progreso de Objetivos LOGRADOS de un club — se llama al
-  // "🔄 Reiniciar temporada de este club" (ver
-  // js/renderizadores.js::reiniciarTodosPartidosClub). Sin esto, los
-  // objetivos marcados la temporada anterior (misma clave de texto:
-  // el catálogo de objetivos es el mismo cada año salvo que el admin lo
-  // edite a mano) seguían apareciendo YA marcados el primer día de la
-  // temporada nueva — reporte usuario ("los objetivos... salen marcados
-  // varios del año pasado"). El texto de los objetivos en sí (las cajas
-  // Liga/Copa/Superliga/Globales que el admin definió) NO se toca aquí
-  // — solo el progreso de qué se ha logrado, que es lo único que tiene
-  // sentido resetear al empezar una temporada nueva.
-  function reiniciarObjetivosLogrados(clubId) {
-    try {
-      localStorage.setItem(_objetivosLogradosKey(clubId), "[]");
+      localStorage.setItem(_rankingClubKey(clubId), texto || "");
       return true;
     } catch (err) {
-      console.error("[estado] no se pudo reiniciar el progreso de objetivos:", err);
-      _avisarFalloGuardado(err);
-      return false;
-    }
-  }
-
-  // ---------- 💼 Valoración del club (cabecera) ----------
-  // 2 números sueltos que el propio mánager teclea a mano ("logrado" /
-  // "objetivo para seguir la temporada que viene") — NO se derivan de
-  // los Objetivos de arriba (el mánager puede llevar su cuenta aparte,
-  // "yo hago la suma manual"). Sin PIN: es su propio progreso.
-  function _valoracionClubKey(clubId) { return "ef7_valoracion_v1_" + clubId; }
-  function obtenerValoracionClub(clubId) {
-    try {
-      var raw = localStorage.getItem(_valoracionClubKey(clubId));
-      var v = raw ? JSON.parse(raw) : null;
-      if (!v || typeof v !== "object") return { logrado: 0, objetivo: 0 };
-      return { logrado: Number(v.logrado) || 0, objetivo: Number(v.objetivo) || 0 };
-    } catch (err) {
-      return { logrado: 0, objetivo: 0 };
-    }
-  }
-  function guardarValoracionClub(clubId, logrado, objetivo) {
-    try {
-      localStorage.setItem(_valoracionClubKey(clubId), JSON.stringify({
-        logrado: Number(logrado) || 0,
-        objetivo: Number(objetivo) || 0
-      }));
-      return true;
-    } catch (err) {
-      console.error("[estado] no se pudo guardar la valoración del club:", err);
-      _avisarFalloGuardado(err);
-      return false;
-    }
-  }
-
-  // ---------- Iconos de las cajas de Objetivos (candado 646) ----------
-  // El catálogo de cajas es ABIERTO (ver js/renderizadores.js::
-  // parsearObjetivosTexto — una caja por cada "# Título" que el admin
-  // escriba, sin límite de cuántas), así que este store acepta CUALQUIER
-  // clave, no solo las 5 "de fábrica". OBJETIVOS_ICONOS_DEFAULT solo da
-  // un icono de partida bonito a esas 5 (copia EXACTA del mapa de
-  // js/renderizadores.js); cualquier caja nueva que el admin invente
-  // arranca con el fallback genérico 🎯 hasta que le ponga el suyo.
-  var OBJETIVOS_ICONOS_DEFAULT = { LIGA: "🏆", COPA: "🎖️", CHAMPIONS: "🇪🇺", SUPERLIGA: "🌟", GLOBALES: "🌍" };
-  var OBJETIVOS_ICONO_FALLBACK = "🎯";
-  function _objetivosIconosKey(clubId) { return "ef7_objetivos_iconos_v1_" + clubId; }
-  function obtenerObjetivosIconos(clubId) {
-    var guardados = null;
-    try {
-      var raw = localStorage.getItem(_objetivosIconosKey(clubId));
-      guardados = raw ? JSON.parse(raw) : null;
-    } catch (err) {
-      guardados = null;
-    }
-    var out = {};
-    // Primero TODO lo ya guardado (incluidas cajas nuevas del admin que
-    // no están en el mapa de defaults) — antes se descartaban en
-    // silencio por no iterar más que las 5 claves de fábrica.
-    if (guardados && typeof guardados === "object") {
-      Object.keys(guardados).forEach(function (s) { out[s] = guardados[s]; });
-    }
-    Object.keys(OBJETIVOS_ICONOS_DEFAULT).forEach(function (s) {
-      if (!out[s]) out[s] = OBJETIVOS_ICONOS_DEFAULT[s];
-    });
-    return out;
-  }
-  function guardarObjetivosIconoSeccion(clubId, seccion, icono) {
-    var actuales = obtenerObjetivosIconos(clubId);
-    actuales[seccion] = (icono && String(icono).trim()) || OBJETIVOS_ICONOS_DEFAULT[seccion] || OBJETIVOS_ICONO_FALLBACK;
-    try {
-      localStorage.setItem(_objetivosIconosKey(clubId), JSON.stringify(actuales));
-      return true;
-    } catch (err) {
-      console.error("[estado] no se pudo guardar el icono del objetivo:", err);
+      console.error("[estado] no se pudo guardar el objetivo de ranking del club:", err);
       _avisarFalloGuardado(err);
       return false;
     }
@@ -4220,15 +4102,11 @@
     capearListaJugadoresAbierta: capearListaJugadoresAbierta,
     obtenerTarjetaFlags: obtenerTarjetaFlags,
     limpiarTarjetaFlag: limpiarTarjetaFlag,
-    obtenerObjetivosTexto: obtenerObjetivosTexto,
-    guardarObjetivosTexto: guardarObjetivosTexto,
-    obtenerObjetivosLogrados: obtenerObjetivosLogrados,
-    toggleObjetivoLogrado: toggleObjetivoLogrado,
-    reiniciarObjetivosLogrados: reiniciarObjetivosLogrados,
-    obtenerValoracionClub: obtenerValoracionClub,
-    guardarValoracionClub: guardarValoracionClub,
-    obtenerObjetivosIconos: obtenerObjetivosIconos,
-    guardarObjetivosIconoSeccion: guardarObjetivosIconoSeccion,
+    RANKING_TIPOS: RANKING_TIPOS,
+    obtenerRankingLista: obtenerRankingLista,
+    guardarRankingLista: guardarRankingLista,
+    obtenerRankingClubTexto: obtenerRankingClubTexto,
+    guardarRankingClubTexto: guardarRankingClubTexto,
     obtenerDerbysTexto: obtenerDerbysTexto,
     guardarDerbysTexto: guardarDerbysTexto,
     obtenerRosterTexto: obtenerRosterTexto,

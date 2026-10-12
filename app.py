@@ -168,8 +168,13 @@ instance_dir = _resolve_data_dir()
 # Normalización de prefijo: Railway/Heroku envían `postgres://` pero
 # SQLAlchemy >= 1.4 requiere `postgresql://`. Sustituimos solo el prefijo.
 _db_url = os.environ.get("DATABASE_URL", "").strip()
+# Se fuerza el driver `psycopg2` (el de requirements.txt): con `postgresql://`
+# a secas, las versiones nuevas de SQLAlchemy buscan `psycopg` (v3) y el
+# servidor no arranca ("No module named 'psycopg'" — reporte 2026-10-12, Neon).
 if _db_url.startswith("postgres://"):
-    _db_url = "postgresql://" + _db_url[len("postgres://"):]
+    _db_url = "postgresql+psycopg2://" + _db_url[len("postgres://"):]
+elif _db_url.startswith("postgresql://"):
+    _db_url = "postgresql+psycopg2://" + _db_url[len("postgresql://"):]
 if not _db_url:
     _db_url = "sqlite:///" + os.path.join(instance_dir, "liga.db")
 
@@ -188,7 +193,7 @@ def _ef7_info_persistencia():
     Railway sin volumen) TODOS los partidos guardados se pierden en cada
     reinicio/suspensión y los móviles que no los reenvían dejan de verlos."""
     try:
-        if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
+        if _db_url.startswith("postgresql") or _db_url.startswith("postgres"):
             persistente = True
         else:
             persistente = bool(
@@ -206,7 +211,7 @@ def _ef7_info_persistencia():
 
 
 def _persistence_diagnostic():
-    if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
+    if _db_url.startswith("postgresql") or _db_url.startswith("postgres"):
         return "PERSISTENT (Postgres via DATABASE_URL)"
     if instance_dir.startswith("/data") or os.environ.get("LIGA_DATA_DIR") \
             or os.environ.get("RAILWAY_VOLUME_MOUNT_PATH"):

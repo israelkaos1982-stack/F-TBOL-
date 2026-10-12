@@ -10338,8 +10338,8 @@
       '<span class="obj-card-tag">' + escapeHTML(seccion) + "</span>" +
       '<span class="obj-card-icono">' + _objIcono(seccion) + "</span>" +
       '<span class="obj-card-cuerpo">' + cuerpo + "</span>" +
-      '<span class="obj-card-rec"><span class="obj-card-rec-tit">RECOMPENSA</span>' +
-      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙 " + escapeHTML(o.recompensa) : "—") + "</span></span>" +
+      '<span class="obj-card-rec">' +
+      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙<br>" + escapeHTML(o.recompensa) : "—") + "</span></span>" +
       "</button>"
     );
   }

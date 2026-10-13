@@ -12495,7 +12495,7 @@
   function _filasClasificacionDePartido(partido, datos, local, visitante) {
     var key = _resolverCompKeyBalon(partido.competicion);
     if (key === "superliga") {
-      return calcularSuperliga(datos).map(function (f) { return { equipoId: f.equipo.id, nombre: f.equipo.nombre, pts: f.pts }; });
+      return calcularSuperliga(datos).map(function (f) { return { equipoId: f.equipo.id, nombre: f.equipo.nombre, pts: f.pts, pj: f.pj }; });
     }
     if (_COMPS_CLASIF_EUROPA[key] && _esFaseDeGruposEuropea(partido)) {
       return key === "champions" ? calcularChampionsCombinada(datos) : (key === "uel" ? calcularUelCombinada(datos) : calcularUeclCombinada(datos));
@@ -12526,7 +12526,7 @@
       for (var i = 0; i < filas.length; i++) {
         var f = filas[i];
         if ((f.equipoId && f.equipoId === equipo.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, equipo.nombre))) {
-          return { pos: i + 1, pts: f.pts };
+          return { pos: i + 1, pts: f.pts, pj: f.pj };
         }
       }
       return null;
@@ -12537,12 +12537,14 @@
   }
   function _htmlClasificacionDePartido(clas) {
     if (!clas) return "";
-    function d(x, campo) { return x ? (campo === "pos" ? x.pos + "º" : x[campo]) : "–"; }
+    function d(x, campo) { return x ? (campo === "pos" ? x.pos + "º" : (x[campo] != null && x[campo] !== "" ? x[campo] : "–")) : "–"; }
     function fila(campo, etiqueta) {
       return '<div class="previa-clas-fila"><span class="previa-clas-val previa-clas-val--izq">' + d(clas.local, campo) + "</span>" +
         '<span class="previa-clas-etq">' + etiqueta + '</span><span class="previa-clas-val previa-clas-val--der">' + d(clas.visitante, campo) + "</span></div>";
     }
-    return fila("pos", "Pos") + fila("pts", "Pts");
+    // PJ (partidos jugados) encima de Pos: solo si la tabla lo trae de algún equipo.
+    var hayPj = (clas.local && clas.local.pj != null && clas.local.pj !== "") || (clas.visitante && clas.visitante.pj != null && clas.visitante.pj !== "");
+    return (hayPj ? fila("pj", "PJ") : "") + fila("pos", "Pos") + fila("pts", "Pts");
   }
 
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga

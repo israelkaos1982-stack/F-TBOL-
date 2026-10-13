@@ -18,7 +18,7 @@ el nº de equipos).
 | Competición | Mult. |
 |---|---|
 | Copa Mundial FIFA | ×5,0 (no implementada: sin competición en la app) |
-| Eurocopa / Copa América (Nations Cup en la app) | ×4,0 (provisional) |
+| Eurocopa / Copa América (Nations Cup en la app) | ×4,0 |
 | Champions League | ×3,0 |
 | Mundial de Clubes / Mundialito | ×2,8 |
 | Liga de 1.ª División (EA Sports, Ligue 1, Premier, Serie A) | ×2,5 |
@@ -30,8 +30,8 @@ el nº de equipos).
 | Conference League | ×0,7 |
 | Supercopas nacionales | ×0,6 |
 | **LaLiga Hypermotion (2.ª)** | **×0,5** (antes ×1,5: el campeón de 2.ª ganaba más que el 8.º de 1.ª) |
-| 1ª REF (3.ª) | ×0,3 (provisional) |
-| 2ª REF (4.ª) | ×0,15 (provisional) |
+| 1ª REF (3.ª) | ×0,3 |
+| 2ª REF (4.ª) | ×0,15 |
 | Finalissima | ×0,5 (no implementada) |
 
 Comparación: 8.º de Primera = 75 × 2,5 = 187,5 · campeón de Segunda = 200 × 0,5 = 100 ·

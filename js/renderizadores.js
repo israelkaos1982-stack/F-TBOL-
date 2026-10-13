@@ -10567,13 +10567,21 @@
           if (!mult || !L.pj) return; // sin partidos jugados la posición es solo orden alfabético
           // ESPAÑA = Ligas españolas + Copa + Supercopa de España; la liga extranjera
           // (Ligue 1, Premier, Serie A) de un humano no español solo cuenta en GLOBAL.
-          sumar(RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1 ? "extra" : "espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
+          if (RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1) return; // liga simulada: sus puntos ya vienen en la lista pegada
+          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
           return;
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];
         if (!mc || !f.rk) return;
         var r = _rankBaseElim(f.rk, k, clubId, datos);
-        sumar(RANK_TAB_COMP[k], RANK_NOMBRE_COMP[k] || f.nombre, r.txt, r.base, mc);
+        var tab = RANK_TAB_COMP[k];
+        if (tab === "espana" && !_rankingJuegaEspana(clubId)) {
+          // Humano extranjero (PSG, Chelsea, Inter): su liga y su copa son simuladas (ya
+          // vienen en la lista pegada); solo juega la Supercopa de su país → cuenta en GLOBAL.
+          if (k !== "supercopa") return;
+          tab = "extra";
+        }
+        sumar(tab, RANK_NOMBRE_COMP[k] || f.nombre, r.txt, r.base, mc);
       } catch (err2) {
         console.error("[ranking] puntos de", f.nombre, err2);
       }

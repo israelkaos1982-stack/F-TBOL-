@@ -10551,7 +10551,7 @@
   var RANK_LIGAS_EXTRANJERAS = ["ligue1", "premier", "seriea"];
   function calcularPuntosRankingClub(clubId, datos) {
     _rankFns();
-    var out = { espana: { total: 0, filas: [] }, europa: { total: 0, filas: [] }, seleccion: { total: 0, filas: [] } };
+    var out = { espana: { total: 0, filas: [] }, europa: { total: 0, filas: [] }, seleccion: { total: 0, filas: [] }, extra: { total: 0, filas: [] } };
     function sumar(tab, nombre, txt, base, mult) {
       if (!base) return;
       var pts = Math.round(base * mult); // enteros, redondeo .5 hacia arriba (262,5 → 263)
@@ -10565,9 +10565,9 @@
         if (f.rkLiga) {
           var L = f.rkLiga, mult = RANK_MULT_LIGA[L.ligaId];
           if (!mult || !L.pj) return; // sin partidos jugados la posición es solo orden alfabético
-          // ESPAÑA = Liga + Copa + Supercopa de España; las ligas extranjeras (Ligue 1,
-          // Premier, Serie A) de los humanos no españoles cuentan en EUROPA.
-          sumar(RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1 ? "europa" : "espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
+          // ESPAÑA = Ligas españolas + Copa + Supercopa de España; la liga extranjera
+          // (Ligue 1, Premier, Serie A) de un humano no español solo cuenta en GLOBAL.
+          sumar(RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1 ? "extra" : "espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
           return;
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];
@@ -10676,7 +10676,7 @@
   // Cache de los puntos por competición de cada club (se calcula en
   // segundo plano al abrir el Ranking, ver renderizarRanking).
   var _rankingPuntosCache = {};
-  var _RANKING_TIPOS_BASE = ["espana", "europa", "seleccion"];
+  var _RANKING_TIPOS_BASE = ["espana", "europa", "extra"]; // GLOBAL = Liga + Copa + Supercopa + Europa (sin Selección)
   function _rankingPuntosComp(tipo, clubId) {
     var c = _rankingPuntosCache[clubId];
     if (tipo === "global") {
@@ -10692,7 +10692,7 @@
   // Puntos de los objetivos YA logrados del club que suman a este ranking.
   function _rankingBonusObjetivos(tipo, clubId) {
     if (tipo === "global") {
-      return _RANKING_TIPOS_BASE.reduce(function (n, t) { return n + _rankingBonusObjetivos(t, clubId); }, 0);
+      return _rankingBonusObjetivos("espana", clubId) + _rankingBonusObjetivos("europa", clubId);
     }
     var parseo = parsearObjetivosTexto(window.Estado.obtenerObjetivosTexto(clubId));
     var logrados = {};
@@ -10740,7 +10740,11 @@
   }
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
-    var humanos = _rankingHumanos(clubId).filter(function (h) { return tipo !== "espana" || _rankingJuegaEspana(h); });
+    var humanos = _rankingHumanos(clubId).filter(function (h) {
+      if (tipo === "espana") return _rankingJuegaEspana(h);
+      if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
+      return true;
+    });
     var hayLista = filas.some(function (f) { return !f.sep; });
     var maxPos = filas.reduce(function (m, f) { return f.sep ? m : Math.max(m, f.pos); }, 0);
     var filaDe = {}, nombreDe = {};

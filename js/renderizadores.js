@@ -10393,6 +10393,16 @@
     var host = document.createElement("div");
     host.innerHTML = html;
     contenedor.appendChild(host);
+    // Cada objetivo en UNA línea: si un texto largo no cabe, se reduce solo su letra (mín. 9 px).
+    var ajustar = function () {
+      host.querySelectorAll(".obj-card-texto").forEach(function (t) {
+        var px = 13;
+        t.style.fontSize = "";
+        while (t.scrollWidth > t.clientWidth + 1 && px > 9) { px -= 0.5; t.style.fontSize = px + "px"; }
+      });
+    };
+    ajustar();
+    setTimeout(ajustar, 60); // por si el modal aún no tenía ancho al pintar
   }
   function pintarEditorObjetivos(contenedor, idClubActivo) {
     contenedor.innerHTML = "";

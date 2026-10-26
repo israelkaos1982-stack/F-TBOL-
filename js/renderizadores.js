@@ -12482,6 +12482,14 @@
     if (typeof l !== "number" || typeof v !== "number") return null;
     return { local: l, visitante: v };
   }
+  // IDA de una eliminatoria a doble partido: "Ida X-Y" = lo que lleva ESTE partido
+  // y "Global X-Y" (todavía igual, la vuelta aún no se juega) — petición usuario
+  // 2026-10-26: en eliminatorias (ida y vuelta) siempre se ven Ida y Global.
+  function _htmlIdaGlobalDeIda(golesLocal, golesVisitante) {
+    var t = (golesLocal || 0) + "-" + (golesVisitante || 0);
+    return '<div class="previa-global-fila">Ida ' + t + "</div>" +
+      '<div class="previa-global-fila previa-global-fila--total">Global ' + t + "</div>";
+  }
   // golesLocal/golesVisitante = lo que lleva ESTE partido (0-0 en la previa).
   function _htmlIdaGlobal(ida, golesLocal, golesVisitante) {
     if (!ida) return "";
@@ -12588,7 +12596,9 @@
   function _esFaseDeGruposEuropea(partido) {
     if (!partido.competicion || !EUROPA_FASE_GRUPOS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
     var rondaNorm = _normNombre(partido.ronda || "");
-    return !/play-?offs?|dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
+    // "Repesca" = Dieciseisavos renombrado en Champions/Europa/Conference; cualquier ida/vuelta es eliminatoria.
+    if (_faseIdaVuelta(partido)) return false;
+    return !/play-?offs?|repesca|dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(rondaNorm);
   }
 
   // FINALES de torneo (petición usuario): Copa del Rey, Champions League,
@@ -12931,7 +12941,9 @@
       var idaPrevia = _datosIdaDeVuelta(partido, datos);
       globalEl.innerHTML = idaPrevia
         ? _htmlIdaGlobal(idaPrevia, partido.jugado ? partido.resultado.golesLocal : 0, partido.jugado ? partido.resultado.golesVisitante : 0)
-        : _htmlClasificacionDePartido(_clasificacionDePartido(partido, datos, local, visitante));
+        : (_faseIdaVuelta(partido) === "ida" && !_esFaseDeGruposEuropea(partido)
+          ? _htmlIdaGlobalDeIda(partido.jugado ? partido.resultado.golesLocal : 0, partido.jugado ? partido.resultado.golesVisitante : 0)
+          : _htmlClasificacionDePartido(_clasificacionDePartido(partido, datos, local, visitante)));
     }
 
     // Mismo nombre acortado + guion " - " (y el mismo renombrado de
@@ -15865,6 +15877,7 @@
     faseIdaVuelta: _faseIdaVuelta,
     datosIdaDeVuelta: _datosIdaDeVuelta,
     htmlIdaGlobal: _htmlIdaGlobal,
+    htmlIdaGlobalDeIda: _htmlIdaGlobalDeIda,
     clasificacionDePartido: _clasificacionDePartido,
     htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,

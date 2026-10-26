@@ -1,0 +1,900 @@
+# Plantillas incluidas en el repositorio
+
+Solo están las plantillas guardadas en el código (`jugadores_data.py` y `data/equipos_ia.json`). Las plantillas que pegaste tú en la app, las clasificaciones y las listas de ranking viven en tu navegador/servidor y no están aquí.
+
+## A) Plantillas completas (`jugadores_data.py`) — 25 equipos
+
+### Real Madrid (40 jugadores)
+- 1 · Thibaut Courtois · portero · 91
+- 13 · Andriy Lunin · portero · 84
+- 26 · Fran González · portero · 68
+- 29 · Javier Navarro · portero · 66
+- 43 · Sergio Mestre · portero · 65
+- 24 · Dean Huijsen · defensa · 85
+- 22 · A. Rüdiger · defensa · 87
+- 12 · Alexander-Arnold · defensa · 88
+- 18 · Á. Carreras · defensa · 83
+- 3 · Éder Militão · defensa · 86
+- 2 · Dani Carvajal · defensa · 83
+- 17 · Raúl Asencio · defensa · 82
+- 4 · David Alaba · defensa · 81
+- 20 · Fran García · defensa · 80
+- 23 · Ferland Mendy · defensa · 83
+- 35 · David Jiménez · defensa · 68
+- 32 · Jesús Fortea · defensa · 67
+- 40 · V. Valdepeñas · defensa · 66
+- 27 · Diego Aguado · defensa · 65
+- 36 · Joan Martínez · defensa · 64
+- 48 · L. Fati · defensa · 64
+- 5 · J. Bellingham · medio · 90
+- 8 · F. Valverde · medio · 89
+- 14 · A. Tchouaméni · medio · 86
+- 15 · Arda Güler · medio · 85
+- 6 · E. Camavinga · medio · 86
+- 19 · Dani Ceballos · medio · 80
+- 45 · T. Pitarch · medio · 72
+- 37 · Manuel Ángel · medio · 69
+- 38 · César Palacios · medio · 68
+- 46 · Álvaro Leiva · medio · 66
+- 28 · Jorge Cestero · medio · 66
+- 47 · Dani Mesonero · medio · 65
+- 10 · K. Mbappé · delantero · 92
+- 7 · Vinícius · delantero · 90
+- 11 · Rodrygo · delantero · 85
+- 30 · F. Mastantuono · delantero · 80
+- 21 · Brahim Díaz · delantero · 83
+- 16 · Gonzalo García · delantero · 78
+- 42 · Daniel Yáñez · delantero · 66
+
+### FC Barcelona (32 jugadores)
+- 13 · Joan García · portero · 85
+- 25 · W. Szczęsny · portero · 83
+- 31 · D. Kochen · portero · 68
+- 33 · Eder Aller · portero · 65
+- 23 · Jules Koundé · defensa · 86
+- 2 · João Cancelo · defensa · 85
+- 3 · Álex Balde · defensa · 84
+- 5 · Pau Cubarsí · defensa · 84
+- 24 · Eric García · defensa · 83
+- 4 · Ronald Araujo · defensa · 87
+- 15 · A. Christensen · defensa · 82
+- 18 · Gerard Martín · defensa · 80
+- 36 · Á. Cortés · defensa · 70
+- 42 · Xavi Espart · defensa · 68
+- 26 · Jofre Torrents · defensa · 67
+- 8 · Pedri · medio · 88
+- 21 · F. De Jong · medio · 87
+- 20 · Dani Olmo · medio · 86
+- 16 · Fermín López · medio · 85
+- 6 · Gavi · medio · 86
+- 17 · Marc Casadó · medio · 78
+- 22 · Marc Bernal · medio · 77
+- 30 · Guille Fernández · medio · 70
+- 29 · Toni Fernández · medio · 69
+- 41 · J. Hernández · medio · 68
+- 43 · Tommy Marqués · medio · 67
+- 11 · Raphinha · delantero · 88
+- 10 · Lamine Yamal · delantero · 90
+- 14 · M. Rashford · delantero · 87
+- 9 · R. Lewandowski · delantero · 88
+- 7 · Ferran Torres · delantero · 86
+- 19 · R. Bardghji · delantero · 79
+
+### Athletic Club (34 jugadores)
+- 1 · Unai Simón · portero · 88
+- 26 · Mikel Santos · portero · 67
+- 27 · Álex Padilla · portero · 66
+- 3 · Dani Vivian · defensa · 83
+- 17 · Yuri · defensa · 84
+- 14 · A. Laporte · defensa · 86
+- 4 · Aitor Paredes · defensa · 81
+- 12 · Jesús Areso · defensa · 80
+- 2 · A. Gorosabel · defensa · 80
+- 5 · Yeray · defensa · 80
+- 15 · Iñigo Lekue · defensa · 79
+- 19 · Adama Boiro · defensa · 77
+- 34 · Jon De Luis · defensa · 65
+- 47 · I. Monreal · defensa · 65
+- 8 · Oihan Sancet · medio · 85
+- 18 · M. Jauregizar · medio · 82
+- 16 · I. Ruiz De Galarreta · medio · 83
+- 20 · Unai Gómez · medio · 80
+- 30 · Rego · medio · 79
+- 6 · Mikel Vesga · medio · 79
+- 24 · Beñat Prados · medio · 75
+- 44 · Selton Sued · medio · 74
+- 35 · Ibon Sánchez · medio · 65
+- 49 · Eder García · medio · 66
+- 11 · G. Guruzeta · delantero · 84
+- 10 · Nico Williams · delantero · 86
+- 9 · I. Williams · delantero · 85
+- 7 · Álex Berenguer · delantero · 83
+- 23 · Robert Navarro · delantero · 80
+- 22 · Nico Serrano · delantero · 78
+- 21 · M. Sannadi · delantero · 76
+- 25 · Izeta · delantero · 72
+- 48 · E. Buján · delantero · 65
+- 31 · Asier Hierro · delantero · 65
+
+### Atletico Madrid (40 jugadores)
+- 13 · Jan Oblak · portero · 90
+- 1 · J. Musso · portero · 83
+- 31 · S. Esquivel · portero · 68
+- 51 · Álvaro Moreno · portero · 66
+- 33 · Mario De Luis · portero · 65
+- 17 · Dávid Hancko · defensa · 85
+- 14 · M. Llorente · defensa · 86
+- 24 · R. Le Normand · defensa · 84
+- 2 · J. Giménez · defensa · 84
+- 16 · Nahuel Molina · defensa · 83
+- 18 · Marc Pubill · defensa · 85
+- 15 · C. Lenglet · defensa · 82
+- 3 · Matteo Ruggeri · defensa · 81
+- 32 · Javier Boñar · defensa · 72
+- 40 · Aleksa Purić · defensa · 66
+- 26 · Ilias Kostis · defensa · 65
+- 34 · Julio Díaz · defensa · 70
+- 30 · Dani Martínez · defensa · 68
+- 36 · Gero Spina · defensa · 64
+- 6 · Koke · medio · 85
+- 7 · A. Griezmann · medio · 88
+- 8 · Pablo Barrios · medio · 82
+- 5 · Johnny Cardoso · medio · 81
+- 21 · Obed Vargas · medio · 79
+- 29 · Rayane Belaid · medio · 70
+- 4 · Rodrigo Mendoza · medio · 72
+- 42 · Javi Serrano · medio · 68
+- 27 · Jano Monserrate · medio · 66
+- 47 · Javi Morcillo · medio · 69
+- 28 · Taufik Seidu · medio · 65
+- 9 · A. Sørloth · delantero · 86
+- 19 · Julián Alvarez · delantero · 87
+- 23 · Nico González · delantero · 82
+- 10 · Álex Baena · delantero · 84
+- 11 · T. Almada · delantero · 83
+- 22 · A. Lookman · delantero · 82
+- 20 · Giuliano · delantero · 81
+- 37 · Iker Luque · delantero · 68
+- 45 · S. Esteban · delantero · 65
+- 61 · Miguel Cubo · delantero · 66
+
+### Betis (35 jugadores)
+- 1 · Álvaro Valles · portero · 84
+- 25 · Pau López · portero · 82
+- 13 · Adrián · portero · 78
+- 41 · Manu González · portero · 66
+- 30 · Germán García · portero · 65
+- 4 · Natan · defensa · 82
+- 12 · Ricardo Rodríguez · defensa · 81
+- 5 · Marc Bartra · defensa · 83
+- 3 · Diego Llorente · defensa · 82
+- 16 · Valentín Gómez · defensa · 82
+- 23 · Junior Firpo · defensa · 80
+- 2 · Héctor Bellerín · defensa · 81
+- 40 · Ángel Ortiz · defensa · 74
+- 36 · Darling Bladi · defensa · 66
+- 42 · Pablo Busto · defensa · 65
+- 33 · C. De Roa · defensa · 65
+- 22 · Isco · medio · 86
+- 8 · Pablo Fornals · medio · 85
+- 15 · Á. Fidalgo · medio · 79
+- 18 · N. Deossa · medio · 78
+- 14 · S. Amrabat · medio · 83
+- 20 · G. Lo Celso · medio · 84
+- 21 · Marc Roca · medio · 82
+- 6 · Sergi Altimira · medio · 80
+- 37 · Dani Pérez · medio · 66
+- 50 · Iván Corralejo · medio · 65
+- 19 · Cucho · delantero · 84
+- 10 · Ez Abde · delantero · 83
+- 7 · Antony · delantero · 85
+- 11 · C. Bakambu · delantero · 79
+- 24 · Aitor Ruibal · delantero · 80
+- 17 · R. Riquelme · delantero · 78
+- 9 · Chimy Ávila · delantero · 77
+- 52 · Pablo García · delantero · 70
+- 29 · Rodrigo Marina · delantero · 65
+
+### Real Sociedad (38 jugadores)
+- 1 · Álex Remiro · portero · 86
+- 32 · Aitor Fraga · portero · 68
+- 13 · Unai Marrero · portero · 67
+- 41 · Theo Folgado · portero · 66
+- 2 · Jon Aramburu · defensa · 82
+- 5 · Igor Zubeldia · defensa · 83
+- 16 · D. Ćaleta-Car · defensa · 82
+- 17 · Sergio Gómez · defensa · 83
+- 31 · Jon Martín · defensa · 80
+- 3 · Aihen Muñoz · defensa · 80
+- 6 · A. Elustondo · defensa · 81
+- 20 · Á. Odriozola · defensa · 79
+- 38 · Luken Beitia · defensa · 68
+- 45 · Kazunari Kita · defensa · 66
+- 23 · Brais Méndez · medio · 85
+- 4 · J. Gorrotxategi · medio · 82
+- 24 · Luka Sučić · medio · 81
+- 18 · Carlos Soler · medio · 84
+- 15 · Pablo Marín · medio · 80
+- 8 · B. Turrientes · medio · 81
+- 12 · Y. Herrera · medio · 77
+- 21 · A. Zakharyan · medio · 80
+- 43 · T. Carbonell · medio · 66
+- 36 · Alex Lebarbier · medio · 65
+- 46 · I. Aguirre · medio · 66
+- 10 · M. Oyarzabal · delantero · 88
+- 11 · G. Guedes · delantero · 84
+- 14 · Take Kubo · delantero · 85
+- 7 · A. Barrenetxea · delantero · 83
+- 9 · O. Óskarsson · delantero · 81
+- 22 · Wesley · delantero · 74
+- 42 · Gorka Carrera · delantero · 68
+- 19 · J. Karrikaburu · delantero · 75
+- 47 · Job Ochieng · delantero · 66
+- 44 · L. Astiazarán · delantero · 66
+- 34 · A. Mariezkurrena · delantero · 67
+- 40 · Alex Marchal · delantero · 65
+- 26 · Dani Díaz · delantero · 66
+
+### Sevilla (35 jugadores)
+- 1 · O. Vlachodimos · portero · 85
+- 13 · Ø. Nyland · portero · 80
+- 31 · Alberto Flores · portero · 66
+- 33 · Rafa Romero · portero · 65
+- 40 · Loren Luchino · portero · 65
+- 12 · Gabriel Suazo · defensa · 82
+- 3 · C. Azpilicueta · defensa · 84
+- 4 · Kike Salas · defensa · 81
+- 2 · Carmona · defensa · 82
+- 16 · Juanlu Sánchez · defensa · 81
+- 23 · Marcão · defensa · 80
+- 5 · T. Nianzou · defensa · 79
+- 32 · Andrés Castrín · defensa · 78
+- 36 · Oso · defensa · 79
+- 15 · Fábio Cardoso · defensa · 75
+- 41 · Iker Muñoz · defensa · 65
+- 22 · F. Gattoni · defensa · 66
+- 6 · N. Gudelj · medio · 83
+- 20 · Djibril Sow · medio · 84
+- 10 · Alexis Sánchez · medio · 85
+- 18 · L. Agoumé · medio · 82
+- 19 · B. Mendy · medio · 80
+- 14 · Peque · medio · 79
+- 8 · Joan Jordán · medio · 78
+- 28 · Manu Bueno · medio · 72
+- 38 · Nico Guillén · medio · 65
+- 39 · Edu Altozano · medio · 65
+- 9 · Akor Adams · delantero · 84
+- 11 · Rubén Vargas · delantero · 83
+- 7 · Isaac Romero · delantero · 82
+- 17 · Neal Maupay · delantero · 80
+- 21 · C. Ejuke · delantero · 78
+- 24 · Adnan Januzaj · delantero · 79
+- 29 · Miguel Sierra · delantero · 66
+- 26 · Álex Costa · delantero · 65
+
+### Villarreal (34 jugadores)
+- 1 · Luiz Júnior · portero · 84
+- 25 · Arnau Tenas · portero · 82
+- 13 · Diego Conde · portero · 68
+- 31 · Rubén Gómez · portero · 66
+- 23 · Sergi Cardona · defensa · 82
+- 12 · Renato Veiga · defensa · 83
+- 8 · Juan Foyth · defensa · 84
+- 15 · S. Mouriño · defensa · 81
+- 4 · Rafa Marín · defensa · 80
+- 24 · A. Pedraza · defensa · 82
+- 6 · Pau Navarro · defensa · 79
+- 3 · Alex Freeman · defensa · 74
+- 2 · Logan Costa · defensa · 70
+- 5 · W. Kambwala · defensa · 69
+- 29 · Sierra · defensa · 65
+- 27 · Ives Valou · defensa · 64
+- 14 · Santi Comesaña · medio · 84
+- 18 · Pape Gueye · medio · 83
+- 10 · Dani Parejo · medio · 85
+- 16 · Thomas · medio · 80
+- 37 · Carlos Maciá · medio · 70
+- 38 · Alassane · medio · 66
+- 9 · G. Mikautadze · delantero · 85
+- 20 · A. Moleiro · delantero · 85
+- 7 · Gerard Moreno · delantero · 85
+- 19 · Nicolas Pépé · delantero · 83
+- 17 · T. Buchanan · delantero · 82
+- 22 · Ayoze · delantero · 81
+- 21 · Tani Oluwaseyi · delantero · 78
+- 11 · Alfon González · delantero · 72
+- 32 · Hugo López · delantero · 68
+- 33 · Pau Cabanes · delantero · 66
+- 40 · Joselillo Gaitán · delantero · 65
+- 28 · M. Barry · delantero · 64
+
+### Espanyol (30 jugadores)
+- 13 · M. Dmitrović · portero · 84
+- 1 · Ángel Fortuño · portero · 68
+- 31 · L. Serred · portero · 66
+- 30 · Pol Tristán · portero · 65
+- 6 · L. Cabrera · defensa · 85
+- 22 · Carlos Romero · defensa · 82
+- 23 · Omar El Hilali · defensa · 81
+- 5 · F. Calero · defensa · 81
+- 38 · C. Riedel · defensa · 80
+- 2 · Rubén Sánchez · defensa · 78
+- 15 · Miguel Rubio · defensa · 76
+- 12 · J. Salinas · defensa · 75
+- 27 · A. Timera · defensa · 65
+- 8 · Edu Expósito · medio · 83
+- 10 · Pol Lozano · medio · 82
+- 4 · Urko González · medio · 81
+- 18 · C. Pickel · medio · 78
+- 14 · Ramón Terrats · medio · 80
+- 28 · F. Gómez · medio · 65
+- 26 · M. Londoño · medio · 65
+- 9 · Roberto · delantero · 82
+- 11 · Pere Milla · delantero · 83
+- 24 · Tyrhys Dolan · delantero · 81
+- 19 · Kike García · delantero · 83
+- 7 · Javi Puado · delantero · 80
+- 17 · Jofre · delantero · 78
+- 16 · Cyril Ngonge · delantero · 79
+- 20 · Antoniu · delantero · 74
+- 33 · A. Almansa · delantero · 65
+- 32 · Lluc Castell · delantero · 65
+
+### Getafe (38 jugadores)
+- 13 · David Soria · portero · 83
+- 1 · Jiří Letáček · portero · 68
+- 35 · Jorge Benito · portero · 66
+- 42 · D. Ferrer · portero · 65
+- 16 · Diego Rico · defensa · 80
+- 2 · D. Djené · defensa · 82
+- 21 · Juan Iglesias · defensa · 81
+- 17 · Kiko Femenía · defensa · 80
+- 22 · D. Duarte · defensa · 81
+- 3 · A. Abqar · defensa · 80
+- 24 · Zaid Romero · defensa · 78
+- 15 · S. Boselli · defensa · 76
+- 26 · Davinchi · defensa · 74
+- 12 · A. Nyom · defensa · 77
+- 32 · L. Laso · defensa · 66
+- 31 · Ismael Bekhoucha · defensa · 70
+- 33 · M. Vilaplana · defensa · 65
+- 41 · Jorge Montes · defensa · 64
+- 5 · Luis Milla · medio · 82
+- 8 · M. Arambarri · medio · 83
+- 14 · Javi Muñoz · medio · 76
+- 6 · Mario Martín · medio · 80
+- 34 · H. Solozábal · medio · 66
+- 45 · A. Mestanza · medio · 68
+- 44 · A. Riquelme · medio · 65
+- 46 · Damián Cáceres · medio · 67
+- 30 · Alberto Risco · medio · 65
+- 10 · Martín Satriano · delantero · 81
+- 9 · B. Mayoral · delantero · 80
+- 19 · Luis Vázquez · delantero · 79
+- 23 · Adrián Liso · delantero · 78
+- 20 · V. Birmančević · delantero · 75
+- 11 · Abu Kamara · delantero · 74
+- 18 · Álex Sancris · delantero · 76
+- 7 · Juanmi · delantero · 77
+- 37 · Joselu · delantero · 72
+- 39 · Yassin Tallal · delantero · 65
+- 29 · Mykyta · delantero · 65
+
+### Albacete BP (29 jugadores)
+- 1 · Mariño · portero · 67
+- 13 · Lizoain · portero · 69
+- 25 · M. Ramos · portero · 58
+- 21 · C. Neva · defensa · 71
+- 23 · P. Sánchez · defensa · 68
+- 22 · L. López · defensa · 68
+- 24 · Vallejo · defensa · 72
+- 5 · J. Moreno · defensa · 64
+- 2 · Lorenzo · defensa · 64
+- 15 · J. Germán · defensa · 64
+- 16 · F. Gámez · defensa · 69
+- 3 · Bernabéu · defensa · 60
+- 14 · Jota · defensa · 59
+- 26 · Á. Rubio · defensa · 65
+- 4 · Agus Medina · medio · 71
+- 8 · Pacheco · medio · 64
+- 6 · Meléndez · medio · 65
+- 12 · Cedeño · medio · 66
+- 17 · M. Fernández · medio · 69
+- 9 · Obeng · medio · 67
+- 11 · J. Villar · medio · 65
+- 7 · Valverde · medio · 65
+- 20 · Capi · medio · 61
+- 10 · Bartolomé · medio · 65
+- 29 · Morientes · medio · 58
+- 27 · Puertas · delantero · 72
+- 18 · Jefté · delantero · 70
+- 19 · Higinio · delantero · 68
+- 28 · Lazo · delantero · 68
+
+### Celta (32 jugadores)
+- 13 · Andrei Radu · portero · 84
+- 25 · Marc Vidal · portero · 66
+- 1 · Iván Villar · portero · 66
+- 20 · Marcos Alonso · defensa · 84
+- 2 · Carl Starfelt · defensa · 80
+- 3 · Ó. Mingueza · defensa · 81
+- 5 · Sergio Carreira · defensa · 80
+- 32 · Javi Rodríguez · defensa · 79
+- 17 · Javi Rueda · defensa · 81
+- 14 · Álvaro Núñez · defensa · 74
+- 24 · C. Domínguez · defensa · 72
+- 29 · Yoel Lago · defensa · 73
+- 12 · Manu Fernández · defensa · 74
+- 21 · Mihailo Ristić · defensa · 73
+- 4 · Joseph Aidoo · defensa · 75
+- 6 · Ilaix Moriba · medio · 82
+- 16 · Miguel Román · medio · 78
+- 15 · M. Vecino · medio · 77
+- 22 · Hugo Sotelo · medio · 79
+- 8 · Fer López · medio · 78
+- 36 · Andrés Antañón · medio · 70
+- 38 · Hugo Burcio · medio · 66
+- 7 · Borja Iglesias · delantero · 85
+- 10 · Iago Aspas · delantero · 85
+- 9 · Ferran Jutglà · delantero · 82
+- 18 · Pablo Durán · delantero · 79
+- 23 · Hugo Álvarez · delantero · 80
+- 19 · W. Swedberg · delantero · 81
+- 39 · J. El-Abdellaoui · delantero · 75
+- 30 · Hugo González · delantero · 66
+- 28 · Angelito · delantero · 65
+- 11 · Franco Cervi · delantero · 78
+
+### Osasuna (29 jugadores)
+- 1 · Sergio Herrera · portero · 84
+- 13 · Aitor Fernández · portero · 78
+- 31 · D. Stamatakis · portero · 66
+- 32 · Rafa Fernández · portero · 65
+- 24 · A. Catena · defensa · 83
+- 22 · Enzo Boyomo · defensa · 82
+- 23 · Abel Bretones · defensa · 81
+- 19 · V. Rosier · defensa · 81
+- 20 · Javi Galán · defensa · 80
+- 5 · J. Herrando · defensa · 80
+- 3 · Juan Cruz · defensa · 78
+- 41 · Íñigo Arguibide · defensa · 72
+- 34 · Raúl Chasco · defensa · 65
+- 42 · M. Serrano · defensa · 65
+- 6 · Lucas Torró · medio · 83
+- 10 · Aimar Oroz · medio · 84
+- 7 · J. Moncayola · medio · 83
+- 16 · Moi Gómez · medio · 80
+- 8 · Iker Muñoz · medio · 79
+- 29 · A. Osambela · medio · 77
+- 26 · M. Echegoyen · medio · 65
+- 17 · A. Budimir · delantero · 85
+- 14 · Rubén García · delantero · 83
+- 21 · Víctor Muñoz · delantero · 84
+- 9 · Raúl García · delantero · 80
+- 18 · Raúl Moro · delantero · 79
+- 11 · Kike Barja · delantero · 78
+- 2 · Iker Benito · delantero · 75
+- 27 · Martín Pedroarena · delantero · 65
+
+### Deportivo Alavés (33 jugadores)
+- 1 · Antonio Sivera · portero · 84
+- 13 · Raúl Fernández · portero · 70
+- 31 · Grégo Świderski · portero · 66
+- 33 · Rubén Montero · portero · 65
+- 14 · N. Tenaglia · defensa · 82
+- 17 · Jonny · defensa · 81
+- 5 · Jon Pacheco · defensa · 81
+- 24 · V. Parada · defensa · 80
+- 3 · Yusi Enríquez · defensa · 79
+- 2 · F. Garcés · defensa · 78
+- 16 · V. Koski · defensa · 74
+- 27 · Egoitz Muñoz · defensa · 66
+- 35 · Xanet Oláiz · defensa · 65
+- 36 · Paco Sanz · defensa · 65
+- 30 · Carlos Ballestero · defensa · 66
+- 8 · Antonio Blanco · medio · 83
+- 19 · Pablo Ibáñez · medio · 82
+- 10 · C. Aleñá · medio · 82
+- 18 · Jon Guridi · medio · 80
+- 6 · Ander Guevara · medio · 79
+- 4 · Denis Suárez · medio · 82
+- 20 · Calebe · medio · 79
+- 23 · C. Protesoni · medio · 77
+- 28 · L. Pinillos · medio · 65
+- 11 · Toni Martínez · delantero · 84
+- 15 · Lucas Boyé · delantero · 83
+- 21 · Abde Rebbach · delantero · 81
+- 7 · Á. Pérez · delantero · 80
+- 22 · I. Diabate · delantero · 78
+- 9 · Mariano · delantero · 77
+- 34 · Aitor Mañas · delantero · 66
+- 29 · D. Morcillo · delantero · 65
+- 32 · Izei Hernández · delantero · 65
+
+### Girona (34 jugadores)
+- 13 · P. Gazzaniga · portero · 84
+- 22 · M. Ter Stegen · portero · 88
+- 25 · V. Krapyvtsov · portero · 78
+- 1 · Rubén Blanco · portero · 76
+- 43 · A. Andreev · portero · 66
+- 17 · Daley Blind · defensa · 84
+- 4 · Arnau Martínez · defensa · 83
+- 12 · Vitor Reis · defensa · 82
+- 24 · Álex Moreno · defensa · 83
+- 2 · Hugo Rincón · defensa · 80
+- 16 · A. Francés · defensa · 80
+- 5 · David López · defensa · 79
+- 31 · A. Salguero · defensa · 65
+- 27 · Pol Arnau · defensa · 65
+- 28 · Gibi · defensa · 65
+- 18 · A. Ounahi · medio · 84
+- 20 · Axel Witsel · medio · 83
+- 23 · Iván Martín · medio · 82
+- 11 · Thomas Lemar · medio · 83
+- 8 · Fran Beltrán · medio · 81
+- 14 · C. Echeverri · medio · 80
+- 6 · D. Van De Beek · medio · 79
+- 29 · Lass · medio · 70
+- 36 · Ricard Artero · medio · 65
+- 19 · V. Vanat · delantero · 85
+- 15 · V. Tsygankov · delantero · 84
+- 21 · Bryan Gil · delantero · 82
+- 7 · C. Stuani · delantero · 81
+- 3 · J. Roca · delantero · 80
+- 8 · Portu · delantero · 79
+- 9 · Abel Ruiz · delantero · 78
+- 44 · Papa Ba · delantero · 65
+- 30 · Javier Sarasa · delantero · 65
+- 32 · Juan Arango · delantero · 66
+
+### Real Oviedo (34 jugadores)
+- 13 · Aarón Escandell · portero · 84
+- 1 · H. Moldovan · portero · 78
+- 26 · M. Narváez · portero · 66
+- 22 · Nacho Vidal · defensa · 80
+- 4 · David Costas · defensa · 80
+- 12 · Dani Calvo · defensa · 79
+- 16 · David Carmo · defensa · 81
+- 3 · R. Alhassane · defensa · 79
+- 25 · Javi López · defensa · 80
+- 24 · Lucas Ahijado · defensa · 78
+- 2 · Eric Bailly · defensa · 80
+- 33 · Diego Espinosa · defensa · 65
+- 30 · Marco Esteban · defensa · 65
+- 29 · Omar Falah · defensa · 65
+- 34 · A. Fernández · defensa · 65
+- 5 · A. Reina · medio · 82
+- 11 · S. Colombatto · medio · 81
+- 20 · L. Dendoncker · medio · 81
+- 6 · Kwasi Sibo · medio · 80
+- 21 · Luka Ilić · medio · 79
+- 8 · Santi Cazorla · medio · 82
+- 23 · N. Fonseca · medio · 79
+- 27 · P. Agudín · medio · 72
+- 32 · Dieguito · medio · 65
+- 31 · Cheli · medio · 65
+- 9 · F. Viñas · delantero · 83
+- 7 · Ilyas Chaira · delantero · 82
+- 10 · H. Hassan · delantero · 81
+- 15 · Thiago Fernández · delantero · 80
+- 19 · Álex Forés · delantero · 78
+- 14 · Ovie · delantero · 75
+- 17 · T. Borbas · delantero · 74
+- 28 · Lamine Gueye · delantero · 65
+- 17 · B. Dominguès · delantero · 65
+
+### Levante (33 jugadores)
+- 13 · M. Ryan · portero · 84
+- 1 · Pablo Cuñat · portero · 78
+- 32 · A. Primo · portero · 66
+- 34 · Caye Romero · portero · 65
+- 4 · Dela · defensa · 81
+- 23 · Manu Sánchez · defensa · 82
+- 22 · Jeremy Toljan · defensa · 82
+- 2 · M. Moreno · defensa · 80
+- 17 · Víctor García · defensa · 79
+- 3 · Alan Matturro · defensa · 79
+- 5 · U. Elgezabal · defensa · 78
+- 6 · Diego Pampín · defensa · 76
+- 29 · Nacho Pérez · defensa · 72
+- 28 · Martín Krug · defensa · 65
+- 35 · H. Nakoha · defensa · 65
+- 24 · Carlos Álvarez · medio · 83
+- 10 · Pablo Martínez · medio · 82
+- 20 · Oriol Rey · medio · 80
+- 16 · K. Arriaga · medio · 81
+- 12 · Unai Vencedor · medio · 80
+- 8 · Olasagasti · medio · 82
+- 18 · Iker Losada · medio · 80
+- 14 · U. Raghouber · medio · 78
+- 33 · Joan Ruiz · medio · 65
+- 19 · Carlos Espí · delantero · 83
+- 9 · Iván Romero · delantero · 82
+- 21 · Etta Eyong · delantero · 81
+- 7 · Roger Brugué · delantero · 80
+- 26 · Kareem Tunde · delantero · 79
+- 11 · Morales · delantero · 78
+- 27 · Paco Cortés · delantero · 75
+- 55 · T. Abed · delantero · 66
+- 37 · D. Cervera · delantero · 65
+
+### Mallorca (35 jugadores)
+- 1 · Leo Román · portero · 84
+- 13 · L. Bergström · portero · 78
+- 38 · Nil · portero · 66
+- 25 · I. Cuéllar · portero · 66
+- 42 · Rareș Vlad · portero · 65
+- 22 · Johan Mojica · defensa · 82
+- 24 · Martin Valjent · defensa · 83
+- 23 · Pablo Maffeo · defensa · 82
+- 21 · A. Raíllo · defensa · 81
+- 4 · M. Kumbulla · defensa · 80
+- 27 · David López · defensa · 79
+- 3 · Toni Lato · defensa · 78
+- 2 · Mateu Morey · defensa · 79
+- 29 · L. Orejuela · defensa · 72
+- 44 · M. Calatayud · defensa · 66
+- 26 · Iliesse Salhi · defensa · 65
+- 34 · J. Olaizola · defensa · 65
+- 32 · Leo Sánchez · defensa · 65
+- 10 · Sergi Darder · medio · 85
+- 12 · Samu Costa · medio · 83
+- 5 · Omar Mascarell · medio · 82
+- 8 · Manu Morlanes · medio · 81
+- 20 · Pablo Torre · medio · 82
+- 6 · Antonio Sánchez · medio · 79
+- 28 · Cesc Riba · medio · 65
+- 41 · Jan Salas · medio · 66
+- 39 · Jandro · medio · 65
+- 7 · Vedat Muriqi · delantero · 87
+- 17 · Jan Virgili · delantero · 81
+- 18 · Mateo Joseph · delantero · 81
+- 11 · Takuma Asano · delantero · 80
+- 15 · Z. Luvumbo · delantero · 79
+- 9 · Abdón Prats · delantero · 78
+- 19 · Javi Llabrés · delantero · 77
+- 30 · Justin Kalumba · delantero · 72
+
+### Elche (36 jugadores)
+- 1 · M. Dituro · portero · 83
+- 13 · Iñaki Peña · portero · 83
+- 45 · A. Iturbe · portero · 66
+- 22 · David Affengruber · defensa · 81
+- 23 · Víctor Chust · defensa · 80
+- 6 · P. Bigas · defensa · 81
+- 3 · Adrià Pedrosa · defensa · 80
+- 21 · L. Pétrot · defensa · 80
+- 18 · John Chetauya · defensa · 78
+- 39 · Héctor Fort · defensa · 79
+- 42 · Buba Sangaré · defensa · 77
+- 26 · B. Sina · defensa · 65
+- 33 · Pablo Felipe · defensa · 65
+- 36 · N. Salvador · defensa · 65
+- 31 · D. Delgado · defensa · 65
+- 27 · A. Niculăesei · defensa · 65
+- 43 · A. Herráiz · defensa · 65
+- 14 · Aleix Febas · medio · 84
+- 8 · Marc Aguado · medio · 82
+- 16 · Martim Neto · medio · 82
+- 12 · Gonzalo Villar · medio · 80
+- 5 · F. Redondo · medio · 78
+- 32 · Adam Boayar · medio · 72
+- 37 · A. Martínez · medio · 65
+- 9 · André Da Silva · delantero · 84
+- 10 · Rafa Mir · delantero · 83
+- 11 · Germán Valera · delantero · 82
+- 20 · Álvaro Rodríguez · delantero · 82
+- 19 · G. Diangana · delantero · 81
+- 15 · Tete Morente · delantero · 80
+- 17 · Josan · delantero · 79
+- 7 · Yago Santiago · delantero · 77
+- 24 · L. Cepeda · delantero · 76
+- 29 · Piri · delantero · 65
+- 38 · Álex Sánchez · delantero · 66
+- 46 · Juan Piera · delantero · 65
+
+### Valencia (36 jugadores)
+- 25 · J. Agirrezabala · portero · 83
+- 1 · S. Dimitrievski · portero · 83
+- 28 · Vicent Abril · portero · 66
+- 41 · Pere García · portero · 65
+- 13 · Cristian Rivero · portero · 66
+- 14 · José Gayà · defensa · 85
+- 5 · César Tárrega · defensa · 80
+- 20 · D. Foulquier · defensa · 79
+- 4 · M. Diakhaby · defensa · 80
+- 12 · Thierry Correia · defensa · 80
+- 4 · Unai Núñez · defensa · 79
+- 3 · Copete · defensa · 80
+- 24 · Eray Cömert · defensa · 81
+- 21 · Jesús Vázquez · defensa · 78
+- 26 · Rubo · defensa · 66
+- 36 · Marcos Navarro · defensa · 65
+- 32 · A. Panach · defensa · 65
+- 40 · J. Fontanet · defensa · 65
+- 8 · Javi Guerra · medio · 85
+- 23 · Filip Ugrinić · medio · 81
+- 18 · Pepelu · medio · 83
+- 19 · Dani Raba · medio · 77
+- 10 · André Almeida · medio · 80
+- 2 · Guido Rodríguez · medio · 83
+- 22 · B. Santamaria · medio · 78
+- 29 · Lucas Núñez · medio · 65
+- 42 · Aaron Mayol · medio · 65
+- 9 · Hugo Duro · delantero · 84
+- 16 · Diego López · delantero · 82
+- 11 · Luis Rioja · delantero · 83
+- 15 · Lucas Beltrán · delantero · 82
+- 7 · A. Danjuma · delantero · 83
+- 6 · Umar Sadiq · delantero · 80
+- 17 · L. Ramazani · delantero · 81
+- 37 · A. Blázquez · delantero · 65
+- 27 · David Otorbi · delantero · 65
+
+### Rayo Vallecano (30 jugadores)
+- 13 · A. Batalla · portero · 83
+- 1 · Dani Cárdenas · portero · 80
+- 30 · Juanpe · portero · 66
+- 40 · Adrián Molina · portero · 65
+- 2 · Andrei Rațiu · defensa · 81
+- 24 · Florian Lejeune · defensa · 83
+- 3 · Pep Chavarría · defensa · 80
+- 22 · Pacha Espino · defensa · 80
+- 20 · Iván Balliu · defensa · 78
+- 32 · Nobel Mendy · defensa · 79
+- 5 · Luiz Felipe · defensa · 79
+- 16 · Abdul Mumin · defensa · 74
+- 33 · J. Vertrouwd · defensa · 73
+- 26 · Marco De Las Sías · defensa · 65
+- 7 · Isi Palazón · medio · 85
+- 6 · Pathé Ciss · medio · 82
+- 17 · Unai López · medio · 81
+- 23 · Óscar Valentín · medio · 82
+- 4 · Pedro Díaz · medio · 80
+- 15 · G. Gumbau · medio · 79
+- 11 · Randy Nteka · medio · 78
+- 8 · Óscar Trejo · medio · 80
+- 28 · Samu Becerra · medio · 66
+- 19 · Jorge De Frutos · delantero · 85
+- 18 · Álvaro García · delantero · 83
+- 9 · Alemão · delantero · 80
+- 21 · Fran Pérez · delantero · 79
+- 10 · Sergio Camello · delantero · 78
+- 14 · Carlos Martín · delantero · 77
+- 12 · Ilias Akhomach · delantero · 79
+
+### Córdoba (21 jugadores)
+- 1 · F. Palatsí · portero · 75
+- 13 · T. Fernández · portero · 70
+- 2 · L. Calderón · defensa · 74
+- 5 · M. Valenzuela · defensa · 73
+- 6 · P. Gutiérrez · defensa · 74
+- 3 · A. Baidoo · defensa · 73
+- 22 · C. Ángel · defensa · 72
+- 14 · C. Boselli · defensa · 72
+- 23 · A. Lolo · defensa · 70
+- 4 · A. Romero · medio · 75
+- 8 · J. Andrés Prieto · medio · 74
+- 10 · A. Carvalho · medio · 76
+- 20 · A. Vallejo · medio · 74
+- 7 · C. Isidoro · medio · 74
+- 17 · L. Arezo · medio · 73
+- 11 · K. Mfulu · medio · 72
+- 16 · C. Bañuls · medio · 72
+- 9 · C. Zaldua · delantero · 76
+- 19 · J. Sebas Moyano · delantero · 74
+- 21 · A. Cruz · delantero · 73
+- 18 · D. Casado · delantero · 72
+
+### Racing (33 jugadores)
+- 1 · Jokin Ezkieta · portero · 74
+- 13 · S. Eriksson · portero · 72
+- 31 · Álvaro Jiménez · portero · 66
+- 35 · Laro Gómez · portero · 66
+- 2 · Mantilla · defensa · 75
+- 15 · Marco Sangalli · defensa · 74
+- 4 · Manu Hernando · defensa · 74
+- 32 · J. Salinas · defensa · 73
+- 21 · Pablo Ramón · defensa · 73
+- 16 · Facu González · defensa · 72
+- 5 · Javi Castro · defensa · 72
+- 3 · Mario García · defensa · 71
+- 37 · A. Crespo · defensa · 65
+- 33 · Samuel Calera · defensa · 65
+- 46 · C. Sánchez · defensa · 65
+- 18 · Peio Canales · medio · 75
+- 19 · Gustavo Puerta · medio · 75
+- 14 · Maguette Gueye · medio · 74
+- 8 · Aritz Aldasoro · medio · 73
+- 23 · Damián · medio · 72
+- 6 · Í. Sainz-Maza · medio · 71
+- 36 · S. Martínez · medio · 69
+- 34 · D. Díaz · medio · 65
+- 44 · Diego Fuentes · medio · 66
+- 11 · Andrés Martín · delantero · 77
+- 10 · Íñigo Vicente · delantero · 76
+- 12 · Asier Villalibre · delantero · 75
+- 7 · G. Guliashvili · delantero · 73
+- 20 · Suleiman · delantero · 71
+- 9 · Arana · delantero · 69
+- 17 · J. Mata · delantero · 70
+- 27 · Manex Lozano · delantero · 68
+- 43 · Santi Franco · delantero · 68
+
+### Liverpool (22 jugadores)
+- 1 · Alisson · portero · 90
+- 25 · G. Mamardashvili · portero · 86
+- 28 · F. Woodman · portero · 75
+- 4 · V. Van Dijk · defensa · 89
+- 5 · I. Konaté · defensa · 86
+- 30 · J. Frimpong · defensa · 85
+- 6 · Miloš Kerkez · defensa · 84
+- 26 · A. Robertson · defensa · 85
+- 12 · Conor Bradley · defensa · 82
+- 2 · Joe Gomez · defensa · 81
+- 8 · D. Szoboszlai · medio · 88
+- 7 · Florian Wirtz · medio · 88
+- 10 · A. Mac Allister · medio · 87
+- 38 · R. Gravenberch · medio · 85
+- 17 · Curtis Jones · medio · 83
+- 3 · Wataru Endo · medio · 81
+- 11 · M. Salah · delantero · 89
+- 22 · Hugo Ekitiké · delantero · 87
+- 18 · Cody Gakpo · delantero · 85
+- 9 · Alexander Isak · delantero · 86
+- 14 · F. Chiesa · delantero · 84
+- 73 · Rio Ngumoha · delantero · 77
+
+### Arsenal (26 jugadores)
+- 1 · David Raya · portero · 86
+- 13 · Kepa · portero · 82
+- 2 · W. Saliba · defensa · 87
+- 6 · Gabriel Magalhães · defensa · 86
+- 12 · Jurriën Timber · defensa · 85
+- 33 · R. Calafiori · defensa · 84
+- 5 · P. Hincapié · defensa · 84
+- 4 · Ben White · defensa · 83
+- 3 · C. Mosquera · defensa · 79
+- 49 · Lewis-Skelly · defensa · 77
+- 89 · M. Salmon · defensa · 65
+- 41 · Declan Rice · medio · 88
+- 36 · M. Zubimendi · medio · 87
+- 8 · M. Ødegaard · medio · 87
+- 10 · E. Eze · medio · 86
+- 23 · Mikel Merino · medio · 85
+- 16 · C. Nørgaard · medio · 80
+- 7 · Bukayo Saka · delantero · 88
+- 14 · V. Gyökeres · delantero · 88
+- 19 · L. Trossard · delantero · 85
+- 11 · Martinelli · delantero · 84
+- 20 · Noni Madueke · delantero · 83
+- 29 · Kai Havertz · delantero · 83
+- 9 · Gabriel Jesus · delantero · 82
+- 56 · M. Dowman · delantero · 70
+- 71 · A. Harriman-Annous · delantero · 65
+
+## B) Equipos IA de `data/equipos_ia.json` (lista corta, 5-11 jugadores)
+
+### Liga EA Sports
+- **Bayern Múnich**: Michael Olise (MED), Harry Kane (DEL), Joshua Kimmich (MED), Luis Díaz (MED), Dayot Upamecano (DEF)
+- **Juventus**: Bremer (DEF), Manuel Locatelli (MED), Kenan Yıldız (MED), Kamil Grabara (POR), Nick Woltemade (DEL)
+- **AC Milan**: Mike Maignan (POR), Luka Modrić (MED), Adrien Rabiot (MED), Matteo Gabbia (DEF), Gonçalo Ramos (DEL)
+- **Manchester City**: Gianluigi Donnarumma (POR), Rúben Dias (DEF), Enzo Fernández (MED), Phil Foden (MED), Erling Haaland (DEL)
+- **Manchester United**: Bruno Fernandes (MED), Youri Tielemans (MED), Senne Lammens (POR), Matthijs de Ligt (DEF), Benjamin Šeško (DEL)
+- **Borussia Dortmund**: Gregor Kobel (POR), Nico Schlotterbeck (DEF), Felix Nmecha (MED), Serhou Guirassy (DEL), Waldemar Anton (DEF)
+- **Napoli**: Scott McTominay (MED), Kevin De Bruyne (MED), Alex Meret (POR), Amir Rrahmani (DEF), Rasmus Højlund (DEL)
+- **Newcastle United**: Lewis Hall (DEF), Robin Roefs (POR), Nico González (MED), Granit Xhaka (MED), Yoane Wissa (DEL)
+- **Aston Villa**: Boubacar Kamara (MED), John McGinn (MED), Zion Suzuki (POR), Pau Torres (DEF), Nicolas Jackson (DEL)
+- **Atalanta**: Marco Carnesecchi (POR), Éderson (MED), Charles De Ketelaere (MED), Giorgio Scalvini (DEF), Gianluca Scamacca (DEL)
+- **Sevilla FC**: Odysseas Vlachodimos (POR), Juan Iglesias (DEF), Kike Salas (DEF), Arouna Sangante (DEF), Gabriel Suazo (DEF), Lucien Agoumé (MED), Youssouf Fofana (MED), Giorgi Kochorashvili (MED), Félix Correia (DEL), Miguel Sierra (DEL), Lucas Stassin (DEL)
+- **SL Benfica**: Anatoliy Trubin (POR), Tomás Araújo (DEF), Palhinha (MED), Fredrik Aursnes (MED), Vangelis Pavlidis (DEL)
+
+### Liga Hypermotion
+- **Girona FC**: Paulo Gazzaniga (POR), Francés (DEF), Holmes Júnior (DEF), David López (DEF), Álex Moreno (DEF), Fran Beltrán (MED), Bryan Gil (MED), Izan González (MED), Iván Morante (MED), Jastin (DEL), Abel Ruiz (DEL)
+- **Real Oviedo**: Aarón Escandell (POR), Nacho Vidal (DEF), David Costas (DEF), Dani Calvo (DEF), S. Rodríguez (DEF), Alberto Reina (MED), Y. Lachhab (MED), Pablo Sáenz (DEL), J. González (MED), Villahermosa (DEL), Chris Ramos (DEL)
+- **SD Eibar**: Magunagoitia (POR), Cubero (DEF), Nolaskoain (DEF), Jair Amador (DEF), Arbilla (DEF), Aleix Garrido (MED), S. Álvarez (MED), Adu Ares (DEL), Guruzeta (MED), Magunazelaia (DEL), Jon Bautista (DEL)
+
+### Primera Federación
+- **CD Castellón**: R. Matthys (POR), A. Jiménez (DEF), Jérémy Mellot (DEF), A. Sienra (DEF), Hamza Bellari (MED), Diego Barri (MED), Álvaro Martín (MED), Iñigo Córdoba (MED), Adam Jakobsen (DEL), O. Camara (DEL), Raúl Sánchez (DEL)
+- **CD Tenerife**: Dani Martín (POR), César Álvarez (DEF), A. Landázuri (DEF), José León (DEF), D. Rodríguez (DEF), Jesús Álvarez (MED), J. Sánchez (MED), Noel (DEL), Víctor Moreno (MED), Nacho Gil (DEL), Enric Gallego (DEL)
+- **UD Almería**: A. Fernández (POR), Luna (DEF), Rodrigo Ely (DEF), F. Bonini (DEF), Álex Muñoz (DEF), Vesga (MED), Stefan Džodić (MED), Álex Sola (DEL), Embarba (DEL), Arribas (MED), Miguel de la Fuente (DEL)

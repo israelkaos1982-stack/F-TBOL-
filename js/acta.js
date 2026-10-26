@@ -624,6 +624,10 @@
       var RR = window.Renderizadores;
       g.innerHTML = _partidoActivo.ida && RR && RR.htmlIdaGlobal
         ? RR.htmlIdaGlobal(_partidoActivo.ida, r.golesLocal, r.golesVisitante)
+        // IDA de una eliminatoria: también "Ida X-Y" + "Global X-Y" (mismo marcador, aún sin vuelta).
+        : (RR && RR.faseIdaVuelta && RR.htmlIdaGlobalDeIda && RR.faseIdaVuelta(_partidoActivo.partido) === "ida" &&
+            !(RR.esFaseDeGruposEuropea && RR.esFaseDeGruposEuropea(_partidoActivo.partido)))
+        ? RR.htmlIdaGlobalDeIda(r.golesLocal, r.golesVisitante)
         // Liga/Superliga/grupos europeos: Nº y Pt de ANTES del partido (se
         // calculan al arrancar y quedan fijos en acta, descanso y final).
         : (RR && RR.htmlClasificacionDePartido ? RR.htmlClasificacionDePartido(_partidoActivo.clas) : "");

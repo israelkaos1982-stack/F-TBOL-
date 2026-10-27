@@ -11251,7 +11251,7 @@
   // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
   // y si con eso sigue sin caber (nombre de una sola palabra muy larga, o
   // muchas palabras), corta con puntos suspensivos como último recurso.
-  var MAX_LEN_NOMBRE_TARJETA = 15;
+  var MAX_LEN_NOMBRE_TARJETA = 22; // el CSS del club deja el nombre en 2 líneas si hace falta
   function _abreviarNombre(nombre, maxLen) {
     var n = String(nombre || "").trim();
     if (!n) return "";

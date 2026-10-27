@@ -12559,7 +12559,7 @@
       for (var i = 0; i < filas.length; i++) {
         var f = filas[i];
         if ((f.equipoId && f.equipoId === equipo.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, equipo.nombre))) {
-          return { pos: i + 1, pts: f.pts, pj: f.pj, pg: f.pg };
+          return { pos: i + 1, pts: f.pts, pj: f.pj, pg: f.pj - f.pe - f.pp };
         }
       }
       return null;
@@ -12575,7 +12575,7 @@
     function chips(x) {
       function v(val) { return val != null && val !== "" ? val : "–"; }
       var pct = x && x.pj > 0 && x.pg != null && x.pg !== "" ? Math.round((x.pg / x.pj) * 100) + "%" : "–";
-      var datos = [["POS", x ? x.pos + "º" : "–"], ["PJ", x ? v(x.pj) : "–"], ["PTS", x ? v(x.pts) : "–"], ["%", pct]];
+      var datos = [["Nº", x ? x.pos + "º" : "–"], ["PJ", x ? v(x.pj) : "–"], ["PTS", x ? v(x.pts) : "–"], ["%", pct]];
       return '<div class="previa-clas-eq">' + datos.map(function (d) {
         return '<span class="previa-clas-chip"><b>' + d[0] + "</b><i>" + d[1] + "</i></span>";
       }).join("") + "</div>";

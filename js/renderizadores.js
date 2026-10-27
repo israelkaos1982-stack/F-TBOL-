@@ -14510,6 +14510,7 @@
           var iconos = ICONOS_STAT_POSICION[pos] || ["⚽", "⭐", "🟨", "🟥"];
           var grupo = document.createElement("div");
           grupo.className = "plantilla-grupo";
+          grupo.setAttribute("data-pos", pos); // tema PES 6: chapa de color por posición
 
           var titulo = document.createElement("div");
           titulo.className = "plantilla-grupo-titulo";

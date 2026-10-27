@@ -4093,6 +4093,8 @@ button { font-family: inherit; cursor: pointer; }
   --pes-3: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #000);
   --pes-hi: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #fff);
   --pes-rayas: repeating-linear-gradient(115deg, color-mix(in srgb, var(--pes-raya, #fff) 16%, transparent) 0 20px, transparent 20px 52px);
+}
+#club-modal-overlay {
   --bg-0: var(--pes-2);
   --bg-1: var(--pes-2);
   --bg-2: var(--pes-1);
@@ -4100,10 +4102,11 @@ button { font-family: inherit; cursor: pointer; }
   --line: rgba(255, 255, 255, 0.2);
   --text-lo: #d6dbe8;
 }
+/* Parte derecha (calendario): fondo oscuro liso, SIN rayas ni color de
+   club, para que las cards de partido se lean bien. El color del escudo
+   + rayas vive solo en la cabecera, el menú izquierdo y la ventana. */
 #screen-club {
-  background:
-    var(--pes-rayas),
-    radial-gradient(ellipse at 20% 0%, var(--pes-hi) 0%, var(--pes-3) 38%, var(--pes-2) 100%);
+  background: linear-gradient(180deg, #0a0e1a, #0e1424 60%, #080b14);
   background-attachment: fixed;
 }
 #screen-club .club-header {
@@ -4118,7 +4121,7 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
 }
 #screen-club .club-menu {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.12));
+  background: var(--pes-rayas), linear-gradient(180deg, var(--pes-3), var(--pes-2));
   border-right: 2px solid color-mix(in srgb, var(--pes-raya, #fff) 55%, transparent);
   gap: 6px;
 }
@@ -4149,11 +4152,11 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---- Partidos (cards del calendario) ---- */
 #screen-club .match-card {
-  background: linear-gradient(135deg, var(--pes-3), var(--pes-1));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, #1b2440, #121a30);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-left: 5px solid var(--pes-raya, #fff);
   border-radius: 3px 16px 3px 16px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 #screen-club .match-card-comp {
   font-style: italic;

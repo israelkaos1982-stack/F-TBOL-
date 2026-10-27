@@ -4467,3 +4467,87 @@ button { font-family: inherit; cursor: pointer; }
 .clasificacion-fila--activo .clasificacion-pts,
 .clasificacion-fila--activo .clasificacion-equipo,
 #club-modal-overlay .clasificacion-fila--activo td { color: #7fe0a0 !important; }
+
+/* ============================================================
+   FORMATO "PANELES" (fotos del usuario) con colores PES 6 — dentro de la
+   ventana del club (#club-modal-overlay): listas con filas alternas,
+   nombre grande + equipo en 2ª línea, cifra clave en dorado, cajas de
+   estadísticas y pestañas inclinadas. Solo CSS: mismos datos y markup.
+   ============================================================ */
+/* Pestañas (ranking, ligas, Champions...): paralelogramos grandes, la activa en dorado */
+#club-modal-overlay .liga-tab-boxes:not(.liga-tab-boxes--grid4) { gap: 6px; }
+#club-modal-overlay .liga-tab-boxes:not(.liga-tab-boxes--grid4) .liga-tab-box {
+  padding: 11px 4px;
+  font-size: 12px;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-width: 0 0 3px 0;
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: none;
+}
+#club-modal-overlay .liga-tab-boxes:not(.liga-tab-boxes--grid4) .liga-tab-box--activa {
+  background: linear-gradient(90deg, #ffd24a, #ff9d2e);
+  border-color: #fff;
+  color: #241500;
+}
+
+/* Cajas de estadísticas (Pichichi · MVP · Tarjetas · Zamora) */
+#club-modal-overlay .liga1ref-stats-grid { gap: 8px; margin-top: 16px; }
+#club-modal-overlay .liga1ref-stat-box {
+  padding: 12px 4px 10px;
+  gap: 5px;
+  border: none;
+  border-bottom: 3px solid #ffd24a;
+  border-radius: 0;
+  background: linear-gradient(160deg, #1c4fb8, #0f2f86);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+#club-modal-overlay .liga1ref-stat-box:active { background: linear-gradient(160deg, #fff, #dfe5f2); }
+#club-modal-overlay .liga1ref-stat-box-icono { font-size: 26px; }
+#club-modal-overlay .liga1ref-stat-box-label { font-size: 11px; font-weight: 900; font-style: italic; color: #fff; letter-spacing: 0.4px; }
+#club-modal-overlay .liga1ref-stat-titulo { font-size: 15px; font-weight: 900; font-style: italic; letter-spacing: 0.8px; text-transform: uppercase; color: #fff; }
+#club-modal-overlay .liga1ref-stat-titulo--bonito { border-left: 4px solid #ffd24a; font-size: 15px; padding-left: 10px; }
+
+/* Listas de jugadores (Goleadores, MVP, tarjetas...): # · nombre + equipo debajo · cifra */
+#club-modal-overlay .liga1ref-stat-tabla { width: 100%; min-width: 0; display: block; font-size: 14px; }
+#club-modal-overlay .liga1ref-stat-tabla thead,
+#club-modal-overlay .liga1ref-stat-tabla tbody { display: block; }
+#club-modal-overlay .liga1ref-stat-tabla tr {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  grid-template-areas: "pos nom val ed" "pos eq val ed";
+  align-items: center;
+  column-gap: 8px;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+#club-modal-overlay .liga1ref-stat-tabla tbody tr:nth-child(odd) { background: rgba(255, 255, 255, 0.06); }
+#club-modal-overlay .liga1ref-stat-tabla tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.18); }
+#club-modal-overlay .liga1ref-stat-tabla th, #club-modal-overlay .liga1ref-stat-tabla td { display: block; width: auto !important; padding: 0 !important; border: none; text-align: left; }
+#club-modal-overlay .liga1ref-stat-tabla thead tr { grid-template-areas: "pos nom val ed"; padding: 8px 10px; background: rgba(0, 0, 0, 0.35); border-bottom: 2px solid #ffd24a; }
+#club-modal-overlay .liga1ref-stat-tabla thead th { font-size: 11px; letter-spacing: 0.6px; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(3) { display: none; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(1), #club-modal-overlay .liga1ref-stat-tabla td:nth-child(1) { grid-area: pos; text-align: center; font-size: 15px; font-weight: 800; color: #cfe0ff; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(2), #club-modal-overlay .liga1ref-stat-tabla td:nth-child(2) { grid-area: nom; font-size: 16px; font-weight: 800; color: #fff; white-space: normal; }
+#club-modal-overlay .liga1ref-stat-tabla td:nth-child(3) { grid-area: eq; font-size: 13px; font-weight: 600; color: #b9cffc; white-space: normal; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(4), #club-modal-overlay .liga1ref-stat-tabla td:nth-child(4) { grid-area: val; text-align: right; }
+#club-modal-overlay .liga1ref-stat-tabla td:nth-child(4) { font-size: 21px; font-weight: 900; color: #ffd24a; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(5), #club-modal-overlay .liga1ref-stat-tabla td:nth-child(5) { grid-area: ed; }
+#club-modal-overlay .liga1ref-stat-tabla .clasificacion-fila--activo td:nth-child(4) { color: #7fe0a0 !important; }
+
+/* Ranking de clubes: filas alternas, nombre grande, puntos en dorado */
+#club-modal-overlay .ranking-lista { gap: 0; }
+#club-modal-overlay .ranking-fila { padding: 11px 10px; font-size: 15px; }
+#club-modal-overlay .ranking-fila:nth-child(odd) { background: rgba(255, 255, 255, 0.06); }
+#club-modal-overlay .ranking-fila:nth-child(even) { background: rgba(0, 0, 0, 0.18); }
+#club-modal-overlay .ranking-fila-pos { color: #cfe0ff; font-size: 15px; }
+#club-modal-overlay .ranking-fila-nom { color: #fff; font-weight: 800; font-size: 16px; }
+#club-modal-overlay .ranking-fila-pts { color: #ffd24a; font-weight: 900; font-size: 17px; }
+#club-modal-overlay .ranking-fila--cab { background: rgba(0, 0, 0, 0.5) !important; border-bottom: 2px solid #ffd24a; }
+#club-modal-overlay .ranking-fila--cab span { color: #cfe0ff; font-size: 11px; }
+#club-modal-overlay .ranking-fila--propia-ok, #club-modal-overlay .ranking-fila--propia-ok .ranking-fila-nom,
+#club-modal-overlay .ranking-fila--propia-ok .ranking-fila-pos, #club-modal-overlay .ranking-fila--propia-ok .ranking-fila-pts { color: #7fe0a0; }
+#club-modal-overlay .liga-tab-boxes:not(.liga-tab-boxes--grid4) .liga-tab-box { font-size: 10px; letter-spacing: 0; padding: 10px 2px; text-overflow: clip; overflow: visible; white-space: nowrap; }

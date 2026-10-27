@@ -4635,3 +4635,117 @@ button { font-family: inherit; cursor: pointer; }
 /* Listas de jugadores: sin el ✏️ de cada fila (se edita con el ✏️ de arriba) */
 .stat-fila-editar-td, .stat-fila-editar-btn { display: none !important; }
 #club-modal-overlay .liga1ref-stat-tabla tr { grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: "pos nom val" "pos eq val"; }
+
+/* ============================================================
+   CARDS DE PARTIDO (previa + en vivo) — formato PES 6 con el color de
+   cada competición (--cc = color de la competición, --cct = texto sobre él).
+   ============================================================ */
+#previa-card, #partido-live-overlay .live-card { --cc: #8fa8ff; --cct: #fff; }
+#previa-card.comp-liga, #partido-live-overlay .live-card.comp-liga { --cc: #ff3b5c; --cct: #fff; }
+#previa-card.comp-copa, #partido-live-overlay .live-card.comp-copa { --cc: #f1c40f; --cct: #241a00; }
+#previa-card.comp-supercopa, #partido-live-overlay .live-card.comp-supercopa { --cc: #a8714a; --cct: #fff; }
+#previa-card.comp-champions, #partido-live-overlay .live-card.comp-champions { --cc: #3ba7ff; --cct: #fff; }
+#previa-card.comp-previa, #partido-live-overlay .live-card.comp-previa { --cc: #8b5cf6; --cct: #fff; }
+#previa-card.comp-uel, #partido-live-overlay .live-card.comp-uel { --cc: #ff7a29; --cct: #fff; }
+#previa-card.comp-uecl, #partido-live-overlay .live-card.comp-uecl { --cc: #39ff6a; --cct: #04200c; }
+#previa-card.comp-intercontinental, #partido-live-overlay .live-card.comp-intercontinental { --cc: #ffe600; --cct: #241f00; }
+#previa-card.comp-usc, #partido-live-overlay .live-card.comp-usc { --cc: #c9d3dc; --cct: #10202e; }
+#previa-card.comp-recopa, #partido-live-overlay .live-card.comp-recopa { --cc: #cd7f32; --cct: #fff; }
+#previa-card.comp-verano, #partido-live-overlay .live-card.comp-verano { --cc: #ffc107; --cct: #241a00; }
+#previa-card.comp-hypermotion, #partido-live-overlay .live-card.comp-hypermotion { --cc: #22c9bd; --cct: #012a27; }
+#previa-card.comp-selecciones, #partido-live-overlay .live-card.comp-selecciones { --cc: #ff4fa8; --cct: #fff; }
+#previa-card.comp-superliga, #partido-live-overlay .live-card.comp-superliga { --cc: #d926c9; --cct: #fff; }
+#previa-card.comp-nations, #partido-live-overlay .live-card.comp-nations { --cc: #b388ff; --cct: #1a0a3a; }
+
+#previa-card.previa-card, #partido-live-overlay .live-card.live-card {
+  border: 2px solid var(--cc);
+  border-radius: 14px;
+  background-color: #061233;
+  background-image:
+    repeating-linear-gradient(115deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 6px),
+    linear-gradient(175deg, color-mix(in srgb, var(--cc) 34%, #0a1c58) 0%, #0a1a55 38%, #061233 100%);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 0 24px color-mix(in srgb, var(--cc) 35%, transparent), 0 24px 60px rgba(0,0,0,0.6);
+  color: #fff;
+}
+#previa-card .previa-comp, #partido-live-overlay .live-card .previa-comp {
+  color: var(--cct) !important;
+  text-shadow: none !important;
+  background: linear-gradient(90deg, var(--cc), color-mix(in srgb, var(--cc) 60%, #000));
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  padding: 8px 12px;
+  font-size: 16px;
+  margin-top: 26px;
+  text-align: center;
+}
+#previa-card .previa-close, #partido-live-overlay .live-card .previa-close { background: #0d2370; border: 1px solid var(--cc); color: #fff; z-index: 2; }
+#previa-card .previa-team, #partido-live-overlay .live-card .previa-team { color: #fff; font-weight: 800; font-style: italic; text-transform: uppercase; }
+#previa-card .previa-marcador, #partido-live-overlay .live-card .previa-marcador {
+  background: #040b24; border: 2px solid #ffd24a; border-radius: 8px; color: #ffd24a; text-shadow: none;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+#previa-card .previa-global-fila, #partido-live-overlay .live-card .previa-global-fila { color: #cfe0ff; }
+#previa-card .previa-global-fila--total, #partido-live-overlay .live-card .previa-global-fila--total { color: #ffd24a; text-shadow: none; }
+#previa-card .previa-info-grid { background: none; border: none; }
+#previa-card .previa-info-item {
+  background: linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04));
+  border: none; border-left: 4px solid var(--cc); border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 3px; padding: 8px 10px;
+}
+#previa-card .previa-info-item dt { color: #cfe0ff; font-style: italic; text-transform: uppercase; font-size: 12px; }
+#previa-card .previa-info-item dd { color: #fff; font-weight: 800; }
+#previa-card .previa-meta-row {
+  background: rgba(0,0,0,0.3); border: 1px solid color-mix(in srgb, var(--cc) 60%, transparent); border-radius: 8px;
+}
+#previa-card .previa-meta-item { color: #fff; font-weight: 800; }
+#previa-card .live-separador, #partido-live-overlay .live-card .live-acta-sep { background: var(--cc); height: 2px; opacity: 0.8; }
+#previa-card .live-lista-title, #partido-live-overlay .live-card .live-lista-title { color: #fff; font-style: italic; text-transform: uppercase; letter-spacing: 0.6px; }
+#previa-card .live-lista-add, #partido-live-overlay .live-card .live-lista-add {
+  background: linear-gradient(160deg, #1c4fb8, #0f2f86); border: none; border-bottom: 2px solid #ffd24a; color: #fff; font-weight: 800; border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+#partido-live-overlay .live-card .live-team-nombre { background: linear-gradient(160deg, #1c4fb8, #0f2f86); border: none; border-bottom: 3px solid transparent; color: #fff; font-style: italic; text-transform: uppercase; font-weight: 900; border-radius: 0; clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+#partido-live-overlay .live-card .live-team-nombre.is-active { background: linear-gradient(90deg, #ffd24a, #ff9d2e); color: #241500; border-bottom-color: #fff; }
+#partido-live-overlay .live-card .live-label { color: #cfe0ff; font-style: italic; text-transform: uppercase; font-weight: 800; }
+#partido-live-overlay .live-card .live-select { background: #0b1f66; border: 1px solid var(--cc); border-radius: 6px; color: #fff; font-weight: 700; }
+#partido-live-overlay .live-card .live-evt-btn {
+  background: linear-gradient(160deg, #1c4fb8, #0f2f86); border: none; border-bottom: 3px solid var(--cc); border-radius: 0; color: #fff;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+#partido-live-overlay .live-card .live-evt-btn span { color: #fff; font-weight: 900; font-style: italic; }
+#partido-live-overlay .live-card .live-evt-btn:active { background: linear-gradient(160deg, #fff, #dfe5f2); }
+#partido-live-overlay .live-card .live-evt-btn--descanso { background: linear-gradient(160deg, #b8741c, #7a4306); border-bottom-color: #ffd24a; }
+#partido-live-overlay .live-card .live-evt-btn--descanso span { color: #fff; }
+#previa-card .btn-confirmar, #partido-live-overlay .live-card .btn-confirmar {
+  background: linear-gradient(90deg, #ffd24a, #ff9d2e); color: #241500; border: none; border-bottom: 3px solid #fff; border-radius: 0; font-weight: 900; font-style: italic; text-shadow: none; box-shadow: none;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+#previa-card .btn-ghost, #partido-live-overlay .live-card .btn-ghost {
+  background: linear-gradient(160deg, #1c4fb8, #0f2f86); color: #fff; border: none; border-bottom: 3px solid rgba(255,255,255,0.5); border-radius: 0; font-weight: 800; font-style: italic;
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+#partido-live-overlay .live-card .live-acta-mini { background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; }
+#partido-live-overlay .live-card .live-acta-mini-min { color: #ffd24a; }
+
+/* Real Madrid: borde blanco en cada caja del menú para notar la separación entre una y otra */
+#screen-club[data-club="real-madrid"] .club-menu-btn,
+#screen-club[data-club="real-madrid"] .club-hub-box {
+  box-shadow: inset 0 0 0 2px #fff;
+  border-left: 5px solid #ffd24a;
+}
+#screen-club[data-club="real-madrid"] .club-menu-btn--calendario { box-shadow: inset 0 0 0 2px #fff; }
+
+/* Fila TOTALES de la plantilla: cabecera y valores en la MISMA cuadrícula (columnas alineadas) */
+#club-modal-overlay .plantilla-grupo--total .plantilla-grupo-titulo {
+  display: grid;
+  grid-template-columns: 6px 1fr repeat(9, 22px);
+  gap: 4px;
+  align-items: center;
+  padding: 5px 4px;
+  border-left: none;
+  box-shadow: inset 5px 0 0 #ffd24a;
+}
+#club-modal-overlay .plantilla-grupo--total .plantilla-grupo-nombre { grid-column: 1 / 3; padding-left: 10px; }
+#club-modal-overlay .plantilla-grupo--total .plantilla-grupo-iconos--9 { display: contents; }
+#club-modal-overlay .plantilla-grupo--total .plantilla-grupo-iconos--9 span { text-align: center; font-size: 12px; }
+#club-modal-overlay .plantilla-jugador--total { padding: 8px 4px; }
+#club-modal-overlay .plantilla-jugador--total .plantilla-nombre { grid-column: 2; }

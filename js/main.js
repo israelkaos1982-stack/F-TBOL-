@@ -2258,7 +2258,7 @@
       if (!ov || !titulo || !body || !window.Renderizadores) return;
       titulo.textContent = "⚽ Trofeos Oficiales";
       body.innerHTML = '<div id="inicio-trofeos-vista"></div>';
-      window.Renderizadores.renderizarProximamente("inicio-trofeos-vista", "Trofeos Oficiales");
+      window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista");
       ov.hidden = false;
     });
 
@@ -2538,6 +2538,18 @@
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
         case "guardar-titulos": guardarTitulos(d.clubId); break;
         case "cancelar-titulos": cancelarTitulos(d.clubId); break;
+        case "editar-golden":
+          abrirCandado(ADMIN_PASSWORD, function () {
+            var c = document.getElementById("inicio-trofeos-vista");
+            if (c) window.Renderizadores.pintarEditorGolden(c);
+          }, "🔒 Editar Golden", "Introduce el PIN de administrador.");
+          break;
+        case "guardar-golden": {
+          var tg = document.getElementById("golden-textarea");
+          if (tg && window.Estado.guardarGoldenTexto(tg.value)) window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista");
+          break;
+        }
+        case "cancelar-golden": window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista"); break;
         case "editar-titulos-temporada-inline": editarTitulosTemporadaInline(); break;
         case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
         case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;

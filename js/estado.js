@@ -2123,6 +2123,19 @@
     }
   }
 
+  // ---------- Golden (Balón de Oro / Bota de Oro) ----------
+  // Texto libre: una línea por jugador "Jugador; Equipo; goles; MVP;
+  // imbatidas; zamora; puntos del club". Se sincroniza solo (prefijo ef7_).
+  var GOLDEN_KEY = "ef7_golden_texto_v1";
+  function obtenerGoldenTexto() {
+    try { var v = localStorage.getItem(GOLDEN_KEY); return v !== null ? v : ""; } catch (err) { return ""; }
+  }
+  function guardarGoldenTexto(texto) {
+    if (!_confirmarSiEncogeMucho(GOLDEN_KEY, obtenerGoldenTexto(), texto)) return false;
+    try { localStorage.setItem(GOLDEN_KEY, texto || ""); return true; }
+    catch (err) { console.error("[estado] no se pudo guardar el golden:", err); _avisarFalloGuardado(err); return false; }
+  }
+
   // ---------- Lesionados / sancionados por club (Fase 4) ----------
   // Igual que el calendario extra: una lista POR CLUB (el mánager de
   // cada caja lleva la suya, independiente de con quién juegue cada
@@ -4186,6 +4199,8 @@
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerTitulosTemporadaTexto: obtenerTitulosTemporadaTexto,
+    obtenerGoldenTexto: obtenerGoldenTexto,
+    guardarGoldenTexto: guardarGoldenTexto,
     guardarTitulosTemporadaTexto: guardarTitulosTemporadaTexto,
     obtenerListaJugadores: obtenerListaJugadores,
     obtenerListaJugadoresActivosPara: obtenerListaJugadoresActivosPara,

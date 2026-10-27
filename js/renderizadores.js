@@ -2263,6 +2263,15 @@
     });
   }
 
+  // Nombre del equipo rival en las estadísticas cuando la fila no trae `en` (es el caso
+  // de un club HUMANO — Real Madrid, Liverpool, Atlético… — que juega ese partido pero no se
+  // marcó como humano al guardar el acta): se resuelve por su id en vez de "Rival IA".
+  function _nombreClubRival(clubId, datos) {
+    var lista = datos && datos.equipos && datos.equipos.equipos ? datos.equipos.equipos : [];
+    for (var i = 0; i < lista.length; i++) if (lista[i].id === clubId) return lista[i].nombre;
+    return "Rival IA";
+  }
+
   // Recorre, para cada club humano de esta liga, sus propios partidos de
   // Liga ya jugados (misma fuente que la clasificación) y suma goles/MVP/
   // amarillas/rojas por jugador — de ESTE club (es_humano:true, ficha
@@ -2329,7 +2338,7 @@
             // Rival IA de ESTE partido concreto (nunca otro humano — ese
             // caso ya lo cubre su propia iteración de arriba). Nombre y
             // equipo del rival IA viajan en la propia fila.
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
 
@@ -3564,7 +3573,7 @@
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
       });
@@ -4262,7 +4271,7 @@
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
       });
@@ -4754,7 +4763,7 @@
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
       });
@@ -5433,7 +5442,7 @@
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
       });
@@ -5932,7 +5941,7 @@
             var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
             sumarFila(fila, nombreJ, e.nombre, e.id);
           } else if (fila.e === oponenteId && fila.n) {
-            sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
           }
         });
       });
@@ -6508,7 +6517,7 @@
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
             }
           });
         });
@@ -7419,7 +7428,7 @@
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
             }
           });
         });
@@ -8120,7 +8129,7 @@
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
             }
           });
         });
@@ -8846,7 +8855,7 @@
               var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
               sumarFila(fila, nombreJ, e.nombre, e.id);
             } else if (fila.e === oponenteId && fila.n) {
-              sumarFila(fila, fila.n, fila.en || "Rival IA", oponenteId);
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
             }
           });
         });

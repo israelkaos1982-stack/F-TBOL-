@@ -366,7 +366,6 @@
           nombreEl.title = equipo.nombre || "";
         }
         if (misterEl) misterEl.textContent = equipo.mister || "—";
-        _pintarFichaHub(equipo);
         _ajustarAlturaClubHeader();
 
         // Tema de color del club — cada caja se ve con SUS colores (menú +
@@ -1814,21 +1813,6 @@
     window.scrollTo(0, 0);
   }
 
-  function _pintarFichaHub(equipo) {
-    var cont = document.getElementById("club-hub-stats");
-    if (!cont) return;
-    function chip(valor, etiqueta) {
-      return '<div class="club-hub-chip"><b>' + valor + "</b><span>" + etiqueta + "</span></div>";
-    }
-    var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
-    cont.innerHTML =
-      chip(esc(equipo.misterEmoji || "👤") + " " + esc(equipo.mister || "—"), "Mister") +
-      chip(esc(equipo.banderaSeleccion || "🌍") + " " + esc(equipo.seleccion || "—"), "Selección") +
-      '<button type="button" class="club-hub-chip club-hub-chip--btn" id="btn-objetivos-hub"><b>🎯</b><span>Objetivos</span></button>';
-    var bo = document.getElementById("btn-objetivos-hub");
-    if (bo) bo.addEventListener("click", function () { abrirModalClub("objetivos"); });
-  }
-
   function salirDelClub() {
     var pant = document.getElementById("screen-club");
     if (pant && pant.getAttribute("data-vista") === "calendario") { _setVistaClub("menu"); return; }
@@ -2337,7 +2321,7 @@
       clubMenu.addEventListener("click", function (ev) {
         var btnCal = ev.target.closest(".club-menu-btn[data-ir-calendario]");
         if (btnCal) { _setVistaClub("calendario"); return; }
-        var btn = ev.target.closest(".club-menu-btn[data-club-vista]");
+        var btn = ev.target.closest(".club-menu-btn[data-club-vista], .club-hub-box[data-club-vista]");
         if (!btn) return;
         abrirModalClub(btn.dataset.clubVista);
       });

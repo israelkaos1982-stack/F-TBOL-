@@ -15048,49 +15048,102 @@
   // datos falsos para una competición nueva. Plantilla / Liga 1ª REF /
   // Copa del Rey / Superliga / Títulos / Objetivos / Derbys ya SÍ son
   // reales (ver sus renderizar* respectivos).
-  // "Trofeos Oficiales" (Inicio): dos cards grandes, Balón de Oro y Bota
-  // de Oro, con el ganador de la temporada. Mismo dato que la pantalla
-  // Títulos de la Temporada (líneas "Balón de Oro:"/"Bota de Oro:"), así
-  // que se edita allí. Trofeo pintado en CSS/emoji (0 KB). El ganador se
-  // escribe "Jugador - Equipo": el último tramo se resuelve como escudo.
+  // "Trofeos Oficiales" (Inicio): Balón de Oro, Bota de Oro y GOLDEN · 50
+  // MEJORES DEL AÑO, todo calculado del texto que pega el admin: una línea
+  // por jugador "Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos
+  // del club" (separadores ; | tab o coma; decimales con coma o punto).
+  // Puntos = gol·1 + MVP·1,5 + imbatida·1 + Zamora·10 + club÷40 (el club
+  // solo lo cobra quien haya sumado algo por sí mismo). Balón = más puntos,
+  // Bota = más goles. 0 imágenes: trofeos en CSS/emoji.
+  function _numGolden(x) {
+    var n = parseFloat(String(x == null ? "" : x).replace(",", ".").replace(/[^0-9.\-]/g, ""));
+    return isNaN(n) ? 0 : n;
+  }
+  function _fmtGolden(n) {
+    var r = Math.round(n * 10) / 10;
+    return String(r).replace(".", ",");
+  }
+  function parsearGolden(texto) {
+    var out = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l || l.charAt(0) === "#") return;
+      var partes = /[;|\t]/.test(l) ? l.split(/[;|\t]/) : l.split(",");
+      partes = partes.map(function (x) { return x.trim(); });
+      if (!partes[0]) return;
+      var gol = _numGolden(partes[2]), mvp = _numGolden(partes[3]), imb = _numGolden(partes[4]);
+      var zam = _numGolden(partes[5]), club = _numGolden(partes[6]) / 40;
+      var propio = gol + mvp * 1.5 + imb + zam * 10;
+      out.push({
+        jugador: partes[0], equipo: partes[1] || "", gol: gol, mvp: mvp, imb: imb, zam: zam,
+        club: propio > 0 ? club : 0, pts: propio + (propio > 0 ? club : 0)
+      });
+    });
+    return out;
+  }
+
+  function _golderCardHTML(d, tipo, jug) {
+    var esBalon = tipo === "balon";
+    var cifra = jug ? (esBalon ? _fmtGolden(jug.pts) + " pts" : _fmtGolden(jug.gol) + " goles") : "";
+    return '<div class="trofeo-of trofeo-of--' + (esBalon ? "balon" : "bota") + '">' +
+      '<span class="trofeo-of-icono">' + (esBalon ? "⚽" : "👟") + "</span>" +
+      '<span class="trofeo-of-titulo">' + (esBalon ? "Balón de Oro" : "Bota de Oro") + "</span>" +
+      (jug
+        ? '<span class="trofeo-of-jugador">' + escapeHTML(jug.jugador) + "</span>" +
+          '<span class="trofeo-of-detalle">' + escapeHTML(jug.equipo) + (jug.equipo ? " · " : "") + cifra + "</span>"
+        : '<span class="trofeo-of-detalle">Sin datos todavía</span>') +
+      "</div>";
+  }
+
   function renderizarTrofeosOficiales(contenedorId) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
-    cargarTodo().then(function (datos) {
-      var texto = window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "";
-      var ind = parsearTitulosTemporadaTexto(texto).individuales;
-      var defs = [
-        { campo: "Balón de Oro", clase: "balon", icono: "⚽", sub: "Mejor jugador de la temporada" },
-        { campo: "Bota de Oro", clase: "bota", icono: "👟", sub: "Máximo goleador de la temporada" }
-      ];
-      var html = "";
-      defs.forEach(function (d) {
-        var v = ind[d.campo];
-        var cuerpo;
-        if (v) {
-          var partes = v.split(/\s+-\s+/);
-          var jugador = partes[0];
-          var equipo = partes.length > 1 ? resolverRivalPorNombre(partes[partes.length - 1], datos, null) : null;
-          var detalle = partes.slice(1).join(" · ");
-          cuerpo =
-            '<span class="trofeo-of-ganador-label">GANADOR</span>' +
-            '<span class="trofeo-of-jugador">' + escapeHTML(jugador) + "</span>" +
-            (equipo ? '<span class="trofeo-of-escudo">' + crearEscudoHTML(equipo, "escudo--lg") + "</span>" : "") +
-            (detalle ? '<span class="trofeo-of-detalle">' + escapeHTML(detalle) + "</span>" : "");
-        } else {
-          cuerpo = '<span class="trofeo-of-detalle">Sin ganador todavía.<br>Se rellena en 🏆 Títulos de la temporada.</span>';
-        }
-        html +=
-          '<div class="trofeo-of trofeo-of--' + d.clase + '">' +
-          '<span class="trofeo-of-icono">' + d.icono + "</span>" +
-          '<span class="trofeo-of-titulo">' + d.campo + "</span>" +
-          '<span class="trofeo-of-sub">' + d.sub + "</span>" +
-          cuerpo + "</div>";
+    var texto = window.Estado ? window.Estado.obtenerGoldenTexto() : "";
+    var jugadores = parsearGolden(texto);
+    var balon = jugadores.slice().sort(function (a, b) { return b.pts - a.pts; })[0];
+    var bota = jugadores.slice().sort(function (a, b) { return b.gol - a.gol; })[0];
+    var top = jugadores.slice().sort(function (a, b) { return b.pts - a.pts; }).slice(0, 50);
+    if (balon && balon.pts <= 0) balon = null;
+    if (bota && bota.gol <= 0) bota = null;
+
+    var filas = top.map(function (j, i) {
+      return '<tr data-busca="' + escapeHTML(_normNombre(j.jugador + " " + j.equipo)) + '">' +
+        '<td class="golden-pos">' + (i + 1) + "</td>" +
+        '<td class="golden-jug"><b>' + escapeHTML(j.jugador) + "</b><small>" + escapeHTML(j.equipo) + "</small></td>" +
+        "<td>" + _fmtGolden(j.gol) + "</td><td>" + _fmtGolden(j.mvp) + "</td><td>" + _fmtGolden(j.imb) + "</td>" +
+        "<td>" + _fmtGolden(j.zam) + "</td><td>" + _fmtGolden(j.club) + '</td><td class="golden-pts">' + _fmtGolden(j.pts) + "</td></tr>";
+    }).join("");
+
+    contenedor.innerHTML =
+      '<div class="liga1ref-header"><span class="liga1ref-leyenda-mini">Salen del texto de jugadores</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-golden" aria-label="Editar golden">✏️</button></div>' +
+      '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>" +
+      '<p class="titulos-bloque-titulo golden-titulo">🏅 GOLDEN · 50 MEJORES DEL AÑO</p>' +
+      '<p class="golden-regla">Suma de todas las competiciones: ⚽ gol 1 · ⭐ MVP 1,5 · 🧤 imbatida 1 · 🥇 Zamora 10 · 🏟️ club = puntos del club ÷ 40 (solo lo cobra quien haya sumado algo por sí mismo).</p>' +
+      (jugadores.length
+        ? '<input type="search" class="golden-buscar" id="golden-buscar" placeholder="🔍 Buscar jugador o equipo…">' +
+          '<div class="golden-scroll"><table class="golden-tabla"><thead><tr><th>Nº</th><th>Jugador</th><th>⚽</th><th>⭐</th><th>🧤</th><th>🥇</th><th>🏟️</th><th>Pts</th></tr></thead><tbody>' + filas + "</tbody></table></div>"
+        : '<div class="club-modal-proximamente">Pulsa ✏️ y pega una línea por jugador:<br><b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club</b></div>');
+
+    var inp = document.getElementById("golden-buscar");
+    if (inp) inp.addEventListener("input", function () {
+      var q = _normNombre(inp.value);
+      contenedor.querySelectorAll(".golden-tabla tbody tr").forEach(function (tr) {
+        tr.style.display = tr.getAttribute("data-busca").indexOf(q) === -1 ? "none" : "";
       });
-      contenedor.innerHTML = '<div class="trofeo-of-lista">' + html + "</div>";
     });
+  }
+
+  function pintarEditorGolden(contenedor) {
+    contenedor.innerHTML =
+      '<p class="admin-nota">Una línea por jugador: <b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club</b>. ' +
+      "Ejemplo: Gonçalo Ramos; Milan; 48; 19; 0; 0; 520. Las líneas que empiezan por # se ignoran.</p>" +
+      '<textarea id="golden-textarea" class="admin-roadmap-textarea" rows="18"></textarea>' +
+      '<div class="admin-roadmap-editor-acciones">' +
+      '<button type="button" class="btn-ghost" data-accion="cancelar-golden">✕ Cancelar</button>' +
+      '<button type="button" class="btn-primary" data-accion="guardar-golden">💾 Guardar</button></div>';
+    var ta = document.getElementById("golden-textarea");
+    if (ta) ta.value = window.Estado ? window.Estado.obtenerGoldenTexto() : "";
   }
 
   function renderizarProximamente(contenedorId, etiqueta) {
@@ -15959,6 +16012,8 @@
     parsearDerbysTexto: parsearDerbysTexto,
     renderizarProximamente: renderizarProximamente,
     renderizarTrofeosOficiales: renderizarTrofeosOficiales,
+    pintarEditorGolden: pintarEditorGolden,
+    parsearGolden: parsearGolden,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,
     pintarRoadmapCalendario: _pintarRoadmapCalendario,

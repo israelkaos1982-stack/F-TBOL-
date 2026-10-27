@@ -1824,7 +1824,9 @@
     cont.innerHTML =
       chip(esc(equipo.misterEmoji || "👤") + " " + esc(equipo.mister || "—"), "Mister") +
       chip(esc(equipo.banderaSeleccion || "🌍") + " " + esc(equipo.seleccion || "—"), "Selección") +
-      chip(esc(equipo.valoracionPoder != null ? equipo.valoracionPoder : "—"), "Poder");
+      '<button type="button" class="club-hub-chip club-hub-chip--btn" id="btn-objetivos-hub"><b>🎯</b><span>Objetivos</span></button>';
+    var bo = document.getElementById("btn-objetivos-hub");
+    if (bo) bo.addEventListener("click", function () { abrirModalClub("objetivos"); });
   }
 
   function salirDelClub() {
@@ -2261,6 +2263,20 @@
 
     var btnTitulosTemp = document.getElementById("btn-abrir-titulos-temporada");
     if (btnTitulosTemp) btnTitulosTemp.addEventListener("click", abrirTitulosTemporada);
+
+    var btnInicioTitulos = document.getElementById("btn-inicio-titulos");
+    if (btnInicioTitulos) btnInicioTitulos.addEventListener("click", abrirTitulosTemporada);
+    var btnInicioTrofeos = document.getElementById("btn-inicio-trofeos");
+    if (btnInicioTrofeos) btnInicioTrofeos.addEventListener("click", function () {
+      var ov = document.getElementById("club-modal-overlay");
+      var titulo = document.getElementById("club-modal-title");
+      var body = document.getElementById("club-modal-body");
+      if (!ov || !titulo || !body || !window.Renderizadores) return;
+      titulo.textContent = "⚽ Trofeos Oficiales";
+      body.innerHTML = '<div id="inicio-trofeos-vista"></div>';
+      window.Renderizadores.renderizarProximamente("inicio-trofeos-vista", "Trofeos Oficiales");
+      ov.hidden = false;
+    });
 
     var btnTitulosTempVolver = document.getElementById("titulos-temporada-volver");
     if (btnTitulosTempVolver) {

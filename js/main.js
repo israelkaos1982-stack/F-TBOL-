@@ -386,6 +386,7 @@
           var secundario = equipo.colorSecundario || "#101114";
           var base = _luminanciaHex(primario) > 0.45 ? secundario : primario;
           var raya = base === primario ? secundario : primario;
+          if (teamId === "real-madrid") { base = "#5a2a9c"; raya = "#b48cf0"; }
           [pantalla, document.getElementById("club-modal-overlay")].forEach(function (el) {
             if (!el) return;
             el.style.setProperty("--club-primary", primario);

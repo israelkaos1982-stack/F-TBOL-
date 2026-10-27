@@ -12559,7 +12559,7 @@
       for (var i = 0; i < filas.length; i++) {
         var f = filas[i];
         if ((f.equipoId && f.equipoId === equipo.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, equipo.nombre))) {
-          return { pos: i + 1, pts: f.pts, pj: f.pj };
+          return { pos: i + 1, pts: f.pts, pj: f.pj, pg: f.pg };
         }
       }
       return null;
@@ -12568,16 +12568,19 @@
     if (!l && !v) return null;
     return { local: l, visitante: v };
   }
+  // POS · PJ · PTS · % de CADA equipo, en horizontal, sobre su propio
+  // escudo: "POS PJ PTS %  -  POS PJ PTS %" (petición usuario).
   function _htmlClasificacionDePartido(clas) {
     if (!clas) return "";
-    function d(x, campo) { return x ? (campo === "pos" ? x.pos + "º" : (x[campo] != null && x[campo] !== "" ? x[campo] : "–")) : "–"; }
-    function fila(campo, etiqueta) {
-      return '<div class="previa-clas-fila"><span class="previa-clas-val previa-clas-val--izq">' + d(clas.local, campo) + "</span>" +
-        '<span class="previa-clas-etq">' + etiqueta + '</span><span class="previa-clas-val previa-clas-val--der">' + d(clas.visitante, campo) + "</span></div>";
+    function chips(x) {
+      function v(val) { return val != null && val !== "" ? val : "–"; }
+      var pct = x && x.pj > 0 && x.pg != null && x.pg !== "" ? Math.round((x.pg / x.pj) * 100) + "%" : "–";
+      var datos = [["POS", x ? x.pos + "º" : "–"], ["PJ", x ? v(x.pj) : "–"], ["PTS", x ? v(x.pts) : "–"], ["%", pct]];
+      return '<div class="previa-clas-eq">' + datos.map(function (d) {
+        return '<span class="previa-clas-chip"><b>' + d[0] + "</b><i>" + d[1] + "</i></span>";
+      }).join("") + "</div>";
     }
-    // PJ (partidos jugados) encima de Pos: solo si la tabla lo trae de algún equipo.
-    var hayPj = (clas.local && clas.local.pj != null && clas.local.pj !== "") || (clas.visitante && clas.visitante.pj != null && clas.visitante.pj !== "");
-    return (hayPj ? fila("pj", "PJ") : "") + fila("pos", "Pos") + fila("pts", "Pts");
+    return '<div class="previa-clas-h">' + chips(clas.local) + '<span class="previa-clas-sep">-</span>' + chips(clas.visitante) + "</div>";
   }
 
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga

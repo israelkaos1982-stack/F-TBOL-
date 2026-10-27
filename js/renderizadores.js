@@ -15048,6 +15048,51 @@
   // datos falsos para una competición nueva. Plantilla / Liga 1ª REF /
   // Copa del Rey / Superliga / Títulos / Objetivos / Derbys ya SÍ son
   // reales (ver sus renderizar* respectivos).
+  // "Trofeos Oficiales" (Inicio): dos cards grandes, Balón de Oro y Bota
+  // de Oro, con el ganador de la temporada. Mismo dato que la pantalla
+  // Títulos de la Temporada (líneas "Balón de Oro:"/"Bota de Oro:"), así
+  // que se edita allí. Trofeo pintado en CSS/emoji (0 KB). El ganador se
+  // escribe "Jugador - Equipo": el último tramo se resuelve como escudo.
+  function renderizarTrofeosOficiales(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+    cargarTodo().then(function (datos) {
+      var texto = window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "";
+      var ind = parsearTitulosTemporadaTexto(texto).individuales;
+      var defs = [
+        { campo: "Balón de Oro", clase: "balon", icono: "⚽", sub: "Mejor jugador de la temporada" },
+        { campo: "Bota de Oro", clase: "bota", icono: "👟", sub: "Máximo goleador de la temporada" }
+      ];
+      var html = "";
+      defs.forEach(function (d) {
+        var v = ind[d.campo];
+        var cuerpo;
+        if (v) {
+          var partes = v.split(/\s+-\s+/);
+          var jugador = partes[0];
+          var equipo = partes.length > 1 ? resolverRivalPorNombre(partes[partes.length - 1], datos, null) : null;
+          var detalle = partes.slice(1).join(" · ");
+          cuerpo =
+            '<span class="trofeo-of-ganador-label">GANADOR</span>' +
+            '<span class="trofeo-of-jugador">' + escapeHTML(jugador) + "</span>" +
+            (equipo ? '<span class="trofeo-of-escudo">' + crearEscudoHTML(equipo, "escudo--lg") + "</span>" : "") +
+            (detalle ? '<span class="trofeo-of-detalle">' + escapeHTML(detalle) + "</span>" : "");
+        } else {
+          cuerpo = '<span class="trofeo-of-detalle">Sin ganador todavía.<br>Se rellena en 🏆 Títulos de la temporada.</span>';
+        }
+        html +=
+          '<div class="trofeo-of trofeo-of--' + d.clase + '">' +
+          '<span class="trofeo-of-icono">' + d.icono + "</span>" +
+          '<span class="trofeo-of-titulo">' + d.campo + "</span>" +
+          '<span class="trofeo-of-sub">' + d.sub + "</span>" +
+          cuerpo + "</div>";
+      });
+      contenedor.innerHTML = '<div class="trofeo-of-lista">' + html + "</div>";
+    });
+  }
+
   function renderizarProximamente(contenedorId, etiqueta) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -15913,6 +15958,7 @@
     pintarEditorDerbys: pintarEditorDerbys,
     parsearDerbysTexto: parsearDerbysTexto,
     renderizarProximamente: renderizarProximamente,
+    renderizarTrofeosOficiales: renderizarTrofeosOficiales,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,
     pintarRoadmapCalendario: _pintarRoadmapCalendario,

@@ -4073,3 +4073,99 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--nations-humanos { color: #d9c4ff; }
 .liga-tab-box--nations-grupos { color: #9cc2ff; }
 .liga-tab-box--nations-playoffs { color: #c9b8ff; }
+
+/* ============================================================
+   ESTILO PRO EVOLUTION SOCCER 6 — interior del club (2026-10-27)
+   Petición usuario: "estilo Pro Evolution 6, con el formato actual".
+   Mismo layout (cabecera + menú lateral + calendario); solo cambia el
+   aspecto: fondo azul con rayas diagonales, cabecera en degradado con
+   filo dorado, botones del menú como barras recortadas en diagonal y la
+   barra pulsada en blanco→azul con filo dorado. Las variables de fondo
+   se redefinen SOLO dentro de #screen-club (nada del resto de la app —
+   inicio, admin, modales — cambia).
+   ============================================================ */
+#screen-club {
+  --bg-0: #041340;
+  --bg-1: rgba(8, 30, 94, 0.92);
+  --bg-2: rgba(14, 46, 128, 0.88);
+  --bg-3: rgba(26, 70, 176, 0.9);
+  --line: rgba(150, 190, 255, 0.28);
+  --text-lo: #b9cffc;
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.045) 0 18px, transparent 18px 46px),
+    radial-gradient(ellipse at 20% 0%, #3b7be0 0%, #12338a 42%, #051a52 100%);
+  background-attachment: fixed;
+}
+#screen-club .club-header {
+  background: linear-gradient(90deg, #0d2d82, #0a2262 60%, #07194a);
+  border-bottom: 3px solid #ffd24a;
+  box-shadow: 0 4px 14px rgba(0, 10, 50, 0.6);
+}
+#screen-club .club-header-nombre {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 2px 2px 0 #00123f;
+}
+#screen-club .club-menu {
+  background: linear-gradient(180deg, rgba(4, 19, 64, 0.55), rgba(4, 19, 64, 0.2));
+  border-right: 2px solid rgba(111, 160, 255, 0.45);
+  gap: 6px;
+}
+#screen-club .club-menu-btn {
+  border: none;
+  border-left: 4px solid #5b8fe8;
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(10, 42, 122, 0.95), rgba(10, 42, 122, 0.45));
+  box-shadow: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  padding: 11px 10px 11px 4px;
+  color: #cfe0ff;
+  transition: background 0.12s;
+}
+#screen-club .club-menu-btn-label {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+#screen-club .club-menu-btn:hover,
+#screen-club .club-menu-btn:active,
+#screen-club .club-menu-btn:focus-visible {
+  background: linear-gradient(90deg, #ffffff 0%, #d6e6ff 55%, #4d86f5 100%);
+  border-left-color: #ffd24a;
+  color: #0a2468;
+}
+#screen-club .club-calendar-col { background: transparent; }
+
+/* Pestañas de la liga (2ª Ref / 1ª Ref / Hypermotion / Ea Sports): cuadrícula
+   2×2 de cajas grandes, inclinadas, con subtítulo — la activa en dorado. */
+.liga-tab-boxes--grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.liga-tab-boxes--grid4 .liga-tab-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 4px;
+  font-size: 13px;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-width: 0 0 3px 0;
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: none;
+}
+.liga-tab-boxes--grid4 .liga-tab-box small {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.8;
+  letter-spacing: 0.3px;
+}
+.liga-tab-boxes--grid4 .liga-tab-box--activa {
+  background: linear-gradient(90deg, #ffd24a, #ff9d2e);
+  border-color: #fff;
+  color: #241500;
+  box-shadow: none;
+}

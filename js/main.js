@@ -68,6 +68,16 @@
 
   // "#c8102e" -> "200, 16, 46" — para poder usar rgba(var(--x-rgb), N) en
   // CSS sin depender de color-mix() (no está en todos los móviles).
+  // Luminancia aproximada 0-1 de un #rrggbb (para decidir qué color del
+  // escudo sirve de fondo oscuro en el tema PES 6 del interior del club).
+  function _luminanciaHex(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+    var num = parseInt(h, 16);
+    if (isNaN(num) || h.length !== 6) return 0.2;
+    return (0.2126 * ((num >> 16) & 255) + 0.7152 * ((num >> 8) & 255) + 0.0722 * (num & 255)) / 255;
+  }
+
   function _hexToRgbParts(hex) {
     var h = String(hex || "").replace("#", "");
     if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
@@ -367,6 +377,20 @@
           pantalla.style.setProperty("--club-primary", primario);
           pantalla.style.setProperty("--club-secondary", equipo.colorSecundario || "#101114");
           pantalla.style.setProperty("--club-primary-rgb", _hexToRgbParts(primario));
+          // Tema PES 6 (css/estilos.css, bloque "ESTILO PRO EVOLUTION SOCCER 6"):
+          // fondo = color del escudo, rayas diagonales = el otro color. Si el
+          // primario es muy claro (p. ej. el amarillo del Real Madrid) se usa
+          // el secundario de base para que el texto blanco siga leyéndose.
+          var secundario = equipo.colorSecundario || "#101114";
+          var base = _luminanciaHex(primario) > 0.45 ? secundario : primario;
+          var raya = base === primario ? secundario : primario;
+          [pantalla, document.getElementById("club-modal-overlay")].forEach(function (el) {
+            if (!el) return;
+            el.style.setProperty("--club-primary", primario);
+            el.style.setProperty("--club-secondary", secundario);
+            el.style.setProperty("--pes-base", base);
+            el.style.setProperty("--pes-raya", raya);
+          });
         }
       });
 

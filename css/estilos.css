@@ -4073,3 +4073,187 @@ button { font-family: inherit; cursor: pointer; }
 .liga-tab-box--nations-humanos { color: #d9c4ff; }
 .liga-tab-box--nations-grupos { color: #9cc2ff; }
 .liga-tab-box--nations-playoffs { color: #c9b8ff; }
+
+/* ============================================================
+   ESTILO PRO EVOLUTION SOCCER 6 — interior del club (2026-10-27)
+   Petición usuario: "estilo Pro Evolution 6, con el formato actual", y
+   luego "el fondo del color del escudo con las rayas en diagonal".
+   Mismo layout (cabecera + menú lateral + calendario + modal de
+   plantilla); solo cambia el aspecto. --pes-base (fondo) y --pes-raya
+   (rayas diagonales) los fija js/main.js al abrir el club a partir de
+   los colores del escudo (data/equipos.json) — en #screen-club y en
+   #club-modal-overlay (el modal vive fuera de la pantalla del club).
+   Las variables de fondo se redefinen SOLO ahí: inicio, admin y el resto
+   de la app no cambian. Ningún dato se toca: todo es CSS.
+   ============================================================ */
+#screen-club,
+#club-modal-overlay {
+  --pes-1: color-mix(in srgb, var(--pes-base, #1c4fb8) 56%, #000);
+  --pes-2: color-mix(in srgb, var(--pes-base, #1c4fb8) 36%, #000);
+  --pes-3: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #000);
+  --pes-hi: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #fff);
+  --pes-rayas: repeating-linear-gradient(115deg, color-mix(in srgb, var(--pes-raya, #fff) 16%, transparent) 0 20px, transparent 20px 52px);
+  --bg-0: var(--pes-2);
+  --bg-1: var(--pes-2);
+  --bg-2: var(--pes-1);
+  --bg-3: var(--pes-3);
+  --line: rgba(255, 255, 255, 0.2);
+  --text-lo: #d6dbe8;
+}
+#screen-club {
+  background:
+    var(--pes-rayas),
+    radial-gradient(ellipse at 20% 0%, var(--pes-hi) 0%, var(--pes-3) 38%, var(--pes-2) 100%);
+  background-attachment: fixed;
+}
+#screen-club .club-header {
+  background: var(--pes-rayas), linear-gradient(90deg, var(--pes-3), var(--pes-1) 65%, var(--pes-2));
+  border-bottom: 3px solid #ffd24a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+#screen-club .club-header-nombre {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+#screen-club .club-menu {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.12));
+  border-right: 2px solid color-mix(in srgb, var(--pes-raya, #fff) 55%, transparent);
+  gap: 6px;
+}
+#screen-club .club-menu-btn {
+  border: none;
+  border-left: 4px solid var(--pes-raya, #fff);
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--pes-3), color-mix(in srgb, var(--pes-3) 45%, transparent));
+  box-shadow: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  padding: 11px 10px 11px 4px;
+  color: #fff;
+  transition: background 0.12s;
+}
+#screen-club .club-menu-btn-label {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+#screen-club .club-menu-btn:hover,
+#screen-club .club-menu-btn:active,
+#screen-club .club-menu-btn:focus-visible {
+  background: linear-gradient(90deg, #ffffff 0%, #eef1f7 55%, var(--pes-hi) 100%);
+  border-left-color: #ffd24a;
+  color: #111;
+}
+#screen-club .club-calendar-col { background: transparent; }
+
+/* ---- Partidos (cards del calendario) ---- */
+#screen-club .match-card {
+  background: linear-gradient(135deg, var(--pes-3), var(--pes-1));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-left: 5px solid var(--pes-raya, #fff);
+  border-radius: 3px 16px 3px 16px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+#screen-club .match-card-comp {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 900;
+}
+#screen-club .match-card-nombre {
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+#screen-club .match-card-marcador { text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55); }
+
+/* ---- Ventana (plantilla, ranking, ligas...) ---- */
+#club-modal-overlay .club-modal-card {
+  background: var(--pes-rayas), linear-gradient(160deg, var(--pes-3), var(--pes-2));
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top: 4px solid #ffd24a;
+  border-radius: 4px 20px 4px 20px;
+}
+#club-modal-overlay .club-modal-header {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.35), transparent);
+}
+#club-modal-overlay .club-modal-title { font-style: italic; text-transform: uppercase; letter-spacing: 0.5px; }
+#club-modal-overlay .plantilla-grupo-titulo {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pes-raya, #fff) 42%, var(--pes-3)), transparent 85%);
+  border-bottom: none;
+  border-left: 5px solid #ffd24a;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+}
+#club-modal-overlay .plantilla-grupo-nombre {
+  color: #fff;
+  font-size: 12px;
+  font-style: italic;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+#club-modal-overlay .plantilla-jugador {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pes-1) 85%, transparent), transparent);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 2px;
+}
+#club-modal-overlay .plantilla-jugador:hover,
+#club-modal-overlay .plantilla-jugador:active {
+  background: linear-gradient(90deg, #fff, #dfe5f2 60%, var(--pes-hi));
+}
+#club-modal-overlay .plantilla-jugador:hover .plantilla-nombre,
+#club-modal-overlay .plantilla-jugador:hover .plantilla-stat,
+#club-modal-overlay .plantilla-jugador:hover .plantilla-dorsal { color: #111; }
+#club-modal-overlay .plantilla-nombre {
+  font-style: italic;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+/* Chapa de posición en el dorsal: portero amarillo, defensa verde,
+   medio azul, delantero rojo (como las fichas de PES). */
+#club-modal-overlay .plantilla-dorsal {
+  color: #fff;
+  background: #5a6275;
+  border-radius: 3px;
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 900;
+}
+#club-modal-overlay .plantilla-grupo[data-pos="POR"] .plantilla-dorsal { background: #e6a100; color: #241500; }
+#club-modal-overlay .plantilla-grupo[data-pos="DEF"] .plantilla-dorsal { background: #1b8a3a; }
+#club-modal-overlay .plantilla-grupo[data-pos="MED"] .plantilla-dorsal { background: #1c66d6; }
+#club-modal-overlay .plantilla-grupo[data-pos="DEL"] .plantilla-dorsal { background: #d11e2e; }
+
+/* Pestañas de la liga (2ª Ref / 1ª Ref / Hypermotion / Ea Sports): cuadrícula
+   2×2 de cajas grandes, inclinadas, con subtítulo — la activa en dorado. */
+.liga-tab-boxes--grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.liga-tab-boxes--grid4 .liga-tab-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 4px;
+  font-size: 13px;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-width: 0 0 3px 0;
+  border-radius: 0;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  box-shadow: none;
+}
+.liga-tab-boxes--grid4 .liga-tab-box small {
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.8;
+  letter-spacing: 0.3px;
+}
+.liga-tab-boxes--grid4 .liga-tab-box--activa {
+  background: linear-gradient(90deg, #ffd24a, #ff9d2e);
+  border-color: #fff;
+  color: #241500;
+  box-shadow: none;
+}

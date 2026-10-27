@@ -2536,7 +2536,11 @@
   // Sports (_ligaLeyendaHTML, rama "promocion") NUNCA cambien de vecino.
   // Ligue 1 es 100% independiente de esa pirámide (liga francesa, sin
   // ascenso/descenso hacia ninguna de las 4 españolas).
-  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports", "ligue1", "premier", "seriea"];
+  // 2026-10-27: PSG, Chelsea e Inter dejaron de ser humanos (ya no tienen
+  // pestaña propia de Ligue 1/Premier/Serie A) — solo quedan las 4
+  // divisiones españolas. LIGA_NAV_META conserva las 3 entradas
+  // extranjeras (inertes) por si algún dato guardado las referencia.
+  var LIGA_NAV_ORDEN = ["2ref", "1ref", "hypermotion", "easports"];
   var LIGA_NAV_META = {
     // "Ref" en minúscula tras la inicial (no "REF" en mayúsculas) —
     // petición usuario 2026-09-26, foto de la fila de pestañas
@@ -2828,12 +2832,13 @@
   // petición usuario: sustituye a las flechas ⬅️/➡️. Tocar una caja
   // abre esa liga "en solitario" (ver _ligaTituloRowHTML) y esta fila
   // se re-pinta con las 3 que quedan.
+  var _LIGA_TAB_SUB = { "2ref": "Segunda RFEF", "1ref": "Primera RFEF", hypermotion: "Segunda", easports: "Primera" };
   function _ligaTabBoxesHTML(ligaId, idClubActivo) {
     // Las 4 divisiones SIEMPRE en fila (petición usuario: "que entren
     // las 4 en horizontal") — incluida la activa, marcada con
     // --activa para distinguirla a simple vista sin tener que leer el
     // título centrado de arriba.
-    var html = '<div class="liga-tab-boxes">';
+    var html = '<div class="liga-tab-boxes liga-tab-boxes--grid4">';
     LIGA_NAV_ORDEN.forEach(function (id) {
       var meta = LIGA_NAV_META[id];
       var activa = id === ligaId;
@@ -2841,7 +2846,8 @@
         (activa ? " liga-tab-box--activa" : "") +
         '" data-accion="liga-nav-ir" data-liga-id="' + id + '" data-club-id="' +
         (idClubActivo || "") + '" aria-label="' + escapeHTML(meta.corta) + '">' +
-        escapeHTML(meta.chip || meta.corta) + "</button>";
+        escapeHTML(meta.chip || meta.corta) +
+        (_LIGA_TAB_SUB[id] ? "<small>" + _LIGA_TAB_SUB[id] + "</small>" : "") + "</button>";
     });
     return html + "</div>";
   }
@@ -14504,6 +14510,7 @@
           var iconos = ICONOS_STAT_POSICION[pos] || ["⚽", "⭐", "🟨", "🟥"];
           var grupo = document.createElement("div");
           grupo.className = "plantilla-grupo";
+          grupo.setAttribute("data-pos", pos); // tema PES 6: chapa de color por posición
 
           var titulo = document.createElement("div");
           titulo.className = "plantilla-grupo-titulo";

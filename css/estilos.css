@@ -4093,21 +4093,33 @@ button { font-family: inherit; cursor: pointer; }
   --pes-3: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #000);
   --pes-hi: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #fff);
   --pes-rayas: repeating-linear-gradient(115deg, color-mix(in srgb, var(--pes-raya, #fff) 16%, transparent) 0 20px, transparent 20px 52px);
-  --bg-0: var(--pes-2);
-  --bg-1: var(--pes-2);
-  --bg-2: var(--pes-1);
-  --bg-3: var(--pes-3);
+}
+#screen-club,
+#club-modal-overlay {
+  /* Azul PES 6 fijo para todas las cajas (cabecera, partidos, ventanas). */
+  --pb-1: #0f2f86;
+  --pb-2: #081d58;
+  --pb-3: #1c4fb8;
+  --pb-hi: #4b86f0;
+  --pb-rayas: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0 20px, transparent 20px 52px);
+}
+#club-modal-overlay {
+  --bg-0: var(--pb-2);
+  --bg-1: var(--pb-2);
+  --bg-2: var(--pb-1);
+  --bg-3: var(--pb-3);
   --line: rgba(255, 255, 255, 0.2);
   --text-lo: #d6dbe8;
 }
+/* Parte derecha (calendario): fondo oscuro liso, SIN rayas ni color de
+   club, para que las cards de partido se lean bien. El color del escudo
+   + rayas vive solo en la cabecera, el menú izquierdo y la ventana. */
 #screen-club {
-  background:
-    var(--pes-rayas),
-    radial-gradient(ellipse at 20% 0%, var(--pes-hi) 0%, var(--pes-3) 38%, var(--pes-2) 100%);
+  background: linear-gradient(180deg, #071238, #0a1a4d 60%, #050d2a);
   background-attachment: fixed;
 }
 #screen-club .club-header {
-  background: var(--pes-rayas), linear-gradient(90deg, var(--pes-3), var(--pes-1) 65%, var(--pes-2));
+  background: var(--pb-rayas), linear-gradient(90deg, var(--pb-3), var(--pb-1) 65%, var(--pb-2));
   border-bottom: 3px solid #ffd24a;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
 }
@@ -4118,7 +4130,7 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
 }
 #screen-club .club-menu {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.12));
+  background: var(--pes-rayas), linear-gradient(180deg, var(--pes-3), var(--pes-2));
   border-right: 2px solid color-mix(in srgb, var(--pes-raya, #fff) 55%, transparent);
   gap: 6px;
 }
@@ -4149,11 +4161,11 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---- Partidos (cards del calendario) ---- */
 #screen-club .match-card {
-  background: linear-gradient(135deg, var(--pes-3), var(--pes-1));
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-left: 5px solid var(--pes-raya, #fff);
+  background: var(--pb-rayas), linear-gradient(135deg, var(--pb-3), var(--pb-1));
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: 5px solid #ffd24a;
   border-radius: 3px 16px 3px 16px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
 }
 #screen-club .match-card-comp {
   font-style: italic;
@@ -4170,7 +4182,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---- Ventana (plantilla, ranking, ligas...) ---- */
 #club-modal-overlay .club-modal-card {
-  background: var(--pes-rayas), linear-gradient(160deg, var(--pes-3), var(--pes-2));
+  background: var(--pb-rayas), linear-gradient(160deg, var(--pb-3), var(--pb-2));
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-top: 4px solid #ffd24a;
   border-radius: 4px 20px 4px 20px;
@@ -4180,7 +4192,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 #club-modal-overlay .club-modal-title { font-style: italic; text-transform: uppercase; letter-spacing: 0.5px; }
 #club-modal-overlay .plantilla-grupo-titulo {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--pes-raya, #fff) 42%, var(--pes-3)), transparent 85%);
+  background: linear-gradient(90deg, var(--pb-hi), transparent 85%);
   border-bottom: none;
   border-left: 5px solid #ffd24a;
   padding: 5px 8px;
@@ -4193,13 +4205,13 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
 }
 #club-modal-overlay .plantilla-jugador {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--pes-1) 85%, transparent), transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--pb-1) 85%, transparent), transparent);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 2px;
 }
 #club-modal-overlay .plantilla-jugador:hover,
 #club-modal-overlay .plantilla-jugador:active {
-  background: linear-gradient(90deg, #fff, #dfe5f2 60%, var(--pes-hi));
+  background: linear-gradient(90deg, #fff, #dfe5f2 60%, var(--pb-hi));
 }
 #club-modal-overlay .plantilla-jugador:hover .plantilla-nombre,
 #club-modal-overlay .plantilla-jugador:hover .plantilla-stat,

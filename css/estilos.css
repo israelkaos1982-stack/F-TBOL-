@@ -4090,9 +4090,9 @@ button { font-family: inherit; cursor: pointer; }
 #club-modal-overlay {
   --pes-1: color-mix(in srgb, var(--pes-base, #1c4fb8) 56%, #000);
   --pes-2: color-mix(in srgb, var(--pes-base, #1c4fb8) 36%, #000);
-  --pes-3: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #000);
+  --pes-3: var(--pes-base, #1c4fb8);
   --pes-hi: color-mix(in srgb, var(--pes-base, #1c4fb8) 78%, #fff);
-  --pes-rayas: repeating-linear-gradient(115deg, color-mix(in srgb, var(--pes-raya, #fff) 16%, transparent) 0 20px, transparent 20px 52px);
+  --pes-rayas: repeating-linear-gradient(115deg, color-mix(in srgb, var(--pes-raya, #fff) 10%, transparent) 0 1px, transparent 1px 8px);
 }
 #screen-club,
 #club-modal-overlay {
@@ -4101,13 +4101,13 @@ button { font-family: inherit; cursor: pointer; }
   --pb-2: #081d58;
   --pb-3: #1c4fb8;
   --pb-hi: #4b86f0;
-  --pb-rayas: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.07) 0 20px, transparent 20px 52px);
+  --pb-rayas: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 8px);
 }
 #club-modal-overlay {
-  --bg-0: var(--pb-2);
-  --bg-1: var(--pb-2);
-  --bg-2: var(--pb-1);
-  --bg-3: var(--pb-3);
+  --bg-0: #060f2c;
+  --bg-1: #091538;
+  --bg-2: #0d1d4a;
+  --bg-3: #16307a;
   --line: rgba(255, 255, 255, 0.2);
   --text-lo: #d6dbe8;
 }
@@ -4136,7 +4136,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 #screen-club .club-menu-btn {
   border: none;
-  border-left: 4px solid var(--pes-raya, #fff);
+  border-left: 3px solid var(--pes-raya, #fff);
   border-radius: 0;
   background: linear-gradient(90deg, var(--pes-3), color-mix(in srgb, var(--pes-3) 45%, transparent));
   box-shadow: none;
@@ -4182,7 +4182,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---- Ventana (plantilla, ranking, ligas...) ---- */
 #club-modal-overlay .club-modal-card {
-  background: var(--pb-rayas), linear-gradient(160deg, var(--pb-3), var(--pb-2));
+  background: var(--pb-rayas), linear-gradient(160deg, #0f2260, #060f2c);
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-top: 4px solid #ffd24a;
   border-radius: 4px 20px 4px 20px;
@@ -4205,7 +4205,7 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.7);
 }
 #club-modal-overlay .plantilla-jugador {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--pb-1) 85%, transparent), transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, #16307a 80%, transparent), transparent);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 2px;
 }
@@ -4321,3 +4321,52 @@ button { font-family: inherit; cursor: pointer; }
 /* Vista calendario: solo la columna de partidos (el menú vuelve con "← Salir"). */
 #screen-club[data-vista="calendario"] .club-layout { grid-template-columns: 1fr; }
 #screen-club[data-vista="calendario"] .club-menu { display: none; }
+
+
+/* ---- Cards de partido: fondo ENTERO del color de su competición (pantalla
+   del club y ventana), texto blanco. Las jugadas bajan un poco de opacidad
+   pero se siguen leyendo. ---- */
+#screen-club .match-card.comp-liga, #club-modal-overlay .match-card.comp-liga { background: linear-gradient(135deg, #cf2a47, #7d1428); }
+#screen-club .match-card.comp-copa, #club-modal-overlay .match-card.comp-copa { background: linear-gradient(135deg, #c99a0a, #7a5900); }
+#screen-club .match-card.comp-supercopa, #club-modal-overlay .match-card.comp-supercopa { background: linear-gradient(135deg, #a8714a, #5e3b1f); }
+#screen-club .match-card.comp-promocion, #club-modal-overlay .match-card.comp-promocion { background: linear-gradient(135deg, #6f7a8c, #3d4553); }
+#screen-club .match-card.comp-champions, #club-modal-overlay .match-card.comp-champions { background: linear-gradient(135deg, #1f86e8, #0c4290); }
+#screen-club .match-card.comp-previa, #club-modal-overlay .match-card.comp-previa { background: linear-gradient(135deg, #8b5cf6, #4a2a99); }
+#screen-club .match-card.comp-uel, #club-modal-overlay .match-card.comp-uel { background: linear-gradient(135deg, #f0701f, #8f3a07); }
+#screen-club .match-card.comp-uecl, #club-modal-overlay .match-card.comp-uecl { background: linear-gradient(135deg, #1fa64f, #0d5a2a); }
+#screen-club .match-card.comp-intercontinental, #club-modal-overlay .match-card.comp-intercontinental { background: linear-gradient(135deg, #b9a200, #6b5f00); }
+#screen-club .match-card.comp-usc, #club-modal-overlay .match-card.comp-usc { background: linear-gradient(135deg, #7f8c97, #444d57); }
+#screen-club .match-card.comp-recopa, #club-modal-overlay .match-card.comp-recopa { background: linear-gradient(135deg, #bd7330, #6e3f12); }
+#screen-club .match-card.comp-verano, #club-modal-overlay .match-card.comp-verano { background: linear-gradient(135deg, #cf9d08, #7d5d00); }
+#screen-club .match-card.comp-hypermotion, #club-modal-overlay .match-card.comp-hypermotion { background: linear-gradient(135deg, #14a89d, #095a55); }
+#screen-club .match-card.comp-selecciones, #club-modal-overlay .match-card.comp-selecciones { background: linear-gradient(135deg, #d6388a, #7d1a52); }
+#screen-club .match-card.comp-superliga, #club-modal-overlay .match-card.comp-superliga { background: linear-gradient(135deg, #b81fa8, #690f62); }
+#screen-club .match-card.superliga-jornada-par, #club-modal-overlay .match-card.superliga-jornada-par { background: linear-gradient(135deg, #5d6b8a, #313c58); }
+#screen-club .match-card[class*="comp-"] .match-card-comp,
+#club-modal-overlay .match-card[class*="comp-"] .match-card-comp { color: #fff; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.55); }
+#screen-club .match-card[class*="comp-"] .match-card-nombre,
+#club-modal-overlay .match-card[class*="comp-"] .match-card-nombre { color: #fff; text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.4); }
+#screen-club .match-card.is-played, #club-modal-overlay .match-card.is-played { opacity: 0.62; }
+#club-modal-overlay .match-card {
+  background: var(--pb-rayas), linear-gradient(135deg, #1c4fb8, #0f2f86);
+  border-left: 5px solid #ffd24a;
+  border-radius: 3px 16px 3px 16px;
+}
+
+/* ---- Clasificación en la ventana: cada zona con recuadro de su color (el
+   mismo de la leyenda: ascenso azul, promoción amarilla, descenso rojo...).
+   Fondo más cargado + franja lateral sólida. ---- */
+#club-modal-overlay [class*="liga1ref-zona-"] td, #club-modal-overlay [class*="superliga-zona-"] td { color: #fff; }
+#club-modal-overlay [class*="liga1ref-zona-"] td:first-child, #club-modal-overlay [class*="superliga-zona-"] td:first-child { box-shadow: inset 6px 0 0 var(--zona-c, transparent); }
+#club-modal-overlay .liga1ref-zona-ascenso { --zona-c: #3ba7ff; background: rgba(59, 167, 255, 0.34); }
+#club-modal-overlay .liga1ref-zona-promo-ascenso { --zona-c: #f1c40f; background: rgba(241, 196, 15, 0.30); }
+#club-modal-overlay .liga1ref-zona-descenso { --zona-c: #ff3b5c; background: rgba(255, 59, 92, 0.34); }
+#club-modal-overlay .liga1ref-zona-promo-descenso { --zona-c: #c8845a; background: rgba(200, 132, 90, 0.34); }
+#club-modal-overlay .liga1ref-zona-champions { --zona-c: #3ba7ff; background: rgba(59, 167, 255, 0.34); }
+#club-modal-overlay .liga1ref-zona-previa { --zona-c: #8b5cf6; background: rgba(139, 92, 246, 0.38); }
+#club-modal-overlay .liga1ref-zona-eleague { --zona-c: #ff7a29; background: rgba(255, 122, 41, 0.34); }
+#club-modal-overlay .liga1ref-zona-conference { --zona-c: #39ff6a; background: rgba(57, 255, 106, 0.26); }
+#club-modal-overlay .liga1ref-zona-octavos { --zona-c: #3ba7ff; background: rgba(59, 167, 255, 0.34); }
+#club-modal-overlay .superliga-zona-campeon { --zona-c: #8b5cf6; background: rgba(139, 92, 246, 0.38); }
+#club-modal-overlay .superliga-zona-subcampeon { --zona-c: #f1c40f; background: rgba(241, 196, 15, 0.30); }
+#club-modal-overlay .superliga-zona-farolillo { --zona-c: #ff3b5c; background: rgba(255, 59, 92, 0.34); }

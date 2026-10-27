@@ -374,6 +374,7 @@
         // de partido) herede la misma pareja de colores sin recalcularla.
         var pantalla = document.getElementById("screen-club");
         if (pantalla) {
+          pantalla.setAttribute("data-club", teamId);
           var primario = equipo.colorPrimario || "#39ff6a";
           pantalla.style.setProperty("--club-primary", primario);
           pantalla.style.setProperty("--club-secondary", equipo.colorSecundario || "#101114");

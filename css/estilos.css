@@ -4269,3 +4269,55 @@ button { font-family: inherit; cursor: pointer; }
   color: #241500;
   box-shadow: none;
 }
+
+/* ---- Hub PES 6: ficha + menú a todo ancho (vista "menu") / calendario ---- */
+#screen-club .club-hub-stats { display: none; }
+#screen-club[data-vista="menu"] .club-layout {
+  grid-template-columns: 1fr;
+  grid-auto-rows: max-content;
+  align-content: start;
+  overflow-y: auto;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+#screen-club[data-vista="menu"] .club-calendar-col { display: none; }
+#screen-club[data-vista="menu"] .club-hub-stats { display: flex; gap: 6px; padding: 12px 0 4px; }
+.club-hub-chip {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(160, 200, 255, 0.4);
+  padding: 7px 4px;
+  color: #cfe0ff;
+  font-size: 10px;
+}
+.club-hub-chip b { display: block; font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#screen-club[data-vista="menu"] .club-menu {
+  border-right: none;
+  background: transparent;
+  overflow: visible;
+  padding: 8px 0 120px;
+  gap: 7px;
+}
+#screen-club[data-vista="menu"] .club-menu-btn {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 54px;
+  padding: 10px 14px 10px 16px;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  text-align: left;
+}
+#screen-club[data-vista="menu"] .club-menu-btn-icon { font-size: 22px; }
+#screen-club[data-vista="menu"] .club-menu-btn-label { font-size: 16px; text-align: left; flex: 1; }
+#screen-club[data-vista="menu"] .club-menu-btn::after { content: "▶"; font-size: 12px; opacity: 0.55; margin-right: 12px; }
+/* La barra "Próximo partido" va resaltada de serie, como el cursor de PES. */
+#screen-club .club-menu-btn--calendario {
+  background: linear-gradient(90deg, #ffffff 0%, #eef1f7 55%, var(--pes-hi) 100%);
+  border-left-color: #ffd24a;
+  color: #111;
+}
+/* Vista calendario: solo la columna de partidos (el menú vuelve con "← Salir"). */
+#screen-club[data-vista="calendario"] .club-layout { grid-template-columns: 1fr; }
+#screen-club[data-vista="calendario"] .club-menu { display: none; }

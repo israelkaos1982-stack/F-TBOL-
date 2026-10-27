@@ -13568,6 +13568,13 @@
     var tarjetas = window.Estado.obtenerMenuClub(clubId).filter(function (t) { return !t.oculta; });
     contenedor.innerHTML = "";
     var frag = document.createDocumentFragment();
+    // Hub estilo PES 6: primera barra = "Próximo partido" (abre el calendario).
+    var btnCal = document.createElement("button");
+    btnCal.type = "button";
+    btnCal.className = "club-menu-btn club-menu-btn--calendario";
+    btnCal.setAttribute("data-ir-calendario", "1");
+    btnCal.innerHTML = '<span class="club-menu-btn-icon">⚽</span><span class="club-menu-btn-label">Próximo partido</span>';
+    frag.appendChild(btnCal);
     tarjetas.forEach(function (t) {
       var btn = document.createElement("button");
       btn.type = "button";

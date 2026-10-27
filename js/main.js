@@ -348,6 +348,7 @@
   function abrirClub(teamId, box) {
     window._idManagerActivo = teamId;
     activarCaja(box);
+    _setVistaClub("menu");
 
     if (window.Renderizadores && typeof window.Renderizadores.cargarTodo === "function") {
       window.Renderizadores.cargarTodo().then(function (datos) {
@@ -365,6 +366,7 @@
           nombreEl.title = equipo.nombre || "";
         }
         if (misterEl) misterEl.textContent = equipo.mister || "—";
+        _pintarFichaHub(equipo);
         _ajustarAlturaClubHeader();
 
         // Tema de color del club — cada caja se ve con SUS colores (menú +
@@ -1796,7 +1798,38 @@
     if (window.Renderizadores) window.Renderizadores.renderizarDerbys("derbys-content", clubId);
   }
 
+  // ---------- Hub estilo PES 6: vista "menu" (ficha + barras) / "calendario" ----------
+  function _setVistaClub(vista) {
+    var pantalla = document.getElementById("screen-club");
+    if (!pantalla) return;
+    pantalla.setAttribute("data-vista", vista);
+    var lay = pantalla.querySelector(".club-layout");
+    if (lay) lay.scrollTop = 0;
+    if (vista === "calendario" && window.Renderizadores && window._idManagerActivo &&
+        typeof window.Renderizadores.generarCalendarioLateralDerecho === "function") {
+      // El calendario se pintó con la vista oculta: se repinta ya visible para
+      // que el salto automático al próximo partido funcione.
+      window.Renderizadores.generarCalendarioLateralDerecho(window._idManagerActivo);
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function _pintarFichaHub(equipo) {
+    var cont = document.getElementById("club-hub-stats");
+    if (!cont) return;
+    function chip(valor, etiqueta) {
+      return '<div class="club-hub-chip"><b>' + valor + "</b><span>" + etiqueta + "</span></div>";
+    }
+    var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
+    cont.innerHTML =
+      chip(esc(equipo.misterEmoji || "👤") + " " + esc(equipo.mister || "—"), "Mister") +
+      chip(esc(equipo.banderaSeleccion || "🌍") + " " + esc(equipo.seleccion || "—"), "Selección") +
+      chip(esc(equipo.valoracionPoder != null ? equipo.valoracionPoder : "—"), "Poder");
+  }
+
   function salirDelClub() {
+    var pant = document.getElementById("screen-club");
+    if (pant && pant.getAttribute("data-vista") === "calendario") { _setVistaClub("menu"); return; }
     window._idManagerActivo = null;
     document.querySelectorAll(".team-box").forEach(function (b) {
       b.classList.remove("team-box--active");
@@ -2286,6 +2319,8 @@
     var clubMenu = document.getElementById("club-menu");
     if (clubMenu) {
       clubMenu.addEventListener("click", function (ev) {
+        var btnCal = ev.target.closest(".club-menu-btn[data-ir-calendario]");
+        if (btnCal) { _setVistaClub("calendario"); return; }
         var btn = ev.target.closest(".club-menu-btn[data-club-vista]");
         if (!btn) return;
         abrirModalClub(btn.dataset.clubVista);

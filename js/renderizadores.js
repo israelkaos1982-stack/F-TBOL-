@@ -13568,14 +13568,42 @@
     var tarjetas = window.Estado.obtenerMenuClub(clubId).filter(function (t) { return !t.oculta; });
     contenedor.innerHTML = "";
     var frag = document.createDocumentFragment();
-    // Hub estilo PES 6: primera barra = "Próximo partido" (abre el calendario).
+    // Hub estilo PES 6: arriba 3 cajas (Títulos · Derbys · Ranking, con el
+    // icono/nombre que tengan en el menú del club), debajo la barra
+    // "Próximo partido" (abre el calendario), la barra "Objetivos" y el resto
+    // de tarjetas del menú en su orden. Los datos/vistas son los mismos.
+    var ids3 = ["titulos", "derbys", "ranking"];
+    var caja3 = tarjetas.filter(function (t) { return ids3.indexOf(t.id) !== -1; })
+      .sort(function (a, b) { return ids3.indexOf(a.id) - ids3.indexOf(b.id); });
+    if (caja3.length) {
+      var trio = document.createElement("div");
+      trio.className = "club-hub-trio";
+      caja3.forEach(function (t) {
+        var bx = document.createElement("button");
+        bx.type = "button";
+        bx.className = "club-hub-box";
+        bx.dataset.clubVista = t.id;
+        bx.innerHTML = '<span class="club-hub-box-icono">' + t.icono + '</span><span class="club-hub-box-label">' + escapeHTML(t.etiqueta) + "</span>";
+        trio.appendChild(bx);
+      });
+      frag.appendChild(trio);
+    }
     var btnCal = document.createElement("button");
     btnCal.type = "button";
     btnCal.className = "club-menu-btn club-menu-btn--calendario";
     btnCal.setAttribute("data-ir-calendario", "1");
     btnCal.innerHTML = '<span class="club-menu-btn-icon">⚽</span><span class="club-menu-btn-label">Próximo partido</span>';
     frag.appendChild(btnCal);
+    if (!tarjetas.some(function (t) { return t.id === "objetivos"; })) {
+      var btnObj = document.createElement("button");
+      btnObj.type = "button";
+      btnObj.className = "club-menu-btn";
+      btnObj.dataset.clubVista = "objetivos";
+      btnObj.innerHTML = '<span class="club-menu-btn-icon">🎯</span><span class="club-menu-btn-label">Objetivos</span>';
+      frag.appendChild(btnObj);
+    }
     tarjetas.forEach(function (t) {
+      if (ids3.indexOf(t.id) !== -1) return;
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "club-menu-btn";

@@ -4287,17 +4287,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 #screen-club[data-vista="menu"] .club-calendar-col { display: none; }
 #screen-club[data-vista="menu"] .club-hub-stats { display: flex; gap: 6px; padding: 12px 0 4px; }
-.club-hub-chip {
-  flex: 1;
-  min-width: 0;
-  text-align: center;
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid rgba(160, 200, 255, 0.4);
-  padding: 7px 4px;
-  color: #cfe0ff;
-  font-size: 10px;
-}
-.club-hub-chip b { display: block; font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #screen-club[data-vista="menu"] .club-menu {
   border-right: none;
   background: transparent;
@@ -4383,12 +4372,6 @@ button { font-family: inherit; cursor: pointer; }
 #screen-club .club-header-mister { font-size: 12px; letter-spacing: 1px; }
 #screen-club .club-escudo-slot .escudo { width: 42px; height: 42px; min-width: 42px; }
 
-/* ---- Chip 🎯 Objetivos de la ficha ---- */
-.club-hub-chip--btn { font: inherit; cursor: pointer; }
-.club-hub-chip--btn b { font-size: 20px; }
-.club-hub-chip--btn:active { background: #fff; color: #111; }
-.club-hub-chip--btn:active b { color: #111; }
-
 /* ---- Calendario del club: escudos, título y nombres grandes y legibles ---- */
 #screen-club .match-card { padding: 14px 8px 12px; gap: 12px; }
 #screen-club .match-card-comp { font-size: 15px; letter-spacing: 0.8px; text-align: center; }
@@ -4427,13 +4410,13 @@ button { font-family: inherit; cursor: pointer; }
 #screen-inicio .brand-mark { color: #fff; font-style: italic; text-transform: uppercase; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55); }
 #screen-inicio .brand-sub { color: #cfe0ff; }
 #screen-inicio .btn-gear { background: rgba(0, 0, 0, 0.35); border-color: rgba(160, 200, 255, 0.45); }
-.inicio-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.inicio-extra { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 14px; }
 .inicio-extra-btn {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 72px;
-  padding: 10px 14px;
+  min-height: 64px;
+  padding: 10px 18px;
   border: none;
   border-left: 4px solid #ffd24a;
   background: linear-gradient(90deg, #1c4fb8, #0f2f86);
@@ -4446,7 +4429,41 @@ button { font-family: inherit; cursor: pointer; }
   text-align: left;
   line-height: 1.15;
   letter-spacing: 0.3px;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
 }
 .inicio-extra-btn:active { background: linear-gradient(90deg, #fff, #cfe0ff); color: #0a2468; }
 .inicio-extra-icono { font-size: 28px; font-style: normal; }
+
+
+/* ---- Hub: 3 cajas Títulos · Derbys · Ranking arriba del menú ---- */
+.club-hub-trio { display: none; }
+#screen-club[data-vista="menu"] .club-hub-trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
+.club-hub-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 96px;
+  padding: 10px 4px;
+  border: none;
+  border-top: 4px solid var(--pes-raya, #fff);
+  background: var(--pes-rayas), linear-gradient(160deg, var(--pes-3), var(--pes-2));
+  color: #fff;
+  font: inherit;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+.club-hub-box-icono { font-size: 32px; line-height: 1; }
+.club-hub-box-label { font-size: 13px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.4px; }
+.club-hub-box:active { background: linear-gradient(160deg, #fff, #dfe5f2); color: #111; }
+
+/* ---- Clasificaciones: nombre del equipo pegado a la izquierda (como Hypermotion) ---- */
+.clasificacion-tabla td.clasificacion-equipo { text-align: left; padding-left: 8px; }
+.clasificacion-tabla:has(td.clasificacion-equipo:nth-child(2)) th:nth-child(2) { text-align: left; padding-left: 8px; }
+
+/* ---- Fila del club humano de la caja (TÚ): TODOS sus datos en el verde del nombre ---- */
+.clasificacion-fila--activo td,
+.clasificacion-fila--activo .clasificacion-pos,
+.clasificacion-fila--activo .clasificacion-pts,
+.clasificacion-fila--activo .clasificacion-equipo,
+#club-modal-overlay .clasificacion-fila--activo td { color: #7fe0a0 !important; }

@@ -166,28 +166,11 @@
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
-      // PSG no juega la Copa del Rey — juega su propia Coupe de France
-      // (petición usuario: "la Coupe France de la caja humana del PSG no
-      // juega la copa españa... adaptalo"). El título ya sale correcto
-      // ("🇫🇷 Coupe de France") porque sale de la propia tarjeta del menú
-      // (ver MENU_CLUB_BUILTIN_POR_CLUB en estado.js) — aquí solo hace
-      // falta NO pintar el cuadro compartido de España ni su ℹ️ (ese
-      // formato de 64 clubes no aplica a PSG). Manchester City/Inter de
-      // Milán (2026-09-25) son el mismo caso con su propia copa nacional
-      // (FA Cup/Coppa Italia).
-      if (clubId === "psg") {
-        window.Renderizadores.renderizarCoupeFrancia("copa-content", clubId);
-      } else if (clubId === "manchester-city") {
-        window.Renderizadores.renderizarFACup("copa-content", clubId);
-      } else if (clubId === "inter-milan") {
-        window.Renderizadores.renderizarCoppaItalia("copa-content", clubId);
-      } else {
-        _pintarTituloModalInfo(
-          titulo, "Copa del Rey", "info-copa-formato", null,
-          window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
-        );
-        window.Renderizadores.irCopaTab(clubId, "humanos");
-      }
+      _pintarTituloModalInfo(
+        titulo, "Copa del Rey", "info-copa-formato", null,
+        window.Renderizadores.obtenerFormatoCopaTexto(), etiqueta
+      );
+      window.Renderizadores.irCopaTab(clubId, "humanos");
     } else if (vista === "superliga") {
       body.innerHTML = '<div id="superliga-content"></div>';
       _pintarTituloModalInfo(
@@ -290,20 +273,6 @@
       // placeholder "todavía no está disponible"). Sin exclusión de
       // club; solo 2 rondas (Semifinal→Final, 4 clubes).
       body.innerHTML = '<div id="sce-content"></div>';
-      // PSG, Chelsea e Inter no juegan la Supercopa de España: cada uno su
-      // supercopa nacional (el título ya sale de la propia tarjeta del menú,
-      // ver MENU_CLUB_BUILTIN_POR_CLUB en estado.js) — un solo club, sin
-      // cuadro compartido ni pestañas.
-      if (clubId === "psg") {
-        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🇫🇷", "Supercoupe", "Competición francesa — solo PSG la disputa, sin cuadro compartido con el resto de cajas.");
-        return;
-      } else if (clubId === "manchester-city") {
-        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Community Shield", "Competición inglesa — solo el Chelsea la disputa, sin cuadro compartido con el resto de cajas.");
-        return;
-      } else if (clubId === "inter-milan") {
-        window.Renderizadores.renderizarSupercopaPropia("sce-content", clubId, "🇮🇹", "Supercoppa", "Competición italiana — solo Inter la disputa, sin cuadro compartido con el resto de cajas.");
-        return;
-      }
       _pintarTituloModalInfo(
         titulo, "Supercopa de España", "info-sce-formato", null,
         window.Renderizadores.obtenerFormatoSceTexto(), etiqueta
@@ -713,42 +682,53 @@
     }
   }
 
-  // Siembra de UN SOLO USO (candado ef7_fixup_seed_renombres_psg_v1):
-  // petición usuario 2026-09-26, "PSG》2023 - 2027" — la plantilla del PSG
-  // cambió de nombres en ~14 puestos a lo largo del proyecto (Donnarumma→
-  // Safonov, Ramos→Pacho, Mbappé→Dembélé…) sin tocar los que se quedaron
-  // igual (Marquinhos, Hakimi, Nuno Mendes, Vitinha, Fabián, Zaïre-Emery).
-  // Siembra el texto de 🔁 Renombres de plantilla del PSG con esa tabla —
-  // SOLO si el admin no ha guardado ya el suyo propio (texto vacío), para
-  // no pisar una edición manual. Ver
-  // js/renderizadores.js::resolverRenombreJugador/pintarEditorRenombresPlantilla.
-  var FIXUP_SEED_RENOMBRES_PSG_KEY = "ef7_fixup_seed_renombres_psg_v1";
-  var RENOMBRES_PSG_2023_2027 = [
-    "Donnarumma - Safonov",
-    "Sergio Rico - Chevalier",
-    "Ramos - Pacho",
-    "Bernat - Lucas Hernández",
-    "Kimpembe - Beraldo",
-    "Verratti - João Neves",
-    "Danilo Pereira - Zabarnyi",
-    "Soler - Dro Fernández",
-    "Renato Sanches - Mayulu",
-    "Mbappé - Dembélé",
-    "Neymar - Désiré Doué",
-    "Messi - Kvaratskhelia",
-    "Gharbi - Akliouche",
-    "Ekitiké - Ferran Torres"
-  ].join("\n");
-  function _fixupSeedRenombresPsgV1() {
+  // Limpieza de UN SOLO USO (candado ef7_fixup_purga_clubes_eliminados_v1):
+  // petición usuario 2026-10-28 — "toda la información que teníamos del
+  // Chelsea, Inter, PSG y FC Barcelona como equipos humanos se elimina por
+  // completo". Vacía (y sube al servidor, forzado) TODA clave "ef7_*_<id>"
+  // de esos 4 clubes y de sus selecciones (calendario extra, menú,
+  // plantilla, derbys, objetivos, títulos, ranking del club...), y quita
+  // "Arsenal" de la clasificación de ESPAÑA (no juega en ninguna liga
+  // española). NO toca los partidos ya guardados en ef7_estado_liga_v1
+  // (los comparten los clubes humanos que quedan).
+  var FIXUP_PURGA_CLUBES_KEY = "ef7_fixup_purga_clubes_eliminados_v1";
+  var CLUBES_HUMANOS_ELIMINADOS = ["fc-barcelona", "psg", "manchester-city", "inter-milan", "chelsea"];
+  function _fixupPurgarClubesEliminadosV1() {
     try {
-      if (localStorage.getItem(FIXUP_SEED_RENOMBRES_PSG_KEY)) return;
-      if (!window.Estado || !window.Estado.obtenerRenombresPlantillaTexto || !window.Estado.guardarRenombresPlantillaTexto) return;
-      if (!window.Estado.obtenerRenombresPlantillaTexto("psg").trim()) {
-        window.Estado.guardarRenombresPlantillaTexto("psg", RENOMBRES_PSG_2023_2027);
+      if (localStorage.getItem(FIXUP_PURGA_CLUBES_KEY)) return;
+      var sufijos = [];
+      CLUBES_HUMANOS_ELIMINADOS.forEach(function (id) { sufijos.push("_" + id, "_sel-" + id); });
+      var claves = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf("ef7_") !== 0 || k.indexOf("ef7_fixup_") === 0) continue;
+        if (sufijos.some(function (suf) { return k.length > suf.length && k.slice(-suf.length) === suf; })) claves.push(k);
       }
-      localStorage.setItem(FIXUP_SEED_RENOMBRES_PSG_KEY, "1");
+      claves.forEach(function (k) {
+        if (!localStorage.getItem(k)) return;
+        if (k.indexOf("ef7_club_calendario_extra_v1_") === 0 && window.Estado && window.Estado.guardarCalendarioExtraTexto) {
+          window.Estado.guardarCalendarioExtraTexto(k.slice("ef7_club_calendario_extra_v1_".length), "", { forzar: true });
+        } else {
+          localStorage.setItem(k, "");
+          if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar(k);
+        }
+      });
+      // Arsenal fuera de la clasificación de España.
+      var kEsp = "ef7_ranking_lista_v1_espana";
+      var txt = localStorage.getItem(kEsp);
+      if (txt) {
+        var nuevo = txt.split("\n").filter(function (l) {
+          var nombre = l.replace(/^\s*\d+\s*[.\-º°)]*\s*/, "").split(/\t| {2,}/)[0].trim().toLowerCase();
+          return !/^arsenal( |$)/.test(nombre);
+        }).join("\n");
+        if (nuevo !== txt) {
+          localStorage.setItem(kEsp, nuevo);
+          if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar(kEsp);
+        }
+      }
+      localStorage.setItem(FIXUP_PURGA_CLUBES_KEY, "1");
     } catch (err) {
-      console.error("[main] fixup seed-renombres-psg:", err);
+      console.error("[main] fixup purga-clubes-eliminados:", err);
     }
   }
 
@@ -2203,7 +2183,7 @@
 
     _fixupAtletiDivisionesAntiguasV1();
     _fixupCapearListasAbiertasV1();
-    _fixupSeedRenombresPsgV1();
+    setTimeout(_fixupPurgarClubesEliminadosV1, 6000);
     // _fixupAtletiResetResultadosV1() RETIRADO (ver comentario junto a su
     // definición, más arriba) — ya cumplió su propósito una vez y
     // dejarlo activo es peligroso: es un candado POR DISPOSITIVO

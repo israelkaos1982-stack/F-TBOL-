@@ -420,10 +420,7 @@
   var SELECCIONES_HUMANAS_POR_CLUB = {
     liverpool: { nombre: "Francia", bandera: "🇫🇷", siglas: "FRA", c1: "#0055a4", c2: "#ef4135" },
     "real-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" },
-    "atletico-madrid": { nombre: "Noruega", bandera: "🇳🇴", siglas: "NOR", c1: "#ba0c2f", c2: "#00205b" },
-    psg: { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#c60b1e", c2: "#ffc400" },
-    "manchester-city": { nombre: "Portugal", bandera: "🇵🇹", siglas: "POR", c1: "#006600", c2: "#ff0000" },
-    "inter-milan": { nombre: "Italia", bandera: "🇮🇹", siglas: "ITA", c1: "#009246", c2: "#ce2b37" }
+    "atletico-madrid": { nombre: "Noruega", bandera: "🇳🇴", siglas: "NOR", c1: "#ba0c2f", c2: "#00205b" }
   };
   function _idSeleccionDeClub(clubId) {
     return SELECCIONES_HUMANAS_POR_CLUB[clubId] ? "sel-" + clubId : null;
@@ -1558,18 +1555,7 @@
   var _ALIAS_CLUBES_HUMANOS = {
     liverpool: ["liverpool", "lfc"],
     "real-madrid": ["real madrid", "r madrid"],
-    "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
-    "fc-barcelona": ["fc barcelona", "barcelona", "barca", "barça"],
-    psg: ["psg", "paris saint germain", "paris sg"],
-    // 8º/9º clubes humanos (2026-09-25, promovidos desde data/equipos_ia.json):
-    // "city"/"inter" a secas SIN colisión verificada contra equipos_ia.json ni
-    // data/rivales_reales.json (ninguna otra entrada de ninguno de los 2
-    // catálogos contiene "city" ni "inter" como substring).
-    // Rubén: desde 2026-10-03 su club es el CHELSEA (id interno
-    // "manchester-city" conservado para no perder sus datos guardados);
-    // el Manchester City vuelve a ser IA, así que "city" ya NO es alias.
-    "manchester-city": ["chelsea", "chelsea fc"],
-    "inter-milan": ["inter", "inter de milan", "inter milan", "internazionale"]
+    "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"]
   };
   function _normSinPuntuacion(s) {
     return _normNombre(s).replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
@@ -1786,7 +1772,7 @@
   // (Ea Sports) y su copa se leen del TEXTO pegado como las de los otros 3
   // — sus partidos de Liga/Copa ya no se suman a mano a la clasificación.
   // Sigue siendo humano en Superliga, Champions, Mundialito, etc.
-  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan", "fc-barcelona"];
+  var LIGA1REF_HUMANOS_EXCLUIDOS = [];
 
   // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
   // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
@@ -3051,7 +3037,7 @@
   // sola, igual que 1ª REF ya hace con los 5 humanos que sí comparten esa
   // liga (calcularLiga1RefCombinada). Toda liga EXTRA nueva cuyo único
   // humano la juegue de verdad añade aquí su entrada ligaId->clubId.
-  var LIGA_NAV_HUMANO_PROPIO = { ligue1: "psg", premier: "manchester-city", seriea: "inter-milan", easports: "fc-barcelona" };
+  var LIGA_NAV_HUMANO_PROPIO = {};
 
   // Fusión: texto pegado (solo IA) + el partido a partido REAL del club
   // humano dueño de esta liga (RESULTADO_RAPIDO_POR_CLUB, o jugado en
@@ -3511,7 +3497,7 @@
   // foto usuario: bloque "PSG" con su propio cuadro Octavos→Final dentro
   // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
   // humano de fuera de España, su id va aquí también.
-  var COPA_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan", "fc-barcelona"];
+  var COPA_HUMANOS_EXCLUIDOS = [];
 
   function _copaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -5861,7 +5847,7 @@
   // manchester-city) e Inter juegan su propia supercopa nacional
   // (Supercoupe / Community Shield / Supercoppa, ver
   // renderizarSupercopaPropia) y no salen en este cuadro.
-  var SCE_HUMANOS_EXCLUIDOS = ["psg", "manchester-city", "inter-milan"];
+  var SCE_HUMANOS_EXCLUIDOS = [];
   function _sceEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
       return SCE_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
@@ -9378,7 +9364,7 @@
   // en el generador de partidos — si algún día se cambia esta lista, hay
   // que tocar LOS DOS SITIOS (aquí decide quién sale en la tabla/stats,
   // allí decide contra quién se generan los 15 partidos de cada club).
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["inter-milan"];
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
 
   function _superligaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -10773,6 +10759,8 @@
   }
   function _rankingEstado(tipo, clubId) {
     var filas = parsearRankingLista(window.Estado.obtenerRankingLista(tipo));
+    // Arsenal no juega en ninguna liga española: nunca figura en la clasificación de ESPAÑA.
+    if (tipo === "espana") filas = filas.filter(function (f) { return f.sep || !/^arsenal( |$)/.test(f.norm); });
     var humanos = _rankingHumanos(clubId).filter(function (h) {
       if (tipo === "espana") return _rankingJuegaEspana(h);
       if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
@@ -11379,16 +11367,7 @@
   // `_resolverCompKeyBalon` de por medio (mismo alias que ya usa el
   // color/balón de la card) para que "Ligue 1"/"Coupe"/etc. casen igual
   // que sus claves internas ("liga"/"copa").
-  var RESULTADO_RAPIDO_POR_CLUB = {
-    psg: { liga: true, copa: true },
-    // Rubén (Manchester City) y Aléx (Inter) — mismo trato que Izan/PSG,
-    // "igual que el PSG" (petición usuario 2026-09-25): Premier League/
-    // FA Cup y Serie A/Coppa Italia se resuelven fuera de la app, solo
-    // se anota el resultado final. El resto de su calendario (Champions/
-    // Recopa/Torneo de Verano/lo que sea) usa la card normal en vivo.
-    "manchester-city": { liga: true, copa: true },
-    "inter-milan": { liga: true, copa: true }
-  };
+  var RESULTADO_RAPIDO_POR_CLUB = {};
   function _usaResultadoRapido(idClub, compKeyResuelto) {
     var cfg = RESULTADO_RAPIDO_POR_CLUB[idClub];
     return !!(cfg && cfg[compKeyResuelto]);
@@ -12017,7 +11996,7 @@
   // deshacer". El confirm() de renderizarAdminPiramide lo advierte
   // explícitamente antes de ejecutar. No toca PSG/Ligue 1 (fuera de la
   // pirámide española, el usuario no lo mencionó).
-  var _PIRAMIDE_CLUBES_HUMANOS = ["liverpool", "real-madrid", "atletico-madrid", "fc-barcelona"];
+  var _PIRAMIDE_CLUBES_HUMANOS = ["liverpool", "real-madrid", "atletico-madrid"];
   var _PIRAMIDE_TEXTO_2REF = [
     "1    Villarreal B          0   0   0   0   0   0   0",
     "2    AD Mérida*            0   0   0   0   0   0   0",
@@ -12306,13 +12285,7 @@
     liverpool: { icono: "↘️", label: "Irregular" },
     arsenal: { icono: "↘️", label: "Irregular" },
     "real-madrid": { icono: "🎲", label: "Impredecible" },
-    "atletico-madrid": { icono: "🎲", label: "Impredecible" },
-    "fc-barcelona": { icono: "↘️", label: "Irregular" },
-    // Inter: Forma "Tu🎲-🎲Rival" en partidos contra IA (petición usuario
-    // 2026-10-05). PSG: Tu🎲-↘️Rival (petición usuario 2026-10-10: el PSG
-    // en 🎲 y el rival en ↘️).
-    psg: { icono: "↘️", label: "Irregular" },
-    "inter-milan": { icono: "🎲", label: "Impredecible" }
+    "atletico-madrid": { icono: "🎲", label: "Impredecible" }
   };
   // Forma en partidos HUMANO vs HUMANO (petición usuario 2026-09-15) —
   // SUPERSEDE el "Tu⬆️-⬆️Rival" fijo de cualquier HvH: cada pareja de
@@ -12330,47 +12303,22 @@
     liverpool: {
       arsenal: { tu: "⬆️", rival: "↗️" },
       "real-madrid": { tu: "⬆️", rival: "🎲" },
-      "atletico-madrid": { tu: "⬆️", rival: "🎲" },
-      psg: { tu: "⬆️", rival: "⬆️" },
-      "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      "inter-milan": { tu: "🎲", rival: "⬆️" }
+      "atletico-madrid": { tu: "⬆️", rival: "🎲" }
     },
     arsenal: {
       liverpool: { tu: "↗️", rival: "⬆️" },
       "atletico-madrid": { tu: "↗️", rival: "🎲" },
-      "real-madrid": { tu: "🎲", rival: "🎲" },
-      "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      psg: { tu: "🎲", rival: "🎲" }
+      "real-madrid": { tu: "🎲", rival: "🎲" }
     },
     "real-madrid": {
       arsenal: { tu: "🎲", rival: "🎲" },
       liverpool: { tu: "🎲", rival: "⬆️" },
-      "atletico-madrid": { tu: "🎲", rival: "🎲" },
-      psg: { tu: "🎲", rival: "⬆️" },
-      "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      "inter-milan": { tu: "🎲", rival: "⬆️" }
+      "atletico-madrid": { tu: "🎲", rival: "🎲" }
     },
     "atletico-madrid": {
       arsenal: { tu: "🎲", rival: "↗️" },
       "real-madrid": { tu: "🎲", rival: "🎲" },
-      liverpool: { tu: "🎲", rival: "⬆️" },
-      psg: { tu: "🎲", rival: "⬆️" },
-      "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      "inter-milan": { tu: "🎲", rival: "⬆️" }
-    },
-    "fc-barcelona": {
-      arsenal: { tu: "🎲", rival: "🎲" },
-      "real-madrid": { tu: "🎲", rival: "🎲" },
-      liverpool: { tu: "🎲", rival: "🎲" },
-      "atletico-madrid": { tu: "↗️", rival: "🎲" },
-      psg: { tu: "🎲", rival: "🎲" }
-    },
-    psg: {
-      arsenal: { tu: "🎲", rival: "🎲" },
-      "atletico-madrid": { tu: "⬆️", rival: "🎲" },
-      liverpool: { tu: "🎲", rival: "🎲" },
-      "fc-barcelona": { tu: "🎲", rival: "🎲" },
-      "real-madrid": { tu: "↗️", rival: "🎲" }
+      liverpool: { tu: "🎲", rival: "⬆️" }
     }
   };
   function _esClubHumano(id, datos) {
@@ -12397,7 +12345,7 @@
   // 4 datos salen "Al Azar" (petición usuario 2026-10-06). Duración 8 min y
   // nivel "Profesional". Contra otro HUMANO (incluido el otro club FIFA) se
   // siguen las reglas normales de eFootball.
-  var _CLUBES_FIFA = { "inter-milan": true, "manchester-city": true };
+  var _CLUBES_FIFA = {};
   function _esPartidoFifaVsIA(local, visitante, datos) {
     if (!local || !visitante) return false;
     var fifaL = !!_CLUBES_FIFA[_idClubDeEquipoId(local.id)], fifaV = !!_CLUBES_FIFA[_idClubDeEquipoId(visitante.id)];

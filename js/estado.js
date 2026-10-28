@@ -1244,7 +1244,7 @@
   // dentro de data/equipos.json en el momento de este fix, así que
   // excluirlo aquí NO reindexa a ningún otro club (0-6 se quedan tal
   // cual) y no rompe ningún "superliga-i-j-leg" ya jugado.
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["inter-milan"];
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
 
   // Localía FIJA por pareja (i<j, índices dentro de datos.equipos.equipos):
   // con 6 clubes, cada índice se enfrenta a los otros 5 y siempre termina
@@ -1522,7 +1522,7 @@
   // división correcta desde el primer momento, sin que el admin tenga que
   // pulsar 📌 manualmente para fijarla (un valor ya guardado en
   // localStorage SIGUE ganando siempre — ver obtenerDivisionClub).
-  var LIGA_DIVISION_DEFECTO_POR_CLUB = { psg: "ligue1", "manchester-city": "premier", "inter-milan": "seriea", "fc-barcelona": "easports" };
+  var LIGA_DIVISION_DEFECTO_POR_CLUB = {};
   // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
   // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
   // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este
@@ -1705,21 +1705,14 @@
   ];
   // Tarjetas de fábrica que NO existen para un club concreto (Barcelona no
   // dirige ninguna selección, así que no tiene Nations Cup).
-  var MENU_CLUB_EXCLUIDOS_POR_CLUB = { "fc-barcelona": { nations: true } };
+  var MENU_CLUB_EXCLUIDOS_POR_CLUB = {};
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
   // Coupe de France (ver COPA_HUMANOS_EXCLUIDOS/renderizarCoupeFrancia en
   // renderizadores.js). Sigue siendo un valor DE FÁBRICA: si el admin la
   // edita a mano (candado 646), su edición (overridesFabrica) gana igual
   // que con cualquier otra tarjeta — este mapa solo sustituye el DEFAULT.
-  var MENU_CLUB_BUILTIN_POR_CLUB = {
-    psg: { copadelrey: { icono: "🇫🇷", etiqueta: "Coupe de France" }, supercopaespana: { icono: "🇫🇷", etiqueta: "Supercoupe" } },
-    // Manchester City (Rubén) e Inter de Milán (Aléx) — 2026-09-25,
-    // mismo mecanismo que PSG: su tarjeta "Copa del Rey" del menú pasa a
-    // mostrar el nombre real de SU copa nacional.
-    "manchester-city": { copadelrey: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "FA Cup" }, supercopaespana: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "Community Shield" } },
-    "inter-milan": { copadelrey: { icono: "🇮🇹", etiqueta: "Coppa Italia" }, supercopaespana: { icono: "🇮🇹", etiqueta: "Supercoppa" } }
-  };
+  var MENU_CLUB_BUILTIN_POR_CLUB = {};
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
   function _menuClubDefault() {
@@ -2520,43 +2513,21 @@
     "atletico-madrid": [ // ISRA ✏️
       "Álvaro 🐭: PJ 10 PG 7 PE 1 PP 2 G+ 30 G- 21",
       "Acsa 🔨: PJ 8 PG 7 PE 0 PP 1 G+ 37 G- 9",
-      "Toñín 💡: PJ 15 PG 12 PE 1 PP 2 G+ 77 G- 23",
-      "Ángel 😈: PJ 10 PG 8 PE 0 PP 2 G+ 40 G- 16",
-      "Izan 🦆: PJ 3 PG 2 PE 0 PP 1 G+ 8 G- 4"
+      "Toñín 💡: PJ 15 PG 12 PE 1 PP 2 G+ 77 G- 23"
     ].join("\n"),
     arsenal: [ // ÁLVARO 🐭
       "Acsa 🔨: PJ 8 PG 2 PE 0 PP 6 G+ 15 G- 27",
       "Toñín 💡: PJ 11 PG 9 PE 1 PP 1 G+ 27 G- 8",
-      "Ángel 😈: PJ 10 PG 4 PE 2 PP 4 G+ 31 G- 24",
-      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
       "Isra ✏️: PJ 10 PG 2 PE 1 PP 7 G+ 21 G- 30"
     ].join("\n"),
     "real-madrid": [ // ACSA 🔨
       "Álvaro 🐭: PJ 8 PG 6 PE 0 PP 2 G+ 27 G- 15",
       "Toñín 💡: PJ 12 PG 7 PE 1 PP 4 G+ 26 G- 19",
-      "Ángel 😈: PJ 8 PG 2 PE 1 PP 5 G+ 19 G- 25",
-      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
       "Isra ✏️: PJ 8 PG 1 PE 0 PP 7 G+ 9 G- 37"
-    ].join("\n"),
-    "fc-barcelona": [ // ÁNGEL 😈
-      "Álvaro 🐭: PJ 10 PG 4 PE 2 PP 4 G+ 24 G- 31",
-      "Acsa 🔨: PJ 8 PG 5 PE 1 PP 2 G+ 25 G- 19",
-      "Toñín 💡: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
-      "Izan 🦆: PJ 4 PG 3 PE 1 PP 0 G+ 9 G- 4",
-      "Isra ✏️: PJ 10 PG 2 PE 0 PP 8 G+ 16 G- 40"
-    ].join("\n"),
-    psg: [ // IZAN 🦆
-      "Álvaro 🐭: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
-      "Acsa 🔨: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
-      "Toñín 💡: PJ 3 PG 2 PE 0 PP 1 G+ 6 G- 3",
-      "Ángel 😈: PJ 4 PG 0 PE 1 PP 3 G+ 4 G- 9",
-      "Isra ✏️: PJ 3 PG 1 PE 0 PP 2 G+ 4 G- 8"
     ].join("\n"),
     liverpool: [ // TOÑÍN 💡
       "Álvaro 🐭: PJ 11 PG 1 PE 1 PP 9 G+ 8 G- 27",
       "Acsa 🔨: PJ 12 PG 4 PE 1 PP 7 G+ 19 G- 26",
-      "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
-      "Izan 🦆: PJ 3 PG 1 PE 0 PP 2 G+ 3 G- 6",
       "Isra ✏️: PJ 15 PG 2 PE 1 PP 12 G+ 23 G- 77"
     ].join("\n")
   };

@@ -14295,6 +14295,16 @@
     }
     return { estado: "Playoffs · " + (pos <= 8 ? "Octavos" : "Play-off"), rk: { kind: "alive", ronda: pos <= 8 ? "Octavos" : "Play-off" } };
   }
+  // Nombres de competición escritos en MAYÚSCULAS (p.ej. "COPA DEL REY")
+  // se muestran como el resto: "Copa del Rey".
+  function _nombreCompNormal(n) {
+    n = String(n || "");
+    if (!/[A-ZÁÉÍÓÚÑ]/.test(n) || n !== n.toUpperCase()) return n;
+    return n.toLowerCase().replace(/(^|\s)([a-záéíóúñ])/g, function (m, a, b) { return a + b.toUpperCase(); })
+      .replace(/\b(Del|De|La|Las|El|Los|Y)\b/g, function (m) { return m.toLowerCase(); })
+      .replace(/^./, function (c) { return c.toUpperCase(); });
+  }
+
   function _filasCompeticionesClub(clubId, datos) {
     var filas = [];
     var pos = _posicionLigaClub(clubId, datos);
@@ -14690,7 +14700,7 @@
         grupoLideres.className = "plantilla-grupo plantilla-grupo--total plantilla-grupo--lideres";
         var tituloLideres = document.createElement("div");
         tituloLideres.className = "plantilla-grupo-titulo";
-        tituloLideres.innerHTML = '<span class="plantilla-grupo-nombre">El mejor jugador en estos apartados</span>';
+        tituloLideres.innerHTML = '<span class="plantilla-grupo-nombre">Mejores jugadores</span>';
         grupoLideres.appendChild(tituloLideres);
         grupoLideres.appendChild(_lineaLider("⚽️", "Pichichi", liderPichichi, liderPichichi ? liderPichichi.valor : 0));
         grupoLideres.appendChild(_lineaLider("⭐️", "MVP", liderMvp, liderMvp ? liderMvp.valor : 0));
@@ -14721,7 +14731,7 @@
             linea.className = "plantilla-comp-linea" + (f.eliminado ? " plantilla-comp-linea--eliminado" : "") + (f.campeon ? " plantilla-comp-linea--campeon" : "");
             linea.innerHTML =
               '<span class="plantilla-lider-emoji">' + f.emoji + "</span>" +
-              '<span class="plantilla-comp-nombre">' + escapeHTML(f.nombre) + ":</span> " +
+              '<span class="plantilla-comp-nombre">' + escapeHTML(_nombreCompNormal(f.nombre)) + ":</span> " +
               '<span class="plantilla-comp-estado">' + escapeHTML(f.estado) + "</span>";
             grupoComp.appendChild(linea);
           });

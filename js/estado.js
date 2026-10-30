@@ -714,7 +714,7 @@
         // otra selección (con su bandera). Un club sin selección (Barcelona)
         // no juega la Nations Cup: esa línea se ignora.
         var ladoId = club.id, rival, esVisitanteLado = ex.esVisitante;
-        if (compKey === "nations") {
+        if (R.esCompSeleccion ? R.esCompSeleccion(compKey) : compKey === "nations") {
           var selId = R.idSeleccionDeClub ? R.idSeleccionDeClub(club.id) : null;
           if (!selId || !R.resolverSeleccionPorNombre) return;
           ladoId = selId;
@@ -1705,7 +1705,16 @@
     // (11 grupos de 5 + eliminatorias desde Octavos, todo ida y vuelta).
     // Tarjeta builtin en todas las cajas MENOS Barcelona (sin selección):
     // ver MENU_CLUB_EXCLUIDOS_POR_CLUB.
-    { id: "nations", icono: "🌐", etiqueta: "Nations Cup" }
+    { id: "nations", icono: "🌐", etiqueta: "Nations Cup" },
+    // Selector del torneo de selecciones de la temporada (la Nations Cup va siempre).
+    { id: "seltorneos", icono: "🎛️", etiqueta: "Torneo de selecciones" },
+    { id: "roadeurocopa", icono: "🛣️", etiqueta: "Road Eurocopa" },
+    { id: "eurocopa", icono: "🇪🇺", etiqueta: "Eurocopa" },
+    { id: "roadmundial", icono: "🛤️", etiqueta: "Road Mundial" },
+    { id: "mundialsel", icono: "🌍", etiqueta: "Mundial" },
+    { id: "roadamerica", icono: "🌎", etiqueta: "Road Copa América" },
+    { id: "roadafrica", icono: "🦁", etiqueta: "Road Copa África" },
+    { id: "roadasia", icono: "🌏", etiqueta: "Road Copa Asia-Oceanía" }
   ];
   // Tarjetas de fábrica que NO existen para un club concreto (Barcelona no
   // dirige ninguna selección, así que no tiene Nations Cup).
@@ -1746,6 +1755,28 @@
       return false;
     }
   }
+
+  // ---------- Torneo de selecciones de la temporada (elegido por el admin) ----------
+  // La Nations Cup se juega todas las temporadas; de los demás torneos de
+  // selecciones solo se muestra UNO (el elegido) y el resto queda oculto.
+  var TORNEOS_SEL_IDS = ["roadeurocopa", "eurocopa", "roadmundial", "mundialsel", "roadamerica", "roadafrica", "roadasia"];
+  var TORNEO_SEL_KEY = "ef7_torneo_sel_activo_v1";
+  function obtenerTorneoSelActivo() {
+    try {
+      var v = localStorage.getItem(TORNEO_SEL_KEY) || "";
+      return TORNEOS_SEL_IDS.indexOf(v) !== -1 ? v : "";
+    } catch (err) { return ""; }
+  }
+  function guardarTorneoSelActivo(id) {
+    try {
+      localStorage.setItem(TORNEO_SEL_KEY, TORNEOS_SEL_IDS.indexOf(id) !== -1 ? id : "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el torneo de selecciones activo:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
   function obtenerMenuClub(clubId) {
     var ov = _cargarMenuClub(clubId);
     var builtinPorId = {};
@@ -1768,12 +1799,13 @@
     var excluidas = MENU_CLUB_EXCLUIDOS_POR_CLUB[clubId] || {};
     orden = orden.filter(function (id) { return !excluidas[id]; });
 
+    var torneoSelActivo = obtenerTorneoSelActivo();
     return orden.map(function (id) {
       if (builtinPorId[id]) {
         var override = ov.overridesFabrica[id];
         var basePorClub = (MENU_CLUB_BUILTIN_POR_CLUB[clubId] && MENU_CLUB_BUILTIN_POR_CLUB[clubId][id]) || {};
         return Object.assign(
-          { esCustom: false, esFabricaEditada: !!override, oculta: !!ov.ocultas[id] },
+          { esCustom: false, esFabricaEditada: !!override, oculta: !!ov.ocultas[id] || (TORNEOS_SEL_IDS.indexOf(id) !== -1 && id !== torneoSelActivo) },
           builtinPorId[id],
           basePorClub,
           override || {}
@@ -3744,6 +3776,503 @@
     }
   }
 
+  // ---------- Road Eurocopa — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularRoadeurocopaCombinada.
+  var ROADEUROCOPA_TEXTO_KEY = "ef7_roadeurocopa_clasificacion_v1";
+  function obtenerRoadeurocopaTexto() {
+    try {
+      return localStorage.getItem(ROADEUROCOPA_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadeurocopaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(ROADEUROCOPA_TEXTO_KEY, obtenerRoadeurocopaTexto(), texto)) return false;
+    try {
+      localStorage.setItem(ROADEUROCOPA_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Road Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadeurocopaStatKey(categoria) {
+    return "ef7_roadeurocopa_stat_" + categoria + "_v1";
+  }
+  function obtenerRoadeurocopaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_roadeurocopaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadeurocopaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_roadeurocopaStatKey(categoria), obtenerRoadeurocopaStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_roadeurocopaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Road Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadeurocopaPlayoffKey(ronda) {
+    return "ef7_roadeurocopa_playoff_" + ronda + "_v1";
+  }
+  function obtenerRoadeurocopaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_roadeurocopaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadeurocopaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_roadeurocopaPlayoffKey(ronda), obtenerRoadeurocopaPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_roadeurocopaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Road Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Eurocopa — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularEurocopaCombinada.
+  var EUROCOPA_TEXTO_KEY = "ef7_eurocopa_clasificacion_v1";
+  function obtenerEurocopaTexto() {
+    try {
+      return localStorage.getItem(EUROCOPA_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarEurocopaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(EUROCOPA_TEXTO_KEY, obtenerEurocopaTexto(), texto)) return false;
+    try {
+      localStorage.setItem(EUROCOPA_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _eurocopaStatKey(categoria) {
+    return "ef7_eurocopa_stat_" + categoria + "_v1";
+  }
+  function obtenerEurocopaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_eurocopaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarEurocopaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_eurocopaStatKey(categoria), obtenerEurocopaStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_eurocopaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _eurocopaPlayoffKey(ronda) {
+    return "ef7_eurocopa_playoff_" + ronda + "_v1";
+  }
+  function obtenerEurocopaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_eurocopaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarEurocopaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_eurocopaPlayoffKey(ronda), obtenerEurocopaPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_eurocopaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Eurocopa:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Road Mundial — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularRoadmundialCombinada.
+  var ROADMUNDIAL_TEXTO_KEY = "ef7_roadmundial_clasificacion_v1";
+  function obtenerRoadmundialTexto() {
+    try {
+      return localStorage.getItem(ROADMUNDIAL_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadmundialTexto(texto) {
+    if (!_confirmarSiEncogeMucho(ROADMUNDIAL_TEXTO_KEY, obtenerRoadmundialTexto(), texto)) return false;
+    try {
+      localStorage.setItem(ROADMUNDIAL_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Road Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadmundialStatKey(categoria) {
+    return "ef7_roadmundial_stat_" + categoria + "_v1";
+  }
+  function obtenerRoadmundialStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_roadmundialStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadmundialStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_roadmundialStatKey(categoria), obtenerRoadmundialStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_roadmundialStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Road Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadmundialPlayoffKey(ronda) {
+    return "ef7_roadmundial_playoff_" + ronda + "_v1";
+  }
+  function obtenerRoadmundialPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_roadmundialPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadmundialPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_roadmundialPlayoffKey(ronda), obtenerRoadmundialPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_roadmundialPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Road Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Mundial — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularMundialselCombinada.
+  var MUNDIALSEL_TEXTO_KEY = "ef7_mundialsel_clasificacion_v1";
+  function obtenerMundialselTexto() {
+    try {
+      return localStorage.getItem(MUNDIALSEL_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarMundialselTexto(texto) {
+    if (!_confirmarSiEncogeMucho(MUNDIALSEL_TEXTO_KEY, obtenerMundialselTexto(), texto)) return false;
+    try {
+      localStorage.setItem(MUNDIALSEL_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _mundialselStatKey(categoria) {
+    return "ef7_mundialsel_stat_" + categoria + "_v1";
+  }
+  function obtenerMundialselStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_mundialselStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarMundialselStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_mundialselStatKey(categoria), obtenerMundialselStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_mundialselStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _mundialselPlayoffKey(ronda) {
+    return "ef7_mundialsel_playoff_" + ronda + "_v1";
+  }
+  function obtenerMundialselPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_mundialselPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarMundialselPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_mundialselPlayoffKey(ronda), obtenerMundialselPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_mundialselPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Mundial:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Road Copa América — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularRoadamericaCombinada.
+  var ROADAMERICA_TEXTO_KEY = "ef7_roadamerica_clasificacion_v1";
+  function obtenerRoadamericaTexto() {
+    try {
+      return localStorage.getItem(ROADAMERICA_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadamericaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(ROADAMERICA_TEXTO_KEY, obtenerRoadamericaTexto(), texto)) return false;
+    try {
+      localStorage.setItem(ROADAMERICA_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Road Copa América:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadamericaStatKey(categoria) {
+    return "ef7_roadamerica_stat_" + categoria + "_v1";
+  }
+  function obtenerRoadamericaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_roadamericaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadamericaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_roadamericaStatKey(categoria), obtenerRoadamericaStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_roadamericaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Road Copa América:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadamericaPlayoffKey(ronda) {
+    return "ef7_roadamerica_playoff_" + ronda + "_v1";
+  }
+  function obtenerRoadamericaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_roadamericaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadamericaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_roadamericaPlayoffKey(ronda), obtenerRoadamericaPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_roadamericaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Road Copa América:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Road Copa África — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularRoadafricaCombinada.
+  var ROADAFRICA_TEXTO_KEY = "ef7_roadafrica_clasificacion_v1";
+  function obtenerRoadafricaTexto() {
+    try {
+      return localStorage.getItem(ROADAFRICA_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadafricaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(ROADAFRICA_TEXTO_KEY, obtenerRoadafricaTexto(), texto)) return false;
+    try {
+      localStorage.setItem(ROADAFRICA_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Road Copa África:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadafricaStatKey(categoria) {
+    return "ef7_roadafrica_stat_" + categoria + "_v1";
+  }
+  function obtenerRoadafricaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_roadafricaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadafricaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_roadafricaStatKey(categoria), obtenerRoadafricaStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_roadafricaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Road Copa África:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadafricaPlayoffKey(ronda) {
+    return "ef7_roadafrica_playoff_" + ronda + "_v1";
+  }
+  function obtenerRoadafricaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_roadafricaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadafricaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_roadafricaPlayoffKey(ronda), obtenerRoadafricaPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_roadafricaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Road Copa África:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- Road Copa Asia-Oceanía — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularRoadasiaCombinada.
+  var ROADASIA_TEXTO_KEY = "ef7_roadasia_clasificacion_v1";
+  function obtenerRoadasiaTexto() {
+    try {
+      return localStorage.getItem(ROADASIA_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadasiaTexto(texto) {
+    if (!_confirmarSiEncogeMucho(ROADASIA_TEXTO_KEY, obtenerRoadasiaTexto(), texto)) return false;
+    try {
+      localStorage.setItem(ROADASIA_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Road Copa Asia-Oceanía:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadasiaStatKey(categoria) {
+    return "ef7_roadasia_stat_" + categoria + "_v1";
+  }
+  function obtenerRoadasiaStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_roadasiaStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadasiaStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_roadasiaStatKey(categoria), obtenerRoadasiaStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_roadasiaStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Road Copa Asia-Oceanía:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _roadasiaPlayoffKey(ronda) {
+    return "ef7_roadasia_playoff_" + ronda + "_v1";
+  }
+  function obtenerRoadasiaPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_roadasiaPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarRoadasiaPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_roadasiaPlayoffKey(ronda), obtenerRoadasiaPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_roadasiaPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Road Copa Asia-Oceanía:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
 
   // ---------- Alias eFootball — "qué equipo real elegir en el juego" ----------
   // eFootball no tiene licencia de la inmensa mayoría de clubes que esta
@@ -4275,6 +4804,9 @@
     obtenerCalendarioTexto: obtenerCalendarioTexto,
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,
+    obtenerTorneoSelActivo: obtenerTorneoSelActivo,
+    guardarTorneoSelActivo: guardarTorneoSelActivo,
+    TORNEOS_SEL_IDS: TORNEOS_SEL_IDS,
     anadirTarjetaMenuClub: anadirTarjetaMenuClub,
     anadirTarjetaMenuClubTodos: anadirTarjetaMenuClubTodos,
     editarTarjetaMenuClub: editarTarjetaMenuClub,
@@ -4369,6 +4901,48 @@
     guardarNationsStatTexto: guardarNationsStatTexto,
     obtenerNationsPlayoffTexto: obtenerNationsPlayoffTexto,
     guardarNationsPlayoffTexto: guardarNationsPlayoffTexto,
+    obtenerRoadeurocopaTexto: obtenerRoadeurocopaTexto,
+    guardarRoadeurocopaTexto: guardarRoadeurocopaTexto,
+    obtenerRoadeurocopaStatTexto: obtenerRoadeurocopaStatTexto,
+    guardarRoadeurocopaStatTexto: guardarRoadeurocopaStatTexto,
+    obtenerRoadeurocopaPlayoffTexto: obtenerRoadeurocopaPlayoffTexto,
+    guardarRoadeurocopaPlayoffTexto: guardarRoadeurocopaPlayoffTexto,
+    obtenerEurocopaTexto: obtenerEurocopaTexto,
+    guardarEurocopaTexto: guardarEurocopaTexto,
+    obtenerEurocopaStatTexto: obtenerEurocopaStatTexto,
+    guardarEurocopaStatTexto: guardarEurocopaStatTexto,
+    obtenerEurocopaPlayoffTexto: obtenerEurocopaPlayoffTexto,
+    guardarEurocopaPlayoffTexto: guardarEurocopaPlayoffTexto,
+    obtenerRoadmundialTexto: obtenerRoadmundialTexto,
+    guardarRoadmundialTexto: guardarRoadmundialTexto,
+    obtenerRoadmundialStatTexto: obtenerRoadmundialStatTexto,
+    guardarRoadmundialStatTexto: guardarRoadmundialStatTexto,
+    obtenerRoadmundialPlayoffTexto: obtenerRoadmundialPlayoffTexto,
+    guardarRoadmundialPlayoffTexto: guardarRoadmundialPlayoffTexto,
+    obtenerMundialselTexto: obtenerMundialselTexto,
+    guardarMundialselTexto: guardarMundialselTexto,
+    obtenerMundialselStatTexto: obtenerMundialselStatTexto,
+    guardarMundialselStatTexto: guardarMundialselStatTexto,
+    obtenerMundialselPlayoffTexto: obtenerMundialselPlayoffTexto,
+    guardarMundialselPlayoffTexto: guardarMundialselPlayoffTexto,
+    obtenerRoadamericaTexto: obtenerRoadamericaTexto,
+    guardarRoadamericaTexto: guardarRoadamericaTexto,
+    obtenerRoadamericaStatTexto: obtenerRoadamericaStatTexto,
+    guardarRoadamericaStatTexto: guardarRoadamericaStatTexto,
+    obtenerRoadamericaPlayoffTexto: obtenerRoadamericaPlayoffTexto,
+    guardarRoadamericaPlayoffTexto: guardarRoadamericaPlayoffTexto,
+    obtenerRoadafricaTexto: obtenerRoadafricaTexto,
+    guardarRoadafricaTexto: guardarRoadafricaTexto,
+    obtenerRoadafricaStatTexto: obtenerRoadafricaStatTexto,
+    guardarRoadafricaStatTexto: guardarRoadafricaStatTexto,
+    obtenerRoadafricaPlayoffTexto: obtenerRoadafricaPlayoffTexto,
+    guardarRoadafricaPlayoffTexto: guardarRoadafricaPlayoffTexto,
+    obtenerRoadasiaTexto: obtenerRoadasiaTexto,
+    guardarRoadasiaTexto: guardarRoadasiaTexto,
+    obtenerRoadasiaStatTexto: obtenerRoadasiaStatTexto,
+    guardarRoadasiaStatTexto: guardarRoadasiaStatTexto,
+    obtenerRoadasiaPlayoffTexto: obtenerRoadasiaPlayoffTexto,
+    guardarRoadasiaPlayoffTexto: guardarRoadasiaPlayoffTexto,
     obtenerChampionsTexto: obtenerChampionsTexto,
     guardarChampionsTexto: guardarChampionsTexto,
     obtenerChampionsStatTexto: obtenerChampionsStatTexto,

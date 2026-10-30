@@ -214,6 +214,82 @@
         window.Renderizadores.obtenerFormatoNationsTexto(), etiqueta
       );
       window.Renderizadores.irNationsTab(clubId, "humanos");
+    } else if (vista === "roadeurocopa") {
+      // Road Eurocopa (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="roadeurocopa-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Road Eurocopa", "info-roadeurocopa-formato", null,
+        window.Renderizadores.obtenerFormatoRoadeurocopaTexto(), etiqueta
+      );
+      window.Renderizadores.irRoadeurocopaTab(clubId, "humanos");
+    } else if (vista === "eurocopa") {
+      // Eurocopa (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="eurocopa-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Eurocopa", "info-eurocopa-formato", null,
+        window.Renderizadores.obtenerFormatoEurocopaTexto(), etiqueta
+      );
+      window.Renderizadores.irEurocopaTab(clubId, "humanos");
+    } else if (vista === "roadmundial") {
+      // Road Mundial (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="roadmundial-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Road Mundial", "info-roadmundial-formato", null,
+        window.Renderizadores.obtenerFormatoRoadmundialTexto(), etiqueta
+      );
+      window.Renderizadores.irRoadmundialTab(clubId, "humanos");
+    } else if (vista === "mundialsel") {
+      // Mundial (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="mundialsel-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Mundial", "info-mundialsel-formato", null,
+        window.Renderizadores.obtenerFormatoMundialselTexto(), etiqueta
+      );
+      window.Renderizadores.irMundialselTab(clubId, "humanos");
+    } else if (vista === "roadamerica") {
+      // Road Copa América (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="roadamerica-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Road Copa América", "info-roadamerica-formato", null,
+        window.Renderizadores.obtenerFormatoRoadamericaTexto(), etiqueta
+      );
+      window.Renderizadores.irRoadamericaTab(clubId, "humanos");
+    } else if (vista === "roadafrica") {
+      // Road Copa África (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="roadafrica-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Road Copa África", "info-roadafrica-formato", null,
+        window.Renderizadores.obtenerFormatoRoadafricaTexto(), etiqueta
+      );
+      window.Renderizadores.irRoadafricaTab(clubId, "humanos");
+    } else if (vista === "roadasia") {
+      // Road Copa Asia-Oceanía (selecciones): mismo patrón que "champions"/"uecl",
+      // con 11 grupos de 5 y eliminatorias desde Octavos.
+      body.innerHTML = '<div id="roadasia-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "Road Copa Asia-Oceanía", "info-roadasia-formato", null,
+        window.Renderizadores.obtenerFormatoRoadasiaTexto(), etiqueta
+      );
+      window.Renderizadores.irRoadasiaTab(clubId, "humanos");
+    } else if (vista === "seltorneos") {
+      // Selector del torneo de selecciones de ESTA temporada: la Nations Cup va
+      // siempre; de los demás se elige uno y el resto se oculta del menú.
+      var activo = window.Estado.obtenerTorneoSelActivo();
+      var ops = [{ id: "", icono: "🌐", nombre: "Solo Nations Cup (ninguno más)" }].concat([{"id": "roadeurocopa", "icono": "🛣️", "nombre": "Road Eurocopa"}, {"id": "eurocopa", "icono": "🇪🇺", "nombre": "Eurocopa"}, {"id": "roadmundial", "icono": "🛤️", "nombre": "Road Mundial"}, {"id": "mundialsel", "icono": "🌍", "nombre": "Mundial"}, {"id": "roadamerica", "icono": "🌎", "nombre": "Road Copa América"}, {"id": "roadafrica", "icono": "🦁", "nombre": "Road Copa África"}, {"id": "roadasia", "icono": "🌏", "nombre": "Road Copa Asia-Oceanía"}]);
+      body.innerHTML =
+        '<p class="admin-nota">Elige el torneo de selecciones de esta temporada. La Nations Cup se juega siempre; el resto de torneos se ocultan.</p>' +
+        '<div class="sel-torneos-lista">' +
+        ops.map(function (o) {
+          return '<button type="button" class="sel-torneo-op' + (o.id === activo ? ' sel-torneo-op--activo' : '') +
+            '" data-accion="elegir-torneo-sel" data-torneo="' + o.id + '"><span class="sel-torneo-ico">' + o.icono + '</span><span>' + o.nombre + '</span>' +
+            (o.id === activo ? '<span class="sel-torneo-check">✔</span>' : '') + '</button>';
+        }).join("") + '</div>';
     } else if (vista === "recopa") {
       // Mismo patrón EXACTO que "copadelrey" (Humanos + Eliminatorias,
       // sin fase de grupos) — petición usuario: "vamos a crear la recopa
@@ -322,6 +398,12 @@
     }
   }
 
+  function elegirTorneoSel(clubId, torneoId) {
+    if (!window.Estado) return;
+    window.Estado.guardarTorneoSelActivo(torneoId || "");
+    cerrarModalClub();
+    repintarMenuClub(clubId);
+  }
   function cerrarModalClub() {
     var ov = document.getElementById("club-modal-overlay");
     if (ov) ov.hidden = true;
@@ -1151,7 +1233,14 @@
     champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
     uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); },
-    nations: function (clubId, categoria) { window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria); }
+    nations: function (clubId, categoria) { window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria); },
+    roadeurocopa: function (clubId, categoria) { window.Renderizadores.renderizarRoadeurocopaStatDetalle("roadeurocopa-content", clubId, categoria); },
+    eurocopa: function (clubId, categoria) { window.Renderizadores.renderizarEurocopaStatDetalle("eurocopa-content", clubId, categoria); },
+    roadmundial: function (clubId, categoria) { window.Renderizadores.renderizarRoadmundialStatDetalle("roadmundial-content", clubId, categoria); },
+    mundialsel: function (clubId, categoria) { window.Renderizadores.renderizarMundialselStatDetalle("mundialsel-content", clubId, categoria); },
+    roadamerica: function (clubId, categoria) { window.Renderizadores.renderizarRoadamericaStatDetalle("roadamerica-content", clubId, categoria); },
+    roadafrica: function (clubId, categoria) { window.Renderizadores.renderizarRoadafricaStatDetalle("roadafrica-content", clubId, categoria); },
+    roadasia: function (clubId, categoria) { window.Renderizadores.renderizarRoadasiaStatDetalle("roadasia-content", clubId, categoria); }
   };
   // `d` es el dataset del propio botón ✏️ pintado en la fila (comp/
   // ligaId/clubId/categoria/nombre/equipo/cantidad/decimales/label) — se
@@ -1791,6 +1880,461 @@
   function mostrarInfoNations() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoNationsTexto(), "nations", mostrarInfoNations);
+  }
+
+  // ---------- Road Eurocopa — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "roadeurocopa-content".
+  function irRoadeurocopaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRoadeurocopaTab(clubId, tab);
+  }
+  function editarRoadeurocopaInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadeurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorRoadeurocopa(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadeurocopa(clubId) {
+    var ta = document.getElementById("roadeurocopa-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadeurocopaTexto(ta.value)) return;
+    window.Renderizadores.renderizarRoadeurocopa("roadeurocopa-content", clubId);
+  }
+  function cancelarRoadeurocopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadeurocopa("roadeurocopa-content", clubId);
+  }
+  function verRoadeurocopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadeurocopaStatDetalle("roadeurocopa-content", clubId, categoria);
+  }
+  function volverRoadeurocopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadeurocopa("roadeurocopa-content", clubId);
+  }
+  function editarRoadeurocopaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadeurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorRoadeurocopaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadeurocopaStat(clubId, categoria) {
+    var ta = document.getElementById("roadeurocopa-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadeurocopaStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarRoadeurocopaStatDetalle("roadeurocopa-content", clubId, categoria);
+  }
+  function cancelarRoadeurocopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadeurocopaStatDetalle("roadeurocopa-content", clubId, categoria);
+  }
+  function editarRoadeurocopaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadeurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorRoadeurocopaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadeurocopaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("roadeurocopa-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadeurocopaPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarRoadeurocopa("roadeurocopa-content", clubId);
+  }
+  function cancelarRoadeurocopaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadeurocopa("roadeurocopa-content", clubId);
+  }
+  function mostrarInfoRoadeurocopa() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRoadeurocopaTexto(), "roadeurocopa", mostrarInfoRoadeurocopa);
+  }
+
+  // ---------- Eurocopa — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "eurocopa-content".
+  function irEurocopaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irEurocopaTab(clubId, tab);
+  }
+  function editarEurocopaInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("eurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorEurocopa(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarEurocopa(clubId) {
+    var ta = document.getElementById("eurocopa-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarEurocopaTexto(ta.value)) return;
+    window.Renderizadores.renderizarEurocopa("eurocopa-content", clubId);
+  }
+  function cancelarEurocopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarEurocopa("eurocopa-content", clubId);
+  }
+  function verEurocopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarEurocopaStatDetalle("eurocopa-content", clubId, categoria);
+  }
+  function volverEurocopa(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarEurocopa("eurocopa-content", clubId);
+  }
+  function editarEurocopaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("eurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorEurocopaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarEurocopaStat(clubId, categoria) {
+    var ta = document.getElementById("eurocopa-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarEurocopaStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarEurocopaStatDetalle("eurocopa-content", clubId, categoria);
+  }
+  function cancelarEurocopaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarEurocopaStatDetalle("eurocopa-content", clubId, categoria);
+  }
+  function editarEurocopaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("eurocopa-content");
+      if (cont) window.Renderizadores.pintarEditorEurocopaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarEurocopaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("eurocopa-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarEurocopaPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarEurocopa("eurocopa-content", clubId);
+  }
+  function cancelarEurocopaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarEurocopa("eurocopa-content", clubId);
+  }
+  function mostrarInfoEurocopa() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoEurocopaTexto(), "eurocopa", mostrarInfoEurocopa);
+  }
+
+  // ---------- Road Mundial — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "roadmundial-content".
+  function irRoadmundialTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRoadmundialTab(clubId, tab);
+  }
+  function editarRoadmundialInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadmundial-content");
+      if (cont) window.Renderizadores.pintarEditorRoadmundial(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadmundial(clubId) {
+    var ta = document.getElementById("roadmundial-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadmundialTexto(ta.value)) return;
+    window.Renderizadores.renderizarRoadmundial("roadmundial-content", clubId);
+  }
+  function cancelarRoadmundial(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadmundial("roadmundial-content", clubId);
+  }
+  function verRoadmundialStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadmundialStatDetalle("roadmundial-content", clubId, categoria);
+  }
+  function volverRoadmundial(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadmundial("roadmundial-content", clubId);
+  }
+  function editarRoadmundialStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadmundial-content");
+      if (cont) window.Renderizadores.pintarEditorRoadmundialStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadmundialStat(clubId, categoria) {
+    var ta = document.getElementById("roadmundial-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadmundialStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarRoadmundialStatDetalle("roadmundial-content", clubId, categoria);
+  }
+  function cancelarRoadmundialStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadmundialStatDetalle("roadmundial-content", clubId, categoria);
+  }
+  function editarRoadmundialPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadmundial-content");
+      if (cont) window.Renderizadores.pintarEditorRoadmundialPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadmundialPlayoff(clubId, ronda) {
+    var ta = document.getElementById("roadmundial-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadmundialPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarRoadmundial("roadmundial-content", clubId);
+  }
+  function cancelarRoadmundialPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadmundial("roadmundial-content", clubId);
+  }
+  function mostrarInfoRoadmundial() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRoadmundialTexto(), "roadmundial", mostrarInfoRoadmundial);
+  }
+
+  // ---------- Mundial — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "mundialsel-content".
+  function irMundialselTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irMundialselTab(clubId, tab);
+  }
+  function editarMundialselInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("mundialsel-content");
+      if (cont) window.Renderizadores.pintarEditorMundialsel(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarMundialsel(clubId) {
+    var ta = document.getElementById("mundialsel-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarMundialselTexto(ta.value)) return;
+    window.Renderizadores.renderizarMundialsel("mundialsel-content", clubId);
+  }
+  function cancelarMundialsel(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarMundialsel("mundialsel-content", clubId);
+  }
+  function verMundialselStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarMundialselStatDetalle("mundialsel-content", clubId, categoria);
+  }
+  function volverMundialsel(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarMundialsel("mundialsel-content", clubId);
+  }
+  function editarMundialselStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("mundialsel-content");
+      if (cont) window.Renderizadores.pintarEditorMundialselStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarMundialselStat(clubId, categoria) {
+    var ta = document.getElementById("mundialsel-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarMundialselStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarMundialselStatDetalle("mundialsel-content", clubId, categoria);
+  }
+  function cancelarMundialselStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarMundialselStatDetalle("mundialsel-content", clubId, categoria);
+  }
+  function editarMundialselPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("mundialsel-content");
+      if (cont) window.Renderizadores.pintarEditorMundialselPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarMundialselPlayoff(clubId, ronda) {
+    var ta = document.getElementById("mundialsel-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarMundialselPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarMundialsel("mundialsel-content", clubId);
+  }
+  function cancelarMundialselPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarMundialsel("mundialsel-content", clubId);
+  }
+  function mostrarInfoMundialsel() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoMundialselTexto(), "mundialsel", mostrarInfoMundialsel);
+  }
+
+  // ---------- Road Copa América — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "roadamerica-content".
+  function irRoadamericaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRoadamericaTab(clubId, tab);
+  }
+  function editarRoadamericaInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadamerica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadamerica(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadamerica(clubId) {
+    var ta = document.getElementById("roadamerica-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadamericaTexto(ta.value)) return;
+    window.Renderizadores.renderizarRoadamerica("roadamerica-content", clubId);
+  }
+  function cancelarRoadamerica(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadamerica("roadamerica-content", clubId);
+  }
+  function verRoadamericaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadamericaStatDetalle("roadamerica-content", clubId, categoria);
+  }
+  function volverRoadamerica(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadamerica("roadamerica-content", clubId);
+  }
+  function editarRoadamericaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadamerica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadamericaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadamericaStat(clubId, categoria) {
+    var ta = document.getElementById("roadamerica-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadamericaStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarRoadamericaStatDetalle("roadamerica-content", clubId, categoria);
+  }
+  function cancelarRoadamericaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadamericaStatDetalle("roadamerica-content", clubId, categoria);
+  }
+  function editarRoadamericaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadamerica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadamericaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadamericaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("roadamerica-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadamericaPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarRoadamerica("roadamerica-content", clubId);
+  }
+  function cancelarRoadamericaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadamerica("roadamerica-content", clubId);
+  }
+  function mostrarInfoRoadamerica() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRoadamericaTexto(), "roadamerica", mostrarInfoRoadamerica);
+  }
+
+  // ---------- Road Copa África — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "roadafrica-content".
+  function irRoadafricaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRoadafricaTab(clubId, tab);
+  }
+  function editarRoadafricaInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadafrica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadafrica(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadafrica(clubId) {
+    var ta = document.getElementById("roadafrica-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadafricaTexto(ta.value)) return;
+    window.Renderizadores.renderizarRoadafrica("roadafrica-content", clubId);
+  }
+  function cancelarRoadafrica(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadafrica("roadafrica-content", clubId);
+  }
+  function verRoadafricaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadafricaStatDetalle("roadafrica-content", clubId, categoria);
+  }
+  function volverRoadafrica(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadafrica("roadafrica-content", clubId);
+  }
+  function editarRoadafricaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadafrica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadafricaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadafricaStat(clubId, categoria) {
+    var ta = document.getElementById("roadafrica-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadafricaStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarRoadafricaStatDetalle("roadafrica-content", clubId, categoria);
+  }
+  function cancelarRoadafricaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadafricaStatDetalle("roadafrica-content", clubId, categoria);
+  }
+  function editarRoadafricaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadafrica-content");
+      if (cont) window.Renderizadores.pintarEditorRoadafricaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadafricaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("roadafrica-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadafricaPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarRoadafrica("roadafrica-content", clubId);
+  }
+  function cancelarRoadafricaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadafrica("roadafrica-content", clubId);
+  }
+  function mostrarInfoRoadafrica() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRoadafricaTexto(), "roadafrica", mostrarInfoRoadafrica);
+  }
+
+  // ---------- Road Copa Asia-Oceanía — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "roadasia-content".
+  function irRoadasiaTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irRoadasiaTab(clubId, tab);
+  }
+  function editarRoadasiaInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadasia-content");
+      if (cont) window.Renderizadores.pintarEditorRoadasia(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadasia(clubId) {
+    var ta = document.getElementById("roadasia-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadasiaTexto(ta.value)) return;
+    window.Renderizadores.renderizarRoadasia("roadasia-content", clubId);
+  }
+  function cancelarRoadasia(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadasia("roadasia-content", clubId);
+  }
+  function verRoadasiaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadasiaStatDetalle("roadasia-content", clubId, categoria);
+  }
+  function volverRoadasia(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadasia("roadasia-content", clubId);
+  }
+  function editarRoadasiaStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadasia-content");
+      if (cont) window.Renderizadores.pintarEditorRoadasiaStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadasiaStat(clubId, categoria) {
+    var ta = document.getElementById("roadasia-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadasiaStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarRoadasiaStatDetalle("roadasia-content", clubId, categoria);
+  }
+  function cancelarRoadasiaStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadasiaStatDetalle("roadasia-content", clubId, categoria);
+  }
+  function editarRoadasiaPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("roadasia-content");
+      if (cont) window.Renderizadores.pintarEditorRoadasiaPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarRoadasiaPlayoff(clubId, ronda) {
+    var ta = document.getElementById("roadasia-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarRoadasiaPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarRoadasia("roadasia-content", clubId);
+  }
+  function cancelarRoadasiaPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarRoadasia("roadasia-content", clubId);
+  }
+  function mostrarInfoRoadasia() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoRoadasiaTexto(), "roadasia", mostrarInfoRoadasia);
   }
 
   // ---------- Superliga — clasificación + Pichichi/MVP/Amarillas/Rojas/
@@ -2661,6 +3205,98 @@
         case "guardar-nations-playoff": guardarNationsPlayoff(d.clubId, d.ronda); break;
         case "cancelar-nations-playoff": cancelarNationsPlayoff(d.clubId); break;
         case "info-nations-formato": mostrarInfoNations(); break;
+        case "roadeurocopa-tab-ir": irRoadeurocopaTab(d.clubId, d.tab); break;
+        case "editar-roadeurocopa-inline": editarRoadeurocopaInline(d.clubId); break;
+        case "guardar-roadeurocopa": guardarRoadeurocopa(d.clubId); break;
+        case "cancelar-roadeurocopa": cancelarRoadeurocopa(d.clubId); break;
+        case "ver-roadeurocopa-stat": verRoadeurocopaStat(d.clubId, d.categoria); break;
+        case "volver-roadeurocopa": volverRoadeurocopa(d.clubId); break;
+        case "editar-roadeurocopa-stat-inline": editarRoadeurocopaStatInline(d.clubId, d.categoria); break;
+        case "guardar-roadeurocopa-stat": guardarRoadeurocopaStat(d.clubId, d.categoria); break;
+        case "cancelar-roadeurocopa-stat": cancelarRoadeurocopaStat(d.clubId, d.categoria); break;
+        case "editar-roadeurocopa-playoff-inline": editarRoadeurocopaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-roadeurocopa-playoff": guardarRoadeurocopaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-roadeurocopa-playoff": cancelarRoadeurocopaPlayoff(d.clubId); break;
+        case "info-roadeurocopa-formato": mostrarInfoRoadeurocopa(); break;
+        case "eurocopa-tab-ir": irEurocopaTab(d.clubId, d.tab); break;
+        case "editar-eurocopa-inline": editarEurocopaInline(d.clubId); break;
+        case "guardar-eurocopa": guardarEurocopa(d.clubId); break;
+        case "cancelar-eurocopa": cancelarEurocopa(d.clubId); break;
+        case "ver-eurocopa-stat": verEurocopaStat(d.clubId, d.categoria); break;
+        case "volver-eurocopa": volverEurocopa(d.clubId); break;
+        case "editar-eurocopa-stat-inline": editarEurocopaStatInline(d.clubId, d.categoria); break;
+        case "guardar-eurocopa-stat": guardarEurocopaStat(d.clubId, d.categoria); break;
+        case "cancelar-eurocopa-stat": cancelarEurocopaStat(d.clubId, d.categoria); break;
+        case "editar-eurocopa-playoff-inline": editarEurocopaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-eurocopa-playoff": guardarEurocopaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-eurocopa-playoff": cancelarEurocopaPlayoff(d.clubId); break;
+        case "info-eurocopa-formato": mostrarInfoEurocopa(); break;
+        case "roadmundial-tab-ir": irRoadmundialTab(d.clubId, d.tab); break;
+        case "editar-roadmundial-inline": editarRoadmundialInline(d.clubId); break;
+        case "guardar-roadmundial": guardarRoadmundial(d.clubId); break;
+        case "cancelar-roadmundial": cancelarRoadmundial(d.clubId); break;
+        case "ver-roadmundial-stat": verRoadmundialStat(d.clubId, d.categoria); break;
+        case "volver-roadmundial": volverRoadmundial(d.clubId); break;
+        case "editar-roadmundial-stat-inline": editarRoadmundialStatInline(d.clubId, d.categoria); break;
+        case "guardar-roadmundial-stat": guardarRoadmundialStat(d.clubId, d.categoria); break;
+        case "cancelar-roadmundial-stat": cancelarRoadmundialStat(d.clubId, d.categoria); break;
+        case "editar-roadmundial-playoff-inline": editarRoadmundialPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-roadmundial-playoff": guardarRoadmundialPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-roadmundial-playoff": cancelarRoadmundialPlayoff(d.clubId); break;
+        case "info-roadmundial-formato": mostrarInfoRoadmundial(); break;
+        case "mundialsel-tab-ir": irMundialselTab(d.clubId, d.tab); break;
+        case "editar-mundialsel-inline": editarMundialselInline(d.clubId); break;
+        case "guardar-mundialsel": guardarMundialsel(d.clubId); break;
+        case "cancelar-mundialsel": cancelarMundialsel(d.clubId); break;
+        case "ver-mundialsel-stat": verMundialselStat(d.clubId, d.categoria); break;
+        case "volver-mundialsel": volverMundialsel(d.clubId); break;
+        case "editar-mundialsel-stat-inline": editarMundialselStatInline(d.clubId, d.categoria); break;
+        case "guardar-mundialsel-stat": guardarMundialselStat(d.clubId, d.categoria); break;
+        case "cancelar-mundialsel-stat": cancelarMundialselStat(d.clubId, d.categoria); break;
+        case "editar-mundialsel-playoff-inline": editarMundialselPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-mundialsel-playoff": guardarMundialselPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-mundialsel-playoff": cancelarMundialselPlayoff(d.clubId); break;
+        case "info-mundialsel-formato": mostrarInfoMundialsel(); break;
+        case "roadamerica-tab-ir": irRoadamericaTab(d.clubId, d.tab); break;
+        case "editar-roadamerica-inline": editarRoadamericaInline(d.clubId); break;
+        case "guardar-roadamerica": guardarRoadamerica(d.clubId); break;
+        case "cancelar-roadamerica": cancelarRoadamerica(d.clubId); break;
+        case "ver-roadamerica-stat": verRoadamericaStat(d.clubId, d.categoria); break;
+        case "volver-roadamerica": volverRoadamerica(d.clubId); break;
+        case "editar-roadamerica-stat-inline": editarRoadamericaStatInline(d.clubId, d.categoria); break;
+        case "guardar-roadamerica-stat": guardarRoadamericaStat(d.clubId, d.categoria); break;
+        case "cancelar-roadamerica-stat": cancelarRoadamericaStat(d.clubId, d.categoria); break;
+        case "editar-roadamerica-playoff-inline": editarRoadamericaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-roadamerica-playoff": guardarRoadamericaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-roadamerica-playoff": cancelarRoadamericaPlayoff(d.clubId); break;
+        case "info-roadamerica-formato": mostrarInfoRoadamerica(); break;
+        case "roadafrica-tab-ir": irRoadafricaTab(d.clubId, d.tab); break;
+        case "editar-roadafrica-inline": editarRoadafricaInline(d.clubId); break;
+        case "guardar-roadafrica": guardarRoadafrica(d.clubId); break;
+        case "cancelar-roadafrica": cancelarRoadafrica(d.clubId); break;
+        case "ver-roadafrica-stat": verRoadafricaStat(d.clubId, d.categoria); break;
+        case "volver-roadafrica": volverRoadafrica(d.clubId); break;
+        case "editar-roadafrica-stat-inline": editarRoadafricaStatInline(d.clubId, d.categoria); break;
+        case "guardar-roadafrica-stat": guardarRoadafricaStat(d.clubId, d.categoria); break;
+        case "cancelar-roadafrica-stat": cancelarRoadafricaStat(d.clubId, d.categoria); break;
+        case "editar-roadafrica-playoff-inline": editarRoadafricaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-roadafrica-playoff": guardarRoadafricaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-roadafrica-playoff": cancelarRoadafricaPlayoff(d.clubId); break;
+        case "info-roadafrica-formato": mostrarInfoRoadafrica(); break;
+        case "roadasia-tab-ir": irRoadasiaTab(d.clubId, d.tab); break;
+        case "editar-roadasia-inline": editarRoadasiaInline(d.clubId); break;
+        case "guardar-roadasia": guardarRoadasia(d.clubId); break;
+        case "cancelar-roadasia": cancelarRoadasia(d.clubId); break;
+        case "ver-roadasia-stat": verRoadasiaStat(d.clubId, d.categoria); break;
+        case "volver-roadasia": volverRoadasia(d.clubId); break;
+        case "editar-roadasia-stat-inline": editarRoadasiaStatInline(d.clubId, d.categoria); break;
+        case "guardar-roadasia-stat": guardarRoadasiaStat(d.clubId, d.categoria); break;
+        case "cancelar-roadasia-stat": cancelarRoadasiaStat(d.clubId, d.categoria); break;
+        case "editar-roadasia-playoff-inline": editarRoadasiaPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-roadasia-playoff": guardarRoadasiaPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-roadasia-playoff": cancelarRoadasiaPlayoff(d.clubId); break;
+        case "info-roadasia-formato": mostrarInfoRoadasia(); break;
+        case "elegir-torneo-sel": elegirTorneoSel(window._idManagerActivo, d.torneo); break;
         case "ver-superliga-stat": verSuperligaStat(d.clubId, d.categoria); break;
         case "volver-superliga": volverSuperliga(d.clubId); break;
         case "editar-titulos-inline": editarTitulosInline(d.clubId); break;

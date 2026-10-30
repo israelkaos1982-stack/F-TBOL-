@@ -316,12 +316,19 @@
     uel: "uel", "europa league": "uel", "uefa europa league": "uel",
     uecl: "uecl", "conference league": "uecl", "uefa conference league": "uecl",
     nations: "nations", "nations cup": "nations", "nations league": "nations", "liga de naciones": "nations",
+    "road eurocopa": "roadeurocopa", "road-eurocopa": "roadeurocopa", roadeurocopa: "roadeurocopa", "clasificacion eurocopa": "roadeurocopa",
+    eurocopa: "eurocopa", "euro copa": "eurocopa", euro: "eurocopa",
+    "road mundial": "roadmundial", "road-mundial": "roadmundial", roadmundial: "roadmundial", "clasificacion mundial": "roadmundial",
+    mundialsel: "mundialsel", "copa del mundo": "mundialsel",
+    "road copa america": "roadamerica", "road america": "roadamerica", roadamerica: "roadamerica",
+    "road copa africa": "roadafrica", "road africa": "roadafrica", roadafrica: "roadafrica",
+    "road copa asia": "roadasia", "road copa asia-oceania": "roadasia", "road copa asia oceania": "roadasia", "road asia": "roadasia", roadasia: "roadasia",
     recopa: "recopa", "recopa de europa": "recopa",
     usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc", "supercopa europa": "usc",
     kaocup: "kaocup", "kao cup": "kaocup", "kao-cup": "kaocup", "copa kao": "kaocup", "kao copa": "kaocup",
     superekao: "superekao", "super e kao": "superekao", "super ekao": "superekao", "super-e-kao": "superekao", "supere kao": "superekao",
     "ucl-previa": "ucl-previa", previa: "ucl-previa", "previa champions": "ucl-previa", "fase previa champions": "ucl-previa",
-    selecciones: "selecciones", "fase final selecciones": "selecciones", mundial: "selecciones",
+    selecciones: "selecciones", "fase final selecciones": "selecciones", mundial: "mundialsel",
     "sel-clasif": "sel-clasif", "clasificacion selecciones": "sel-clasif",
     intercontinental: "intercontinental", "copa intercontinental": "intercontinental",
     clasif: "clasif", clasificatorias: "clasif", repesca: "clasif",
@@ -783,7 +790,7 @@
     liga: "Liga", hypermotion: "Hypermotion", copa: "Copa Rey", supercopa: "Supercopa España",
     promocion: "Promoción",
     champions: "Champions", "ucl-previa": "Previa Champions",
-    uel: "Europa", uecl: "Conference", nations: "Nations Cup",
+    uel: "Europa", uecl: "Conference", nations: "Nations Cup", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía",
     recopa: "Recopa", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO",
     intercontinental: "Intercontinental",
     verano: "Torneo de Verano",
@@ -805,7 +812,7 @@
     liga: "comp-liga", hypermotion: "comp-hypermotion", copa: "comp-copa", supercopa: "comp-supercopa",
     promocion: "comp-promocion",
     champions: "comp-champions", "ucl-previa": "comp-previa",
-    uel: "comp-uel", uecl: "comp-uecl", nations: "comp-nations",
+    uel: "comp-uel", uecl: "comp-uecl", nations: "comp-nations", roadeurocopa: "comp-roadeurocopa", eurocopa: "comp-eurocopa", roadmundial: "comp-roadmundial", mundialsel: "comp-mundialsel", roadamerica: "comp-roadamerica", roadafrica: "comp-roadafrica", roadasia: "comp-roadasia",
     recopa: "comp-recopa", usc: "comp-usc", kaocup: "comp-kaocup", superekao: "comp-superekao",
     intercontinental: "comp-intercontinental",
     verano: "comp-verano",
@@ -2424,6 +2431,13 @@
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
       case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
       case "nations": return window.Estado.obtenerNationsStatTexto(categoria);
+      case "roadeurocopa": return window.Estado.obtenerRoadeurocopaStatTexto(categoria);
+      case "eurocopa": return window.Estado.obtenerEurocopaStatTexto(categoria);
+      case "roadmundial": return window.Estado.obtenerRoadmundialStatTexto(categoria);
+      case "mundialsel": return window.Estado.obtenerMundialselStatTexto(categoria);
+      case "roadamerica": return window.Estado.obtenerRoadamericaStatTexto(categoria);
+      case "roadafrica": return window.Estado.obtenerRoadafricaStatTexto(categoria);
+      case "roadasia": return window.Estado.obtenerRoadasiaStatTexto(categoria);
       default: return "";
     }
   }
@@ -2446,6 +2460,13 @@
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
       case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
       case "nations": window.Estado.guardarNationsStatTexto(categoria, texto); break;
+      case "roadeurocopa": window.Estado.guardarRoadeurocopaStatTexto(categoria, texto); break;
+      case "eurocopa": window.Estado.guardarEurocopaStatTexto(categoria, texto); break;
+      case "roadmundial": window.Estado.guardarRoadmundialStatTexto(categoria, texto); break;
+      case "mundialsel": window.Estado.guardarMundialselStatTexto(categoria, texto); break;
+      case "roadamerica": window.Estado.guardarRoadamericaStatTexto(categoria, texto); break;
+      case "roadafrica": window.Estado.guardarRoadafricaStatTexto(categoria, texto); break;
+      case "roadasia": window.Estado.guardarRoadasiaStatTexto(categoria, texto); break;
     }
   }
 
@@ -3817,6 +3838,8 @@
   // las 4 rondas anteriores, que también lo necesitan).
   function _copaPlayoffRondaCoincide(rondaKey, rondaTexto) {
     var t = _normNombre(rondaTexto || "");
+    var mRep = /^rep(\d+)$/.exec(rondaKey);
+    if (mRep) return /repesca|playoff/.test(t) && new RegExp("\\b" + mRep[1] + "\\s*(vs|v|-)\\s*" + mRep[1] + "\\b").test(t);
     if (rondaKey === "r64") return /1\s*\/\s*64/.test(t);
     if (rondaKey === "dieciseisavos") return /1\s*\/\s*16/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
@@ -9606,7 +9629,7 @@
   }
 
   // ============================================================
-  // NATIONS CUP — selecciones: 👥️ Humanos + 🔵 Grupos (11 grupos de 5, ida y
+  // NATIONS CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
   // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
   // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
   // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
@@ -9625,10 +9648,8 @@
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
   // de grupo + los 5 mejores segundos), todo a ida y vuelta.
   var NATIONS_PLAYOFF_RONDAS = [
-    { key: "octavos", label: "Octavos de Final" },
-    { key: "cuartos", label: "Cuartos de Final" },
-    { key: "semis", label: "Semifinales" },
-    { key: "final", label: "Final" }
+    { key: "semis", label: "Semifinales (Liga Oro)" },
+    { key: "final", label: "Final (Liga Oro)" }
   ];
 
   // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
@@ -9646,8 +9667,7 @@
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
   // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
   function _nationsZona(pos) {
-    if (pos === 1) return "octavos";
-    if (pos === 2) return "dieciseisavos";
+    if (pos <= 2) return "octavos";
     return "";
   }
 
@@ -9659,9 +9679,10 @@
     String(texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
-      var m = l.match(/^(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
       if (m) {
-        actual = { nombre: "Grupo " + m[1].toUpperCase(), lineas: [] };
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
         grupos.push(actual);
         return;
       }
@@ -10037,7 +10058,7 @@
     contenedor.appendChild(tituloRow);
 
     if (!grupos.length) {
-      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 11 grupos de 5 selecciones."));
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 8 grupos de 7 selecciones (Oro, Plata y Bronce)."));
     } else {
       grupos.forEach(function (g) {
         var sub = document.createElement("p");
@@ -10056,7 +10077,7 @@
         contenedor.appendChild(wrap);
       });
       contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º de grupo: directo a Octavos (11)</span><span>🟨 2º: los 5 mejores segundos pasan a Octavos</span></div>'
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
       ));
     }
 
@@ -10176,7 +10197,7 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      "Pega los 11 grupos juntos. Cada grupo empieza con una línea «Grupo A» (o «Grupo 1») y debajo " +
+      "Pega los 8 grupos juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
       "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
       "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
       "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
@@ -10305,6 +10326,4667 @@
     var override = window.Estado ? window.Estado.obtenerFormatoOverride("nations") : "";
     return override || FORMATO_NATIONS_TEXTO;
   }
+
+  // ============================================================
+  // ROADEUROCOPA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "roadeurocopa"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var ROADEUROCOPA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var ROADEUROCOPA_PLAYOFF_RONDAS = [
+    { key: "rep6", label: "Repesca · 6 vs 6" },
+    { key: "rep3", label: "Repesca · 3 vs 3" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _roadeurocopaEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _roadeurocopaIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _roadeurocopaZona(pos) {
+    return pos <= 2 ? "octavos" : (pos === 3 ? "dieciseisavos" : "");
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearRoadeurocopaGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularRoadeurocopaGrupos(datos) {
+    var humanos = _roadeurocopaEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearRoadeurocopaGruposTexto(window.Estado ? window.Estado.obtenerRoadeurocopaTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "roadeurocopa" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="roadeurocopa".
+  function calcularRoadeurocopaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _roadeurocopaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "roadeurocopa" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularRoadeurocopaStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerRoadeurocopaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRoadeurocopaStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="roadeurocopa".
+  function _roadeurocopaPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "roadeurocopa" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _roadeurocopaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _roadeurocopaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _roadeurocopaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRoadeurocopaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Road Eurocopa — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularRoadeurocopaPlayoffTodasLasRondas(datos) {
+    return {
+      rep6: _roadeurocopaRondaDesdeTexto(datos, "rep6"),
+      rep3: _roadeurocopaRondaDesdeTexto(datos, "rep3")
+    };
+  }
+
+  var _roadeurocopaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _roadeurocopaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadeurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadeurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_roadeurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadeurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_roadeurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadeurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Road Eurocopa de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _roadeurocopaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "roadeurocopa" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _roadeurocopaEstadoClub(datos, e) {
+    var partidos = _roadeurocopaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Road Eurocopa de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _roadeurocopaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarRoadeurocopaHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _roadeurocopaIdActivo(idClubActivo);
+    var equiposHumanos = _roadeurocopaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _roadeurocopaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Road Eurocopa. Añádelos desde el ✏️ de cada caja (Calendario extra → «Road Eurocopa - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _roadeurocopaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _roadeurocopaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = ROADEUROCOPA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-roadeurocopa-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarRoadeurocopaGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularRoadeurocopaGrupos(datos);
+    var idActivo = _roadeurocopaIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Road Eurocopa · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadeurocopa-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 11 grupos de 5 selecciones (A-K)."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _roadeurocopaZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarRoadeurocopaPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularRoadeurocopaPlayoffTodasLasRondas(datos);
+
+    ROADEUROCOPA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadeurocopa-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _roadeurocopaIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRoadeurocopa(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _roadeurocopaTabsHTML(idClubActivo));
+
+      if (_roadeurocopaTabActual === "playoffs") _renderizarRoadeurocopaPlayoffs(contenedor, datos, idClubActivo);
+      else if (_roadeurocopaTabActual === "grupos") _renderizarRoadeurocopaGrupos(contenedor, datos, idClubActivo);
+      else _renderizarRoadeurocopaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irRoadeurocopaTab(idClubActivo, tab) {
+    _roadeurocopaTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarRoadeurocopa("roadeurocopa-content", idClubActivo);
+  }
+
+  function renderizarRoadeurocopaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = ROADEUROCOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-roadeurocopa" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadeurocopa-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRoadeurocopaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _roadeurocopaIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadeurocopa", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorRoadeurocopa(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 11 grupos de 5 selecciones (A-K) juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadeurocopa-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadeurocopaTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadeurocopa" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadeurocopa" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadeurocopaStat(contenedor, idClubActivo, categoria) {
+    var meta = ROADEUROCOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Roadeurocopa " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadeurocopa-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadeurocopaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadeurocopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadeurocopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadeurocopaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = ROADEUROCOPA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil» o «Alemania 3 vs 1 Brasil». Si una selección humana ya tiene sus propios partidos de Road Eurocopa jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadeurocopa-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadeurocopaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadeurocopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadeurocopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Road Eurocopa — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoRoadeurocopa).
+  var FORMATO_ROADEUROCOPA_TEXTO = [
+    "📋FORMATO ROAD EUROCOPA (55 selecciones europeas, sin Ciudad del Vaticano — cada 5 años):",
+    "11 grupos de 5 equipos (A-K), a ida y vuelta: 8 partidos por equipo contra rivales de su grupo.",
+    "1º y 2º de cada grupo: clasificados directos a la EUROCOPA (22).",
+    "Los 11 mejores terceros y el mejor cuarto juegan la repesca, a partidos de ida y vuelta con gol fuera de casa valor doble. Mejor clasificado vs peor clasificado: 6 vs 6 → 3 vs 3 = los 3 ganadores.",
+    "Total: 22 + 3 = 25 equipos a la Eurocopa.",
+    "",
+    "🌍SELECCIONES HUMANAS: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra."
+  ].join("\n");
+  function obtenerFormatoRoadeurocopaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("roadeurocopa") : "";
+    return override || FORMATO_ROADEUROCOPA_TEXTO;
+  }
+
+
+  // ============================================================
+  // EUROCOPA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "eurocopa"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var EUROCOPA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var EUROCOPA_PLAYOFF_RONDAS = [
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _eurocopaEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _eurocopaIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _eurocopaZona(pos) {
+    return pos <= 3 ? "octavos" : (pos === 4 ? "dieciseisavos" : "");
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearEurocopaGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularEurocopaGrupos(datos) {
+    var humanos = _eurocopaEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearEurocopaGruposTexto(window.Estado ? window.Estado.obtenerEurocopaTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "eurocopa" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="eurocopa".
+  function calcularEurocopaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _eurocopaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "eurocopa" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularEurocopaStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerEurocopaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularEurocopaStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="eurocopa".
+  function _eurocopaPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "eurocopa" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _eurocopaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _eurocopaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _eurocopaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerEurocopaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Eurocopa — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularEurocopaPlayoffTodasLasRondas(datos) {
+    return {
+      octavos: _eurocopaRondaDesdeTexto(datos, "octavos"),
+      cuartos: _eurocopaRondaDesdeTexto(datos, "cuartos"),
+      semis: _eurocopaRondaDesdeTexto(datos, "semis"),
+      final: _eurocopaRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _eurocopaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _eurocopaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_eurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="eurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_eurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="eurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_eurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="eurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Eurocopa de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _eurocopaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "eurocopa" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _eurocopaEstadoClub(datos, e) {
+    var partidos = _eurocopaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Eurocopa de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _eurocopaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarEurocopaHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _eurocopaIdActivo(idClubActivo);
+    var equiposHumanos = _eurocopaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _eurocopaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Eurocopa. Añádelos desde el ✏️ de cada caja (Calendario extra → «Eurocopa - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _eurocopaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _eurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _eurocopaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = EUROCOPA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-eurocopa-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarEurocopaGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularEurocopaGrupos(datos);
+    var idActivo = _eurocopaIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Eurocopa · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-eurocopa-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 5 grupos de 5 selecciones."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _eurocopaZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _eurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarEurocopaPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularEurocopaPlayoffTodasLasRondas(datos);
+
+    EUROCOPA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-eurocopa-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _eurocopaIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _eurocopaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarEurocopa(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _eurocopaTabsHTML(idClubActivo));
+
+      if (_eurocopaTabActual === "playoffs") _renderizarEurocopaPlayoffs(contenedor, datos, idClubActivo);
+      else if (_eurocopaTabActual === "grupos") _renderizarEurocopaGrupos(contenedor, datos, idClubActivo);
+      else _renderizarEurocopaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irEurocopaTab(idClubActivo, tab) {
+    _eurocopaTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarEurocopa("eurocopa-content", idClubActivo);
+  }
+
+  function renderizarEurocopaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = EUROCOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-eurocopa" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-eurocopa-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularEurocopaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _eurocopaIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("eurocopa", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorEurocopa(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 5 grupos de 5 selecciones juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "eurocopa-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerEurocopaTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-eurocopa" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-eurocopa" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorEurocopaStat(contenedor, idClubActivo, categoria) {
+    var meta = EUROCOPA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Eurocopa " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "eurocopa-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerEurocopaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-eurocopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-eurocopa-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorEurocopaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = EUROCOPA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil». Si una selección humana ya tiene sus propios partidos de Eurocopa jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "eurocopa-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerEurocopaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-eurocopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-eurocopa-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Eurocopa — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoEurocopa).
+  var FORMATO_EUROCOPA_TEXTO = [
+    "📋FORMATO EUROCOPA (25 selecciones clasificadas desde la Road Eurocopa):",
+    "5 grupos de 5 equipos (grupos por bombos, por nivel de clasificación), a una vuelta contra rivales del mismo grupo (4 partidos por equipo).",
+    "Pasan a los Playoffs los 3 primeros de cada grupo (15) y el mejor cuarto (1) = 16 equipos.",
+    "",
+    "👥️PLAYOFFS (partido único, con prórroga y penaltis en caso de empate):",
+    "Los 16 clasificados, por posición mejores vs peores, desde Octavos hasta la Final.",
+    "",
+    "🌍SELECCIONES HUMANAS: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra."
+  ].join("\n");
+  function obtenerFormatoEurocopaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("eurocopa") : "";
+    return override || FORMATO_EUROCOPA_TEXTO;
+  }
+
+
+  // ============================================================
+  // ROADMUNDIAL CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "roadmundial"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var ROADMUNDIAL_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var ROADMUNDIAL_PLAYOFF_RONDAS = [
+    { key: "rep10", label: "Repesca · 10 vs 10" },
+    { key: "rep5", label: "Repesca · 5 vs 5" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _roadmundialEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _roadmundialIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _roadmundialZona(pos) {
+    return pos === 1 ? "octavos" : ((pos === 2 || pos === 3) ? "dieciseisavos" : "");
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearRoadmundialGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularRoadmundialGrupos(datos) {
+    var humanos = _roadmundialEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearRoadmundialGruposTexto(window.Estado ? window.Estado.obtenerRoadmundialTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "roadmundial" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="roadmundial".
+  function calcularRoadmundialStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _roadmundialEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "roadmundial" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularRoadmundialStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerRoadmundialStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRoadmundialStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="roadmundial".
+  function _roadmundialPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "roadmundial" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _roadmundialRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _roadmundialEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _roadmundialPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRoadmundialPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Road Mundial — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularRoadmundialPlayoffTodasLasRondas(datos) {
+    return {
+      rep10: _roadmundialRondaDesdeTexto(datos, "rep10"),
+      rep5: _roadmundialRondaDesdeTexto(datos, "rep5")
+    };
+  }
+
+  var _roadmundialTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _roadmundialTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadmundialTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadmundial-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_roadmundialTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadmundial-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_roadmundialTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadmundial-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Road Mundial de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _roadmundialPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "roadmundial" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _roadmundialEstadoClub(datos, e) {
+    var partidos = _roadmundialPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Road Mundial de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _roadmundialPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarRoadmundialHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _roadmundialIdActivo(idClubActivo);
+    var equiposHumanos = _roadmundialEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _roadmundialEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Road Mundial. Añádelos desde el ✏️ de cada caja (Calendario extra → «Road Mundial - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _roadmundialPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _roadmundialAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _roadmundialAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = ROADMUNDIAL_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-roadmundial-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarRoadmundialGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularRoadmundialGrupos(datos);
+    var idActivo = _roadmundialIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Road Mundial · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadmundial-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 11 grupos de 5 selecciones (A-K)."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _roadmundialZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _roadmundialAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarRoadmundialPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularRoadmundialPlayoffTodasLasRondas(datos);
+
+    ROADMUNDIAL_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadmundial-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _roadmundialIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _roadmundialAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRoadmundial(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _roadmundialTabsHTML(idClubActivo));
+
+      if (_roadmundialTabActual === "playoffs") _renderizarRoadmundialPlayoffs(contenedor, datos, idClubActivo);
+      else if (_roadmundialTabActual === "grupos") _renderizarRoadmundialGrupos(contenedor, datos, idClubActivo);
+      else _renderizarRoadmundialHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irRoadmundialTab(idClubActivo, tab) {
+    _roadmundialTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarRoadmundial("roadmundial-content", idClubActivo);
+  }
+
+  function renderizarRoadmundialStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = ROADMUNDIAL_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-roadmundial" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadmundial-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRoadmundialStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _roadmundialIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadmundial", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorRoadmundial(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 11 grupos de 5 selecciones (A-K) juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadmundial-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadmundialTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadmundial" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadmundial" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadmundialStat(contenedor, idClubActivo, categoria) {
+    var meta = ROADMUNDIAL_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Roadmundial " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadmundial-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadmundialStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadmundial-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadmundial-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadmundialPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = ROADMUNDIAL_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador AGREGADO (ida+vuelta ya sumada) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil» o «Alemania 3 vs 1 Brasil». Si una selección humana ya tiene sus propios partidos de Road Mundial jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadmundial-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadmundialPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadmundial-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadmundial-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Road Mundial — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoRoadmundial).
+  var FORMATO_ROADMUNDIAL_TEXTO = [
+    "📋FORMATO ROAD MUNDIAL (55 selecciones europeas, sin Ciudad del Vaticano — cada 5 años):",
+    "11 grupos de 5 equipos (A-K), a ida y vuelta: 8 partidos por equipo contra rivales de su grupo.",
+    "Los primeros de cada grupo se clasifican para el MUNDIAL (11 selecciones).",
+    "Los 11 segundos + los 9 mejores terceros (20 equipos) juegan la repesca, a ida y vuelta con gol fuera de casa valor doble. Por posición mejores vs peores: 10 vs 10 → 5 vs 5 = los 5 ganadores.",
+    "Total: 11 + 5 = 16 selecciones europeas al Mundial.",
+    "",
+    "🌍SELECCIONES HUMANAS: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra."
+  ].join("\n");
+  function obtenerFormatoRoadmundialTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("roadmundial") : "";
+    return override || FORMATO_ROADMUNDIAL_TEXTO;
+  }
+
+
+  // ============================================================
+  // MUNDIALSEL CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "mundialsel"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var MUNDIALSEL_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var MUNDIALSEL_PLAYOFF_RONDAS = [
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _mundialselEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _mundialselIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _mundialselZona(pos) {
+    return pos <= 3 ? "octavos" : (pos === 4 ? "dieciseisavos" : "");
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearMundialselGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularMundialselGrupos(datos) {
+    var humanos = _mundialselEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearMundialselGruposTexto(window.Estado ? window.Estado.obtenerMundialselTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "mundialsel" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="mundialsel".
+  function calcularMundialselStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _mundialselEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "mundialsel" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularMundialselStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerMundialselStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularMundialselStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="mundialsel".
+  function _mundialselPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "mundialsel" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _mundialselRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _mundialselEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _mundialselPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerMundialselPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Mundial — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularMundialselPlayoffTodasLasRondas(datos) {
+    return {
+      dieciseisavos: _mundialselRondaDesdeTexto(datos, "dieciseisavos"),
+      octavos: _mundialselRondaDesdeTexto(datos, "octavos"),
+      cuartos: _mundialselRondaDesdeTexto(datos, "cuartos"),
+      semis: _mundialselRondaDesdeTexto(datos, "semis"),
+      final: _mundialselRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _mundialselTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _mundialselTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_mundialselTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="mundialsel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_mundialselTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="mundialsel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_mundialselTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="mundialsel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Mundial de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _mundialselPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "mundialsel" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _mundialselEstadoClub(datos, e) {
+    var partidos = _mundialselPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Mundial de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _mundialselPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarMundialselHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _mundialselIdActivo(idClubActivo);
+    var equiposHumanos = _mundialselEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _mundialselEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Mundial. Añádelos desde el ✏️ de cada caja (Calendario extra → «Mundial - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _mundialselPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _mundialselAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _mundialselAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = MUNDIALSEL_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-mundialsel-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarMundialselGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularMundialselGrupos(datos);
+    var idActivo = _mundialselIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Mundial · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-mundialsel-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 10 grupos de 5 selecciones."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _mundialselZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _mundialselAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarMundialselPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularMundialselPlayoffTodasLasRondas(datos);
+
+    MUNDIALSEL_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-mundialsel-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _mundialselIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _mundialselAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarMundialsel(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _mundialselTabsHTML(idClubActivo));
+
+      if (_mundialselTabActual === "playoffs") _renderizarMundialselPlayoffs(contenedor, datos, idClubActivo);
+      else if (_mundialselTabActual === "grupos") _renderizarMundialselGrupos(contenedor, datos, idClubActivo);
+      else _renderizarMundialselHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irMundialselTab(idClubActivo, tab) {
+    _mundialselTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarMundialsel("mundialsel-content", idClubActivo);
+  }
+
+  function renderizarMundialselStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = MUNDIALSEL_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-mundialsel" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-mundialsel-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularMundialselStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _mundialselIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("mundialsel", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorMundialsel(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 10 grupos de 5 selecciones juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "mundialsel-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerMundialselTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-mundialsel" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-mundialsel" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorMundialselStat(contenedor, idClubActivo, categoria) {
+    var meta = MUNDIALSEL_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Mundialsel " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "mundialsel-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerMundialselStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-mundialsel-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-mundialsel-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorMundialselPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = MUNDIALSEL_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil». Si una selección humana ya tiene sus propios partidos de Mundial jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "mundialsel-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerMundialselPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-mundialsel-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-mundialsel-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Mundial — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoMundialsel).
+  var FORMATO_MUNDIALSEL_TEXTO = [
+    "📋FORMATO MUNDIAL (50 selecciones):",
+    "16 europeas · 12 de América Norte-Centro-Sur · 11 de África · 11 de Asia y Oceanía.",
+    "10 grupos de 5 selecciones (por bombos y nivel), a una vuelta (4 partidos por selección contra rivales del mismo grupo).",
+    "Pasan a los Playoffs los 1º, 2º y 3º de cada grupo (30) junto a los 2 mejores cuartos de todos los grupos = 32 selecciones.",
+    "",
+    "👥️PLAYOFFS (partido único, con prórroga y penaltis en caso de empate):",
+    "Las 32 clasificadas, por posición mejores vs peores, desde Dieciseisavos hasta la Final.",
+    "",
+    "🌍SELECCIONES HUMANAS: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra."
+  ].join("\n");
+  function obtenerFormatoMundialselTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("mundialsel") : "";
+    return override || FORMATO_MUNDIALSEL_TEXTO;
+  }
+
+
+  // ============================================================
+  // ROADAMERICA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "roadamerica"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var ROADAMERICA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var ROADAMERICA_PLAYOFF_RONDAS = [
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _roadamericaEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _roadamericaIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _roadamericaZona(pos) {
+    return pos <= 2 ? "octavos" : "";
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearRoadamericaGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularRoadamericaGrupos(datos) {
+    var humanos = _roadamericaEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearRoadamericaGruposTexto(window.Estado ? window.Estado.obtenerRoadamericaTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "roadamerica" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="roadamerica".
+  function calcularRoadamericaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _roadamericaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "roadamerica" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularRoadamericaStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerRoadamericaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRoadamericaStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="roadamerica".
+  function _roadamericaPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "roadamerica" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _roadamericaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _roadamericaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _roadamericaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRoadamericaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Road Copa América — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularRoadamericaPlayoffTodasLasRondas(datos) {
+    return {
+      semis: _roadamericaRondaDesdeTexto(datos, "semis"),
+      final: _roadamericaRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _roadamericaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _roadamericaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadamericaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadamerica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_roadamericaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadamerica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_roadamericaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadamerica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Road Copa América de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _roadamericaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "roadamerica" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _roadamericaEstadoClub(datos, e) {
+    var partidos = _roadamericaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Road Copa América de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _roadamericaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarRoadamericaHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _roadamericaIdActivo(idClubActivo);
+    var equiposHumanos = _roadamericaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _roadamericaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Road Copa América. Añádelos desde el ✏️ de cada caja (Calendario extra → «Road Copa América - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _roadamericaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _roadamericaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _roadamericaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = ROADAMERICA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-roadamerica-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarRoadamericaGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularRoadamericaGrupos(datos);
+    var idActivo = _roadamericaIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Road Copa América · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadamerica-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los grupos de la Road Copa América."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _roadamericaZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _roadamericaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarRoadamericaPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularRoadamericaPlayoffTodasLasRondas(datos);
+
+    ROADAMERICA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadamerica-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _roadamericaIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _roadamericaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRoadamerica(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _roadamericaTabsHTML(idClubActivo));
+
+      if (_roadamericaTabActual === "playoffs") _renderizarRoadamericaPlayoffs(contenedor, datos, idClubActivo);
+      else if (_roadamericaTabActual === "grupos") _renderizarRoadamericaGrupos(contenedor, datos, idClubActivo);
+      else _renderizarRoadamericaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irRoadamericaTab(idClubActivo, tab) {
+    _roadamericaTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarRoadamerica("roadamerica-content", idClubActivo);
+  }
+
+  function renderizarRoadamericaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = ROADAMERICA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-roadamerica" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadamerica-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRoadamericaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _roadamericaIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadamerica", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorRoadamerica(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los grupos de la Road Copa América juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadamerica-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadamericaTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadamerica" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadamerica" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadamericaStat(contenedor, idClubActivo, categoria) {
+    var meta = ROADAMERICA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Roadamerica " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadamerica-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadamericaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadamerica-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadamerica-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadamericaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = ROADAMERICA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil». Si una selección humana ya tiene sus propios partidos de Road Copa América jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadamerica-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadamericaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadamerica-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadamerica-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Road Copa América — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoRoadamerica).
+  var FORMATO_ROADAMERICA_TEXTO = [
+    "📋FORMATO ROAD COPA AMÉRICA:",
+    "3 equipos humanos: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra.",
+    "Grupos pegados a mano y eliminatorias (Semifinales y Final) a partido único con prórroga y penaltis."
+  ].join("\n");
+  function obtenerFormatoRoadamericaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("roadamerica") : "";
+    return override || FORMATO_ROADAMERICA_TEXTO;
+  }
+
+
+  // ============================================================
+  // ROADAFRICA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "roadafrica"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var ROADAFRICA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var ROADAFRICA_PLAYOFF_RONDAS = [
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _roadafricaEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _roadafricaIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _roadafricaZona(pos) {
+    return pos <= 2 ? "octavos" : "";
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearRoadafricaGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularRoadafricaGrupos(datos) {
+    var humanos = _roadafricaEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearRoadafricaGruposTexto(window.Estado ? window.Estado.obtenerRoadafricaTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "roadafrica" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="roadafrica".
+  function calcularRoadafricaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _roadafricaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "roadafrica" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularRoadafricaStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerRoadafricaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRoadafricaStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="roadafrica".
+  function _roadafricaPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "roadafrica" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _roadafricaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _roadafricaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _roadafricaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRoadafricaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Road Copa África — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularRoadafricaPlayoffTodasLasRondas(datos) {
+    return {
+      semis: _roadafricaRondaDesdeTexto(datos, "semis"),
+      final: _roadafricaRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _roadafricaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _roadafricaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadafricaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadafrica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_roadafricaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadafrica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_roadafricaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadafrica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Road Copa África de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _roadafricaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "roadafrica" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _roadafricaEstadoClub(datos, e) {
+    var partidos = _roadafricaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Road Copa África de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _roadafricaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarRoadafricaHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _roadafricaIdActivo(idClubActivo);
+    var equiposHumanos = _roadafricaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _roadafricaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Road Copa África. Añádelos desde el ✏️ de cada caja (Calendario extra → «Road Copa África - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _roadafricaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _roadafricaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _roadafricaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = ROADAFRICA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-roadafrica-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarRoadafricaGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularRoadafricaGrupos(datos);
+    var idActivo = _roadafricaIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Road Copa África · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadafrica-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los grupos de la Road Copa África."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _roadafricaZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _roadafricaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarRoadafricaPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularRoadafricaPlayoffTodasLasRondas(datos);
+
+    ROADAFRICA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadafrica-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _roadafricaIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _roadafricaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRoadafrica(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _roadafricaTabsHTML(idClubActivo));
+
+      if (_roadafricaTabActual === "playoffs") _renderizarRoadafricaPlayoffs(contenedor, datos, idClubActivo);
+      else if (_roadafricaTabActual === "grupos") _renderizarRoadafricaGrupos(contenedor, datos, idClubActivo);
+      else _renderizarRoadafricaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irRoadafricaTab(idClubActivo, tab) {
+    _roadafricaTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarRoadafrica("roadafrica-content", idClubActivo);
+  }
+
+  function renderizarRoadafricaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = ROADAFRICA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-roadafrica" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadafrica-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRoadafricaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _roadafricaIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadafrica", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorRoadafrica(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los grupos de la Road Copa África juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadafrica-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadafricaTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadafrica" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadafrica" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadafricaStat(contenedor, idClubActivo, categoria) {
+    var meta = ROADAFRICA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Roadafrica " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadafrica-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadafricaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadafrica-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadafrica-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadafricaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = ROADAFRICA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil». Si una selección humana ya tiene sus propios partidos de Road Copa África jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadafrica-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadafricaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadafrica-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadafrica-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Road Copa África — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoRoadafrica).
+  var FORMATO_ROADAFRICA_TEXTO = [
+    "📋FORMATO ROAD COPA ÁFRICA:",
+    "3 equipos humanos: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra.",
+    "Grupos pegados a mano y eliminatorias (Semifinales y Final) a partido único con prórroga y penaltis."
+  ].join("\n");
+  function obtenerFormatoRoadafricaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("roadafrica") : "";
+    return override || FORMATO_ROADAFRICA_TEXTO;
+  }
+
+
+  // ============================================================
+  // ROADASIA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "roadasia"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene selección.
+  // ============================================================
+  var ROADASIA_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var ROADASIA_PLAYOFF_RONDAS = [
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene selección.
+  function _roadasiaEquiposHumanos(datos) {
+    return _seleccionesHumanasEntidades(datos);
+  }
+  // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
+  function _roadasiaIdActivo(idClubActivo) {
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _roadasiaZona(pos) {
+    return pos <= 2 ? "octavos" : "";
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por selección:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearRoadasiaGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // selecciones IA); las selecciones HUMANAS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularRoadasiaGrupos(datos) {
+    var humanos = _roadasiaEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearRoadasiaGruposTexto(window.Estado ? window.Estado.obtenerRoadasiaTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "roadasia" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una selección humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="roadasia".
+  function calcularRoadasiaStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _roadasiaEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "roadasia" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularRoadasiaStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerRoadasiaStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularRoadasiaStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="roadasia".
+  function _roadasiaPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "roadasia" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _roadasiaRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _roadasiaEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _roadasiaPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerRoadasiaPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Road Copa Asia-Oceanía — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularRoadasiaPlayoffTodasLasRondas(datos) {
+    return {
+      semis: _roadasiaRondaDesdeTexto(datos, "semis"),
+      final: _roadasiaRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _roadasiaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _roadasiaTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadasiaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadasia-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_roadasiaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadasia-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_roadasiaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadasia-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Road Copa Asia-Oceanía de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _roadasiaPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "roadasia" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _roadasiaEstadoClub(datos, e) {
+    var partidos = _roadasiaPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Road Copa Asia-Oceanía de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _roadasiaPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarRoadasiaHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _roadasiaIdActivo(idClubActivo);
+    var equiposHumanos = _roadasiaEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _roadasiaEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Road Copa Asia-Oceanía. Añádelos desde el ✏️ de cada caja (Calendario extra → «Road Copa Asia-Oceanía - Jornada 1 - Alemania»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _roadasiaPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _roadasiaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _roadasiaAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = ROADASIA_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-roadasia-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarRoadasiaGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularRoadasiaGrupos(datos);
+    var idActivo = _roadasiaIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Road Copa Asia-Oceanía · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadasia-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los grupos de la Road Copa Asia-Oceanía."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _roadasiaZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
+      ));
+    }
+
+    _roadasiaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarRoadasiaPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularRoadasiaPlayoffTodasLasRondas(datos);
+
+    ROADASIA_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadasia-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _roadasiaIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _roadasiaAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarRoadasia(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _roadasiaTabsHTML(idClubActivo));
+
+      if (_roadasiaTabActual === "playoffs") _renderizarRoadasiaPlayoffs(contenedor, datos, idClubActivo);
+      else if (_roadasiaTabActual === "grupos") _renderizarRoadasiaGrupos(contenedor, datos, idClubActivo);
+      else _renderizarRoadasiaHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irRoadasiaTab(idClubActivo, tab) {
+    _roadasiaTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarRoadasia("roadasia-content", idClubActivo);
+  }
+
+  function renderizarRoadasiaStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = ROADASIA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-roadasia" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-roadasia-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularRoadasiaStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _roadasiaIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadasia", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorRoadasia(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los grupos de la Road Copa Asia-Oceanía juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadasia-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadasiaTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadasia" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadasia" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadasiaStat(contenedor, idClubActivo, categoria) {
+    var meta = ROADASIA_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Roadasia " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadasia-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadasiaStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadasia-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadasia-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorRoadasiaPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = ROADASIA_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Alemania 3-1 Brasil». Si una selección humana ya tiene sus propios partidos de Road Copa Asia-Oceanía jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "roadasia-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerRoadasiaPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-roadasia-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-roadasia-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Road Copa Asia-Oceanía — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoRoadasia).
+  var FORMATO_ROADASIA_TEXTO = [
+    "📋FORMATO ROAD COPA ASIA-OCEANÍA:",
+    "3 equipos humanos: Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra.",
+    "Grupos pegados a mano y eliminatorias (Semifinales y Final) a partido único con prórroga y penaltis."
+  ].join("\n");
+  function obtenerFormatoRoadasiaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("roadasia") : "";
+    return override || FORMATO_ROADASIA_TEXTO;
+  }
+
+  // Competiciones de SELECCIONES (equipos "sel-<clubId>"): compKey -> calculador de grupos.
+  var _SEL_COMPS_GRUPOS = {
+    nations: calcularNationsGrupos,
+    roadeurocopa: calcularRoadeurocopaGrupos,
+    eurocopa: calcularEurocopaGrupos,
+    roadmundial: calcularRoadmundialGrupos,
+    mundialsel: calcularMundialselGrupos,
+    roadamerica: calcularRoadamericaGrupos,
+    roadafrica: calcularRoadafricaGrupos,
+    roadasia: calcularRoadasiaGrupos
+  };
+  function esCompSeleccion(compKey) { return !!_SEL_COMPS_GRUPOS[compKey]; }
 
 
   // ============================================================
@@ -11421,15 +16103,15 @@
   var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 0.5, "1ref": 0.3, "2ref": 0.15 };
   var RANK_MULT_COMP = {
     copa: 1.0, supercopa: 0.6, champions: 3.0, uel: 1.2, uecl: 0.7, recopa: 1.5,
-    intercontinental: 2.0, usc: 0.8, kaocup: 1.0, superekao: 0.8, mundialito: 2.8, nations: 4.0
+    intercontinental: 2.0, usc: 0.8, kaocup: 1.0, superekao: 0.8, mundialito: 2.8, nations: 4.0, eurocopa: 4.0, mundialsel: 4.0, roadeurocopa: 2.0, roadmundial: 2.0, roadamerica: 2.0, roadafrica: 2.0, roadasia: 2.0
   };
   var RANK_TAB_COMP = {
     copa: "espana", supercopa: "espana", champions: "europa", uel: "europa", uecl: "europa", recopa: "europa",
-    intercontinental: "europa", usc: "europa", kaocup: "espana", superekao: "europa", mundialito: "europa", nations: "seleccion"
+    intercontinental: "europa", usc: "europa", kaocup: "espana", superekao: "europa", mundialito: "europa", nations: "seleccion", roadeurocopa: "seleccion", eurocopa: "seleccion", roadmundial: "seleccion", mundialsel: "seleccion", roadamerica: "seleccion", roadafrica: "seleccion", roadasia: "seleccion"
   };
   var RANK_NOMBRE_COMP = {
     copa: "Copa", supercopa: "Supercopa", champions: "Champions", uel: "Europa League", uecl: "Conference",
-    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO", mundialito: "Mundialito", nations: "Nations Cup"
+    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO", mundialito: "Mundialito", nations: "Nations Cup", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía"
   };
 
   // Puestos 1.º-17.º de la Escala B; del 18.º en adelante baja de 35 en 2 en
@@ -15126,7 +19808,7 @@
   // Plantilla) — el club solo conoce SUS partidos, así que en las fases
   // de grupos se muestran sus puntos, no una posición.
   var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true, kaocup: true, superekao: true };
-  var _ORDEN_COMPS_PLANTILLA = ["nations", "copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "kaocup", "superekao", "intercontinental", "mundialito", "verano", "promocion"];
+  var _ORDEN_COMPS_PLANTILLA = ["nations", "roadeurocopa", "eurocopa", "roadmundial", "mundialsel", "roadamerica", "roadafrica", "roadasia", "copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "kaocup", "superekao", "intercontinental", "mundialito", "verano", "promocion"];
   // Icono + nombre de cada competición = los de SU tarjeta del menú del club
   // (🇪🇺 Champions, 🟠 E. League, 🟢 Conference, 🥈 Recopa, 🌎 Intercontinental,
   // ☀️ Verano, 🛡️ Supercopa Europa, 🏅 Supercopa España, 🍇 Superliga y, en
@@ -15137,7 +19819,7 @@
   var _MENU_ID_POR_COMP_PLANTILLA = {
     copa: "copadelrey", supercopa: "supercopaespana", superliga: "superliga",
     champions: "champions", "ucl-previa": "champions", uel: "uel", uecl: "uecl",
-    recopa: "recopa", usc: "usc", kaocup: "kaocup", superekao: "superekao", intercontinental: "intercontinental", verano: "verano", nations: "nations"
+    recopa: "recopa", usc: "usc", kaocup: "kaocup", superekao: "superekao", intercontinental: "intercontinental", verano: "verano", nations: "nations", roadeurocopa: "roadeurocopa", eurocopa: "eurocopa", roadmundial: "roadmundial", mundialsel: "mundialsel", roadamerica: "roadamerica", roadafrica: "roadafrica", roadasia: "roadasia"
   };
   function _iconoYNombreCompPlantilla(clubId, compKey, nombreDefecto) {
     // Iconos fijos pedidos por el usuario (2026-10-10): 👥️ Superliga y
@@ -15334,11 +20016,11 @@
       var r;
       if (_COMPS_ELIM_PLANTILLA[k] || (!conocida && tieneRondasKO)) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
-      } else if (k === "nations") {
+      } else if (_SEL_COMPS_GRUPOS[k]) {
         // Nations Cup (selecciones): jornadas de grupo (11 grupos de 5) y
         // cuadro final desde Octavos. Fase de grupos -> puesto dentro de SU
         // grupo; al empezar el cuadro, la ronda / "Eliminado" / "Campeón".
-        var esKoN = function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(_normNombre(p.ronda || "")); };
+        var esKoN = function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b|repesca/.test(_normNombre(p.ronda || "")); };
         var gruposN = lista.filter(function (p) { return !esKoN(p); });
         var koN = lista.filter(esKoN);
         if (koN.length) {
@@ -15346,7 +20028,7 @@
         } else {
           var posN = null;
           try {
-            calcularNationsGrupos(datos).some(function (g) {
+            _SEL_COMPS_GRUPOS[k](datos).some(function (g) {
               var ix = g.filas.findIndex(function (f) { return f.equipoId === clubId; });
               if (ix >= 0) { posN = ix + 1; return true; }
               return false;
@@ -16961,6 +21643,56 @@
     obtenerFormatoUelTexto: obtenerFormatoUelTexto,
     calcularUelCombinada: calcularUelCombinada,
     calcularUelPlayoffTodasLasRondas: calcularUelPlayoffTodasLasRondas,
+    obtenerFormatoRoadeurocopaTexto: obtenerFormatoRoadeurocopaTexto,
+    renderizarRoadeurocopa: renderizarRoadeurocopa,
+    irRoadeurocopaTab: irRoadeurocopaTab,
+    renderizarRoadeurocopaStatDetalle: renderizarRoadeurocopaStatDetalle,
+    pintarEditorRoadeurocopa: pintarEditorRoadeurocopa,
+    pintarEditorRoadeurocopaStat: pintarEditorRoadeurocopaStat,
+    pintarEditorRoadeurocopaPlayoff: pintarEditorRoadeurocopaPlayoff,
+    obtenerFormatoEurocopaTexto: obtenerFormatoEurocopaTexto,
+    renderizarEurocopa: renderizarEurocopa,
+    irEurocopaTab: irEurocopaTab,
+    renderizarEurocopaStatDetalle: renderizarEurocopaStatDetalle,
+    pintarEditorEurocopa: pintarEditorEurocopa,
+    pintarEditorEurocopaStat: pintarEditorEurocopaStat,
+    pintarEditorEurocopaPlayoff: pintarEditorEurocopaPlayoff,
+    obtenerFormatoRoadmundialTexto: obtenerFormatoRoadmundialTexto,
+    renderizarRoadmundial: renderizarRoadmundial,
+    irRoadmundialTab: irRoadmundialTab,
+    renderizarRoadmundialStatDetalle: renderizarRoadmundialStatDetalle,
+    pintarEditorRoadmundial: pintarEditorRoadmundial,
+    pintarEditorRoadmundialStat: pintarEditorRoadmundialStat,
+    pintarEditorRoadmundialPlayoff: pintarEditorRoadmundialPlayoff,
+    obtenerFormatoMundialselTexto: obtenerFormatoMundialselTexto,
+    renderizarMundialsel: renderizarMundialsel,
+    irMundialselTab: irMundialselTab,
+    renderizarMundialselStatDetalle: renderizarMundialselStatDetalle,
+    pintarEditorMundialsel: pintarEditorMundialsel,
+    pintarEditorMundialselStat: pintarEditorMundialselStat,
+    pintarEditorMundialselPlayoff: pintarEditorMundialselPlayoff,
+    obtenerFormatoRoadamericaTexto: obtenerFormatoRoadamericaTexto,
+    renderizarRoadamerica: renderizarRoadamerica,
+    irRoadamericaTab: irRoadamericaTab,
+    renderizarRoadamericaStatDetalle: renderizarRoadamericaStatDetalle,
+    pintarEditorRoadamerica: pintarEditorRoadamerica,
+    pintarEditorRoadamericaStat: pintarEditorRoadamericaStat,
+    pintarEditorRoadamericaPlayoff: pintarEditorRoadamericaPlayoff,
+    obtenerFormatoRoadafricaTexto: obtenerFormatoRoadafricaTexto,
+    renderizarRoadafrica: renderizarRoadafrica,
+    irRoadafricaTab: irRoadafricaTab,
+    renderizarRoadafricaStatDetalle: renderizarRoadafricaStatDetalle,
+    pintarEditorRoadafrica: pintarEditorRoadafrica,
+    pintarEditorRoadafricaStat: pintarEditorRoadafricaStat,
+    pintarEditorRoadafricaPlayoff: pintarEditorRoadafricaPlayoff,
+    obtenerFormatoRoadasiaTexto: obtenerFormatoRoadasiaTexto,
+    renderizarRoadasia: renderizarRoadasia,
+    irRoadasiaTab: irRoadasiaTab,
+    renderizarRoadasiaStatDetalle: renderizarRoadasiaStatDetalle,
+    pintarEditorRoadasia: pintarEditorRoadasia,
+    pintarEditorRoadasiaStat: pintarEditorRoadasiaStat,
+    pintarEditorRoadasiaPlayoff: pintarEditorRoadasiaPlayoff,
+    esCompSeleccion: esCompSeleccion,
     renderizarNations: renderizarNations,
     irNationsTab: irNationsTab,
     renderizarNationsStatDetalle: renderizarNationsStatDetalle,

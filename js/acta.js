@@ -537,6 +537,9 @@
     fila.hidden = !esHumano;
     sel.innerHTML = "";
     if (!esHumano) return;
+    // El <select> nativo queda OCULTO (sigue guardando el valor para el resto
+    // del código) y se maneja con el selector PES 6 (ver _prepararBotonJugador).
+    sel.classList.add("live-jugador-nativo");
 
     var jugadores = window.Renderizadores.obtenerJugadoresClub(equipo.id);
     POSICIONES_ORDEN.forEach(function (pos) {
@@ -552,6 +555,34 @@
       });
       sel.appendChild(grupo);
     });
+    _prepararBotonJugador(sel, jugadores);
+  }
+
+  function _prepararBotonJugador(sel, jugadores) {
+    var btn = document.getElementById("live-jugador-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "live-jugador-btn";
+      btn.className = "live-jugador-btn";
+      sel.parentNode.appendChild(btn);
+      btn.addEventListener("click", function () {
+        var R = window.Renderizadores;
+        if (!R || !R.abrirPickerJugadorPES) return;
+        R.abrirPickerJugadorPES({
+          titulo: "Elige jugador",
+          jugadores: btn._jugadores || [],
+          valor: sel.value,
+          onElegir: function (j) { sel.value = j.id; _pintarBotonJugador(sel, btn); }
+        });
+      });
+    }
+    btn._jugadores = jugadores;
+    _pintarBotonJugador(sel, btn);
+  }
+  function _pintarBotonJugador(sel, btn) {
+    var op = sel.options[sel.selectedIndex];
+    btn.textContent = op ? op.textContent + "  ▾" : "Sin jugadores";
   }
 
   function seleccionarLado(lado) {
@@ -823,6 +854,28 @@
     return '<p class="live-eliminatoria live-eliminatoria--decidida">🏆 <strong>' + nombre + '</strong> avanza de ronda ' + (motivos[res.motivo] || "") + ".</p>";
   }
 
+  // Texto de "quién clasifica" para un partido a ELIMINATORIA ÚNICA
+  // (Recopa, Copa a partido único, finales…) — petición usuario:
+  // "Bayern Munich clasifica a la Final".
+  function _siguienteRondaTexto(ronda) {
+    var r = String(ronda || "").toLowerCase();
+    if (/semifinal|semis/.test(r)) return "a la Final";
+    if (/cuartos/.test(r)) return "a Semifinales";
+    if (/octavos/.test(r)) return "a Cuartos";
+    if (/dieciseisavos|1\/16/.test(r)) return "a Octavos";
+    if (/treintaidosavos|1\/32/.test(r)) return "a Dieciseisavos";
+    return "a la siguiente ronda";
+  }
+  function textoEliminatoriaUnica(partido, nombreGanador, penL, penV) {
+    var ronda = partido && partido.ronda;
+    var esFinal = /^\s*final\b/i.test(String(ronda || ""));
+    var detalle = (penL || penV) ? " (penaltis " + penL + "-" + penV + ")" : "";
+    if (esFinal) {
+      return '<p class="live-eliminatoria live-eliminatoria--decidida">🏆 <strong>' + nombreGanador + "</strong> campeón" + detalle + ".</p>";
+    }
+    return '<p class="live-eliminatoria live-eliminatoria--decidida">🏆 <strong>' + nombreGanador + "</strong> clasifica " + _siguienteRondaTexto(ronda) + detalle + ".</p>";
+  }
+
   // Un partido a ELIMINACIÓN DIRECTA (Copa/competición europea a
   // partido único, final, dieciseisavos… "eliminatoria-unica" en
   // Renderizadores.detectarModoPartido) SIEMPRE tiene que dar un
@@ -882,9 +935,21 @@
     }
 
     var r = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
+    // La tanda hay que contarla ANTES de finalizar (el acta temporal se vacía).
+    var _penLUnica = _contarTandaPenaltis(_partidoActivo.local.id);
+    var _penVUnica = _contarTandaPenaltis(_partidoActivo.visitante.id);
+    var _partidoUnico = _partidoActivo.partido, _localU = _partidoActivo.local, _visitU = _partidoActivo.visitante;
     var resultado = finalizarYSubirPartido(_partidoActivo.partido.id, r.golesLocal, r.golesVisitante);
 
-    document.getElementById("live-resumen-eliminatoria").innerHTML = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
+    var _htmlElim = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
+    if (!_htmlElim && _necesitaGanador(_partidoUnico)) {
+      var _ganU = null;
+      if (r.golesLocal > r.golesVisitante) _ganU = _localU;
+      else if (r.golesLocal < r.golesVisitante) _ganU = _visitU;
+      else if (_penLUnica !== _penVUnica) _ganU = _penLUnica > _penVUnica ? _localU : _visitU;
+      if (_ganU) _htmlElim = textoEliminatoriaUnica(_partidoUnico, _ganU.nombre, r.golesLocal === r.golesVisitante ? _penLUnica : 0, r.golesLocal === r.golesVisitante ? _penVUnica : 0);
+    }
+    document.getElementById("live-resumen-eliminatoria").innerHTML = _htmlElim;
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;

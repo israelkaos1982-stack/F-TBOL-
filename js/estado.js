@@ -1634,8 +1634,8 @@
     { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
     { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
-    { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
-    { id: "supercopaespana", icono: "🏅", etiqueta: "Supercopa España" },
+    { id: "superliga", icono: "👥️", etiqueta: "Superliga" },
+    { id: "supercopaespana", icono: "🏆", etiqueta: "Supercopa España" },
     { id: "champions", icono: "🇪🇺", etiqueta: "Champions" },
     // Petición usuario ("quiero que la E.League tenga el mismo formato
     // que la champions"): mismo tratamiento de fábrica que "champions"

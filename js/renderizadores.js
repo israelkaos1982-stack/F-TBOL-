@@ -10512,7 +10512,11 @@
   var FORMATO_SUPERLIGA_TEXTO = [
     "📋FORMATO SUPERLIGA:",
     "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
-    "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de cada"
+    "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de casa",
+    "",
+    "Los grupos por bombos por sorteo por nivel",
+    "",
+    "Los partidos de SuperLiga Humano vs IA y Humano vs Humano salen en el calendario Próximo Partido como el resto de Competiciones"
   ].join("\n");
   function obtenerFormatoSuperligaTexto() {
     var override = window.Estado ? window.Estado.obtenerFormatoOverride("superliga") : "";
@@ -12599,7 +12603,11 @@
     var partidosDelClub = todosLosPartidos.filter(function (p) {
       var esSuyo = p.local === clubId || p.visitante === clubId || (selId && (p.local === selId || p.visitante === selId));
       if (!esSuyo) return false;
-      if (p.competicion === "superliga") return false;
+      // Los cruces de Superliga AUTO-GENERADOS (ids superliga-i-j-leg, 100% humanos)
+      // viven solo en su propio modal; los que el admin teclea en el Calendario
+      // extra (Humano vs IA / Humano vs Humano) salen en el calendario y en
+      // "Próximo partido" como los de cualquier otra competición.
+      if (p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id)) return false;
       if (p.competicion === "liga") return p.liga === ligaActual;
       return true;
     });
@@ -12890,7 +12898,7 @@
       var partidosPorId = _ultimoContexto.partidosPorId || {};
       Object.keys(partidosPorId).forEach(function (id) {
         var p = partidosPorId[id];
-        if (p.competicion === "superliga") return;
+        if (p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id)) return;
         if (!p.jugado) return;
         // NUNCA reiniciar de rebote un partido HvH (Copa del Rey con
         // sorteo real, Liga si el calendario cruza a 2 de los 6…) desde

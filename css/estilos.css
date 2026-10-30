@@ -4918,3 +4918,21 @@ button { font-family: inherit; cursor: pointer; }
 #previa-card.comp-superekao, #partido-live-overlay .live-card.comp-superekao { --cc: #6d5bff; --cc-rgb: 109,91,255; --cc-dark: #2f2599; --cct: #fff; }
 #previa-card.comp-superekao .previa-comp, #partido-live-overlay .live-card.comp-superekao .previa-comp { color: #fff; }
 #screen-club .match-card.comp-superekao, #club-modal-overlay .match-card.comp-superekao { background: linear-gradient(135deg, #6d5bff, #2f2599); }
+
+/* Iconos de las cajas KAO Cup (🏆 morado) y SuperEKAO (♟️ violeta) */
+.club-menu-btn[data-club-vista="kaocup"] .club-menu-btn-icon { filter: hue-rotate(235deg) saturate(1.6) brightness(1.05); }
+.club-menu-btn[data-club-vista="superekao"] .club-menu-btn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #9d8fff, #4a3ccc);
+  box-shadow: 0 0 8px rgba(109, 91, 255, 0.6); font-size: 17px;
+}
+/* Partidos humano vs humano: rosa más sobrio (ciruela) para que el escudo se vea */
+#screen-club .match-card.match-card--hvh, #club-modal-overlay .match-card.match-card--hvh,
+#screen-club .match-card.match-card--siguiente.match-card--hvh, #club-modal-overlay .match-card.match-card--siguiente.match-card--hvh {
+  background: linear-gradient(135deg, #7a2f63, #3f1535);
+}
+#screen-club .match-card.match-card--hvh:not(.match-card--siguiente), #club-modal-overlay .match-card.match-card--hvh:not(.match-card--siguiente) {
+  border-color: #c9609f; border-left-color: #e68ac0;
+}
+.match-card--hvh .escudo--real { filter: drop-shadow(0 0 4px rgba(255,255,255,0.35)); }

@@ -1698,9 +1698,9 @@
     // estilizado en plata), solo faltaba esta tarjeta + su motor.
     { id: "usc", icono: "🛡️", etiqueta: "Supercopa Europa" },
     // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
-    { id: "kaocup", icono: "🟣", etiqueta: "KAO Cup" },
+    { id: "kaocup", icono: "🏆", etiqueta: "KAO Cup" },
     // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
-    { id: "superekao", icono: "🔮", etiqueta: "SuperEKAO" },
+    { id: "superekao", icono: "♟️", etiqueta: "SuperEKAO" },
     // Petición usuario ("vamos a montar las selecciones"): Nations Cup
     // (11 grupos de 5 + eliminatorias desde Octavos, todo ida y vuelta).
     // Tarjeta builtin en todas las cajas MENOS Barcelona (sin selección):

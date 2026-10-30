@@ -14962,6 +14962,50 @@
     return window.Estado.guardarStatsBaseJSON(idClubActivo, deltas);
   }
 
+  // Selector de jugador estilo PES 6 (petición usuario: "que la lista salga
+  // como la plantilla"): overlay propio, agrupado por posición con la misma
+  // chapa de color y filas dorsal+nombre que la pantalla Plantilla. Sustituye
+  // al <select> nativo (Lesionados/Sancionados y jugador del acta en vivo).
+  // opts: { titulo, jugadores:[{id,dorsal,nombre,posicion}], valor, onElegir(j), onCerrar() }
+  function abrirPickerJugadorPES(opts) {
+    var viejo = document.getElementById("pes-picker-overlay");
+    if (viejo) viejo.remove();
+    var ov = document.createElement("div");
+    ov.id = "pes-picker-overlay";
+    ov.className = "pes-picker-overlay";
+    var grupos = ORDEN_POSICIONES.map(function (pos) {
+      var lista = (opts.jugadores || []).filter(function (j) { return j.posicion === pos; });
+      if (!lista.length) return "";
+      return '<div class="plantilla-grupo pes-picker-grupo" data-pos="' + pos + '">' +
+        '<div class="plantilla-grupo-titulo"><span class="plantilla-grupo-nombre">' + escapeHTML(LABEL_POSICION[pos]) + " · " + lista.length + "</span></div>" +
+        lista.map(function (j) {
+          var sel = String(j.id) === String(opts.valor) ? " is-selected" : "";
+          return '<button type="button" class="pes-picker-fila' + sel + '" data-pes-id="' + escapeHTML(String(j.id)) + '">' +
+            '<span class="plantilla-dorsal">' + escapeHTML(String(j.dorsal)) + "</span>" +
+            '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>" +
+            '<span class="pes-picker-marca">' + (sel ? "◀" : "") + "</span></button>";
+        }).join("") + "</div>";
+    }).join("");
+    ov.innerHTML =
+      '<div class="pes-picker-card">' +
+      '<div class="pes-picker-cab"><span>' + escapeHTML(opts.titulo || "Elige jugador") + '</span>' +
+      '<button type="button" class="pes-picker-cerrar" aria-label="Cerrar">✕</button></div>' +
+      '<div class="pes-picker-lista">' + (grupos || '<div class="live-acta-vacia">Sin jugadores en la plantilla.</div>') + "</div></div>";
+    function cerrar() { ov.remove(); if (opts.onCerrar) opts.onCerrar(); }
+    ov.addEventListener("click", function (ev) {
+      if (ev.target === ov || ev.target.closest(".pes-picker-cerrar")) { cerrar(); return; }
+      var fila = ev.target.closest(".pes-picker-fila");
+      if (!fila) return;
+      var id = fila.getAttribute("data-pes-id");
+      var j = (opts.jugadores || []).filter(function (x) { return String(x.id) === id; })[0];
+      ov.remove();
+      if (j && opts.onElegir) opts.onElegir(j);
+    });
+    document.body.appendChild(ov);
+    var marcada = ov.querySelector(".is-selected");
+    if (marcada && marcada.scrollIntoView) marcada.scrollIntoView({ block: "center" });
+  }
+
   // Picker de jugador REAL (reemplaza el window.prompt() de texto libre)
   // para "➕ Añadir" en Lesionados/Sancionados de la previa. Se pinta
   // DENTRO del propio contenedor de la lista — reutiliza `.live-select`
@@ -14979,28 +15023,21 @@
       return;
     }
 
-    // Agrupados por posición (Porteros/Defensas/Centrocampistas/
-    // Delanteros), mismo orden/etiquetas que el selector de jugador del
-    // acta en vivo (js/acta.js::poblarSelectJugador) — petición usuario:
-    // con plantillas largas, una lista plana por dorsal era lenta de
-    // recorrer a mano.
-    var opciones = ORDEN_POSICIONES.map(function (pos) {
-      var deEstaPos = jugadores.filter(function (j) { return j.posicion === pos; });
-      if (!deEstaPos.length) return "";
-      return '<optgroup label="' + escapeHTML(LABEL_POSICION[pos]) + '">' +
-        deEstaPos.map(function (j) {
-          var etiqueta = "#" + j.dorsal + " " + j.nombre;
-          return '<option value="' + escapeHTML(j.nombre) + '">' + escapeHTML(etiqueta) + "</option>";
-        }).join("") +
-        "</optgroup>";
-    }).join("");
-
-    cont.innerHTML =
-      '<div class="live-lista-picker">' +
-      '<select id="lista-picker-select" class="live-select">' + opciones + "</select>" +
-      '<button type="button" class="live-lista-add" data-accion-picker="confirmar" data-tipo-lista="' + tipoLista + '">✓</button>' +
-      '<button type="button" class="live-lista-add" data-accion-picker="cancelar" data-tipo-lista="' + tipoLista + '">✕</button>' +
-      "</div>";
+    abrirPickerJugadorPES({
+      titulo: tipoLista === "lesionados" ? "🚑 Añadir lesionado" : "🟨 Añadir sancionado",
+      jugadores: jugadores,
+      valor: null,
+      onElegir: function (jug) {
+        if (window._idManagerActivo && window.Estado) {
+          // Lesionados dura ESE partido + el siguiente; Sancionados solo el
+          // partido para el que se añade (ver estado.js::agregarJugadorALista).
+          var ordenAlta = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+          var hastaAlta = ordenAlta + (tipoLista === "lesionados" ? 2 : 1);
+          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoLista, jug.nombre, ordenAlta, hastaAlta);
+        }
+        renderListasJugadores();
+      }
+    });
   }
 
   // Placeholder plano para cualquier tarjeta del menú del club que el
@@ -15841,6 +15878,7 @@
     ajustarTituloComp: _ajustarTituloComp,
     renderizarPlantillaClub: renderizarPlantillaClub,
     obtenerJugadoresClub: obtenerJugadoresClub,
+    abrirPickerJugadorPES: abrirPickerJugadorPES,
     parsearRosterTexto: parsearRosterTexto,
     calcularStatsRosterClub: calcularStatsRosterClub,
     calcularCopaStatsCombinado: calcularCopaStatsCombinado,

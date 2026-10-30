@@ -1749,7 +1749,10 @@
 
     // "Objetivos" desapareció y su hueco lo ocupa "Ranking" (misma posición
     // en el orden que el admin ya hubiera guardado).
-    var orden = ov.orden.map(function (id) { return id === "objetivos" ? "ranking" : id; });
+    var orden = ov.orden.map(function (id) { return id === "objetivos" ? "ranking" : id; })
+      // Si el orden guardado tenía "objetivos" Y "ranking", ambos acaban
+      // siendo "ranking" → se quita el duplicado (salían 2 Rankings).
+      .filter(function (id, i, arr) { return arr.indexOf(id) === i; });
     // Cualquier tarjeta de fábrica NUEVA (añadida en una versión futura de
     // la app) que el admin todavía no tenga en su orden guardado se añade
     // al final automáticamente — nunca desaparece solo por haber editado

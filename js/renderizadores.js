@@ -421,8 +421,8 @@
   // nombre con su bandera (ver _banderaDePais).
   var SELECCIONES_HUMANAS_POR_CLUB = {
     liverpool: { nombre: "Francia", bandera: "🇫🇷", siglas: "FRA", c1: "#0055a4", c2: "#ef4135" },
-    "real-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" },
-    "atletico-madrid": { nombre: "Noruega", bandera: "🇳🇴", siglas: "NOR", c1: "#ba0c2f", c2: "#00205b" }
+    "real-madrid": { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#aa151b", c2: "#f1bf00" },
+    "atletico-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" }
   };
   function _idSeleccionDeClub(clubId) {
     return SELECCIONES_HUMANAS_POR_CLUB[clubId] ? "sel-" + clubId : null;
@@ -10178,8 +10178,8 @@
     nota.textContent =
       "Pega los 11 grupos juntos. Cada grupo empieza con una línea «Grupo A» (o «Grupo 1») y debajo " +
       "una línea por selección: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
-      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, Inglaterra, " +
-      "Noruega, España, Portugal, Italia) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+      "son opcionales, se recalculan solos). Pon también las selecciones humanas (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
@@ -10263,22 +10263,40 @@
   // Texto EXACTO del ℹ️ de Nations Cup — mismo overlay propio que
   // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoNations).
   var FORMATO_NATIONS_TEXTO = [
-    "📋FORMATO NATIONS CUP:",
-    "Fase de Grupos: 11 grupos de 5 selecciones, todos contra todos a ida y vuelta (8 partidos por selección).",
+    "📋FORMATO NATIONS CUP (solo selecciones europeas — se juega todos los años):",
+    "56 selecciones (se añade Ciudad del Vaticano) en 3 divisiones: 8 grupos de 7 selecciones, 6 partidos por selección contra rivales de su grupo, a una vuelta.",
+    "Liga Oro — 2 grupos (A-B) de 7 equipos · Liga Plata — 3 grupos (A-B-C) de 7 equipos · Liga Bronce — 3 grupos (A-B-C) de 7 equipos.",
     "",
-    "🏁RESOLUCIÓN FASE DE GRUPOS:",
-    " 🟦 1º de cada grupo (11): clasificación DIRECTA a Octavos de Final.",
+    "🏆LIGA ORO (14 selecciones):",
+    "Primero y Segundo de cada grupo pasan a semifinales y final, a partidos de ida y vuelta con gol doble fuera de casa.",
+    "Los clasificados 5º-6º-7º de cada grupo descienden a Liga Plata (9 equipos).",
     "",
-    " 🟨 Los 5 mejores segundos: también pasan a Octavos (16 selecciones en total).",
+    "🥈LIGA PLATA (21 selecciones):",
+    "Primero y Segundo de cada grupo ascienden a Liga Oro (6 equipos).",
+    "Los clasificados 6º-7º de cada grupo descienden a Liga Bronce (6 equipos).",
     "",
-    " ⬛️ El resto: eliminadas.",
-    "",
-    "👥️ELIMINATORIAS:",
-    "Octavos → Cuartos → Semifinales → Final, todo a ida y vuelta.",
-    "Cada ronda se pega en texto por separado — los cruces de una selección humana se auto-computan desde el Calendario extra.",
+    "🥉LIGA BRONCE (21 selecciones):",
+    "Primero y Segundo de cada grupo ascienden a Liga Plata (6 equipos).",
     "",
     "🌍SELECCIONES HUMANAS:",
-    "Liverpool = Francia · Real Madrid = Inglaterra · Atlético Madrid = Noruega · PSG = España · Chelsea = Portugal · Inter = Italia. Cada una tiene su propia plantilla y estadísticas (botón con su bandera en la Plantilla del club).",
+    "Liverpool = Francia · Real Madrid = España · Atlético Madrid = Inglaterra. Cada una tiene su propia plantilla y estadísticas (botón con su bandera en la Plantilla del club).",
+    "",
+    "🎯OTROS TORNEOS DE SELECCIONES (6 torneos distintos en total):",
+    "",
+    "ROAD EUROCOPA (55 europeas, sin Ciudad del Vaticano — cada 5 años):",
+    "11 grupos de 5 (A-K), ida y vuelta, 8 partidos por equipo. Los primeros y segundos de cada grupo se clasifican directos a la Eurocopa (22). Los 11 mejores terceros y el mejor cuarto juegan la repesca a ida y vuelta con gol fuera de casa doble, mejor clasificado vs peor: 6 vs 6 → 3 vs 3 → los 3 ganadores se clasifican. Total: 25 equipos a la Eurocopa.",
+    "",
+    "EUROCOPA (25 selecciones):",
+    "5 grupos de 5 (grupos por bombos, por nivel de clasificación), a una vuelta (4 partidos por equipo). Pasan a los Playoffs los 3 primeros de cada grupo (15) y el mejor cuarto (1) = 16 equipos. Playoffs: mejores vs peores, desde Octavos hasta la Final a partido único con prórroga y penaltis.",
+    "",
+    "ROAD MUNDIAL (55 europeas, sin Ciudad del Vaticano — cada 5 años):",
+    "11 grupos de 5 (A-K), ida y vuelta, 8 partidos por equipo. Los primeros de cada grupo se clasifican al Mundial (11). Los 11 segundos + los 9 mejores terceros (20 equipos) juegan la repesca a ida y vuelta con gol fuera de casa doble, por posición mejores vs peores: 10 vs 10 → 5 vs 5 → los 5 ganadores. Total: 16 selecciones europeas.",
+    "",
+    "MUNDIAL (50 selecciones):",
+    "16 europeas · 12 de América Norte-Centro-Sur · 11 de África · 11 de Asia y Oceanía. 10 grupos de 5 (por bombos y nivel), a una vuelta (4 partidos por selección). Pasan a los Playoffs los 1º, 2º y 3º de cada grupo (30) más los 2 mejores cuartos (32). Playoffs: mejores vs peores, desde Dieciseisavos hasta la Final a partido único con prórroga y penaltis.",
+    "",
+    "ROAD COPA AMÉRICA · ROAD COPA ÁFRICA · ROAD COPA ASIA-OCEANÍA:",
+    "3 equipos humanos: Francia · España · Inglaterra.",
     "",
     "📊ESTADÍSTICAS:",
     "Pichichi/MVP/T.Amarillas/T.Rojas suman Fase de Grupos + Eliminatorias juntos, sin distinguir fase."

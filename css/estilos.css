@@ -4887,3 +4887,22 @@ button { font-family: inherit; cursor: pointer; }
 #partido-live-overlay .live-select { background: linear-gradient(180deg, #0d2370, #081a52); border: 1px solid #ffd24a; color: #fff; font-weight: 800; font-style: italic; }
 #partido-live-overlay .live-label { color: #ffd24a; font-style: italic; }
 #partido-live-overlay .live-acta-mini-item { font-style: italic; font-weight: 700; }
+
+/* ---- Cards de calendario: sin halo de color tras el escudo; HvH en rosa; el
+   próximo partido (📌) en rojo llamativo para distinguirlo de los jugados. ---- */
+.match-card-team::before { display: none !important; }
+.match-card .escudo--real, .match-card .escudo--vector { background: transparent; box-shadow: none; }
+#screen-club .match-card.match-card--hvh, #club-modal-overlay .match-card.match-card--hvh {
+  background: linear-gradient(135deg, #ff2fa0, #b3125f);
+}
+#screen-club .match-card.match-card--hvh:not(.match-card--siguiente), #club-modal-overlay .match-card.match-card--hvh:not(.match-card--siguiente) {
+  border-color: #ff8ccb; border-left-color: #ffd1ea;
+}
+#screen-club .match-card.match-card--siguiente, #club-modal-overlay .match-card.match-card--siguiente {
+  background: linear-gradient(135deg, #ff2b2b, #a30c0c);
+  border: 2px solid #fff; border-left: 5px solid #ffd24a;
+  box-shadow: 0 0 0 2px #ff2b2b, 0 0 18px rgba(255, 43, 43, 0.75);
+}
+#screen-club .match-card.match-card--siguiente.match-card--hvh, #club-modal-overlay .match-card.match-card--siguiente.match-card--hvh {
+  background: linear-gradient(135deg, #ff2fa0, #b3125f);
+}

@@ -9562,12 +9562,8 @@
   // (ver js/main.js::mostrarInfoSuperliga/_abrirInfoOverlay).
   var FORMATO_SUPERLIGA_TEXTO = [
     "📋FORMATO SUPERLIGA:",
-    "6 clubes humanos todos contra todos a 3 vueltas (3 partidos contra cada equipo humano jugando,, total de 15 partidos cada club humano)",
-    "",
-    "🏁RESOLUCION CLASIFICACIÓN:",
-    "🟣1º Es Campeón y busca rival digno para derby decente",
-    "🟨2º Subcampeón",
-    "🔴6º Farolillo rojo y necesita ajustes o un plan mejor."
+    "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
+    "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de cada"
   ].join("\n");
   function obtenerFormatoSuperligaTexto() {
     var override = window.Estado ? window.Estado.obtenerFormatoOverride("superliga") : "";
@@ -11489,7 +11485,8 @@
     // PREVIA — no se puede adelantar a Dieciseisavos sin haber ganado 1/64.
     card.className = "match-card" + (claseComp ? " " + claseComp : "") +
       ((partido.jugado || esEliminado || esBloqueado) ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "") +
-      (partido.pospuesto ? " match-card--pospuesto" : "");
+      (partido.pospuesto ? " match-card--pospuesto" : "") +
+      (esHumanoVsHumano ? " match-card--hvh" : "");
     card.dataset.partidoId = partido.id;
 
     // Torneo de Verano ("Teresa Herrera"...): nombre abreviado + ☀️ +

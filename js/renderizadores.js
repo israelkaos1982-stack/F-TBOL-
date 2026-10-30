@@ -2431,6 +2431,7 @@
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
       case "uecl": return window.Estado.obtenerUeclStatTexto(categoria);
       case "nations": return window.Estado.obtenerNationsStatTexto(categoria);
+      case "superliga": return window.Estado.obtenerSlxStatTexto(categoria);
       case "roadeurocopa": return window.Estado.obtenerRoadeurocopaStatTexto(categoria);
       case "eurocopa": return window.Estado.obtenerEurocopaStatTexto(categoria);
       case "roadmundial": return window.Estado.obtenerRoadmundialStatTexto(categoria);
@@ -2460,6 +2461,7 @@
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
       case "uecl": window.Estado.guardarUeclStatTexto(categoria, texto); break;
       case "nations": window.Estado.guardarNationsStatTexto(categoria, texto); break;
+      case "superliga": window.Estado.guardarSlxStatTexto(categoria, texto); break;
       case "roadeurocopa": window.Estado.guardarRoadeurocopaStatTexto(categoria, texto); break;
       case "eurocopa": window.Estado.guardarEurocopaStatTexto(categoria, texto); break;
       case "roadmundial": window.Estado.guardarRoadmundialStatTexto(categoria, texto); break;
@@ -10328,6 +10330,671 @@
   }
 
   // ============================================================
+  // SLX CUP — clubes: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
+  // vuelta, 8 partidos por club) + 🟣 Eliminatorias (Octavos → Final,
+  // 16 clubes: los 11 primeros de grupo + los 5 mejores segundos), mismas
+  // 4 cajas de estadísticas. Réplica de la Conference League (misma lógica,
+  // compKey "slx"), con 2 diferencias: los grupos son 11 tablas pegadas
+  // juntas en un solo texto, y los equipos humanos son las SELECCIONES de cada
+  // club (id "sel-<clubId>", ver SELECCIONES_HUMANAS_POR_CLUB), con plantilla y
+  // estadísticas propias. El Barcelona no tiene club.
+  // ============================================================
+  var SLX_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 clubes: los 11 primeros
+  // de grupo + los 5 mejores segundos), todo a ida y vuelta.
+  var SLX_PLAYOFF_RONDAS = [
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,
+  // Portugal, Italia): equipos propios con id "sel-<clubId>" — su plantilla,
+  // sus partidos y sus estadísticas son SEPARADOS de los del club. El Barcelona
+  // no tiene club.
+  function _slxEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+  // id de la club del club activo (para marcar "TÚ" en tablas y filas).
+  function _slxIdActivo(idClubActivo) {
+    return idClubActivo;
+  }
+
+  // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
+  // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
+  function _slxZona(pos) {
+    return pos <= 2 ? "octavos" : "";
+  }
+
+  // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
+  // «Grupo A» (o «Group 1», «Grupo 1:»...) y debajo una línea por club:
+  // «Pos Nombre Pts PJ PE PP G+ G- DG» (mismo formato que Champions).
+  function parsearSlxGruposTexto(texto) {
+    var grupos = [], actual = null;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/^(.*?)(?:grupo|group)\s+([A-Za-z0-9]+)\s*[:\-]?\s*$/i);
+      if (m) {
+        // «Grupo A» -> "Grupo A"; con prefijo («Liga Oro - Grupo A») se conserva tal cual.
+        actual = { nombre: m[1].replace(/[\s:\-]+$/, "") ? l.replace(/[\s:\-]+$/, "") : "Grupo " + m[2].toUpperCase(), lineas: [] };
+        grupos.push(actual);
+        return;
+      }
+      if (!actual) { actual = { nombre: "Grupo A", lineas: [] }; grupos.push(actual); }
+      actual.lineas.push(l);
+    });
+    grupos.forEach(function (g) { g.filas = parsearLiga1RefTexto(g.lineas.join("\n")); });
+    return grupos;
+  }
+
+  // Los grupos con sus filas ya calculadas: la base la pegas tú (solo las
+  // clubes IA); las clubes HUMANOS suman SOLAS cada partido que juegan
+  // en su calendario (y también le suman a su rival IA), igual que en Champions.
+  function calcularSlxGrupos(datos) {
+    var humanos = _slxEquiposHumanos(datos);
+    var idsHumanos = {};
+    humanos.forEach(function (e) { idsHumanos[e.id] = true; });
+    var gruposTexto = parsearSlxGruposTexto(window.Estado ? window.Estado.obtenerSlxTexto() : "");
+    var grupos = gruposTexto.map(function (g) {
+      var filas = [], humanosAqui = [];
+      g.filas.forEach(function (f) {
+        var h = humanos.filter(function (e) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); })[0];
+        if (h) { humanosAqui.push(h.id); return; }
+        filas.push({
+          nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        });
+      });
+      return { nombre: g.nombre, filas: filas, humanosAqui: humanosAqui };
+    });
+
+    var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+    var sinGrupo = null;
+
+    humanos.forEach(function (e) {
+      var partidosComp = todosPartidos.filter(function (p) {
+        return p.competicion === "superliga" && (p.local === e.id || p.visitante === e.id);
+      });
+      if (!partidosComp.length) return;
+      var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
+      if (!grupo) {
+        if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
+        grupo = sinGrupo;
+      }
+
+      var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      partidosComp.filter(function (p) { return p.jugado && p.resultado; }).forEach(function (p) {
+        var esLocal = p.local === e.id;
+        var oponenteId = esLocal ? p.visitante : p.local;
+        var golesE = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+        var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
+        if (idsHumanos[oponenteId]) return; // la fila del rival humano la aporta SU PROPIA iteración
+        var rival = buscarEquipoPorId(oponenteId, datos);
+        var nombreRival = rival ? rival.nombre : oponenteId;
+        var destino = null;
+        grupos.some(function (g) {
+          var f = g.filas.filter(function (fl) { return fl.equipoId === null && _liga1RefNombresCoinciden(fl.nombre, nombreRival); })[0];
+          if (f) { destino = f; return true; }
+          return false;
+        });
+        if (!destino) {
+          destino = { nombre: nombreRival, nombreMostrado: nombreRival, equipoId: null, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+          grupo.filas.push(destino);
+        }
+        _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+      });
+
+      grupo.filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+      });
+    });
+
+    // Una club humana que aparece en el texto pero aún no tiene partidos
+    // sale igualmente en su grupo, a 0.
+    grupos.forEach(function (g) {
+      g.humanosAqui.forEach(function (id) {
+        if (g.filas.some(function (f) { return f.equipoId === id; })) return;
+        var e = humanos.filter(function (x) { return x.id === id; })[0];
+        if (!e) return;
+        g.filas.push({ nombre: e.nombre, nombreMostrado: (e.misterEmoji || "") + e.nombre, equipoId: e.id, pts: 0, pj: 0, pe: 0, pp: 0, gf: 0, gc: 0 });
+      });
+      g.filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+    });
+    return grupos.filter(function (g) { return g.filas.length; });
+  }
+
+  // Mismo criterio EXACTO que calcularChampionsStatsHumanos, filtrando
+  // competicion==="slx".
+  function calcularSlxStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      // Se agrupa por NOMBRE normalizado, NO por jugadorId derivado del
+      // dorsal — es el criterio válido de identidad de un jugador (ver
+      // _nombreFilaJugadorConFallback): un mismo jugador puede llegar
+      // aquí con más de un jugador_id a lo largo de la temporada, y
+      // agrupar por id partía sus estadísticas en varias filas.
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _slxEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+        .filter(function (p) { return p.jugado && p.competicion === "superliga" && (p.local === e.id || p.visitante === e.id); })
+        .forEach(function (p) {
+          var oponenteId = p.local === e.id ? p.visitante : p.local;
+          (p.jug || []).forEach(function (fila) {
+            if (!fila.j) return;
+            if (fila.e === e.id) {
+              var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+              sumarFila(fila, nombreJ, e.nombre, e.id);
+            } else if (fila.e === oponenteId && fila.n) {
+              sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+            }
+          });
+        });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  function calcularSlxStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerSlxStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularSlxStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // ---------- Playoffs ----------
+  // Mismo mecanismo EXACTO que Champions (ver el comentario de arriba,
+  // sección "Playoffs" de Champions, para el razonamiento completo):
+  // Octavos/Cuartos/Semis/Final se pegan cada una por separado, SIN
+  // inferirse de la ronda anterior.
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _championsPlayoffHumano, filtrando
+  // competicion==="slx".
+  function _slxPlayoffHumano(datos, club, rondaKey) {
+    var re = CHAMPIONS_PLAYOFF_REGEX_POR_KEY[rondaKey];
+    if (!re) return null;
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "superliga" && (p.local === club.id || p.visitante === club.id))) return false;
+      var t = _normNombre(p.ronda || "");
+      if (rondaKey === "final" && /\bsemi/.test(t)) return false;
+      return re.test(t);
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Octavos/Cuartos/Semis/Final — mismo criterio EXACTO que
+  // _championsRondaDesdeTexto: cada club humano con partidos YA jugados
+  // esta ronda aporta el suyo auto-computado, el resto sale del texto
+  // libre pegado por el admin para ESA ronda.
+  function _slxRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _slxEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _slxPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerSlxPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el bracket ENTERO de Superliga — las 5
+  // rondas son INDEPENDIENTES entre sí, mismo criterio que Champions.
+  function calcularSlxPlayoffTodasLasRondas(datos) {
+    return {
+      semis: _slxRondaDesdeTexto(datos, "semis"),
+      final: _slxRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  var _slxTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+
+  function _slxTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes nations-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_slxTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="slx-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
+      (_slxTabActual === "grupos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="slx-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_slxTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
+      '" data-accion="slx-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      "</div>"
+    );
+  }
+
+  // Partidos de Superliga de UN club, ordenados por fecha — mismo
+  // criterio EXACTO que _championsPartidosDelClub.
+  function _slxPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "superliga" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  function _slxEstadoClub(datos, e) {
+    var partidos = _slxPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    return { equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—" };
+  }
+
+  // Fila de UN partido de Superliga de un club — mismo layout/clases
+  // EXACTOS que _championsPartidoRowHTML.
+  function _slxPartidoRowHTML(p, clubId, datos) {
+    var esLocal = p.local === clubId;
+    var rival = buscarEquipoPorId(esLocal ? p.visitante : p.local, datos);
+    var esBloqueado = !!(rival && rival.desconocido);
+    var claseEstado = "";
+    var resultadoHTML;
+    if (p.jugado && p.resultado) {
+      var golesClub = esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var golesRival = esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      claseEstado = golesClub > golesRival ? " copa-partido-row--gano"
+        : (golesClub === golesRival ? " copa-partido-row--empate" : " copa-partido-row--perdio");
+      resultadoHTML = '<span class="copa-partido-resultado">' + golesClub + " - " + golesRival + "</span>";
+    } else if (esBloqueado) {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado copa-partido-resultado--bloqueado" title="Rival aún sin determinar">🔒</span>';
+    } else {
+      claseEstado = " copa-partido-row--pendiente";
+      resultadoHTML = '<span class="copa-partido-resultado">PREVIA</span>';
+    }
+    return (
+      '<div class="copa-partido-row' + claseEstado + '">' +
+      '<span class="copa-partido-ronda">' + escapeHTML(p.ronda || "—") + "</span>" +
+      crearEscudoHTML(rival, "escudo--sm") +
+      '<span class="copa-partido-rival">' + escapeHTML(esLocal ? "vs " : "@ ") + escapeHTML(rival ? rival.nombre : "Rival") + "</span>" +
+      resultadoHTML +
+      "</div>"
+    );
+  }
+
+  function _renderizarSlxHumanos(contenedor, datos, idClubActivo) {
+    var idActivo = _slxIdActivo(idClubActivo);
+    var equiposHumanos = _slxEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idActivo) return -1;
+      if (b.id === idActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _slxEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🌐", "Todavía no hay partidos de Superliga. Añádelos desde el ✏️ de cada caja (Calendario extra → «Superliga - Jornada 1 - Inter»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        var esActivo = b.equipo.id === idActivo;
+        var bloque = document.createElement("div");
+        bloque.className = "copa-club-block" + (esActivo ? " copa-club-block--activo" : "");
+        bloque.innerHTML =
+          '<div class="copa-club-header">' +
+          crearEscudoHTML(b.equipo, "escudo--sm") +
+          '<span class="copa-club-nombre">' + (b.equipo.misterEmoji || "") + escapeHTML(b.equipo.nombre) +
+          (esActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
+          '<span class="copa-club-ronda">' + escapeHTML(b.rondaActual) + "</span>" +
+          "</div>" +
+          '<div class="copa-club-partidos">' +
+          b.partidos.map(function (p) { return _slxPartidoRowHTML(p, b.equipo.id, datos); }).join("") +
+          "</div>";
+        contenedor.appendChild(bloque);
+      });
+    }
+
+    _slxAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // Las 4 cajas de estadísticas — mismo criterio EXACTO que
+  // _championsAppendStatsGrid: idénticas en las 3 pestañas.
+  function _slxAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = SLX_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-slx-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  function _renderizarSlxGrupos(contenedor, datos, idClubActivo) {
+    var grupos = calcularSlxGrupos(datos);
+    var idActivo = _slxIdActivo(idClubActivo);
+
+    var tituloRow = document.createElement("div");
+    tituloRow.className = "liga1ref-titulo-row";
+    tituloRow.innerHTML =
+      '<span class="liga1ref-titulo-spacer"></span>' +
+      '<span class="liga1ref-titulo-actual">🔵 Superliga · Fase de Grupos</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-slx-inline" data-club-id="' +
+      (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
+    contenedor.appendChild(tituloRow);
+
+    if (!grupos.length) {
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los los 2 grupos de 4 clubes (A y B)."));
+    } else {
+      grupos.forEach(function (g) {
+        var sub = document.createElement("p");
+        sub.className = "liga1ref-stat-titulo nations-grupo-titulo";
+        sub.textContent = g.nombre;
+        contenedor.appendChild(sub);
+        var wrap = document.createElement("div");
+        wrap.className = "clasificacion-wrap";
+        var tablaEl = document.createElement("table");
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.innerHTML =
+          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+        tablaEl.appendChild(_construirTbodyClasificacion(g.filas, idActivo, _slxZona));
+        wrap.appendChild(tablaEl);
+        contenedor.appendChild(wrap);
+      });
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: pasan a Semifinales</span></div>'
+      ));
+    }
+
+    _slxAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function _renderizarSlxPlayoffs(contenedor, datos, idClubActivo) {
+    var rondas = calcularSlxPlayoffTodasLasRondas(datos);
+
+    SLX_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-slx-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, _slxIdActivo(idClubActivo)); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO (gol fuera de casa)</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
+    ));
+
+    _slxAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarSlx(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _slxTabsHTML(idClubActivo));
+
+      if (_slxTabActual === "playoffs") _renderizarSlxPlayoffs(contenedor, datos, idClubActivo);
+      else if (_slxTabActual === "grupos") _renderizarSlxGrupos(contenedor, datos, idClubActivo);
+      else _renderizarSlxHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  function irSlxTab(idClubActivo, tab) {
+    _slxTabActual = (tab === "playoffs" || tab === "grupos") ? tab : "humanos";
+    renderizarSlx("slx-content", idClubActivo);
+  }
+
+  function renderizarSlxStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = SLX_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-slx" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-slx-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularSlxStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === _slxIdActivo(idClubActivo));
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("superliga", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  function pintarEditorSlx(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los 2 grupos juntos. Cada grupo empieza con una línea «Grupo A» (o «Liga Oro - Grupo A», «Grupo 1») y debajo " +
+      "una línea por club: «Pos Nombre Pts PJ PE PP G+ G- DG» separado por espacios (Pos y DG " +
+      "son opcionales, se recalculan solos). Pon también las clubes humanos (Francia, España, " +
+      "Inglaterra) en su grupo: sus partidos se suman solos desde el Calendario extra.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "slx-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 20;
+    textarea.placeholder = "Grupo A\n1  Alemania   12  4  0  0  10  2   8\n2  Francia    9  4  0  1  8  3   5\n\nGrupo B\n1  Brasil   12  4  0  0  9  1   8";
+    textarea.value = window.Estado ? window.Estado.obtenerSlxTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-slx" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-slx" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorSlxStat(contenedor, idClubActivo, categoria) {
+    var meta = SLX_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Suma Fase de Grupos + Playoffs juntos. " +
+      "Los jugadores de las 6 cajas humanas se suman SOLOS al añadir eventos en un partido de Slx " +
+      "Cup — salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador " +
+      "que la app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en " +
+      "vez de sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "slx-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  9\n2º Paulo Dybala - AS Roma  7";
+    textarea.value = window.Estado ? window.Estado.obtenerSlxStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-slx-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-slx-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  function pintarEditorSlxPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = SLX_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el marcador AGREGADO (ida+vuelta ya sumada; en caso de empate decide el gol fuera de casa) de cada cruce, una línea por eliminatoria — vale «-» o «vs»: «Liverpool 3-1 Inter». Si un club humano ya tiene sus propios partidos de Superliga jugados en esta ronda (Calendario extra), su cruce se calcula solo y esa línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "slx-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 12;
+    textarea.placeholder = "Francia 4-2 Alemania\nBrasil 3 vs 3 Italia";
+    textarea.value = window.Estado ? window.Estado.obtenerSlxPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-slx-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-slx-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Texto EXACTO del ℹ️ de Superliga — mismo overlay propio que
+  // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoSlx).
+  var FORMATO_SLX_TEXTO = [
+    "📋FORMATO SUPERLIGA:",
+    "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
+    "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de casa",
+    "Los grupos por bombos por sorteo por nivel",
+    "Los partidos de SuperLiga Humano vs IA y Humano vs Humano salen en el calendario Próximo Partido como el resto de Competiciones",
+    "",
+    "👥️HUMANOS: Liverpool, Real Madrid y Atlético Madrid.",
+    "🤖IA: Inter, Manchester City, Arsenal, FC Barcelona y PSG."
+  ].join("\n");
+  function obtenerFormatoSlxTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("slx") : "";
+    return override || FORMATO_SLX_TEXTO;
+  }
+
+
+  // ============================================================
   // ROADEUROCOPA CUP — selecciones: 👥️ Humanos + 🔵 Grupos (8 grupos de 7, una vuelta; ida y
   // vuelta, 8 partidos por selección) + 🟣 Eliminatorias (Octavos → Final,
   // 16 selecciones: los 11 primeros de grupo + los 5 mejores segundos), mismas
@@ -15209,18 +15876,9 @@
   // Texto EXACTO del ℹ️ de Superliga (petición usuario, verbatim) — mismo
   // overlay propio que el de Liga 1ª REF/2ª REF/Hypermotion/Ea Sports
   // (ver js/main.js::mostrarInfoSuperliga/_abrirInfoOverlay).
-  var FORMATO_SUPERLIGA_TEXTO = [
-    "📋FORMATO SUPERLIGA:",
-    "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
-    "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de casa",
-    "",
-    "Los grupos por bombos por sorteo por nivel",
-    "",
-    "Los partidos de SuperLiga Humano vs IA y Humano vs Humano salen en el calendario Próximo Partido como el resto de Competiciones"
-  ].join("\n");
+  var FORMATO_SUPERLIGA_TEXTO = null; // el texto vive en FORMATO_SLX_TEXTO (Superliga nueva)
   function obtenerFormatoSuperligaTexto() {
-    var override = window.Estado ? window.Estado.obtenerFormatoOverride("superliga") : "";
-    return override || FORMATO_SUPERLIGA_TEXTO;
+    return obtenerFormatoSlxTexto();
   }
 
   function renderizarSuperliga(contenedorId, idClubActivo) {
@@ -18135,7 +18793,8 @@
   function _filasClasificacionDePartido(partido, datos, local, visitante) {
     var key = _resolverCompKeyBalon(partido.competicion);
     if (key === "superliga") {
-      return calcularSuperliga(datos).map(function (f) { return { equipoId: f.equipo.id, nombre: f.equipo.nombre, pts: f.pts, pj: f.pj }; });
+      var _fl = []; calcularSlxGrupos(datos).forEach(function (g) { g.filas.forEach(function (f) { if (f.equipoId) _fl.push({ equipoId: f.equipoId, nombre: f.nombre, pts: f.pts, pj: f.pj }); }); });
+      return _fl;
     }
     if (_COMPS_CLASIF_EUROPA[key] && _esFaseDeGruposEuropea(partido)) {
       return key === "champions" ? calcularChampionsCombinada(datos) : (key === "uel" ? calcularUelCombinada(datos) : calcularUeclCombinada(datos));
@@ -21693,6 +22352,13 @@
     pintarEditorRoadasiaStat: pintarEditorRoadasiaStat,
     pintarEditorRoadasiaPlayoff: pintarEditorRoadasiaPlayoff,
     esCompSeleccion: esCompSeleccion,
+    renderizarSlx: renderizarSlx,
+    irSlxTab: irSlxTab,
+    renderizarSlxStatDetalle: renderizarSlxStatDetalle,
+    pintarEditorSlx: pintarEditorSlx,
+    pintarEditorSlxStat: pintarEditorSlxStat,
+    pintarEditorSlxPlayoff: pintarEditorSlxPlayoff,
+    obtenerFormatoSlxTexto: obtenerFormatoSlxTexto,
     renderizarNations: renderizarNations,
     irNationsTab: irNationsTab,
     renderizarNationsStatDetalle: renderizarNationsStatDetalle,

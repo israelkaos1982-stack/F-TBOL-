@@ -318,6 +318,8 @@
     nations: "nations", "nations cup": "nations", "nations league": "nations", "liga de naciones": "nations",
     recopa: "recopa", "recopa de europa": "recopa",
     usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc", "supercopa europa": "usc",
+    kaocup: "kaocup", "kao cup": "kaocup", "kao-cup": "kaocup", "copa kao": "kaocup", "kao copa": "kaocup",
+    superekao: "superekao", "super e kao": "superekao", "super ekao": "superekao", "super-e-kao": "superekao", "supere kao": "superekao",
     "ucl-previa": "ucl-previa", previa: "ucl-previa", "previa champions": "ucl-previa", "fase previa champions": "ucl-previa",
     selecciones: "selecciones", "fase final selecciones": "selecciones", mundial: "selecciones",
     "sel-clasif": "sel-clasif", "clasificacion selecciones": "sel-clasif",
@@ -782,7 +784,7 @@
     promocion: "Promoción",
     champions: "Champions", "ucl-previa": "Previa Champions",
     uel: "Europa", uecl: "Conference", nations: "Nations Cup",
-    recopa: "Recopa", usc: "Supercopa Europa",
+    recopa: "Recopa", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO",
     intercontinental: "Intercontinental",
     verano: "Torneo de Verano",
     selecciones: "Selecciones", "sel-clasif": "Selecciones · Clasif.",
@@ -804,7 +806,7 @@
     promocion: "comp-promocion",
     champions: "comp-champions", "ucl-previa": "comp-previa",
     uel: "comp-uel", uecl: "comp-uecl", nations: "comp-nations",
-    recopa: "comp-recopa", usc: "comp-usc",
+    recopa: "comp-recopa", usc: "comp-usc", kaocup: "comp-kaocup", superekao: "comp-superekao",
     intercontinental: "comp-intercontinental",
     verano: "comp-verano",
     selecciones: "comp-selecciones", "sel-clasif": "comp-selecciones",
@@ -929,7 +931,7 @@
   // Promoción de ascenso/descenso). Un futuro playoff que cumpla lo mismo
   // se añade aquí sin más — NUNCA un torneo con fase de grupos (ahí perder
   // un partido no elimina, y las jornadas no dependen de ganar la anterior).
-  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, verano: true, usc: true };
+  var COMPS_ELIMINACION_DIRECTA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, verano: true, usc: true, kaocup: true, superekao: true };
 
   // ¿Esta "ronda" es UNA de las 2 legs de una eliminatoria ida+vuelta
   // ("Ida", "Vuelta", "Ida Semifinal", "Promoción · Vuelta"...)? Y su base
@@ -2415,6 +2417,8 @@
       case "intercontinental": return window.Estado.obtenerInterStatTexto(categoria);
       case "verano": return window.Estado.obtenerVeranoStatTexto(categoria);
       case "usc": return window.Estado.obtenerUscStatTexto(categoria);
+      case "kaocup": return window.Estado.obtenerKaocupStatTexto(categoria);
+      case "superekao": return window.Estado.obtenerSuperekaoStatTexto(categoria);
       case "sce": return window.Estado.obtenerSceStatTexto(categoria);
       case "champions": return window.Estado.obtenerChampionsStatTexto(categoria);
       case "uel": return window.Estado.obtenerUelStatTexto(categoria);
@@ -2435,6 +2439,8 @@
       case "intercontinental": window.Estado.guardarInterStatTexto(categoria, texto); break;
       case "verano": window.Estado.guardarVeranoStatTexto(categoria, texto); break;
       case "usc": window.Estado.guardarUscStatTexto(categoria, texto); break;
+      case "kaocup": window.Estado.guardarKaocupStatTexto(categoria, texto); break;
+      case "superekao": window.Estado.guardarSuperekaoStatTexto(categoria, texto); break;
       case "sce": window.Estado.guardarSceStatTexto(categoria, texto); break;
       case "champions": window.Estado.guardarChampionsStatTexto(categoria, texto); break;
       case "uel": window.Estado.guardarUelStatTexto(categoria, texto); break;
@@ -5826,6 +5832,949 @@
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-usc-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-usc-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
+  // 3c-quinquies-quater. SUPERCOPA DE EUROPA — 👥️ Humanos + ⛓️ Eliminatorias
+  // — MISMO estilo EXACTO que la Copa Intercontinental/Torneo de Verano
+  // de arriba, pero con solo 4 clubes y 2 rondas: Semifinal (2 vs 2) →
+  // Final (1 vs 1) — petición usuario 2026-09-15: "Creame Supercopa
+  // Europa, 4 equipos jugando eliminatorias como la copa del rey desde
+  // Semifinal y final a partido único con prórroga y penaltis, con
+  // editor". Sin fase de grupos, sin exclusiones de club.
+  // ============================================================
+  function _kaocupEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de KAO Cup de UN club, ordenados por fecha —
+  // mismo criterio EXACTO que _veranoPartidosDelClub/_interPartidosDelClub.
+  // `competicion==="kaocup"` ya sale normalizado de Calendario extra
+  // (_BALON_COMP_ALIAS: "KAO Cup"/"KAO Cup" tecleado
+  // por el admin siempre cuadra con este ===).
+  function _kaocupPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "kaocup" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Supercopa de
+  // Europa ya jugados y suma goles/MVP/amarillas/rojas por jugador —
+  // mismo criterio EXACTO que calcularVeranoStatsHumanos, con su PROPIO
+  // acumulado (nunca comparte contador con ninguna otra competición).
+  function calcularKaocupStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _kaocupEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _kaocupPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+          }
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularVeranoStatsCombinado, sobre el
+  // almacén propio de KAO Cup (Estado.obtenerKaocupStatTexto).
+  function calcularKaocupStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerKaocupStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularKaocupStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de la KAO Cup" de UN club — mismo cálculo
+  // EXACTO que _veranoEstadoClub/_interEstadoClub (reutiliza el mismo
+  // _estadoRondasEliminacion, genérico por competición). Devuelve null si
+  // el club no tiene ningún partido de esta competición todavía.
+  function _kaocupEstadoClub(datos, e) {
+    var partidos = _kaocupPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
+  }
+
+  // Texto EXACTO del ℹ️ de la KAO Cup — 2 rondas, TODAS a
+  // partido único con prórroga y penaltis (nunca ida+vuelta).
+  var FORMATO_KAOCUP_TEXTO = [
+    "📋FORMATO KAO CUP:",
+    "Mismo formato que la Copa del Rey, pero TODAS las eliminatorias a partido único, con prórroga y penaltis en caso de empate.",
+    "",
+    "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "1/64 · 1ª Ronda.",
+    "Dieciseisavos de Final.",
+    "Octavos de Final.",
+    "Cuartos de Final.",
+    "Semifinales — 2 vs 2.",
+    "Final — 1 vs 1.",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan como Local",
+    "",
+    "🏁RESOLUCIÓN KAO CUP:",
+    " 🏆 Los ganadores de la KAO Cup juegan la SuperEKAO."
+  ].join("\n");
+  function obtenerFormatoKaocupTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("kaocup") : "";
+    return override || FORMATO_KAOCUP_TEXTO;
+  }
+
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
+  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
+  // criterio EXACTO que _veranoAppendStatsGrid.
+  var KAOCUP_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  function _kaocupAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = KAOCUP_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-kaocup-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
+  // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
+  var _kaocupTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _kaocupTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_kaocupTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="kaocup-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_kaocupTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="kaocup-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (Semifinal → Final) de CADA
+  // club humano, uno debajo del otro — mismo patrón EXACTO que
+  // _renderizarVeranoHumanos, reutilizando _copaBloqueClubHTML tal cual.
+  function _renderizarKaocupHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _kaocupEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _kaocupEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🟣", "Todavía no hay partidos de la KAO Cup. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «KAO Cup»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
+      });
+    }
+
+    _kaocupAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO de 2 rondas ----------
+  // Semifinal YA es la primera ronda del cuadro de 4 clubes — las 2
+  // rondas se ven todas aquí, igual que Intercontinental/Verano arrancan
+  // en Octavos.
+  var KAOCUP_PLAYOFF_RONDAS = [
+    { key: "r64", label: "1/64 · 1ª Ronda" },
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _veranoPlayoffHumano, filtrando competicion==="kaocup"
+  // y reutilizando el detector de ronda de Copa (_copaPlayoffRondaCoincide,
+  // genérico por rondaKey/rondaTexto — no depende de qué competición sea).
+  function _kaocupPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "kaocup" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de UNA ronda de la KAO Cup (Semifinal o Final —
+  // AMBAS se resuelven IGUAL, ninguna depende de la anterior) — mismo
+  // criterio EXACTO que _veranoRondaDesdeTexto: cada club humano con
+  // partidos YA jugados esta ronda aporta el suyo auto-computado; el resto
+  // sale del texto libre que el admin pega para ESA ronda concreta
+  // ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
+  function _kaocupRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _kaocupEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _kaocupPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerKaocupPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 2 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
+  // admin pegó para ESA ronda.
+  function calcularKaocupPlayoffTodasLasRondas(datos) {
+    return {
+      r64: _kaocupRondaDesdeTexto(datos, "r64"),
+      dieciseisavos: _kaocupRondaDesdeTexto(datos, "dieciseisavos"),
+      octavos: _kaocupRondaDesdeTexto(datos, "octavos"),
+      cuartos: _kaocupRondaDesdeTexto(datos, "cuartos"),
+      semis: _kaocupRondaDesdeTexto(datos, "semis"),
+      final: _kaocupRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  function _renderizarKaocupEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularKaocupPlayoffTodasLasRondas(datos);
+
+    KAOCUP_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-kaocup-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key !== "final"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los duelos de ' + escapeHTML(meta.label) + '.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir el cruce de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _kaocupAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarKaocup(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _kaocupTabsHTML(idClubActivo));
+
+      if (_kaocupTabActual === "eliminatorias") _renderizarKaocupEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarKaocupHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_kaocupTabActual`, mismo patrón que irVeranoTab.
+  function irKaocupTab(idClubActivo, tab) {
+    _kaocupTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarKaocup("kaocup-content", idClubActivo);
+  }
+
+  // Ranking (top 15) de UNA categoría de KAO Cup — mismo
+  // patrón exacto que renderizarVeranoStatDetalle.
+  function renderizarKaocupStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = KAOCUP_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-kaocup" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-kaocup-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularKaocupStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("kaocup", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de la Supercopa de
+  // Europa (PIN 646) — mismo patrón exacto que pintarEditorVeranoStat.
+  function pintarEditorKaocupStat(contenedor, idClubActivo, categoria) {
+    var meta = KAOCUP_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de KAO Cup — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "kaocup-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
+    textarea.value = window.Estado ? window.Estado.obtenerKaocupStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorVeranoPlayoff: las 2 rondas se
+  // pegan igual, una línea por cruce, siempre marcador de partido único.
+  function pintarEditorKaocupPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = KAOCUP_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esSemis = rondaKey !== "final";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esSemis
+      ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
+        "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
+        "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) del cruce de la Final — vale «-» " +
+        "o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Si un club humano ya tiene su propio " +
+        "partido de KAO Cup jugado en esta ronda (Calendario extra), su cruce se calcula solo y " +
+        "esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "kaocup-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esSemis ? 8 : 4;
+    textarea.placeholder = esSemis
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      : "Liverpool 1-0 Arsenal";
+    textarea.value = window.Estado ? window.Estado.obtenerKaocupPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // ============================================================
+  // 3c-quinquies-quater. SUPERCOPA DE EUROPA — 👥️ Humanos + ⛓️ Eliminatorias
+  // — MISMO estilo EXACTO que la Copa Intercontinental/Torneo de Verano
+  // de arriba, pero con solo 4 clubes y 2 rondas: Semifinal (2 vs 2) →
+  // Final (1 vs 1) — petición usuario 2026-09-15: "Creame Supercopa
+  // Europa, 4 equipos jugando eliminatorias como la copa del rey desde
+  // Semifinal y final a partido único con prórroga y penaltis, con
+  // editor". Sin fase de grupos, sin exclusiones de club.
+  // ============================================================
+  function _superekaoEquiposHumanos(datos) {
+    return datos.equipos.equipos || [];
+  }
+
+  // Partidos de SuperEKAO de UN club, ordenados por fecha —
+  // mismo criterio EXACTO que _veranoPartidosDelClub/_interPartidosDelClub.
+  // `competicion==="superekao"` ya sale normalizado de Calendario extra
+  // (_BALON_COMP_ALIAS: "SuperEKAO"/"SuperEKAO" tecleado
+  // por el admin siempre cuadra con este ===).
+  function _superekaoPartidosDelClub(datos, clubId) {
+    return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : [])
+      .filter(function (p) {
+        return p.competicion === "superekao" && (p.local === clubId || p.visitante === clubId);
+      })
+      .sort(function (a, b) {
+        var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+        var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+        return ta - tb;
+      });
+  }
+
+  // Recorre, para cada club humano, sus propios partidos de Supercopa de
+  // Europa ya jugados y suma goles/MVP/amarillas/rojas por jugador —
+  // mismo criterio EXACTO que calcularVeranoStatsHumanos, con su PROPIO
+  // acumulado (nunca comparte contador con ninguna otra competición).
+  function calcularSuperekaoStatsHumanos(datos) {
+    var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {} };
+
+    function sumar(bucket, nombre, equipo, equipoId, n) {
+      if (!n) return;
+      var key = _normNombre(nombre);
+      if (!key) return;
+      if (!bucket[key]) bucket[key] = { nombre: nombre, equipo: equipo, equipoId: equipoId, cantidad: 0 };
+      bucket[key].cantidad += n;
+    }
+    function sumarFila(fila, nombre, equipo, equipoId) {
+      sumar(acumulado.pichichi, nombre, equipo, equipoId, fila.g);
+      sumar(acumulado.mvp, nombre, equipo, equipoId, fila.m);
+      sumar(acumulado.amarillas, nombre, equipo, equipoId, fila.a);
+      sumar(acumulado.rojas, nombre, equipo, equipoId, fila.r);
+    }
+
+    _superekaoEquiposHumanos(datos).forEach(function (e) {
+      var nombresPorId = {};
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+
+      _superekaoPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+        var oponenteId = p.local === e.id ? p.visitante : p.local;
+        (p.jug || []).forEach(function (fila) {
+          if (!fila.j) return;
+          if (fila.e === e.id) {
+            var nombreJ = _nombreFilaJugadorConFallback(nombresPorId, fila);
+            sumarFila(fila, nombreJ, e.nombre, e.id);
+          } else if (fila.e === oponenteId && fila.n) {
+            sumarFila(fila, fila.n, fila.en || _nombreClubRival(oponenteId, typeof datos !== "undefined" ? datos : null), oponenteId);
+          }
+        });
+      });
+    });
+
+    var salida = {};
+    Object.keys(acumulado).forEach(function (k) {
+      salida[k] = Object.keys(acumulado[k]).map(function (id) { return acumulado[k][id]; });
+    });
+    return salida;
+  }
+
+  // Ranking final de una categoría: texto pegado (IA) + auto-suma humana,
+  // top 15 — mismo criterio que calcularVeranoStatsCombinado, sobre el
+  // almacén propio de SuperEKAO (Estado.obtenerSuperekaoStatTexto).
+  function calcularSuperekaoStatsCombinado(datos, categoria) {
+    var texto = window.Estado ? window.Estado.obtenerSuperekaoStatTexto(categoria) : "";
+    var filas = _fusionarStatFilasConOverride(
+      parsearLiga1RefStatTexto(texto),
+      calcularSuperekaoStatsHumanos(datos)[categoria] || []
+    );
+
+    filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 15);
+  }
+
+  // Bloque "estado de la SuperEKAO" de UN club — mismo cálculo
+  // EXACTO que _veranoEstadoClub/_interEstadoClub (reutiliza el mismo
+  // _estadoRondasEliminacion, genérico por competición). Devuelve null si
+  // el club no tiene ningún partido de esta competición todavía.
+  function _superekaoEstadoClub(datos, e) {
+    var partidos = _superekaoPartidosDelClub(datos, e.id);
+    if (!partidos.length) return null;
+    var ultima = partidos[partidos.length - 1];
+    var estado = _estadoRondasEliminacion(partidos, e.id);
+    return {
+      equipo: e, partidos: partidos, rondaActual: ultima.ronda || "—",
+      eliminadoIds: estado.eliminadoIds, bloqueadoIds: estado.bloqueadoIds
+    };
+  }
+
+  // Texto EXACTO del ℹ️ de la SuperEKAO — 2 rondas, TODAS a
+  // partido único con prórroga y penaltis (nunca ida+vuelta).
+  var FORMATO_SUPEREKAO_TEXTO = [
+    "📋FORMATO SUPEREKAO:",
+    "Participan los ganadores de la KAO Cup. Mismo formato que la Recopa de Europa: eliminatorias desde la primera ronda hasta la final.",
+    "",
+    "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "1/64 · 1ª Ronda.",
+    "Dieciseisavos de Final.",
+    "Octavos de Final.",
+    "Cuartos de Final.",
+    "Semifinales — 2 vs 2.",
+    "Final — 1 vs 1.",
+    "",
+    " * Reparto de localía: ",
+    "Los equipos mas débiles siempre juegan como Local"
+  ].join("\n");
+  function obtenerFormatoSuperekaoTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("superekao") : "";
+    return override || FORMATO_SUPEREKAO_TEXTO;
+  }
+
+  // Las 4 cajas de estadísticas — IDÉNTICAS estén en la pestaña que estén,
+  // pintadas al final de LAS 2 (👥️ Humanos y ⛓️ Eliminatorias) — mismo
+  // criterio EXACTO que _veranoAppendStatsGrid.
+  var SUPEREKAO_STATS = [
+    { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
+    { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
+    { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+  ];
+
+  function _superekaoAppendStatsGrid(contenedor, idClubActivo) {
+    contenedor.appendChild(nodoSeparador());
+    contenedor.appendChild(nodoTituloEstadisticas());
+
+    var statsGrid = document.createElement("div");
+    statsGrid.className = "liga1ref-stats-grid";
+    statsGrid.innerHTML = SUPEREKAO_STATS.map(function (s) {
+      return '<button type="button" class="liga1ref-stat-box" data-accion="ver-superekao-stat" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + s.key + '"><span class="liga1ref-stat-box-icono">' +
+        s.icono + '</span><span class="liga1ref-stat-box-label">' + escapeHTML(s.label) + "</span></button>";
+    }).join("");
+    contenedor.appendChild(statsGrid);
+  }
+
+  // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
+  // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
+  var _superekaoTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+
+  function _superekaoTabsHTML(idClubActivo) {
+    return (
+      '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
+      (_superekaoTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="superekao-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_superekaoTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="superekao-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
+      "</div>"
+    );
+  }
+
+  // Pestaña 👥️ Humanos — el cuadro completo (Semifinal → Final) de CADA
+  // club humano, uno debajo del otro — mismo patrón EXACTO que
+  // _renderizarVeranoHumanos, reutilizando _copaBloqueClubHTML tal cual.
+  function _renderizarSuperekaoHumanos(contenedor, datos, idClubActivo) {
+    var equiposHumanos = _superekaoEquiposHumanos(datos).slice().sort(function (a, b) {
+      if (a.id === idClubActivo) return -1;
+      if (b.id === idClubActivo) return 1;
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    var bloques = equiposHumanos
+      .map(function (e) { return _superekaoEstadoClub(datos, e); })
+      .filter(Boolean);
+
+    if (!bloques.length) {
+      contenedor.appendChild(nodoEstado("🔮", "Todavía no hay partidos de la SuperEKAO. Añádelos desde el ✏️ de cada caja (Calendario extra → Competición «SuperEKAO»)."));
+    } else {
+      bloques.forEach(function (b, bi) {
+        if (bi > 0) contenedor.appendChild(nodoSeparador());
+        contenedor.insertAdjacentHTML("beforeend", _copaBloqueClubHTML(b, datos, idClubActivo));
+      });
+    }
+
+    _superekaoAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  // ---------- Pestaña ⛓️ Eliminatorias — cuadro ÚNICO de 2 rondas ----------
+  // Semifinal YA es la primera ronda del cuadro de 4 clubes — las 2
+  // rondas se ven todas aquí, igual que Intercontinental/Verano arrancan
+  // en Octavos.
+  var SUPEREKAO_PLAYOFF_RONDAS = [
+    { key: "r64", label: "1/64 · 1ª Ronda" },
+    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "octavos", label: "Octavos de Final" },
+    { key: "cuartos", label: "Cuartos de Final" },
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
+  ];
+
+  // Cruce AUTO-COMPUTADO de un club humano en UNA ronda concreta — mismo
+  // criterio EXACTO que _veranoPlayoffHumano, filtrando competicion==="superekao"
+  // y reutilizando el detector de ronda de Copa (_copaPlayoffRondaCoincide,
+  // genérico por rondaKey/rondaTexto — no depende de qué competición sea).
+  function _superekaoPlayoffHumano(datos, club, rondaKey) {
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      if (!(p.jugado && p.resultado && p.competicion === "superekao" && (p.local === club.id || p.visitante === club.id))) return false;
+      return _copaPlayoffRondaCoincide(rondaKey, p.ronda || "");
+    });
+    if (!partidos.length) return null;
+    var rivalId = null, golA = 0, golB = 0;
+    partidos.forEach(function (p) {
+      var esLocal = p.local === club.id;
+      rivalId = esLocal ? p.visitante : p.local;
+      golA += esLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      golB += esLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+    });
+    var rivalObj = buscarEquipoPorId(rivalId, datos);
+    return {
+      equipoA: club.nombre, equipoAObj: club, golA: golA,
+      golB: golB, equipoB: rivalObj ? rivalObj.nombre : (rivalId || "Rival"), equipoBObj: rivalObj
+    };
+  }
+
+  // Los cruces de UNA ronda de la SuperEKAO (Semifinal o Final —
+  // AMBAS se resuelven IGUAL, ninguna depende de la anterior) — mismo
+  // criterio EXACTO que _veranoRondaDesdeTexto: cada club humano con
+  // partidos YA jugados esta ronda aporta el suyo auto-computado; el resto
+  // sale del texto libre que el admin pega para ESA ronda concreta
+  // ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
+  function _superekaoRondaDesdeTexto(datos, rondaKey) {
+    var equiposHumanos = _superekaoEquiposHumanos(datos);
+    var ties = [];
+    var indexPorHumano = {};
+
+    equiposHumanos.forEach(function (e) {
+      var t = _superekaoPlayoffHumano(datos, e, rondaKey);
+      if (!t) return;
+      indexPorHumano[e.id] = ties.length;
+      ties.push({
+        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
+        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
+      });
+    });
+
+    var texto = window.Estado ? window.Estado.obtenerSuperekaoPlayoffTexto(rondaKey) : "";
+    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
+      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
+      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
+      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+
+      ties.push({
+        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+      });
+    });
+
+    return ties;
+  }
+
+  // Punto ÚNICO que calcula el cuadro ENTERO — las 2 rondas son
+  // INDEPENDIENTES entre sí, cada una sale directamente del texto que el
+  // admin pegó para ESA ronda.
+  function calcularSuperekaoPlayoffTodasLasRondas(datos) {
+    return {
+      r64: _superekaoRondaDesdeTexto(datos, "r64"),
+      dieciseisavos: _superekaoRondaDesdeTexto(datos, "dieciseisavos"),
+      octavos: _superekaoRondaDesdeTexto(datos, "octavos"),
+      cuartos: _superekaoRondaDesdeTexto(datos, "cuartos"),
+      semis: _superekaoRondaDesdeTexto(datos, "semis"),
+      final: _superekaoRondaDesdeTexto(datos, "final")
+    };
+  }
+
+  function _renderizarSuperekaoEliminatorias(contenedor, datos, idClubActivo) {
+    var rondas = calcularSuperekaoPlayoffTodasLasRondas(datos);
+
+    SUPEREKAO_PLAYOFF_RONDAS.forEach(function (meta) {
+      var ties = rondas[meta.key] || [];
+      var bloque = document.createElement("div");
+      bloque.className = "copa-club-block champions-playoff-ronda";
+      var header =
+        '<div class="copa-club-header">' +
+        '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-superekao-playoff-inline" data-ronda="' +
+        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        "</div>";
+      var cuerpo;
+      if (!ties.length) {
+        cuerpo = meta.key !== "final"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los duelos de ' + escapeHTML(meta.label) + '.</p>'
+          : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir el cruce de ' + escapeHTML(meta.label) + '.</p>';
+      } else {
+        cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
+      }
+      bloque.innerHTML = header + cuerpo;
+      contenedor.appendChild(bloque);
+    });
+
+    contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
+      '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
+      "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
+    ));
+
+    _superekaoAppendStatsGrid(contenedor, idClubActivo);
+  }
+
+  function renderizarSuperekao(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      contenedor.insertAdjacentHTML("beforeend", _superekaoTabsHTML(idClubActivo));
+
+      if (_superekaoTabActual === "eliminatorias") _renderizarSuperekaoEliminatorias(contenedor, datos, idClubActivo);
+      else _renderizarSuperekaoHumanos(contenedor, datos, idClubActivo);
+    });
+  }
+
+  // Cambia de pestaña (👥️ Humanos ⇄ ⛓️ Eliminatorias) y re-pinta — único
+  // punto que toca `_superekaoTabActual`, mismo patrón que irVeranoTab.
+  function irSuperekaoTab(idClubActivo, tab) {
+    _superekaoTabActual = tab === "eliminatorias" ? "eliminatorias" : "humanos";
+    renderizarSuperekao("superekao-content", idClubActivo);
+  }
+
+  // Ranking (top 15) de UNA categoría de SuperEKAO — mismo
+  // patrón exacto que renderizarVeranoStatDetalle.
+  function renderizarSuperekaoStatDetalle(contenedorId, idClubActivo, categoria) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    var meta = SUPEREKAO_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<button type="button" class="btn-ghost liga1ref-volver-btn" data-accion="volver-superekao" data-club-id="' +
+        (idClubActivo || "") + '">← Volver</button>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-superekao-stat-inline" data-club-id="' +
+        (idClubActivo || "") + '" data-categoria="' + categoria + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>';
+      contenedor.appendChild(header);
+
+      var titulo = document.createElement("p");
+      titulo.className = "liga1ref-stat-titulo";
+      titulo.textContent = meta.icono + " " + meta.label;
+      contenedor.appendChild(titulo);
+
+      var filas = calcularSuperekaoStatsCombinado(datos, categoria);
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      var tbody = document.createElement("tbody");
+      filas.forEach(function (f, i) {
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var tr = document.createElement("tr");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
+          (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("superekao", "", categoria, idClubActivo, f, meta) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+    });
+  }
+
+  // Editor inline de UNA categoría de estadística de la Supercopa de
+  // Europa (PIN 646) — mismo patrón exacto que pintarEditorVeranoStat.
+  function pintarEditorSuperekaoStat(contenedor, idClubActivo, categoria) {
+    var meta = SUPEREKAO_STATS.filter(function (s) { return s.key === categoria; })[0];
+    if (!meta) return;
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega el ranking, una línea por jugador: «Nombre Jugador - Equipo  " + meta.columna +
+      "» (el Nº inicial es opcional, se recalcula solo). Los jugadores de las 6 cajas " +
+      "humanas se suman SOLOS al añadir eventos en un partido de SuperEKAO — no hace falta escribirlos aquí, " +
+      "salvo que el cálculo automático no cuadre: si escribes el nombre EXACTO de un jugador que la " +
+      "app ya calcula sola (humano o rival IA con ficha real), tu línea CORRIGE ese número en vez de " +
+      "sumarse aparte.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "superekao-stat-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1º Mohamed Salah - Liverpool  3\n2º Bukayo Saka - Arsenal  2";
+    textarea.value = window.Estado ? window.Estado.obtenerSuperekaoStatTexto(categoria) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-superekao-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-superekao-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
+  // mismo patrón exacto que pintarEditorVeranoPlayoff: las 2 rondas se
+  // pegan igual, una línea por cruce, siempre marcador de partido único.
+  function pintarEditorSuperekaoPlayoff(contenedor, idClubActivo, rondaKey) {
+    var meta = SUPEREKAO_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
+    if (!meta) return;
+    var esSemis = rondaKey !== "final";
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = esSemis
+      ? "Una línea por cruce, pega el marcador (partido único, con prórroga/penaltis si hizo falta) TAL CUAL " +
+        "lo veas en el juego — vale «-» o «vs»: «Liverpool 2-1 RB Leipzig» o «RB Leipzig 1 vs 2 Liverpool», da " +
+        "igual el orden. Usa los nombres TAL CUAL salen en el resto de la app. Si un club humano ya tiene su " +
+        "cruce jugado (Calendario extra), esta línea se ignora — su resultado real manda siempre."
+      : "Pega el marcador (partido único, con prórroga/penaltis si hizo falta) del cruce de la Final — vale «-» " +
+        "o «vs»: «Equipo A 3-1 Equipo B» o «Equipo A 3 vs 1 Equipo B». Si un club humano ya tiene su propio " +
+        "partido de SuperEKAO jugado en esta ronda (Calendario extra), su cruce se calcula solo y " +
+        "esta línea se ignora.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "superekao-playoff-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = esSemis ? 8 : 4;
+    textarea.placeholder = esSemis
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      : "Liverpool 1-0 Arsenal";
+    textarea.value = window.Estado ? window.Estado.obtenerSuperekaoPlayoffTexto(rondaKey) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-superekao-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-superekao-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -10086,6 +11035,8 @@
     { key: "uecl", label: "Conference", sub: ["Pichichi", "MVP"], color: "#39ff6a" },
     { key: "recopa", label: "Recopa", sub: ["Pichichi", "MVP"], color: "#e0a458" },
     { key: "usc", label: "Supercopa Europa", sub: [], color: "#8ecae6" },
+    { key: "kaocup", label: "KAO Cup", sub: ["Pichichi", "MVP"], color: "#9d4edd" },
+    { key: "superekao", label: "SuperEKAO", sub: ["Pichichi", "MVP"], color: "#7a6cff" },
     { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"], color: "#ffe600" }
   ];
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
@@ -10448,15 +11399,15 @@
   var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 0.5, "1ref": 0.3, "2ref": 0.15 };
   var RANK_MULT_COMP = {
     copa: 1.0, supercopa: 0.6, champions: 3.0, uel: 1.2, uecl: 0.7, recopa: 1.5,
-    intercontinental: 2.0, usc: 0.8, mundialito: 2.8, nations: 4.0
+    intercontinental: 2.0, usc: 0.8, kaocup: 1.0, superekao: 0.8, mundialito: 2.8, nations: 4.0
   };
   var RANK_TAB_COMP = {
     copa: "espana", supercopa: "espana", champions: "europa", uel: "europa", uecl: "europa", recopa: "europa",
-    intercontinental: "europa", usc: "europa", mundialito: "europa", nations: "seleccion"
+    intercontinental: "europa", usc: "europa", kaocup: "espana", superekao: "europa", mundialito: "europa", nations: "seleccion"
   };
   var RANK_NOMBRE_COMP = {
     copa: "Copa", supercopa: "Supercopa", champions: "Champions", uel: "Europa League", uecl: "Conference",
-    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", mundialito: "Mundialito", nations: "Nations Cup"
+    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO", mundialito: "Mundialito", nations: "Nations Cup"
   };
 
   // Puestos 1.º-17.º de la Escala B; del 18.º en adelante baja de 35 en 2 en
@@ -10483,7 +11434,8 @@
     copa: "calcularCopaPlayoffTodasLasRondas", supercopa: "calcularScePlayoffTodasLasRondas",
     champions: "calcularChampionsPlayoffTodasLasRondas", uel: "calcularUelPlayoffTodasLasRondas",
     uecl: "calcularUeclPlayoffTodasLasRondas", recopa: "calcularRecopaPlayoffTodasLasRondas",
-    intercontinental: "calcularInterPlayoffTodasLasRondas", usc: "calcularUscPlayoffTodasLasRondas"
+    intercontinental: "calcularInterPlayoffTodasLasRondas", usc: "calcularUscPlayoffTodasLasRondas",
+    kaocup: "calcularKaocupPlayoffTodasLasRondas", superekao: "calcularSuperekaoPlayoffTodasLasRondas"
   };
   // ¿El club eliminado en esta ronda está entre los "mejores" perdedores de
   // la ronda (mitad superior por diferencia/goles del cruce)? Si no se
@@ -10525,7 +11477,9 @@
       calcularUeclPlayoffTodasLasRondas: calcularUeclPlayoffTodasLasRondas,
       calcularRecopaPlayoffTodasLasRondas: calcularRecopaPlayoffTodasLasRondas,
       calcularInterPlayoffTodasLasRondas: calcularInterPlayoffTodasLasRondas,
-      calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas
+      calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas,
+      calcularKaocupPlayoffTodasLasRondas: calcularKaocupPlayoffTodasLasRondas,
+      calcularSuperekaoPlayoffTodasLasRondas: calcularSuperekaoPlayoffTodasLasRondas
     };
   }
   // Puntos BASE de una eliminatoria según su estado estructurado (`rk`).
@@ -12577,7 +13531,7 @@
   // una eliminatoria a doble partido).
   var FINALES_ACTIVADAS_COMPS = {
     copa: true, supercopa: true, champions: true, uel: true, uecl: true,
-    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true
+    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true
   };
   function _esFinalDeTorneo(partido) {
     if (!partido.competicion || !FINALES_ACTIVADAS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
@@ -14145,8 +15099,8 @@
   // del calendario del propio club (mismo origen que el resto de la
   // Plantilla) — el club solo conoce SUS partidos, así que en las fases
   // de grupos se muestran sus puntos, no una posición.
-  var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true };
-  var _ORDEN_COMPS_PLANTILLA = ["nations", "copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "intercontinental", "mundialito", "verano", "promocion"];
+  var _COMPS_ELIM_PLANTILLA = { copa: true, supercopa: true, promocion: true, recopa: true, intercontinental: true, usc: true, kaocup: true, superekao: true };
+  var _ORDEN_COMPS_PLANTILLA = ["nations", "copa", "supercopa", "champions", "uel", "uecl", "ucl-previa", "recopa", "usc", "kaocup", "superekao", "intercontinental", "mundialito", "verano", "promocion"];
   // Icono + nombre de cada competición = los de SU tarjeta del menú del club
   // (🇪🇺 Champions, 🟠 E. League, 🟢 Conference, 🥈 Recopa, 🌎 Intercontinental,
   // ☀️ Verano, 🛡️ Supercopa Europa, 🏅 Supercopa España, 🍇 Superliga y, en
@@ -14157,7 +15111,7 @@
   var _MENU_ID_POR_COMP_PLANTILLA = {
     copa: "copadelrey", supercopa: "supercopaespana", superliga: "superliga",
     champions: "champions", "ucl-previa": "champions", uel: "uel", uecl: "uecl",
-    recopa: "recopa", usc: "usc", intercontinental: "intercontinental", verano: "verano", nations: "nations"
+    recopa: "recopa", usc: "usc", kaocup: "kaocup", superekao: "superekao", intercontinental: "intercontinental", verano: "verano", nations: "nations"
   };
   function _iconoYNombreCompPlantilla(clubId, compKey, nombreDefecto) {
     // Iconos fijos pedidos por el usuario (2026-10-10): 👥️ Superliga y
@@ -15942,6 +16896,20 @@
     pintarEditorUscStat: pintarEditorUscStat,
     pintarEditorUscPlayoff: pintarEditorUscPlayoff,
     calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas,
+    obtenerFormatoKaocupTexto: obtenerFormatoKaocupTexto,
+    renderizarKaocup: renderizarKaocup,
+    irKaocupTab: irKaocupTab,
+    renderizarKaocupStatDetalle: renderizarKaocupStatDetalle,
+    pintarEditorKaocupStat: pintarEditorKaocupStat,
+    pintarEditorKaocupPlayoff: pintarEditorKaocupPlayoff,
+    calcularKaocupPlayoffTodasLasRondas: calcularKaocupPlayoffTodasLasRondas,
+    obtenerFormatoSuperekaoTexto: obtenerFormatoSuperekaoTexto,
+    renderizarSuperekao: renderizarSuperekao,
+    irSuperekaoTab: irSuperekaoTab,
+    renderizarSuperekaoStatDetalle: renderizarSuperekaoStatDetalle,
+    pintarEditorSuperekaoStat: pintarEditorSuperekaoStat,
+    pintarEditorSuperekaoPlayoff: pintarEditorSuperekaoPlayoff,
+    calcularSuperekaoPlayoffTodasLasRondas: calcularSuperekaoPlayoffTodasLasRondas,
     obtenerFormatoSceTexto: obtenerFormatoSceTexto,
     renderizarSce: renderizarSce,
     irSceTab: irSceTab,

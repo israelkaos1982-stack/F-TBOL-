@@ -265,6 +265,32 @@
         window.Renderizadores.obtenerFormatoUscTexto(), etiqueta
       );
       window.Renderizadores.irUscTab(clubId, "humanos");
+    } else if (vista === "kaocup") {
+      // Mismo patrón EXACTO que "verano"/"intercontinental" (Humanos +
+      // Eliminatorias, sin fase de grupos) — petición usuario
+      // 2026-09-15: "Creame Supercopa Europa, 4 equipos jugando
+      // eliminatorias como la copa del rey desde Semifinal y final a
+      // partido único con prórroga y penaltis, con editor". Sin
+      // exclusión de club; solo 2 rondas (Semifinal→Final, 4 clubes).
+      body.innerHTML = '<div id="kaocup-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "KAO Cup", "info-kaocup-formato", null,
+        window.Renderizadores.obtenerFormatoKaocupTexto(), etiqueta
+      );
+      window.Renderizadores.irKaocupTab(clubId, "humanos");
+    } else if (vista === "superekao") {
+      // Mismo patrón EXACTO que "verano"/"intercontinental" (Humanos +
+      // Eliminatorias, sin fase de grupos) — petición usuario
+      // 2026-09-15: "Creame Supercopa Europa, 4 equipos jugando
+      // eliminatorias como la copa del rey desde Semifinal y final a
+      // partido único con prórroga y penaltis, con editor". Sin
+      // exclusión de club; solo 2 rondas (Semifinal→Final, 4 clubes).
+      body.innerHTML = '<div id="superekao-content"></div>';
+      _pintarTituloModalInfo(
+        titulo, "SuperEKAO", "info-superekao-formato", null,
+        window.Renderizadores.obtenerFormatoSuperekaoTexto(), etiqueta
+      );
+      window.Renderizadores.irSuperekaoTab(clubId, "humanos");
     } else if (vista === "supercopaespana") {
       // Mismo patrón EXACTO que "usc" (Humanos + Eliminatorias, sin fase
       // de grupos) — petición usuario 2026-09-16: "Son 4 equipos jugando
@@ -1013,6 +1039,14 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUscTexto(), "usc", mostrarInfoUsc);
   }
+  function mostrarInfoKaocup() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoKaocupTexto(), "kaocup", mostrarInfoKaocup);
+  }
+  function mostrarInfoSuperekao() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSuperekaoTexto(), "superekao", mostrarInfoSuperekao);
+  }
   function cerrarInfoLigaFormato() {
     var ov = document.getElementById("liga-info-overlay");
     var editor = document.getElementById("liga-info-editor");
@@ -1111,6 +1145,8 @@
     intercontinental: function (clubId, categoria) { window.Renderizadores.renderizarInterStatDetalle("inter-content", clubId, categoria); },
     verano: function (clubId, categoria) { window.Renderizadores.renderizarVeranoStatDetalle("verano-content", clubId, categoria); },
     usc: function (clubId, categoria) { window.Renderizadores.renderizarUscStatDetalle("usc-content", clubId, categoria); },
+    kaocup: function (clubId, categoria) { window.Renderizadores.renderizarKaocupStatDetalle("kaocup-content", clubId, categoria); },
+    superekao: function (clubId, categoria) { window.Renderizadores.renderizarSuperekaoStatDetalle("superekao-content", clubId, categoria); },
     sce: function (clubId, categoria) { window.Renderizadores.renderizarSceStatDetalle("sce-content", clubId, categoria); },
     champions: function (clubId, categoria) { window.Renderizadores.renderizarChampionsStatDetalle("champions-content", clubId, categoria); },
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
@@ -1360,6 +1396,96 @@
   }
   function cancelarUscPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarUsc("usc-content", clubId);
+  }
+
+  // ---------- KAO Cup — 👥️ Humanos + ⛓️ Eliminatorias, mismo
+  // patrón EXACTO que el Torneo de Verano (arriba), contenedor
+  // "kaocup-content".
+  function irKaocupTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irKaocupTab(clubId, tab);
+  }
+  function verKaocupStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarKaocupStatDetalle("kaocup-content", clubId, categoria);
+  }
+  function volverKaocup(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
+  }
+  function editarKaocupStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("kaocup-content");
+      if (cont) window.Renderizadores.pintarEditorKaocupStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarKaocupStat(clubId, categoria) {
+    var ta = document.getElementById("kaocup-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarKaocupStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarKaocupStatDetalle("kaocup-content", clubId, categoria);
+  }
+  function cancelarKaocupStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarKaocupStatDetalle("kaocup-content", clubId, categoria);
+  }
+  function editarKaocupPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("kaocup-content");
+      if (cont) window.Renderizadores.pintarEditorKaocupPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
+  }
+  function guardarKaocupPlayoff(clubId, ronda) {
+    var ta = document.getElementById("kaocup-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarKaocupPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
+  }
+  function cancelarKaocupPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
+  }
+
+  // ---------- SuperEKAO — 👥️ Humanos + ⛓️ Eliminatorias, mismo
+  // patrón EXACTO que el Torneo de Verano (arriba), contenedor
+  // "superekao-content".
+  function irSuperekaoTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irSuperekaoTab(clubId, tab);
+  }
+  function verSuperekaoStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperekaoStatDetalle("superekao-content", clubId, categoria);
+  }
+  function volverSuperekao(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperekao("superekao-content", clubId);
+  }
+  function editarSuperekaoStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("superekao-content");
+      if (cont) window.Renderizadores.pintarEditorSuperekaoStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarSuperekaoStat(clubId, categoria) {
+    var ta = document.getElementById("superekao-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarSuperekaoStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarSuperekaoStatDetalle("superekao-content", clubId, categoria);
+  }
+  function cancelarSuperekaoStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperekaoStatDetalle("superekao-content", clubId, categoria);
+  }
+  function editarSuperekaoPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("superekao-content");
+      if (cont) window.Renderizadores.pintarEditorSuperekaoPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar eliminatoria", "Introduce el PIN de administrador.");
+  }
+  function guardarSuperekaoPlayoff(clubId, ronda) {
+    var ta = document.getElementById("superekao-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarSuperekaoPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarSuperekao("superekao-content", clubId);
+  }
+  function cancelarSuperekaoPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSuperekao("superekao-content", clubId);
   }
 
   // ---------- Supercopa de España — 👥️ Humanos + ⛓️ Eliminatorias, mismo
@@ -2453,6 +2579,26 @@
         case "editar-usc-playoff-inline": editarUscPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-usc-playoff": guardarUscPlayoff(d.clubId, d.ronda); break;
         case "cancelar-usc-playoff": cancelarUscPlayoff(d.clubId); break;
+        case "info-kaocup-formato": mostrarInfoKaocup(); break;
+        case "kaocup-tab-ir": irKaocupTab(d.clubId, d.tab); break;
+        case "ver-kaocup-stat": verKaocupStat(d.clubId, d.categoria); break;
+        case "volver-kaocup": volverKaocup(d.clubId); break;
+        case "editar-kaocup-stat-inline": editarKaocupStatInline(d.clubId, d.categoria); break;
+        case "guardar-kaocup-stat": guardarKaocupStat(d.clubId, d.categoria); break;
+        case "cancelar-kaocup-stat": cancelarKaocupStat(d.clubId, d.categoria); break;
+        case "editar-kaocup-playoff-inline": editarKaocupPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-kaocup-playoff": guardarKaocupPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-kaocup-playoff": cancelarKaocupPlayoff(d.clubId); break;
+        case "info-superekao-formato": mostrarInfoSuperekao(); break;
+        case "superekao-tab-ir": irSuperekaoTab(d.clubId, d.tab); break;
+        case "ver-superekao-stat": verSuperekaoStat(d.clubId, d.categoria); break;
+        case "volver-superekao": volverSuperekao(d.clubId); break;
+        case "editar-superekao-stat-inline": editarSuperekaoStatInline(d.clubId, d.categoria); break;
+        case "guardar-superekao-stat": guardarSuperekaoStat(d.clubId, d.categoria); break;
+        case "cancelar-superekao-stat": cancelarSuperekaoStat(d.clubId, d.categoria); break;
+        case "editar-superekao-playoff-inline": editarSuperekaoPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-superekao-playoff": guardarSuperekaoPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-superekao-playoff": cancelarSuperekaoPlayoff(d.clubId); break;
         case "info-sce-formato": mostrarInfoSce(); break;
         case "sce-tab-ir": irSceTab(d.clubId, d.tab); break;
         case "ver-sce-stat": verSceStat(d.clubId, d.categoria); break;

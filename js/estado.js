@@ -1697,6 +1697,10 @@
     // FINALES_ACTIVADAS_COMPS, y css/estilos.css ya tenía .comp-usc
     // estilizado en plata), solo faltaba esta tarjeta + su motor.
     { id: "usc", icono: "🛡️", etiqueta: "Supercopa Europa" },
+    // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
+    { id: "kaocup", icono: "🟣", etiqueta: "KAO Cup" },
+    // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
+    { id: "superekao", icono: "🔮", etiqueta: "SuperEKAO" },
     // Petición usuario ("vamos a montar las selecciones"): Nations Cup
     // (11 grupos de 5 + eliminatorias desde Octavos, todo ida y vuelta).
     // Tarjeta builtin en todas las cajas MENOS Barcelona (sin selección):
@@ -3271,6 +3275,118 @@
     }
   }
 
+  // ---------- KAO Cup — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que el Torneo de Verano (texto libre +
+  // auto-suma), con su PROPIA clave — nunca comparte contador con
+  // ninguna otra competición. Ver js/renderizadores.js::KAOCUP_STATS/
+  // calcularKaocupStatsCombinado/renderizarKaocupStatDetalle.
+  function _kaocupStatKey(categoria) {
+    return "ef7_kaocup_stat_" + categoria + "_v1";
+  }
+  function obtenerKaocupStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_kaocupStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarKaocupStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_kaocupStatKey(categoria), obtenerKaocupStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_kaocupStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de la KAO Cup:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- KAO Cup — Eliminatorias ⛓️, texto libre por
+  // ronda (candado 646) ----------
+  // 4 equipos, 2 eliminatorias: Semifinales (2 vs 2) y Final (1 vs 1) —
+  // mismo mecanismo EXACTO que el Torneo de Verano (ver
+  // obtenerVeranoPlayoffTexto más arriba), con su PROPIA clave.
+  // Semifinales ES la primera ronda — no hay una ronda previa "vista
+  // completa en Humanos" que recortar.
+  function _kaocupPlayoffKey(ronda) {
+    return "ef7_kaocup_playoff_" + ronda + "_v1";
+  }
+  function obtenerKaocupPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_kaocupPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarKaocupPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_kaocupPlayoffKey(ronda), obtenerKaocupPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_kaocupPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de la KAO Cup:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- SuperEKAO — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
+  // Mismo mecanismo EXACTO que el Torneo de Verano (texto libre +
+  // auto-suma), con su PROPIA clave — nunca comparte contador con
+  // ninguna otra competición. Ver js/renderizadores.js::SUPEREKAO_STATS/
+  // calcularSuperekaoStatsCombinado/renderizarSuperekaoStatDetalle.
+  function _superekaoStatKey(categoria) {
+    return "ef7_superekao_stat_" + categoria + "_v1";
+  }
+  function obtenerSuperekaoStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_superekaoStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSuperekaoStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_superekaoStatKey(categoria), obtenerSuperekaoStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_superekaoStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de la SuperEKAO:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  // ---------- SuperEKAO — Eliminatorias ⛓️, texto libre por
+  // ronda (candado 646) ----------
+  // 4 equipos, 2 eliminatorias: Semifinales (2 vs 2) y Final (1 vs 1) —
+  // mismo mecanismo EXACTO que el Torneo de Verano (ver
+  // obtenerVeranoPlayoffTexto más arriba), con su PROPIA clave.
+  // Semifinales ES la primera ronda — no hay una ronda previa "vista
+  // completa en Humanos" que recortar.
+  function _superekaoPlayoffKey(ronda) {
+    return "ef7_superekao_playoff_" + ronda + "_v1";
+  }
+  function obtenerSuperekaoPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_superekaoPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSuperekaoPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_superekaoPlayoffKey(ronda), obtenerSuperekaoPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_superekaoPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de la SuperEKAO:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Supercopa de España — Pichichi/MVP/Amarillas/Rojas (candado 646) ----------
   // Mismo mecanismo EXACTO que la Supercopa de Europa (arriba), con su
   // PROPIA clave — nunca comparte contador con ninguna otra competición.
@@ -4235,6 +4351,14 @@
     guardarUscStatTexto: guardarUscStatTexto,
     obtenerUscPlayoffTexto: obtenerUscPlayoffTexto,
     guardarUscPlayoffTexto: guardarUscPlayoffTexto,
+    obtenerKaocupStatTexto: obtenerKaocupStatTexto,
+    guardarKaocupStatTexto: guardarKaocupStatTexto,
+    obtenerKaocupPlayoffTexto: obtenerKaocupPlayoffTexto,
+    guardarKaocupPlayoffTexto: guardarKaocupPlayoffTexto,
+    obtenerSuperekaoStatTexto: obtenerSuperekaoStatTexto,
+    guardarSuperekaoStatTexto: guardarSuperekaoStatTexto,
+    obtenerSuperekaoPlayoffTexto: obtenerSuperekaoPlayoffTexto,
+    guardarSuperekaoPlayoffTexto: guardarSuperekaoPlayoffTexto,
     obtenerSceStatTexto: obtenerSceStatTexto,
     guardarSceStatTexto: guardarSceStatTexto,
     obtenerScePlayoffTexto: obtenerScePlayoffTexto,

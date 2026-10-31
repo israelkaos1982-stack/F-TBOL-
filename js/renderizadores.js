@@ -1502,6 +1502,23 @@
     }
     return true;
   }
+  // ¿Coincidencia parcial segura entre dos nombres normalizados? Solo por
+  // PALABRAS completas ("inter" NO casa con "cf intercity") y nunca contra
+  // un filial ("girona fc b" != "girona fc", "atletico c" != "atletico").
+  function _coincideParcialSeguro(a, b) {
+    if (a === b) return true;
+    var corto = a.length <= b.length ? a : b, largo = a.length <= b.length ? b : a;
+    if (corto.length <= 2) return false;
+    var esc = corto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (!new RegExp("(^|[^a-z0-9])" + esc + "($|[^a-z0-9])").test(largo)) return false;
+    var resto = largo.replace(corto, " ").trim();
+    return !/^(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria|juvenil|sub-?\d+)$/.test(resto);
+  }
+
+  function _sufijoFilial(n) {
+    var m = /\s(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria)$/.exec(n);
+    return m ? m[1] : "";
+  }
   function _buscarRivalReal(norm) {
     if (!_rivalesRealesMap) return null;
     if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
@@ -1522,7 +1539,7 @@
       var mejorSub = null, mejorSubDiff = Infinity, empatadoSub = false;
       for (var i = 0; i < claves.length; i++) {
         var k = claves[i];
-        if (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1) {
+        if (_coincideParcialSeguro(k, norm)) {
           var diff = Math.abs(k.length - norm.length);
           if (diff < mejorSubDiff) { mejorSubDiff = diff; mejorSub = k; empatadoSub = false; }
           else if (diff === mejorSubDiff && k !== mejorSub) { empatadoSub = true; }
@@ -1530,13 +1547,13 @@
       }
       if (mejorSub && !empatadoSub) return _rivalesRealesMap[mejorSub];
     }
-    var candAbrev = claves.filter(function (k2) { return _matchAbreviatura(norm, k2); });
+    var candAbrev = claves.filter(function (k2) { return _sufijoFilial(k2) === _sufijoFilial(norm) && _matchAbreviatura(norm, k2); });
     if (candAbrev.length === 1) return _rivalesRealesMap[candAbrev[0]];
     if (norm.length >= 6) {
       var mejor = null, mejorDist = 3, empatado = false;
       for (var j = 0; j < claves.length; j++) {
         var d = _distanciaEdicion(norm, claves[j]);
-        if (d <= 2) {
+        if (d <= 2 && _sufijoFilial(claves[j]) === _sufijoFilial(norm)) {
           if (d < mejorDist) { mejorDist = d; mejor = claves[j]; empatado = false; }
           else if (d === mejorDist) { empatado = true; }
         }
@@ -1609,8 +1626,7 @@
     }
 
     var parcial = candidatos.find(function (e) {
-      var n = _normNombre(e.nombre);
-      return norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1);
+      return norm.length > 2 && _coincideParcialSeguro(_normNombre(e.nombre), norm);
     });
     if (parcial) return parcial;
 
@@ -2061,7 +2077,16 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
-      l = l.replace(/^\d+[ºª°]?[.\-)]?\s*/, ""); // quita "1º ", "12.", "3) "...
+      l = l.replace(/^#?\s*\d+[ºª°]?[.\-)]?\s*/, ""); // quita "1º ", "12.", "3) "...
+      // Formato de la app real: "Jugador · Equipo · Cantidad · PJ · Coef."
+      // (lo que se copia tal cual) — la 3ª columna es la cantidad.
+      if (l.indexOf(" · ") !== -1) {
+        var cols = l.split(" · ").map(function (c) { return c.trim(); });
+        if (cols.length >= 3 && /^\d+(?:[.,]\d+)?$/.test(cols[2]) && cols[0]) {
+          items.push({ nombre: cols[0], equipo: cols[1] || "", cantidad: Number(cols[2].replace(",", ".")) });
+        }
+        return;
+      }
       var m = l.match(/^(.*\S)\s+(\d+(?:[.,]\d+)?)\s*$/);
       if (!m) return;
       var cantidad = Number(m[2].replace(",", "."));
@@ -2524,7 +2549,7 @@
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
     });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ============================================================
@@ -3334,7 +3359,7 @@
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
     });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   function renderizarLiga1RefStatDetalle(contenedorId, idClubActivo, categoria, ligaId) {
@@ -3622,7 +3647,7 @@
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
     });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la Copa" de UN club: ronda actual (la de su partido
@@ -3842,7 +3867,9 @@
     var t = _normNombre(rondaTexto || "");
     var mRep = /^rep(\d+)$/.exec(rondaKey);
     if (mRep) return /repesca|playoff/.test(t) && new RegExp("\\b" + mRep[1] + "\\s*(vs|v|-)\\s*" + mRep[1] + "\\b").test(t);
-    if (rondaKey === "r64") return /1\s*\/\s*64/.test(t);
+    if (rondaKey === "r64") return /1\s*\/\s*64|\b1\s*[ªa]?\s*ronda\b/.test(t);
+    if (rondaKey === "previa") return /ronda previa|\bprevia\b/.test(t);
+    if (rondaKey === "ronda2") return /\b2\s*[ªa]?\s*ronda\b/.test(t);
     if (rondaKey === "dieciseisavos") return /1\s*\/\s*16/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
     if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
@@ -4318,7 +4345,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la Recopa" de UN club — mismo cálculo EXACTO que
@@ -4810,7 +4837,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de Intercontinental" de UN club — mismo cálculo EXACTO
@@ -5489,7 +5516,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la Supercopa de Europa" de UN club — mismo cálculo
@@ -5952,7 +5979,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la KAO Cup" de UN club — mismo cálculo
@@ -5977,7 +6004,9 @@
     "Mismo formato que la Copa del Rey, pero TODAS las eliminatorias a partido único, con prórroga y penaltis en caso de empate.",
     "",
     "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
-    "1/64 · 1ª Ronda.",
+    "Ronda previa.",
+    "1ª Ronda.",
+    "2ª Ronda.",
     "Dieciseisavos de Final.",
     "Octavos de Final.",
     "Cuartos de Final.",
@@ -6067,7 +6096,9 @@
   // rondas se ven todas aquí, igual que Intercontinental/Verano arrancan
   // en Octavos.
   var KAOCUP_PLAYOFF_RONDAS = [
-    { key: "r64", label: "1/64 · 1ª Ronda" },
+    { key: "previa", label: "Ronda previa" },
+    { key: "r64", label: "1ª Ronda" },
+    { key: "ronda2", label: "2ª Ronda" },
     { key: "dieciseisavos", label: "Dieciseisavos de Final" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
@@ -6142,7 +6173,9 @@
   // admin pegó para ESA ronda.
   function calcularKaocupPlayoffTodasLasRondas(datos) {
     return {
+      previa: _kaocupRondaDesdeTexto(datos, "previa"),
       r64: _kaocupRondaDesdeTexto(datos, "r64"),
+      ronda2: _kaocupRondaDesdeTexto(datos, "ronda2"),
       dieciseisavos: _kaocupRondaDesdeTexto(datos, "dieciseisavos"),
       octavos: _kaocupRondaDesdeTexto(datos, "octavos"),
       cuartos: _kaocupRondaDesdeTexto(datos, "cuartos"),
@@ -6425,7 +6458,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la SuperEKAO" de UN club — mismo cálculo
@@ -6936,7 +6969,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Bloque "estado de la Supercopa de España" de UN club — mismo cálculo
@@ -7516,7 +7549,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -7558,10 +7591,24 @@
   // penaltis si el agregado quedó empatado (ver _CHAMPIONS_MARCADOR_PEN_RE).
   // El orden de los 2 nombres no implica localía (una eliminatoria a
   // doble partido no tiene un "local" único).
+  // Normaliza una línea de cruce pegada tal cual de la app real:
+  //   "A 1-1 B (prórroga, pen. 6-7) ✅ B"  ->  "A 1 (6) vs (7) 1 B"
+  //   "A 3-1 B (prórroga) ✅ A"            ->  "A 3-1 B"
+  //   "X pasa directo" / "? vs ?" / sin marcador -> "" (se ignora)
+  function _normalizarLineaCruce(l) {
+    l = l.replace(/\s*✅.*$/, "").trim();
+    if (!l || /pasa directo\s*$/i.test(l) || /^\?\s*vs\s*\?$/i.test(l)) return "";
+    var mp = l.match(/^(.*\S)\s+(\d+)\s*(?:-|vs\.?)\s*(\d+)\s+(\S.*?)\s*\(\s*pr[óo]rroga\s*,\s*pen\.?\s*(\d+)\s*-\s*(\d+)\s*\)\s*$/i);
+    if (mp) return mp[1] + " " + mp[2] + " (" + mp[5] + ") vs (" + mp[6] + ") " + mp[3] + " " + mp[4];
+    return l.replace(/\s*\(\s*pr[óo]rroga\s*\)\s*$/i, "").trim();
+  }
+
   function parsearChampionsPlayoffTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
+      if (!l) return;
+      l = _normalizarLineaCruce(l);
       if (!l) return;
       var mp = l.match(_CHAMPIONS_MARCADOR_PEN_RE);
       if (mp) {
@@ -8426,7 +8473,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -9127,7 +9174,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -9851,7 +9898,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -10549,7 +10596,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -11215,7 +11262,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -11881,7 +11928,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -12548,7 +12595,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -13215,7 +13262,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -13884,7 +13931,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -14544,7 +14591,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -15204,7 +15251,7 @@
     );
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // ---------- Playoffs ----------
@@ -15844,7 +15891,7 @@
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
     });
-    return filas.slice(0, 15);
+    return filas.slice(0, 20);
   }
 
   // Agrupa los 15 partidos de Superliga del club activo por RIVAL (5

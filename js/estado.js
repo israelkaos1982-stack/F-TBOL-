@@ -1637,8 +1637,8 @@
     { id: "derbys", icono: "⚔️", etiqueta: "Derbys" },
     { id: "ranking", icono: "📊", etiqueta: "Ranking" },
     { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
-    { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
-    { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
+    { id: "liga1ref", icono: "🇪🇸", etiqueta: "Liga 1ª REF" },
+    { id: "copadelrey", icono: "🏆", etiqueta: "Copa del Rey" },
     { id: "superliga", icono: "👥️", etiqueta: "Superliga" },
     { id: "supercopaespana", icono: "🏆", etiqueta: "Supercopa España" },
     { id: "champions", icono: "🇪🇺", etiqueta: "Champions" },
@@ -1651,7 +1651,7 @@
     // tarjeta de fábrica NUEVA..." un poco más abajo) la incorpora sola,
     // al final del orden guardado, en cualquier club que ya tuviera su
     // menú personalizado ANTES de esta versión.
-    { id: "uel", icono: "🟠", etiqueta: "E. League" },
+    { id: "uel", icono: "🇪🇺", etiqueta: "E. League" },
     // Petición usuario ("Creame la Conference, idéntica a Champions y
     // Europa League con sus colores en verde"): MISMO tratamiento de
     // fábrica que "champions"/"uel" — tarjeta builtin en las 6 cajas.
@@ -1659,7 +1659,7 @@
     // "uel" (ver comentario justo arriba): el mecanismo ya existente de
     // obtenerMenuClub() la incorpora sola en cualquier club que ya
     // tuviera su menú personalizado antes de esta versión.
-    { id: "uecl", icono: "🟢", etiqueta: "Conference" },
+    { id: "uecl", icono: "🇪🇺", etiqueta: "Conference" },
     // Petición usuario ("vamos a crear la recopa de europa, Estilo caja
     // Champions con caja humanos y eliminatorias"): MISMO tratamiento de
     // fábrica que "champions"/"uel"/"uecl" — tarjeta builtin en las 6
@@ -1669,7 +1669,7 @@
     // cualquier club que ya tuviera su menú personalizado antes de esta
     // versión. 🥈 — mismo emoji que ya usa la app para "Recopa Campeón y
     // Subcampeón" (ver renderizadores.js, leyenda de Copa del Rey).
-    { id: "recopa", icono: "🥈", etiqueta: "Recopa" },
+    { id: "recopa", icono: "🏆", etiqueta: "Recopa" },
     // Petición usuario ("crear torneo Intercontinental, 16 equipos,
     // eliminatorias como la copa del rey desde Octavos-Cuartos-Semifinal
     // y final a partido único con prórroga y penaltis"): MISMO
@@ -1680,7 +1680,7 @@
     // FINALES_ACTIVADAS_COMPS), solo faltaba esta tarjeta + su motor.
     // 🌎 — el emoji que ya usa la Leyenda del calendario para
     // "Intercontinental" en otras pantallas de la app.
-    { id: "intercontinental", icono: "🌎", etiqueta: "Intercontinental" },
+    { id: "intercontinental", icono: "🏆", etiqueta: "Intercontinental" },
     // Petición usuario ("Creame torneo de verano, 16 equipos jugando
     // eliminatorias como la copa del rey desde Octavos-Cuartos-
     // Semifinal y final a partido único con prórroga y penaltis, con
@@ -1705,7 +1705,7 @@
     // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
     { id: "kaocup", icono: "🏆", etiqueta: "KAO Cup" },
     // Competición nueva (petición usuario): tarjeta builtin en las cajas humanas, sin exclusión.
-    { id: "superekao", icono: "♟️", etiqueta: "SuperEKAO" },
+    { id: "superekao", icono: "🏆", etiqueta: "SuperEKAO" },
     // Petición usuario ("vamos a montar las selecciones"): Nations Cup
     // (11 grupos de 5 + eliminatorias desde Octavos, todo ida y vuelta).
     // Tarjeta builtin en todas las cajas MENOS Barcelona (sin selección):

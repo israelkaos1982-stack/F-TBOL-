@@ -13,7 +13,8 @@
     balones: "data/balones.json",
     partidos: "data/partidos.json",
     rivalesReales: "data/rivales_reales.json",
-    titulos: "data/titulos.json"
+    titulos: "data/titulos.json",
+    seleccionesIA: "data/selecciones_ia.json" // 3.5 KB: nivel + colores de las selecciones IA
   };
 
   // Rango de valoracionPoder (correlativo con data/estadios.json) por liga —
@@ -59,6 +60,7 @@
 
   var _estadiosLista = null; // caché síncrona para obtenerEstadioCorrelativoAjustado
   var _rivalesAltMap = null; // nombre alternativo normalizado (ej. "club brujas") -> ficha
+  var _seleccionesIAMap = {}; // clave normalizada -> [nivel, color1, color2, (color3)] (data/selecciones_ia.json)
   var _rivalesRealesMap = null; // caché síncrona clave normalizada -> ficha, para resolverRivalPorNombre
 
   function cargarTodo() {
@@ -69,8 +71,10 @@
       cargarJSON(DATA_URLS.balones),
       cargarJSON(DATA_URLS.partidos),
       cargarJSON(DATA_URLS.rivalesReales),
-      cargarJSON(DATA_URLS.titulos)
+      cargarJSON(DATA_URLS.titulos),
+      cargarJSON(DATA_URLS.seleccionesIA).catch(function () { return {}; })
     ]).then(function (r) {
+      _seleccionesIAMap = r[7] || {};
       // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
       // referencia en cada llamada a cargarTodo) — NUNCA se mutan
       // directamente, se copian antes de fusionar el overlay de
@@ -505,13 +509,19 @@
   function _crearSeleccionIA(nombre) {
     var norm = _normNombre(nombre);
     var siglas = (norm.replace(/[^a-z]/g, "").slice(0, 3) || "?").toUpperCase();
-    return {
+    var sel = {
       id: "sel-ia-" + norm.replace(/[^a-z0-9]+/g, "-"),
       nombre: nombre, siglas: siglas, esSeleccion: true,
       bandera: _banderaDePais(nombre),
       colorPrimario: "#2b2f36", colorSecundario: "#101114",
       valoracionPoder: 75, mostrarSiglas: true
     };
+    var d = _seleccionesIAMap && _seleccionesIAMap[norm];
+    if (d) { // nivel y colores reales (data/selecciones_ia.json)
+      sel.valoracionPoder = d[0]; sel.colorPrimario = d[1]; sel.colorSecundario = d[2] || d[1];
+      if (d[3]) sel.colorTerciario = d[3];
+    }
+    return sel;
   }
   // Resuelve el nombre de una selección escrito en el Calendario extra de la
   // Nations Cup: una selección humana (Francia, España...) -> su equipo "sel-*";

@@ -3987,6 +3987,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, COPA_PLAYOFF_RONDAS, "COPA");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador AGREGADO — partido único, o ida+vuelta ya sumada</span>' +
       "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
@@ -4661,6 +4663,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, RECOPA_PLAYOFF_RONDAS, "RECOPA");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
       "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
@@ -5140,6 +5144,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, INTER_PLAYOFF_RONDAS, "INTER");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
       "<span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>"
@@ -5452,6 +5458,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, VERANO_PLAYOFF_RONDAS, "VERANO");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
@@ -5814,6 +5822,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, USC_PLAYOFF_RONDAS, "USC");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
@@ -6249,22 +6259,38 @@
       var mv = l.replace(/\s*✅.*$/, "").match(/^(.*\S)\s+vs\.?\s+(\S.*)$/i);
       if (mv) itemsTexto.push({ equipoA: mv[1].trim(), equipoB: mv[2].trim(), golA: null, golB: null });
     });
+    var autosArr = ties.splice(0, ties.length); // los cruces de clubes humanos jugados
+    var usado = autosArr.map(function () { return false; });
+    function siguienteAuto() {
+      for (var i = 0; i < autosArr.length; i++) if (!usado[i]) { usado[i] = true; return autosArr[i]; }
+      return null;
+    }
     itemsTexto.forEach(function (it) {
       if (it.pend) {
-        ties.push({ equipoA: "", equipoB: "", textoPend: "?", esAuto: false });
+        // Un hueco "? vs ?" se rellena solo cuando juega un club humano.
+        var a = siguienteAuto();
+        ties.push(a || { equipoA: "", equipoB: "", textoPend: "?", esAuto: false });
         return;
       }
       var objA = resolverRivalPorNombre(it.equipoA, datos, null);
       var objB = resolverRivalPorNombre(it.equipoB, datos, null);
       var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
       var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
-      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
+      if (idxHumanoA !== undefined || idxHumanoB !== undefined) {
+        // su cruce lo aporta el auto-cómputo humano, en el sitio de esta línea
+        var idx = idxHumanoA !== undefined ? idxHumanoA : idxHumanoB;
+        if (!usado[idx]) { usado[idx] = true; ties.push(autosArr[idx]); }
+        return;
+      }
 
       ties.push({
         equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
         penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
       });
     });
+    // Los humanos que no encajaron en ninguna línea ni hueco, arriba del todo.
+    var sobrantes = autosArr.filter(function (_, i) { return !usado[i]; });
+    if (sobrantes.length) ties.unshift.apply(ties, sobrantes);
 
     return ties;
   }
@@ -6288,10 +6314,6 @@
   function _renderizarKaocupEliminatorias(contenedor, datos, idClubActivo) {
     var rondas = calcularKaocupPlayoffTodasLasRondas(datos);
 
-    contenedor.insertAdjacentHTML("beforeend",
-      '<div class="admin-roadmap-editor-acciones"><button type="button" class="admin-list-add-btn" data-accion="importar-kaocup-todo" data-club-id="' +
-      (idClubActivo || "") + '">📥 Importar todo el texto</button></div>');
-
     KAOCUP_PLAYOFF_RONDAS.forEach(function (meta) {
       var ties = rondas[meta.key] || [];
       var bloque = document.createElement("div");
@@ -6299,8 +6321,11 @@
       var header =
         '<div class="copa-club-header">' +
         '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-kaocup-playoff-inline" data-ronda="' +
-        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        // Solo la Ronda previa lleva ✏️: abre la importación de TODO el texto.
+        (meta.key === "previa"
+          ? '<button type="button" class="liga1ref-editar-btn" data-accion="importar-kaocup-todo" data-club-id="' +
+            (idClubActivo || "") + '" aria-label="Importar todo el texto">✏️</button>'
+          : "") +
         "</div>";
       var cuerpo;
       if (!ties.length) {
@@ -6313,6 +6338,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, KAOCUP_PLAYOFF_RONDAS, "KAOCUP");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
@@ -6785,6 +6812,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, SUPEREKAO_PLAYOFF_RONDAS, "SUPEREKAO");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
@@ -7294,6 +7323,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, SCE_PLAYOFF_RONDAS, "SCE");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Marcador de partido único — con prórroga y penaltis si hace falta</span>' +
@@ -8057,6 +8088,54 @@
   // `esLocal`: el LOCAL (lado A) va en espejo del visitante — nombre a la
   // izquierda, escudo PEGADO al marcador —, así el escudo de cada lado
   // queda junto al resultado (estilo Pro Evolution 6).
+  // ---------- Cajas de ronda estilo PES6 (todas las competiciones por
+  // eliminatoria): 1/128 · 1/64 · 1/32 · 1/16 · 1/8 · 1/4 · 1/2 · FINAL ----------
+  // Se llama justo después de pintar los bloques de ronda
+  // (.champions-playoff-ronda, uno por entrada de `metaList`, en orden):
+  // inserta la tira de cajas arriba y deja visible SOLO la ronda elegida.
+  var _rondaSelPES6 = {}; // compKey -> key de la ronda elegida (solo mientras la app está abierta)
+  var _RONDA_CORTA_PES6 = { previa: "1/128", r64: "1/64", ronda2: "1/32", dieciseisavos: "1/16", octavos: "1/8", cuartos: "1/4", semis: "1/2", final: "FINAL" };
+  function _cajasRondasPES6(contenedor, metaList, compKey) {
+    var bloques = Array.prototype.slice.call(contenedor.querySelectorAll(".champions-playoff-ronda"));
+    bloques = bloques.slice(bloques.length - metaList.length);
+    if (bloques.length !== metaList.length || bloques.length < 2) return;
+    var sel = _rondaSelPES6[compKey];
+    if (!metaList.some(function (m) { return m.key === sel; })) {
+      // Por defecto: la última ronda que ya tiene algún marcador jugado.
+      sel = metaList[0].key;
+      bloques.forEach(function (b, i) {
+        if (b.querySelector(".champions-tie-marcador:not(.champions-tie-marcador--pendiente)")) sel = metaList[i].key;
+      });
+    }
+    var tira = document.createElement("div");
+    tira.className = "ronda-cajas";
+    metaList.forEach(function (m) {
+      var caja = document.createElement("button");
+      caja.type = "button";
+      caja.className = "ronda-caja";
+      caja.setAttribute("data-key", m.key);
+      var rep = /^rep(\d+)$/.exec(m.key);
+      caja.textContent = _RONDA_CORTA_PES6[m.key] || (rep ? "REP. " + rep[1] : m.label);
+      caja.title = m.label;
+      tira.appendChild(caja);
+    });
+    function pintar() {
+      Array.prototype.forEach.call(tira.children, function (c) {
+        c.classList.toggle("ronda-caja--activa", c.getAttribute("data-key") === sel);
+      });
+      bloques.forEach(function (b, i) { b.style.display = metaList[i].key === sel ? "" : "none"; });
+    }
+    tira.addEventListener("click", function (ev) {
+      var c = ev.target.closest(".ronda-caja");
+      if (!c) return;
+      sel = c.getAttribute("data-key");
+      _rondaSelPES6[compKey] = sel;
+      pintar();
+    });
+    bloques[0].parentNode.insertBefore(tira, bloques[0]);
+    pintar();
+  }
+
   function _championsLadoTieHTML(nombre, obj, clase, esTuyo, esLocal, textoPend) {
     var cls = esLocal ? " champions-tie-lado--local" : "";
     if (!nombre) {
@@ -8187,6 +8266,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, CHAMPIONS_PLAYOFF_RONDAS, "CHAMPIONS");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
@@ -8885,6 +8966,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, UEL_PLAYOFF_RONDAS, "UEL");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
@@ -9587,6 +9670,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, UECL_PLAYOFF_RONDAS, "UECL");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -10274,6 +10359,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, NATIONS_PLAYOFF_RONDAS, "NATIONS");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
@@ -10971,6 +11058,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, SLX_PLAYOFF_RONDAS, "SLX");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO (gol fuera de casa)</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -11636,6 +11725,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, ROADEUROCOPA_PLAYOFF_RONDAS, "ROADEUROCOPA");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
@@ -12305,6 +12396,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, EUROCOPA_PLAYOFF_RONDAS, "EUROCOPA");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -12969,6 +13062,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, ROADMUNDIAL_PLAYOFF_RONDAS, "ROADMUNDIAL");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Ida y vuelta — marcador AGREGADO</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
@@ -13640,6 +13735,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, MUNDIALSEL_PLAYOFF_RONDAS, "MUNDIALSEL");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -14306,6 +14403,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, ROADAMERICA_PLAYOFF_RONDAS, "ROADAMERICA");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -14966,6 +15065,8 @@
       contenedor.appendChild(bloque);
     });
 
+    _cajasRondasPES6(contenedor, ROADAFRICA_PLAYOFF_RONDAS, "ROADAFRICA");
+
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'
     ));
@@ -15625,6 +15726,8 @@
       bloque.innerHTML = header + cuerpo;
       contenedor.appendChild(bloque);
     });
+
+    _cajasRondasPES6(contenedor, ROADASIA_PLAYOFF_RONDAS, "ROADASIA");
 
     contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
       '<div class="liga1ref-leyenda-grid"><span>Partido único — con prórroga y penaltis si hace falta</span><span>Cada ronda se pega en texto por separado — los cruces de un club humano se auto-computan</span></div>'

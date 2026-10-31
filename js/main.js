@@ -3224,6 +3224,10 @@
         case "cancelar-kaocup-stat": cancelarKaocupStat(d.clubId, d.categoria); break;
         case "editar-kaocup-playoff-inline": editarKaocupPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-kaocup-playoff": guardarKaocupPlayoff(d.clubId, d.ronda); break;
+        case "vaciar-textarea": (function () {
+          var t = document.getElementById(d.target);
+          if (t) { t.value = ""; t.focus(); }
+        })(); break;
         case "importar-kaocup-todo": importarKaocupTodo(d.clubId); break;
         case "guardar-kaocup-importar": guardarKaocupImportar(d.clubId); break;
         case "cancelar-kaocup-importar": if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", d.clubId); break;

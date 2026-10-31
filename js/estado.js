@@ -1833,7 +1833,11 @@
       var custom = ov.personalizadas[id];
       if (!custom) return null;
       return Object.assign({ esCustom: true, id: id, oculta: !!ov.ocultas[id] }, custom);
-    }).filter(Boolean);
+    }).filter(Boolean).map(function (it) {
+      // Los nombres de las cajas del menú van SIEMPRE en mayúsculas.
+      if (it.etiqueta) it.etiqueta = String(it.etiqueta).toUpperCase();
+      return it;
+    });
   }
   // 👁/🙈 — oculta o muestra una tarjeta del menú SIN borrarla (de fábrica
   // o añadida por el admin). Independiente de icono/etiqueta/orden: ni

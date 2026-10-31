@@ -1805,6 +1805,12 @@
     orden = orden.filter(function (id) { return !excluidas[id]; });
 
     var torneoSelActivo = obtenerTorneoSelActivo();
+    // Valores ANTIGUOS de fábrica que un override guardado todavía trae: se
+    // sustituyen al leer (si el admin puso otro texto/icono, se respeta).
+    var MIGRAR_OVERRIDE = {
+      nations: { etiqueta: { "selección": "NATIONS CUP", "seleccion": "NATIONS CUP" } },
+      superekao: { icono: { "♟️": "🏆", "♟": "🏆" } }
+    };
     return orden.map(function (id) {
       if (builtinPorId[id]) {
         var override = ov.overridesFabrica[id];
@@ -1814,7 +1820,15 @@
           builtinPorId[id],
           basePorClub,
           override || {}
-        );
+        , (function () {
+          var m = MIGRAR_OVERRIDE[id], ov2 = override || {}, fix = {};
+          if (m) Object.keys(m).forEach(function (campo) {
+            var v = String(ov2[campo] == null ? "" : ov2[campo]).trim();
+            var clave = campo === "etiqueta" ? v.toLowerCase() : v;
+            if (m[campo][clave]) fix[campo] = m[campo][clave];
+          });
+          return fix;
+        })());
       }
       var custom = ov.personalizadas[id];
       if (!custom) return null;

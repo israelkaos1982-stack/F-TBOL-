@@ -8173,7 +8173,7 @@
     var nom = '<span class="champions-tie-nombre">' + escapeHTML(nombre) +
       (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>";
     var esc = crearEscudoHTML(obj, "escudo--sm");
-    return '<div class="champions-tie-lado' + clase + cls + '">' + (esLocal ? nom + esc : esc + nom) + "</div>";
+    return '<div class="champions-tie-lado' + clase + cls + (esTuyo ? " champions-tie-lado--tuyo" : "") + '">' + (esLocal ? nom + esc : esc + nom) + "</div>";
   }
 
   function _championsTieRowHTML(tie, idClubActivo) {

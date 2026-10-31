@@ -3824,8 +3824,8 @@
     { key: "dieciseisavos", label: "Dieciseisavos de Final" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
-    { key: "semis", label: "Semifinales" },
-    { key: "final", label: "Final" }
+    { key: "semis", label: "Semifinales (ida y vuelta)" },
+    { key: "final", label: "Final (ida y vuelta)" }
   ];
 
   // La convención libre que ya usa esta app para el campo `ronda` de un
@@ -10982,6 +10982,7 @@
     "📋FORMATO SUPERLIGA:",
     "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
     "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de casa",
+    "La Final también es a Ida y Vuelta con gol fuera de casa",
     "Los grupos por bombos por sorteo por nivel",
     "Los partidos de SuperLiga Humano vs IA y Humano vs Humano salen en el calendario Próximo Partido como el resto de Competiciones",
     "",

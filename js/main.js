@@ -547,6 +547,16 @@
       repintarMenuClub(clubId);
     });
   }
+  function copiarMenuClubATodos(clubId) {
+    if (!window.Estado || !window.Renderizadores) return;
+    if (!window.confirm("¿Copiar el menú de este club (orden, nombres, iconos y cajas ocultas) a los demás clubes? Sustituye el que tengan ahora.")) return;
+    window.Renderizadores.cargarTodo().then(function (datos) {
+      var ids = ((datos.equipos && datos.equipos.equipos) || []).map(function (e) { return e.id; });
+      var n = window.Estado.copiarMenuClubA(clubId, ids);
+      window.alert("Menú copiado a " + n + " club(es).");
+      repintarMenuClub(clubId);
+    });
+  }
   function moverTarjetaMenuClub(clubId, id, direccion) {
     if (!window.Estado) return;
     window.Estado.moverTarjetaMenuClub(clubId, id, Number(direccion));
@@ -3107,6 +3117,7 @@
         case "reiniciar-temporada-club": reiniciarTodosPartidosClub(d.clubId); break;
         case "cambiar-division-club": cambiarDivisionClub(d.clubId, d.divisionId); break;
         case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
+        case "copiar-menu-club-a-todos": copiarMenuClubATodos(d.clubId); break;
         case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
         case "editar-tarjeta-menu-club": editarTarjetaMenuClubPrompt(d.clubId, d.id, d.icono, d.etiqueta); break;
         case "toggle-visibilidad-tarjeta-menu-club": toggleVisibilidadTarjetaMenuClub(d.clubId, d.id); break;

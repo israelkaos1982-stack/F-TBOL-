@@ -19853,7 +19853,10 @@
     // icono/nombre que tengan en el menú del club), debajo la barra
     // "Próximo partido" (abre el calendario), la barra "Objetivos" y el resto
     // de tarjetas del menú en su orden. Los datos/vistas son los mismos.
-    var ids3 = ["titulos", "derbys", "ranking"];
+    var ids3 = ["titulos", "derbys", "objetivos", "ranking"];
+    if (!tarjetas.some(function (t) { return t.id === "objetivos"; })) {
+      tarjetas = tarjetas.concat([{ id: "objetivos", icono: "🎯", etiqueta: "OBJETIVOS" }]);
+    }
     var caja3 = tarjetas.filter(function (t) { return ids3.indexOf(t.id) !== -1; })
       .sort(function (a, b) { return ids3.indexOf(a.id) - ids3.indexOf(b.id); });
     if (caja3.length) {
@@ -19875,14 +19878,6 @@
     btnCal.setAttribute("data-ir-calendario", "1");
     btnCal.innerHTML = '<span class="club-menu-btn-icon">⚽</span><span class="club-menu-btn-label">Próximo partido</span>';
     frag.appendChild(btnCal);
-    if (!tarjetas.some(function (t) { return t.id === "objetivos"; })) {
-      var btnObj = document.createElement("button");
-      btnObj.type = "button";
-      btnObj.className = "club-menu-btn";
-      btnObj.dataset.clubVista = "objetivos";
-      btnObj.innerHTML = '<span class="club-menu-btn-icon">🎯</span><span class="club-menu-btn-label">Objetivos</span>';
-      frag.appendChild(btnObj);
-    }
     tarjetas.forEach(function (t) {
       if (ids3.indexOf(t.id) !== -1) return;
       var btn = document.createElement("button");
@@ -19927,6 +19922,18 @@
     notaAdd.className = "admin-nota";
     notaAdd.textContent = "Se añade a la vez a los 6 clubes — no hace falta repetirlo en cada uno.";
     contenedor.appendChild(notaAdd);
+
+    var btnCopiar = document.createElement("button");
+    btnCopiar.type = "button";
+    btnCopiar.className = "admin-list-add-btn";
+    btnCopiar.dataset.accion = "copiar-menu-club-a-todos";
+    btnCopiar.dataset.clubId = clubId;
+    btnCopiar.textContent = "📋 Copiar este menú a los demás clubes";
+    contenedor.appendChild(btnCopiar);
+    var notaCopiar = document.createElement("p");
+    notaCopiar.className = "admin-nota";
+    notaCopiar.textContent = "Deja a los otros clubes con este mismo orden, nombres, iconos y cajas ocultas (cada uno mantiene su propia caja de liga).";
+    contenedor.appendChild(notaCopiar);
 
     var tarjetas = window.Estado ? window.Estado.obtenerMenuClub(clubId) : [];
     var frag = document.createDocumentFragment();

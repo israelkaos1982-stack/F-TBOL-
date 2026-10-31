@@ -1839,6 +1839,23 @@
       return it;
     });
   }
+  // Copia el menú de UN club (orden, nombres/iconos editados, ocultas y
+  // tarjetas añadidas) a otros clubes, para que tengan "misma organización,
+  // mismos iconos". Cada destino conserva su PROPIA tarjeta de liga
+  // (liga1ref) porque cambia según la liga que juegue cada club.
+  function copiarMenuClubA(origenId, destinoIds) {
+    var src = _cargarMenuClub(origenId);
+    var n = 0;
+    (destinoIds || []).forEach(function (destId) {
+      if (!destId || destId === origenId) return;
+      var dst = _cargarMenuClub(destId);
+      var copia = JSON.parse(JSON.stringify(src));
+      var propiaLiga = dst.overridesFabrica && dst.overridesFabrica.liga1ref;
+      if (propiaLiga) copia.overridesFabrica.liga1ref = propiaLiga; else delete copia.overridesFabrica.liga1ref;
+      if (_guardarMenuClub(destId, copia)) n++;
+    });
+    return n;
+  }
   // 👁/🙈 — oculta o muestra una tarjeta del menú SIN borrarla (de fábrica
   // o añadida por el admin). Independiente de icono/etiqueta/orden: ni
   // editarTarjetaMenuClub ni moverTarjetaMenuClub la tocan nunca.
@@ -4898,6 +4915,7 @@
     obtenerCalendarioTexto: obtenerCalendarioTexto,
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,
+    copiarMenuClubA: copiarMenuClubA,
     obtenerTorneoSelActivo: obtenerTorneoSelActivo,
     guardarTorneoSelActivo: guardarTorneoSelActivo,
     TORNEOS_SEL_IDS: TORNEOS_SEL_IDS,

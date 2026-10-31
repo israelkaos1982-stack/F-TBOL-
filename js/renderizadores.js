@@ -5511,9 +5511,10 @@
   // partido único con prórroga y penaltis (nunca ida+vuelta).
   var FORMATO_USC_TEXTO = [
     "📋FORMATO SUPERCOPA DE EUROPA:",
-    "4 clubes participan en 2 eliminatorias: Semifinales y Final.",
+    "8 clubes (los añades tú manualmente) participan en 3 eliminatorias desde Cuartos de Final hasta la final.",
     "",
     "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "Cuartos de Final — 4 vs 4.",
     "Semifinales — 2 vs 2.",
     "Final — 1 vs 1.",
     "",
@@ -5597,6 +5598,7 @@
   // rondas se ven todas aquí, igual que Intercontinental/Verano arrancan
   // en Octavos.
   var USC_PLAYOFF_RONDAS = [
+    { key: "cuartos", label: "Cuartos de Final" },
     { key: "semis", label: "Semifinales" },
     { key: "final", label: "Final" }
   ];
@@ -5668,6 +5670,7 @@
   // admin pegó para ESA ronda.
   function calcularUscPlayoffTodasLasRondas(datos) {
     return {
+      cuartos: _uscRondaDesdeTexto(datos, "cuartos"),
       semis: _uscRondaDesdeTexto(datos, "semis"),
       final: _uscRondaDesdeTexto(datos, "final")
     };
@@ -5688,7 +5691,9 @@
         "</div>";
       var cuerpo;
       if (!ties.length) {
-        cuerpo = meta.key === "semis"
+        cuerpo = meta.key === "cuartos"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 4 duelos de Cuartos de Final.</p>'
+          : meta.key === "semis"
           ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 2 duelos de Semifinales.</p>'
           : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir el cruce de ' + escapeHTML(meta.label) + '.</p>';
       } else {
@@ -5826,7 +5831,7 @@
   function pintarEditorUscPlayoff(contenedor, idClubActivo, rondaKey) {
     var meta = USC_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
     if (!meta) return;
-    var esSemis = rondaKey === "semis";
+    var esSemis = rondaKey === "semis" || rondaKey === "cuartos";
     contenedor.innerHTML = "";
 
     var nota = document.createElement("p");
@@ -5845,9 +5850,9 @@
     var textarea = document.createElement("textarea");
     textarea.id = "usc-playoff-textarea";
     textarea.className = "admin-roadmap-textarea";
-    textarea.rows = esSemis ? 6 : 4;
+    textarea.rows = esSemis ? (rondaKey === "cuartos" ? 8 : 6) : 4;
     textarea.placeholder = esSemis
-      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP"
+      ? "Liverpool 2-1 RB Leipzig\nArsenal 3 vs 0 Sporting CP" + (rondaKey === "cuartos" ? "\nReal Madrid 1-0 Inter\nAtlético Madrid 2-2 PSG" : "")
       : "Liverpool 1-0 Arsenal";
     textarea.value = window.Estado ? window.Estado.obtenerUscPlayoffTexto(rondaKey) : "";
     contenedor.appendChild(textarea);
@@ -6953,9 +6958,10 @@
   // partido único con prórroga y penaltis (nunca ida+vuelta).
   var FORMATO_SCE_TEXTO = [
     "📋FORMATO SUPERCOPA DE ESPAÑA:",
-    "4 clubes participan en 2 eliminatorias: Semifinales y Final.",
+    "8 clubes (los añades tú manualmente) participan en 3 eliminatorias desde Cuartos de Final hasta la final.",
     "",
     "👥️FORMATO ELIMINATORIAS (todas a partido único, con prórroga y penaltis en caso de empate):",
+    "Cuartos de Final — 4 vs 4.",
     "Semifinales — 2 vs 2.",
     "Final — 1 vs 1.",
     "",
@@ -7044,6 +7050,7 @@
   // Semifinal YA es la primera ronda del cuadro de 4 clubes — las 2
   // rondas se ven todas aquí, igual que Supercopa de Europa.
   var SCE_PLAYOFF_RONDAS = [
+    { key: "cuartos", label: "Cuartos de Final" },
     { key: "semis", label: "Semifinales" },
     { key: "final", label: "Final" }
   ];
@@ -7115,6 +7122,7 @@
   // admin pegó para ESA ronda.
   function calcularScePlayoffTodasLasRondas(datos) {
     return {
+      cuartos: _sceRondaDesdeTexto(datos, "cuartos"),
       semis: _sceRondaDesdeTexto(datos, "semis"),
       final: _sceRondaDesdeTexto(datos, "final")
     };
@@ -7135,7 +7143,9 @@
         "</div>";
       var cuerpo;
       if (!ties.length) {
-        cuerpo = meta.key === "semis"
+        cuerpo = meta.key === "cuartos"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 4 duelos de Cuartos de Final.</p>'
+          : meta.key === "semis"
           ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 2 duelos de Semifinales.</p>'
           : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir el cruce de ' + escapeHTML(meta.label) + '.</p>';
       } else {
@@ -7273,7 +7283,7 @@
   function pintarEditorScePlayoff(contenedor, idClubActivo, rondaKey) {
     var meta = SCE_PLAYOFF_RONDAS.filter(function (r) { return r.key === rondaKey; })[0];
     if (!meta) return;
-    var esSemis = rondaKey === "semis";
+    var esSemis = rondaKey === "semis" || rondaKey === "cuartos";
     contenedor.innerHTML = "";
 
     var nota = document.createElement("p");
@@ -7292,7 +7302,7 @@
     var textarea = document.createElement("textarea");
     textarea.id = "sce-playoff-textarea";
     textarea.className = "admin-roadmap-textarea";
-    textarea.rows = esSemis ? 6 : 4;
+    textarea.rows = esSemis ? (rondaKey === "cuartos" ? 8 : 6) : 4;
     textarea.placeholder = esSemis
       ? "Liverpool 2-1 Real Madrid\nArsenal 3 vs 0 FC Barcelona"
       : "Liverpool 1-0 Arsenal";
@@ -10756,7 +10766,7 @@
     contenedor.appendChild(tituloRow);
 
     if (!grupos.length) {
-      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los los 2 grupos de 4 clubes (A y B)."));
+      contenedor.appendChild(nodoEstado("📊", "Todavía no hay grupos pegados. Pulsa ✏️ para añadir los 2 grupos de 4 clubes (A y B)."));
     } else {
       grupos.forEach(function (g) {
         var sub = document.createElement("p");
@@ -10980,14 +10990,14 @@
   // Champions/Copa/Superliga/Liga 1ª REF (ver js/main.js::mostrarInfoSlx).
   var FORMATO_SLX_TEXTO = [
     "📋FORMATO SUPERLIGA:",
-    "8 Clubes (3 humanos) dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
+    "8 Clubes: los 3 humanos + 5 equipos IA que añades tú manualmente. Dividimos en 2 grupos de 4 equipos, jugando 3 partidos cada equipo",
     "Los 2 primeros pasan a Semifinales a Ida y Vuelta con gol fuera de casa",
     "La Final también es a Ida y Vuelta con gol fuera de casa",
     "Los grupos por bombos por sorteo por nivel",
     "Los partidos de SuperLiga Humano vs IA y Humano vs Humano salen en el calendario Próximo Partido como el resto de Competiciones",
     "",
     "👥️HUMANOS: Liverpool, Real Madrid y Atlético Madrid.",
-    "🤖IA: Inter, Manchester City, Arsenal, FC Barcelona y PSG."
+    "🤖IA: los 5 equipos que añadas manualmente en la pestaña Grupos."
   ].join("\n");
   function obtenerFormatoSlxTexto() {
     var override = window.Estado ? window.Estado.obtenerFormatoOverride("slx") : "";

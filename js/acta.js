@@ -81,6 +81,81 @@
     });
   }
 
+  // ---------- Plantillas REALES de equipos IA (data/plantillas_ia.json) ----------
+  // Petición usuario: guardar las plantillas reales (5 mejores por club y
+  // por selección; 11 titulares en Liga EA Sports/Hypermotion) pero que
+  // SOLO se usen cuando un equipo humano se enfrenta a una IA, y que no
+  // ocupen KB. Por eso: (1) un único fichero estático de ~60 KB (32 KB
+  // comprimido) con un texto por equipo ("P:a/D:b,c/M:d/L:e"); (2) se
+  // descarga PEREZOSAMENTE al abrir el partido en vivo de un humano
+  // contra una IA (iniciarPartidoEnVivo) — nunca en el arranque ni en
+  // las simulaciones IA-vs-IA; (3) vive solo en memoria: no se guarda en
+  // localStorage ni se sincroniza (no lleva prefijo ef7_). Tiene
+  // prioridad sobre `jugadores` de rivales_reales.json/equipos_ia.json y
+  // sobre el pool genérico. Regenerar con tools/generar_plantillas_ia.py.
+  var _plantillasIA = null;
+  var _plantillasIAPromesa = null;
+  var _plantillasIACache = {};
+  var _POS_PLANTILLA_IA = { P: "POR", D: "DEF", M: "MED", L: "DEL" };
+
+  function _normIA(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  }
+
+  function cargarPlantillasIA() {
+    if (_plantillasIA) return Promise.resolve(_plantillasIA);
+    if (!_plantillasIAPromesa) {
+      _plantillasIAPromesa = fetch("data/plantillas_ia.json")
+        .then(function (r) { if (!r.ok) throw new Error("plantillas_ia " + r.status); return r.json(); })
+        .then(function (d) { _plantillasIA = d || {}; _plantillasIACache = {}; return _plantillasIA; })
+        .catch(function () { _plantillasIAPromesa = null; return null; });
+    }
+    return _plantillasIAPromesa;
+  }
+
+  function _parsearPlantillaIA(txt) {
+    var out = [];
+    String(txt).split("/").forEach(function (grupo) {
+      var i = grupo.indexOf(":");
+      var pos = _POS_PLANTILLA_IA[grupo.slice(0, i)];
+      if (!pos) return;
+      grupo.slice(i + 1).split(",").forEach(function (n) { if (n) out.push({ nombre: n, posicion: pos }); });
+    });
+    return out;
+  }
+
+  // Plantilla real del equipo IA (o null). Orden: nombre exacto -> alias
+  // confirmado (nombre del juego -> clave del texto) -> coincidencia
+  // parcial SEGURA por palabras (la misma que usa resolverRivalPorNombre,
+  // nunca contra un filial) y solo si es única.
+  function _plantillaRealIA(equipo) {
+    if (!_plantillasIA || !equipo || !equipo.nombre) return null;
+    var esSel = !!equipo.esSeleccion;
+    var tabla = esSel ? _plantillasIA.s : _plantillasIA.c;
+    if (!tabla) return null;
+    var norm = _normIA(equipo.nombre);
+    var ck = (esSel ? "s|" : "c|") + norm;
+    if (Object.prototype.hasOwnProperty.call(_plantillasIACache, ck)) return _plantillasIACache[ck];
+
+    var txt = tabla[norm];
+    if (!txt && !esSel && _plantillasIA.a && _plantillasIA.a[norm]) txt = tabla[_plantillasIA.a[norm]];
+    if (!txt && norm.length > 2) {
+      var R = window.Renderizadores, mejor = null, mejorDif = Infinity, empate = false;
+      if (R && R.coincideParcialSeguro) {
+        Object.keys(tabla).forEach(function (k) {
+          if (!R.coincideParcialSeguro(k, norm)) return;
+          var d = Math.abs(k.length - norm.length);
+          if (d < mejorDif) { mejorDif = d; mejor = k; empate = false; }
+          else if (d === mejorDif && k !== mejor) empate = true;
+        });
+      }
+      if (mejor && !empate) txt = tabla[mejor];
+    }
+    var res = txt ? _parsearPlantillaIA(txt) : null;
+    _plantillasIACache[ck] = (res && res.length) ? res : null;
+    return _plantillasIACache[ck];
+  }
+
   // Elige, de la plantilla (real o sintética) de un equipo IA, un jugador
   // de Medio o Delantero al azar (fallback a cualquiera si no hay). NUNCA
   // pide selección manual — es automático e instantáneo. Devuelve un id
@@ -88,7 +163,9 @@
   // sumar los eventos de este mismo jugador entre partidos.
   function simularGoleadorAutomatorioIA(idEquipoIA, datos) {
     var equipo = window.Renderizadores.buscarEquipoPorId(idEquipoIA, datos);
-    var jugadores = (equipo && equipo.jugadores && equipo.jugadores.length) ? equipo.jugadores : _rosterSinteticoIA(idEquipoIA);
+    if (!_plantillasIA) cargarPlantillasIA(); // por si el evento llega antes de que acabe la descarga
+    var jugadores = _plantillaRealIA(equipo) ||
+      ((equipo && equipo.jugadores && equipo.jugadores.length) ? equipo.jugadores : _rosterSinteticoIA(idEquipoIA));
 
     var candidatos = jugadores.filter(function (j) { return j.posicion === "MED" || j.posicion === "DEL"; });
     if (!candidatos.length) candidatos = jugadores;
@@ -738,6 +815,9 @@
     var visitante = window.Renderizadores.buscarEquipoPorId(partido.visitante, datos);
     if (!local || !visitante) return;
 
+    // Humano contra IA: precarga las plantillas reales de la IA (ver arriba).
+    if (!local.mister || !visitante.mister) cargarPlantillasIA();
+
     actaTemporal = [];
     var R = window.Renderizadores;
     var modo = R.detectarModoPartido ? R.detectarModoPartido(partido) : "eliminatoria-unica";
@@ -1128,6 +1208,8 @@
     agregarEventoActa: agregarEventoActa,
     eliminarEventoDeActa: eliminarEventoDeActa,
     simularGoleadorAutomatorioIA: simularGoleadorAutomatorioIA,
+    cargarPlantillasIA: cargarPlantillasIA,
+    plantillaRealIA: _plantillaRealIA,
     calcularMarcadorDesdeActa: calcularMarcadorDesdeActa,
     finalizarYSubirPartido: finalizarYSubirPartido,
     iniciarPartidoEnVivo: iniciarPartidoEnVivo,

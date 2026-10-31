@@ -1268,6 +1268,11 @@
   var SUPERLIGA_ORDEN_ID = ["liverpool", "arsenal", "real-madrid", "atletico-madrid", "fc-barcelona", "psg", "manchester-city", "inter-milan"];
 
   function _partidosSuperliga(datos) {
+    // Superliga NUEVA (2 grupos de 4 + semis): los partidos se teclean en el
+    // Calendario extra de cada club humano ("Superliga - ..."); ya no se generan.
+    return [];
+  }
+  function _partidosSuperligaGeneradosLegacy(datos) {
     var todos = (datos.equipos && datos.equipos.equipos) || [];
     var equipos = SUPERLIGA_ORDEN_ID.map(function (id) {
       if (SUPERLIGA_HUMANOS_EXCLUIDOS.indexOf(id) !== -1) return null;
@@ -3776,6 +3781,77 @@
     }
   }
 
+  // ---------- Superliga — MISMO FORMATO que Champions/Europa League
+  // (candado 646) ----------
+  // Réplica de las 3 claves de Champions/Europa League de arriba
+  // (los 11 grupos pegados juntos + Pichichi/MVP/Amarillas/Rojas + Playoffs por ronda),
+  // con su PROPIA clave de almacenamiento — nunca comparte contador con
+  // Champions ni con Europa League ni con Copa del Rey. Ver
+  // js/renderizadores.js::calcularSlxCombinada.
+  var SLX_TEXTO_KEY = "ef7_slx_clasificacion_v1";
+  function obtenerSlxTexto() {
+    try {
+      return localStorage.getItem(SLX_TEXTO_KEY) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSlxTexto(texto) {
+    if (!_confirmarSiEncogeMucho(SLX_TEXTO_KEY, obtenerSlxTexto(), texto)) return false;
+    try {
+      localStorage.setItem(SLX_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de Superliga:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _slxStatKey(categoria) {
+    return "ef7_slx_stat_" + categoria + "_v1";
+  }
+  function obtenerSlxStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_slxStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSlxStatTexto(categoria, texto) {
+    if (!_confirmarSiEncogeMucho(_slxStatKey(categoria), obtenerSlxStatTexto(categoria), texto)) return false;
+    try {
+      localStorage.setItem(_slxStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de Superliga:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
+  function _slxPlayoffKey(ronda) {
+    return "ef7_slx_playoff_" + ronda + "_v1";
+  }
+  function obtenerSlxPlayoffTexto(ronda) {
+    try {
+      return localStorage.getItem(_slxPlayoffKey(ronda)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarSlxPlayoffTexto(ronda, texto) {
+    if (!_confirmarSiEncogeMucho(_slxPlayoffKey(ronda), obtenerSlxPlayoffTexto(ronda), texto)) return false;
+    try {
+      localStorage.setItem(_slxPlayoffKey(ronda), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el playoff " + ronda + " de Superliga:", err);
+      _avisarFalloGuardado(err);
+      return false;
+    }
+  }
+
   // ---------- Road Eurocopa — MISMO FORMATO que Champions/Europa League
   // (candado 646) ----------
   // Réplica de las 3 claves de Champions/Europa League de arriba
@@ -4901,6 +4977,12 @@
     guardarNationsStatTexto: guardarNationsStatTexto,
     obtenerNationsPlayoffTexto: obtenerNationsPlayoffTexto,
     guardarNationsPlayoffTexto: guardarNationsPlayoffTexto,
+    obtenerSlxTexto: obtenerSlxTexto,
+    guardarSlxTexto: guardarSlxTexto,
+    obtenerSlxStatTexto: obtenerSlxStatTexto,
+    guardarSlxStatTexto: guardarSlxStatTexto,
+    obtenerSlxPlayoffTexto: obtenerSlxPlayoffTexto,
+    guardarSlxPlayoffTexto: guardarSlxPlayoffTexto,
     obtenerRoadeurocopaTexto: obtenerRoadeurocopaTexto,
     guardarRoadeurocopaTexto: guardarRoadeurocopaTexto,
     obtenerRoadeurocopaStatTexto: obtenerRoadeurocopaStatTexto,

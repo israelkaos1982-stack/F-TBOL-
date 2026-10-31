@@ -172,12 +172,12 @@
       );
       window.Renderizadores.irCopaTab(clubId, "humanos");
     } else if (vista === "superliga") {
-      body.innerHTML = '<div id="superliga-content"></div>';
+      body.innerHTML = '<div id="slx-content"></div>';
       _pintarTituloModalInfo(
         titulo, "Superliga", "info-superliga-formato", null,
         window.Renderizadores.obtenerFormatoSuperligaTexto(), etiqueta
       );
-      window.Renderizadores.renderizarSuperliga("superliga-content", clubId);
+      window.Renderizadores.irSlxTab(clubId, "humanos");
     } else if (vista === "champions") {
       body.innerHTML = '<div id="champions-content"></div>';
       _pintarTituloModalInfo(
@@ -1234,6 +1234,8 @@
     uel: function (clubId, categoria) { window.Renderizadores.renderizarUelStatDetalle("uel-content", clubId, categoria); },
     uecl: function (clubId, categoria) { window.Renderizadores.renderizarUeclStatDetalle("uecl-content", clubId, categoria); },
     nations: function (clubId, categoria) { window.Renderizadores.renderizarNationsStatDetalle("nations-content", clubId, categoria); },
+    slx: function (clubId, categoria) { window.Renderizadores.renderizarSlxStatDetalle("slx-content", clubId, categoria); },
+    superliga: function (clubId, categoria) { window.Renderizadores.renderizarSlxStatDetalle("slx-content", clubId, categoria); },
     roadeurocopa: function (clubId, categoria) { window.Renderizadores.renderizarRoadeurocopaStatDetalle("roadeurocopa-content", clubId, categoria); },
     eurocopa: function (clubId, categoria) { window.Renderizadores.renderizarEurocopaStatDetalle("eurocopa-content", clubId, categoria); },
     roadmundial: function (clubId, categoria) { window.Renderizadores.renderizarRoadmundialStatDetalle("roadmundial-content", clubId, categoria); },
@@ -1880,6 +1882,71 @@
   function mostrarInfoNations() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoNationsTexto(), "nations", mostrarInfoNations);
+  }
+
+  // ---------- Superliga — MISMO PATRÓN EXACTO que Champions/
+  // Europa League (ver los 2 bloques de arriba), mismo contenedor
+  // "slx-content".
+  function irSlxTab(clubId, tab) {
+    if (window.Renderizadores) window.Renderizadores.irSlxTab(clubId, tab);
+  }
+  function editarSlxInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("slx-content");
+      if (cont) window.Renderizadores.pintarEditorSlx(cont, clubId);
+    }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
+  }
+  function guardarSlx(clubId) {
+    var ta = document.getElementById("slx-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarSlxTexto(ta.value)) return;
+    window.Renderizadores.renderizarSlx("slx-content", clubId);
+  }
+  function cancelarSlx(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSlx("slx-content", clubId);
+  }
+  function verSlxStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSlxStatDetalle("slx-content", clubId, categoria);
+  }
+  function volverSlx(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSlx("slx-content", clubId);
+  }
+  function editarSlxStatInline(clubId, categoria) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("slx-content");
+      if (cont) window.Renderizadores.pintarEditorSlxStat(cont, clubId, categoria);
+    }, "🔒 Editar estadística", "Introduce el PIN de administrador.");
+  }
+  function guardarSlxStat(clubId, categoria) {
+    var ta = document.getElementById("slx-stat-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarSlxStatTexto(categoria, ta.value)) return;
+    window.Renderizadores.renderizarSlxStatDetalle("slx-content", clubId, categoria);
+  }
+  function cancelarSlxStat(clubId, categoria) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSlxStatDetalle("slx-content", clubId, categoria);
+  }
+  function editarSlxPlayoffInline(clubId, ronda) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("slx-content");
+      if (cont) window.Renderizadores.pintarEditorSlxPlayoff(cont, clubId, ronda);
+    }, "🔒 Editar playoff", "Introduce el PIN de administrador.");
+  }
+  function guardarSlxPlayoff(clubId, ronda) {
+    var ta = document.getElementById("slx-playoff-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarSlxPlayoffTexto(ronda, ta.value)) return;
+    window.Renderizadores.renderizarSlx("slx-content", clubId);
+  }
+  function cancelarSlxPlayoff(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarSlx("slx-content", clubId);
+  }
+  function mostrarInfoSlx() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSlxTexto(), "slx", mostrarInfoSlx);
   }
 
   // ---------- Road Eurocopa — MISMO PATRÓN EXACTO que Champions/
@@ -3205,6 +3272,18 @@
         case "guardar-nations-playoff": guardarNationsPlayoff(d.clubId, d.ronda); break;
         case "cancelar-nations-playoff": cancelarNationsPlayoff(d.clubId); break;
         case "info-nations-formato": mostrarInfoNations(); break;
+        case "slx-tab-ir": irSlxTab(d.clubId, d.tab); break;
+        case "editar-slx-inline": editarSlxInline(d.clubId); break;
+        case "guardar-slx": guardarSlx(d.clubId); break;
+        case "cancelar-slx": cancelarSlx(d.clubId); break;
+        case "ver-slx-stat": verSlxStat(d.clubId, d.categoria); break;
+        case "volver-slx": volverSlx(d.clubId); break;
+        case "editar-slx-stat-inline": editarSlxStatInline(d.clubId, d.categoria); break;
+        case "guardar-slx-stat": guardarSlxStat(d.clubId, d.categoria); break;
+        case "cancelar-slx-stat": cancelarSlxStat(d.clubId, d.categoria); break;
+        case "editar-slx-playoff-inline": editarSlxPlayoffInline(d.clubId, d.ronda); break;
+        case "guardar-slx-playoff": guardarSlxPlayoff(d.clubId, d.ronda); break;
+        case "cancelar-slx-playoff": cancelarSlxPlayoff(d.clubId); break;
         case "roadeurocopa-tab-ir": irRoadeurocopaTab(d.clubId, d.tab); break;
         case "editar-roadeurocopa-inline": editarRoadeurocopaInline(d.clubId); break;
         case "guardar-roadeurocopa": guardarRoadeurocopa(d.clubId); break;

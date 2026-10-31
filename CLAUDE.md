@@ -2,6 +2,7 @@
 
 - Un club real debe existir en UN solo catálogo. `data/equipos_ia.json` gana a `data/rivales_reales.json` en `resolverRivalPorNombre`; si un club está en ambos, se fusiona en la ficha IA y las otras grafías pasan a su `nombresAlt` (el match exacto también mira `nombresAlt`). Si la ficha eliminada tenía `alias` eFootball, copiarlo a la ficha IA (los equipos IA con `alias` se registran en `_rivalesAltMap` en `cargarTodo`).
 - **NO son duplicados** (clubes distintos, no fusionar): AC Escaldes ≠ CE Escaldes, SD Logroñés ≠ UD Logroñés, FC Vitebsk ≠ ML Vitebsk, CE Europa ≠ Europa FC (Gibraltar). Tampoco Arsenal Tivat / Arsenal Dzyarzhynsk vs Arsenal.
+- FC Rangers (Andorra) ≠ Rangers FC (Escocia): clubes distintos, cada uno con su ficha y su plantilla (`rangers fc` es alias de `rangers` en `plantillas_ia.json`).
 - "CDP" = **CDP Porthmadog** (Gales), clave `cdp porthmadog`.
 - Sabadell/CE Sabadell, Ceuta/AD Ceuta FC y Extremadura/CD Extremadura SÍ son el mismo club (fusionados).
 

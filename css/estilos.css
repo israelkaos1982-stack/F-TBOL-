@@ -5118,3 +5118,63 @@ button { font-family: inherit; cursor: pointer; }
 }
 .club-menu-btn[data-club-vista="copadelrey"] .club-menu-btn-icon { filter: sepia(1) hue-rotate(232deg) saturate(4.5) brightness(1.15) drop-shadow(0 0 3px rgba(190,90,255,.8)); }
 .club-menu-btn-etiqueta, .club-menu-btn-label { text-transform: uppercase; }
+
+/* ===== v384: colores de icono = colores de las cards del calendario ===== */
+.club-menu-btn[data-club-vista="copadelrey"] .club-menu-btn-icon { filter: saturate(1.25) brightness(1.05); }
+.club-menu-btn[data-club-vista="supercopaespana"] .club-menu-btn-icon { filter: sepia(1) saturate(1.3) brightness(0.78); }
+.club-menu-btn[data-club-vista="superliga"] .club-menu-btn-icon { filter: grayscale(1) sepia(1) hue-rotate(262deg) saturate(5.5) brightness(1); }
+.club-menu-btn[data-club-vista="kaocup"] .club-menu-btn-icon { filter: sepia(1) hue-rotate(238deg) saturate(4.5) brightness(1.02); }
+.club-menu-btn[data-club-vista="superekao"] .club-menu-btn-icon { filter: sepia(1) hue-rotate(205deg) saturate(4.5) brightness(1.1); }
+.club-menu-btn[data-club-vista="recopa"] .club-menu-btn-icon { filter: sepia(1) saturate(2.6) hue-rotate(-12deg) brightness(0.88); }
+.club-menu-btn[data-club-vista="intercontinental"] .club-menu-btn-icon { filter: sepia(1) saturate(3) hue-rotate(10deg) brightness(0.95); }
+.club-menu-btn[data-club-vista="usc"] .club-menu-btn-icon { filter: grayscale(1) sepia(.3) hue-rotate(175deg) brightness(1.05); }
+/* Banderas dibujadas de Europa League / Conference: MISMO tamaño que el 🇪🇺 de Champions */
+#screen-club[data-vista="menu"] .club-menu-btn[data-club-vista="uel"] .club-menu-btn-icon,
+#screen-club[data-vista="menu"] .club-menu-btn[data-club-vista="uecl"] .club-menu-btn-icon {
+  position: relative; font-size: 0; width: 34px; height: 26px; flex: 0 0 34px; margin: 0;
+  background: none; box-shadow: none; border-radius: 0;
+}
+.club-menu-btn[data-club-vista="uel"] .club-menu-btn-icon::before,
+.club-menu-btn[data-club-vista="uecl"] .club-menu-btn-icon::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 17px; margin: -8.5px 0 0 -12px; border-radius: 2px;
+}
+.club-menu-btn[data-club-vista="uel"] .club-menu-btn-icon::before { background: #f0701f; }
+.club-menu-btn[data-club-vista="uecl"] .club-menu-btn-icon::before { background: #1fa64f; }
+.club-menu-btn[data-club-vista="uel"] .club-menu-btn-icon::after,
+.club-menu-btn[data-club-vista="uecl"] .club-menu-btn-icon::after {
+  position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -5.5px 0 0 -5.5px; border: 2px dotted #fff; border-radius: 50%;
+}
+
+/* ===== v384: eliminatorias / cruces estilo Pro Evolution 6 ===== */
+.copa-club-block, .champions-playoff-ronda {
+  background: linear-gradient(180deg, #17368a 0%, #0a1d55 55%, #061236 100%);
+  border: 1px solid #7aa6ff;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.25), 0 3px 10px rgba(0,0,0,.45);
+}
+.copa-club-block--activo { background: linear-gradient(180deg, #1d4a2a 0%, #0c2a1a 100%); border-color: #ffe14a; }
+.copa-club-header { padding-bottom: 6px; border-bottom: 2px solid #ffe14a; }
+.copa-club-nombre { font-style: italic; text-transform: uppercase; letter-spacing: .4px; text-shadow: 1px 1px 0 rgba(0,0,0,.6); }
+.copa-club-block--activo .copa-club-nombre { color: #ffe14a; }
+.copa-club-ronda { background: #050b1f; border-color: #4a6fc4; color: #dfe9ff; font-style: italic; border-radius: 4px; }
+.copa-partido-row, .champions-tie-row { border-top: 1px solid rgba(122,166,255,.28); }
+.copa-partido-row:nth-child(odd), .champions-tie-row:nth-child(odd) { background: rgba(255,255,255,.045); }
+.copa-partido-rival, .champions-tie-nombre, .copa-partido-ronda { font-style: italic; text-shadow: 1px 1px 0 rgba(0,0,0,.55); }
+.champions-tie-nombre { font-size: 12px; }
+.champions-tie-lado--gano .champions-tie-nombre { color: #ffe14a; }
+.champions-tie-lado--perdio .champions-tie-nombre { color: #8fa0c8; }
+/* Marcador tipo marcador de estadio: caja oscura con dígitos amarillos */
+.copa-partido-resultado, .champions-tie-marcador {
+  background: #050b1f; border: 1px solid #4a6fc4; border-radius: 4px; padding: 2px 8px;
+  color: #ffe14a; min-width: 54px; text-align: center; letter-spacing: 1px; font-variant-numeric: tabular-nums;
+  box-shadow: inset 0 0 6px rgba(74,111,196,.5);
+}
+.copa-partido-row--gano .copa-partido-resultado { color: #39ff6a; }
+.copa-partido-row--empate .copa-partido-resultado { color: #7fc4ff; }
+.copa-partido-row--perdio .copa-partido-resultado { color: #ff6b8a; }
+.champions-tie-marcador--pendiente, .copa-partido-row--pendiente .copa-partido-resultado { color: #8fa0c8; }
+/* Local en espejo del visitante: nombre pegado a la izquierda del escudo, escudo junto al marcador */
+.champions-tie-lado--local { justify-content: flex-end; text-align: right; }
+.champions-tie-lado--local .champions-tie-nombre { text-align: right; }
+.club-menu-btn[data-club-vista="uel"] .club-menu-btn-icon::after,
+.club-menu-btn[data-club-vista="uecl"] .club-menu-btn-icon::after { width: 9px; height: 9px; margin: -6.5px 0 0 -6.5px; }

@@ -1507,12 +1507,13 @@
   // un filial ("girona fc b" != "girona fc", "atletico c" != "atletico").
   function _coincideParcialSeguro(a, b) {
     if (a === b) return true;
+    if (_sufijoFilial(a) !== _sufijoFilial(b)) return false;
     var corto = a.length <= b.length ? a : b, largo = a.length <= b.length ? b : a;
     if (corto.length <= 2) return false;
     var esc = corto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (!new RegExp("(^|[^a-z0-9])" + esc + "($|[^a-z0-9])").test(largo)) return false;
     var resto = largo.replace(corto, " ").trim();
-    return !/^(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria|juvenil|sub-?\d+)$/.test(resto);
+    return !/^(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria|juvenil|sub-?\d+)$/.test(resto) && !/^(atletico|athletic)\b/.test(resto);
   }
 
   function _sufijoFilial(n) {

@@ -22684,6 +22684,7 @@
     calcularNationsGrupos: calcularNationsGrupos,
     calcularNationsPlayoffTodasLasRondas: calcularNationsPlayoffTodasLasRondas,
     resolverSeleccionPorNombre: resolverSeleccionPorNombre,
+    coincideParcialSeguro: _coincideParcialSeguro,
     seleccionHumanaDeClub: function (clubId) { return SELECCIONES_HUMANAS_POR_CLUB[clubId] || null; },
     idSeleccionDeClub: _idSeleccionDeClub,
     renderizarUecl: renderizarUecl,

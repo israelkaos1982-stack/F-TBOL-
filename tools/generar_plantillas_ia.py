@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Genera data/plantillas_ia.json (compacto) a partir de los 3 textos de plantillas.
-Uso: python3 tools/generar_plantillas_ia.py selecciones.txt resto_de_ligas.txt espana.txt
+Uso: python3 tools/generar_plantillas_ia.py selecciones.txt clubes1.txt [clubes2.txt ...]
 Formato de salida: {"_meta":..., "c": {clave_club: "P:a,b/D:c/M:d/L:e"}, "s": {clave_seleccion: ...}}
 Códigos de posición: P=POR D=DEF M=MED L=DEL (se expanden en js/acta.js)."""
 import json, re, sys, unicodedata
@@ -50,7 +50,7 @@ def parsear(ruta):
             continue
         if seccion.startswith("SIN PLANTILLA") or seccion.startswith("RESTO DEL MUNDO"):
             continue
-        m = re.match(r"^(.+?) - (\d+)$", lin)
+        m = re.match(r"^(.+?) - (\d+|\?)$", lin)
         if m:
             actual = {"n": m.group(1).strip(), "j": []}
             equipos.append(actual)
@@ -66,13 +66,13 @@ def codificar(jug):
         por.setdefault(c, []).append(nom.replace(",", " "))
     return "/".join(c + ":" + ",".join(por[c]) for c in "PDML" if c in por)
 
-def main(sel, resto, esp):
+def main(sel, *otros):
     out = {"_meta": {
         "descripcion": "Plantillas REALES de equipos IA (5 mejores por club/seleccion; 11 titulares en Liga EA Sports/Hypermotion). Solo las lee js/acta.js cuando un humano juega contra una IA (carga perezosa, jamás se sincroniza ni se guarda en localStorage). Regenerar con tools/generar_plantillas_ia.py.",
         "codigos": "P=POR D=DEF M=MED L=DEL", "a": "alias: nombre del equipo en el juego (normalizado) -> clave de c"}, "c": {}, "s": {}, "a": {}}
     for e in parsear(sel):
         out["s"][norm(e["n"])] = codificar(e["j"])
-    for ruta in (resto, esp):
+    for ruta in otros:
         for e in parsear(ruta):
             k = norm(e["n"])
             if k in out["c"]:
@@ -88,4 +88,4 @@ def main(sel, resto, esp):
     print(len(out["c"]), "clubes,", len(out["s"]), "selecciones,", len(txt.encode()), "bytes")
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(*sys.argv[1:])

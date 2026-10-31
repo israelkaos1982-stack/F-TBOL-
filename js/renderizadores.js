@@ -4238,7 +4238,7 @@
       }
       if (!destino) return;
       if (destino.tipo === "playoff") {
-        if (!/pasa directo\s*$/i.test(l) && !/^\?\s*vs\s*\?$/i.test(l)) playoff[destino.key].push(l);
+        if (!/pasa directo\s*$/i.test(l)) playoff[destino.key].push(l);
       } else if (/^\d+[.)]\s/.test(l)) {
         stats[destino.key].push(l);
       }
@@ -4282,6 +4282,7 @@
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="btn-ghost" data-accion="vaciar-textarea" data-target="kaocup-importar-textarea">🗑 Vaciar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">📥 Importar</button>';
     contenedor.appendChild(acciones);
   }
@@ -6236,7 +6237,23 @@
     });
 
     var texto = window.Estado ? window.Estado.obtenerKaocupPlayoffTexto(rondaKey) : "";
-    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
+    // Línea a línea (respeta el orden del texto): marcador normal, cruce
+    // todavía sin jugar ("A vs B") o hueco por sortear ("? vs ?").
+    var itemsTexto = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l || /pasa directo\s*$/i.test(l)) return;
+      if (/^\?\s*vs\s*\?$/i.test(l)) { itemsTexto.push({ pend: true }); return; }
+      var it1 = parsearChampionsPlayoffTexto(l)[0];
+      if (it1) { itemsTexto.push(it1); return; }
+      var mv = l.replace(/\s*✅.*$/, "").match(/^(.*\S)\s+vs\.?\s+(\S.*)$/i);
+      if (mv) itemsTexto.push({ equipoA: mv[1].trim(), equipoB: mv[2].trim(), golA: null, golB: null });
+    });
+    itemsTexto.forEach(function (it) {
+      if (it.pend) {
+        ties.push({ equipoA: "", equipoB: "", textoPend: "?", esAuto: false });
+        return;
+      }
       var objA = resolverRivalPorNombre(it.equipoA, datos, null);
       var objB = resolverRivalPorNombre(it.equipoB, datos, null);
       var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
@@ -6415,6 +6432,7 @@
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">✕ Cancelar</button>' +
+      '<button type="button" class="btn-ghost" data-accion="vaciar-textarea" data-target="kaocup-stat-textarea">🗑 Vaciar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-stat" data-club-id="' + (idClubActivo || "") + '" data-categoria="' + categoria + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
@@ -6455,6 +6473,7 @@
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
       '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">✕ Cancelar</button>' +
+      '<button type="button" class="btn-ghost" data-accion="vaciar-textarea" data-target="kaocup-playoff-textarea">🗑 Vaciar</button>' +
       '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-playoff" data-club-id="' + (idClubActivo || "") + '" data-ronda="' + rondaKey + '">💾 Guardar</button>';
     contenedor.appendChild(acciones);
   }
@@ -8038,11 +8057,12 @@
   // `esLocal`: el LOCAL (lado A) va en espejo del visitante — nombre a la
   // izquierda, escudo PEGADO al marcador —, así el escudo de cada lado
   // queda junto al resultado (estilo Pro Evolution 6).
-  function _championsLadoTieHTML(nombre, obj, clase, esTuyo, esLocal) {
+  function _championsLadoTieHTML(nombre, obj, clase, esTuyo, esLocal, textoPend) {
     var cls = esLocal ? " champions-tie-lado--local" : "";
     if (!nombre) {
-      var pendHTML = '<div class="escudo escudo--ia escudo--sm"></div><span class="champions-tie-nombre">Pendiente</span>';
-      if (esLocal) pendHTML = '<span class="champions-tie-nombre">Pendiente</span><div class="escudo escudo--ia escudo--sm"></div>';
+      var tp = textoPend || "Pendiente";
+      var pendHTML = '<div class="escudo escudo--ia escudo--sm"></div><span class="champions-tie-nombre">' + escapeHTML(tp) + '</span>';
+      if (esLocal) pendHTML = '<span class="champions-tie-nombre">' + escapeHTML(tp) + '</span><div class="escudo escudo--ia escudo--sm"></div>';
       return '<div class="champions-tie-lado champions-tie-lado--pendiente' + cls + '">' + pendHTML + "</div>";
     }
     var nom = '<span class="champions-tie-nombre">' + escapeHTML(nombre) +
@@ -8082,9 +8102,9 @@
 
     return (
       '<div class="champions-tie-row">' +
-      _championsLadoTieHTML(tie.equipoA, tie.equipoAObj, claseA, esTuyoA, true) +
+      _championsLadoTieHTML(tie.equipoA, tie.equipoAObj, claseA, esTuyoA, true, tie.textoPend) +
       marcadorHTML +
-      _championsLadoTieHTML(tie.equipoB, tie.equipoBObj, claseB, esTuyoB) +
+      _championsLadoTieHTML(tie.equipoB, tie.equipoBObj, claseB, esTuyoB, false, tie.textoPend) +
       "</div>" + esperaHTML
     );
   }

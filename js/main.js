@@ -3480,3 +3480,27 @@ document.addEventListener("click", function (ev) {
   var fila = ev.target && ev.target.closest ? ev.target.closest(".champions-tie-row") : null;
   if (fila) fila.classList.toggle("champions-tie-row--abierta");
 });
+
+// v402: las filas de cajas (pestañas de liga/competición y rondas 1/128…FINAL)
+// se deslizan en horizontal; al repintarse o pulsar una, la caja ACTIVA se
+// centra sola dentro de su fila (sin mover la pantalla en vertical).
+(function () {
+  function centrarActivas(raiz) {
+    var activas = raiz.querySelectorAll(".liga-tab-box--activa, .ronda-caja--activa");
+    Array.prototype.forEach.call(activas, function (caja) {
+      var fila = caja.parentNode;
+      if (!fila || fila.scrollWidth <= fila.clientWidth + 1) return;
+      var destino = caja.offsetLeft - (fila.clientWidth - caja.offsetWidth) / 2;
+      fila.scrollLeft = Math.max(0, destino);
+    });
+  }
+  var ov = document.getElementById("club-modal-overlay");
+  if (!ov || !window.MutationObserver) return;
+  var pendiente = false;
+  function programar() {
+    if (pendiente) return;
+    pendiente = true;
+    requestAnimationFrame(function () { pendiente = false; centrarActivas(ov); });
+  }
+  new MutationObserver(programar).observe(ov, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+})();

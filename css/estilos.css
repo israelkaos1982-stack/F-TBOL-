@@ -5250,3 +5250,57 @@ button { font-family: inherit; cursor: pointer; }
     line-height: 1.15;
   }
 }
+
+/* ============================================================
+   v402: filas de cajas DESLIZABLES en horizontal (como las cajas del
+   menú de arriba) — pestañas de liga (2ª REF · 1ª REF · Hypermotion ·
+   Ea Sports), pestañas de Copa/Champions/Europa/Conference/Nations
+   (Humanos · Grupo · Playoffs…) y cajas de ronda (1/128 … FINAL).
+   Una sola fila, cada caja con ancho propio, se desplaza con el dedo
+   hacia la derecha y hacia la izquierda; sin barra de scroll visible. */
+#club-modal-overlay .liga-tab-boxes,
+#club-modal-overlay .ronda-cajas {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+#club-modal-overlay .liga-tab-boxes::-webkit-scrollbar,
+#club-modal-overlay .ronda-cajas::-webkit-scrollbar { display: none; }
+
+#club-modal-overlay .liga-tab-boxes > .liga-tab-box,
+#club-modal-overlay .liga-tab-boxes--grid4 > .liga-tab-box,
+#club-modal-overlay .champions-tabs > .liga-tab-box,
+#club-modal-overlay .uel-tabs > .liga-tab-box,
+#club-modal-overlay .uecl-tabs > .liga-tab-box,
+#club-modal-overlay .nations-tabs > .liga-tab-box,
+#club-modal-overlay .copa-tabs > .liga-tab-box {
+  flex: 0 0 auto;
+  min-width: 118px;
+  padding-left: 16px;
+  padding-right: 16px;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  scroll-snap-align: start;
+}
+#club-modal-overlay .ronda-cajas > .ronda-caja {
+  flex: 0 0 auto;
+  min-width: 84px;
+  padding-left: 14px;
+  padding-right: 14px;
+  white-space: nowrap;
+  scroll-snap-align: start;
+}
+/* La caja activa se centra sola al pulsarla (ver scrollIntoView en JS). */
+/* El texto largo ("Fase Grupos") se queda siempre: ya no hay falta de hueco. */
+#club-modal-overlay .tab-cq { container-type: normal; width: auto; }
+#club-modal-overlay .tab-cq .tab-largo { display: inline; }
+#club-modal-overlay .tab-cq .tab-corto { display: none; }

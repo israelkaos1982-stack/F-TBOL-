@@ -3474,3 +3474,9 @@
     });
   });
 })();
+
+// Toca (o pasa el ratón por) un cruce de eliminatoria: se ven los nombres enteros.
+document.addEventListener("click", function (ev) {
+  var fila = ev.target && ev.target.closest ? ev.target.closest(".champions-tie-row") : null;
+  if (fila) fila.classList.toggle("champions-tie-row--abierta");
+});

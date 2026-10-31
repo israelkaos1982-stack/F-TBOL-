@@ -3824,8 +3824,8 @@
     { key: "dieciseisavos", label: "Dieciseisavos de Final" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
-    { key: "semis", label: "Semifinales (ida y vuelta)" },
-    { key: "final", label: "Final (ida y vuelta)" }
+    { key: "semis", label: "Semifinales" },
+    { key: "final", label: "Final" }
   ];
 
   // La convención libre que ya usa esta app para el campo `ronda` de un
@@ -10349,8 +10349,8 @@
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 clubes: los 11 primeros
   // de grupo + los 5 mejores segundos), todo a ida y vuelta.
   var SLX_PLAYOFF_RONDAS = [
-    { key: "semis", label: "Semifinales" },
-    { key: "final", label: "Final" }
+    { key: "semis", label: "Semifinales (ida y vuelta)" },
+    { key: "final", label: "Final (ida y vuelta)" }
   ];
 
   // Las SELECCIONES de los clubes humanos (Francia, Inglaterra, Noruega, España,

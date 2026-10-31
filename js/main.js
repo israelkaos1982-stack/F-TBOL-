@@ -1540,19 +1540,25 @@
     if (!window.Estado.guardarKaocupPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
   }
-  function importarKaocupTodo(clubId) {
-    if (!window.Renderizadores) return;
+  var _COMP_IMPORTAR = {
+    kaocup: { cont: "kaocup-content", titulo: "KAO Cup", render: function (id) { window.Renderizadores.renderizarKaocup("kaocup-content", id); } },
+    copa: { cont: "copa-content", titulo: "Copa del Rey", render: function (id) { window.Renderizadores.renderizarCopaDelRey("copa-content", id); } }
+  };
+  function importarCompTodo(clubId, comp) {
+    var c = _COMP_IMPORTAR[comp];
+    if (!c || !window.Renderizadores) return;
     abrirCandado(ADMIN_PASSWORD, function () {
-      var cont = document.getElementById("kaocup-content");
-      if (cont) window.Renderizadores.pintarEditorKaocupImportar(cont, clubId);
-    }, "🔒 Importar KAO Cup", "Introduce el PIN de administrador.");
+      var cont = document.getElementById(c.cont);
+      if (cont) window.Renderizadores.pintarEditorKaocupImportar(cont, clubId, comp);
+    }, "🔒 Importar " + c.titulo, "Introduce el PIN de administrador.");
   }
-  function guardarKaocupImportar(clubId) {
-    var ta = document.getElementById("kaocup-importar-textarea");
-    if (!ta || !window.Renderizadores) return;
-    var n = window.Renderizadores.importarBloqueKaocup(ta.value);
+  function guardarCompImportar(clubId, comp) {
+    var c = _COMP_IMPORTAR[comp];
+    var ta = document.getElementById("importar-textarea");
+    if (!c || !ta || !window.Renderizadores) return;
+    var n = window.Renderizadores.importarBloqueKaocup(ta.value, comp);
     if (!n.rondas && !n.stats) { alert("No he encontrado ninguna ronda ni estadística en ese texto."); return; }
-    window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
+    c.render(clubId);
   }
   function cancelarKaocupPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
@@ -3228,9 +3234,9 @@
           var t = document.getElementById(d.target);
           if (t) { t.value = ""; t.focus(); }
         })(); break;
-        case "importar-kaocup-todo": importarKaocupTodo(d.clubId); break;
-        case "guardar-kaocup-importar": guardarKaocupImportar(d.clubId); break;
-        case "cancelar-kaocup-importar": if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", d.clubId); break;
+        case "importar-comp-todo": importarCompTodo(d.clubId, d.comp); break;
+        case "guardar-comp-importar": guardarCompImportar(d.clubId, d.comp); break;
+        case "cancelar-comp-importar": if (_COMP_IMPORTAR[d.comp]) _COMP_IMPORTAR[d.comp].render(d.clubId); break;
         case "cancelar-kaocup-playoff": cancelarKaocupPlayoff(d.clubId); break;
         case "info-superekao-formato": mostrarInfoSuperekao(); break;
         case "superekao-tab-ir": irSuperekaoTab(d.clubId, d.tab); break;

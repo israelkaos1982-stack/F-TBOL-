@@ -1540,6 +1540,20 @@
     if (!window.Estado.guardarKaocupPlayoffTexto(ronda, ta.value)) return;
     window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
   }
+  function importarKaocupTodo(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("kaocup-content");
+      if (cont) window.Renderizadores.pintarEditorKaocupImportar(cont, clubId);
+    }, "🔒 Importar KAO Cup", "Introduce el PIN de administrador.");
+  }
+  function guardarKaocupImportar(clubId) {
+    var ta = document.getElementById("kaocup-importar-textarea");
+    if (!ta || !window.Renderizadores) return;
+    var n = window.Renderizadores.importarBloqueKaocup(ta.value);
+    if (!n.rondas && !n.stats) { alert("No he encontrado ninguna ronda ni estadística en ese texto."); return; }
+    window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
+  }
   function cancelarKaocupPlayoff(clubId) {
     if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", clubId);
   }
@@ -3210,6 +3224,9 @@
         case "cancelar-kaocup-stat": cancelarKaocupStat(d.clubId, d.categoria); break;
         case "editar-kaocup-playoff-inline": editarKaocupPlayoffInline(d.clubId, d.ronda); break;
         case "guardar-kaocup-playoff": guardarKaocupPlayoff(d.clubId, d.ronda); break;
+        case "importar-kaocup-todo": importarKaocupTodo(d.clubId); break;
+        case "guardar-kaocup-importar": guardarKaocupImportar(d.clubId); break;
+        case "cancelar-kaocup-importar": if (window.Renderizadores) window.Renderizadores.renderizarKaocup("kaocup-content", d.clubId); break;
         case "cancelar-kaocup-playoff": cancelarKaocupPlayoff(d.clubId); break;
         case "info-superekao-formato": mostrarInfoSuperekao(); break;
         case "superekao-tab-ir": irSuperekaoTab(d.clubId, d.tab); break;

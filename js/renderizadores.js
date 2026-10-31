@@ -1513,7 +1513,7 @@
     var esc = corto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (!new RegExp("(^|[^a-z0-9])" + esc + "($|[^a-z0-9])").test(largo)) return false;
     var resto = largo.replace(corto, " ").trim();
-    return !/^(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria|juvenil|sub-?\d+)$/.test(resto) && !/^(atletico|athletic)\b/.test(resto);
+    return !/^(b|c|d|ii|iii|at\.?|promesas|castilla|fortuna|vetusta|cantabria|ilicitano|juvenil|sub-?\d+)$/.test(resto) && !/^(atletico|athletic)\b/.test(resto);
   }
 
   function _sufijoFilial(n) {
@@ -4203,6 +4203,89 @@
     contenedor.appendChild(acciones);
   }
 
+  // ---------- Importar TODO el texto de la KAO Cup de una vez ----------
+  // El admin pega el bloque completo ("— Ronda previa —" ... "— Final —" y
+  // las 4 listas "⚽ GOLEADORES · KAO Cup" ...) y la app lo reparte sola en
+  // cada ronda y cada estadística. Solo se sobrescribe lo que viene en el
+  // bloque; lo demás se deja como estaba.
+  var _KAOCUP_RONDAS_TITULO = [
+    ["previa", /^ronda previa/], ["r64", /^1\s*[ªa]?\s*ronda/], ["ronda2", /^2\s*[ªa]?\s*ronda/],
+    ["dieciseisavos", /^dieciseisavos/], ["octavos", /^octavos/], ["cuartos", /^cuartos/],
+    ["semis", /^semifinal/], ["final", /^final/]
+  ];
+  var _KAOCUP_STAT_EMOJI = { "⚽": "pichichi", "⭐": "mvp", "🟨": "amarillas", "🟥": "rojas" };
+  function dividirBloqueKaocup(texto) {
+    var playoff = {}, stats = {}, destino = null;
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var mr = l.match(/^[—–-]+\s*(.+?)\s*[—–-]+$/);
+      if (mr) {
+        var nombre = _normNombre(mr[1]);
+        destino = null;
+        _KAOCUP_RONDAS_TITULO.some(function (r) {
+          if (r[1].test(nombre)) { destino = { tipo: "playoff", key: r[0] }; return true; }
+          return false;
+        });
+        if (destino) playoff[destino.key] = [];
+        return;
+      }
+      var primero = Array.from(l)[0];
+      if (_KAOCUP_STAT_EMOJI[primero] && /kao cup/i.test(l)) {
+        destino = { tipo: "stat", key: _KAOCUP_STAT_EMOJI[primero] };
+        stats[destino.key] = [];
+        return;
+      }
+      if (!destino) return;
+      if (destino.tipo === "playoff") {
+        if (!/pasa directo\s*$/i.test(l) && !/^\?\s*vs\s*\?$/i.test(l)) playoff[destino.key].push(l);
+      } else if (/^\d+[.)]\s/.test(l)) {
+        stats[destino.key].push(l);
+      }
+    });
+    Object.keys(playoff).forEach(function (k) { playoff[k] = playoff[k].join("\n"); });
+    Object.keys(stats).forEach(function (k) { stats[k] = stats[k].join("\n"); });
+    return { playoff: playoff, stats: stats };
+  }
+
+  // Guarda el reparto (sin el aviso "¿seguro?" de los editores sueltos: el
+  // admin acaba de pedir EXACTAMENTE esto) y fuerza la subida al servidor.
+  function importarBloqueKaocup(texto) {
+    var r = dividirBloqueKaocup(texto);
+    var n = { rondas: 0, stats: 0 };
+    function escribir(clave, valor) {
+      localStorage.setItem(clave, valor);
+      if (window.Sync && typeof window.Sync.marcarParaForzar === "function") window.Sync.marcarParaForzar(clave);
+    }
+    Object.keys(r.playoff).forEach(function (k) { escribir("ef7_kaocup_playoff_" + k + "_v1", r.playoff[k]); n.rondas++; });
+    Object.keys(r.stats).forEach(function (k) { escribir("ef7_kaocup_stat_" + k + "_v1", r.stats[k]); n.stats++; });
+    if (window.Sync && typeof window.Sync.forzarCiclo === "function") window.Sync.forzarCiclo();
+    return n;
+  }
+
+  function pintarEditorKaocupImportar(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega TODO el texto de la KAO Cup de una vez (las rondas «— Ronda previa — … — Final —» y las listas " +
+      "«⚽ GOLEADORES · KAO Cup», «⭐ MVP…», «🟨 AMARILLAS…», «🟥 ROJAS…»). La app lo reparte sola en cada " +
+      "ronda y cada estadística y SUSTITUYE lo que ya hubiera en las partes que vengan en el texto.";
+    contenedor.appendChild(nota);
+    var ta = document.createElement("textarea");
+    ta.id = "kaocup-importar-textarea";
+    ta.className = "admin-roadmap-textarea";
+    ta.rows = 14;
+    ta.placeholder = "— Ronda previa —\nEquipo A 1-2 Equipo B ✅ Equipo B\n…\n\n⚽ GOLEADORES · KAO Cup\n1. Jugador · Equipo · 3 · 2 · 1.50";
+    contenedor.appendChild(ta);
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">📥 Importar</button>';
+    contenedor.appendChild(acciones);
+  }
+
   // Editor inline de UNA ronda del cuadro ⛓️ Eliminatorias (PIN 646) —
   // mismo patrón exacto que pintarEditorChampionsPlayoff, sin el aparte
   // de Dieciseisavos con "> Equipo que espera" (la Copa no lo necesita:
@@ -6187,6 +6270,10 @@
 
   function _renderizarKaocupEliminatorias(contenedor, datos, idClubActivo) {
     var rondas = calcularKaocupPlayoffTodasLasRondas(datos);
+
+    contenedor.insertAdjacentHTML("beforeend",
+      '<div class="admin-roadmap-editor-acciones"><button type="button" class="admin-list-add-btn" data-accion="importar-kaocup-todo" data-club-id="' +
+      (idClubActivo || "") + '">📥 Importar todo el texto</button></div>');
 
     KAOCUP_PLAYOFF_RONDAS.forEach(function (meta) {
       var ties = rondas[meta.key] || [];
@@ -22258,6 +22345,9 @@
     detectarDuplicadosLigaCalendarioExtra: detectarDuplicadosLigaCalendarioExtra,
     quitarDuplicadosLigaDeCalendarioExtraTexto: quitarDuplicadosLigaDeCalendarioExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
+    pintarEditorKaocupImportar: pintarEditorKaocupImportar,
+    importarBloqueKaocup: importarBloqueKaocup,
+    dividirBloqueKaocup: dividirBloqueKaocup,
     resolverCompKeyPartido: _resolverCompKeyBalon,
     claseComp: _claseComp,
     ajustarTituloComp: _ajustarTituloComp,

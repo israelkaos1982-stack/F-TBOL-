@@ -3847,7 +3847,10 @@
   // Semis, Final) las da el admin directamente en texto, ninguna se
   // infiere de la ronda anterior (ver `_copaRondaDesdeTexto`).
   var COPA_PLAYOFF_RONDAS = [
-    { key: "dieciseisavos", label: "Dieciseisavos de Final" },
+    { key: "previa", label: "Ronda previa" },
+    { key: "r64", label: "1ª Ronda" },
+    { key: "ronda2", label: "2ª Ronda" },
+    { key: "dieciseisavos", label: "3ª Ronda" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
     { key: "semis", label: "Semifinales" },
@@ -3871,7 +3874,7 @@
     if (rondaKey === "r64") return /1\s*\/\s*64|\b1\s*[ªa]?\s*ronda\b/.test(t);
     if (rondaKey === "previa") return /ronda previa|\bprevia\b/.test(t);
     if (rondaKey === "ronda2") return /\b2\s*[ªa]?\s*ronda\b/.test(t);
-    if (rondaKey === "dieciseisavos") return /1\s*\/\s*16/.test(t);
+    if (rondaKey === "dieciseisavos") return /1\s*\/\s*16|\b3\s*[ªa]?\s*ronda\b|dieciseisavos/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
     if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
     if (rondaKey === "semis") return /\bsemi/.test(t);
@@ -3918,35 +3921,10 @@
   // algoritmo de generarlos automáticamente" (se reportó con Octavos
   // generándose solo a partir de los ganadores de Dieciseisavos).
   function _copaRondaDesdeTexto(datos, rondaKey) {
-    var equiposHumanos = _copaEquiposHumanos(datos);
-    var ties = [];
-    var indexPorHumano = {};
-
-    equiposHumanos.forEach(function (e) {
-      var t = _copaPlayoffHumano(datos, e, rondaKey);
-      if (!t) return;
-      indexPorHumano[e.id] = ties.length;
-      ties.push({
-        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
-        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
-      });
+    return _rondaDesdeTextoGenerica(datos, rondaKey, {
+      equipos: _copaEquiposHumanos, humano: _copaPlayoffHumano,
+      texto: function (k) { return window.Estado ? window.Estado.obtenerCopaPlayoffTexto(k) : ""; }
     });
-
-    var texto = window.Estado ? window.Estado.obtenerCopaPlayoffTexto(rondaKey) : "";
-    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
-      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
-      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
-      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
-      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
-      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
-
-      ties.push({
-        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
-        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
-      });
-    });
-
-    return ties;
   }
 
   // Punto ÚNICO que calcula el cuadro ENTERO — las 5 rondas son
@@ -3954,6 +3932,9 @@
   // el admin pegó para ESA ronda (nunca del ganador de la anterior).
   function calcularCopaPlayoffTodasLasRondas(datos) {
     return {
+      previa: _copaRondaDesdeTexto(datos, "previa"),
+      r64: _copaRondaDesdeTexto(datos, "r64"),
+      ronda2: _copaRondaDesdeTexto(datos, "ronda2"),
       dieciseisavos: _copaRondaDesdeTexto(datos, "dieciseisavos"),
       octavos: _copaRondaDesdeTexto(datos, "octavos"),
       cuartos: _copaRondaDesdeTexto(datos, "cuartos"),
@@ -3972,8 +3953,11 @@
       var header =
         '<div class="copa-club-header">' +
         '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
-        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-copa-playoff-inline" data-ronda="' +
-        meta.key + '" data-club-id="' + (idClubActivo || "") + '" aria-label="Editar ' + escapeHTML(meta.label) + '">✏️</button>' +
+        // Solo la Ronda previa lleva ✏️: abre la importación de TODO el texto.
+        (meta.key === "previa"
+          ? '<button type="button" class="liga1ref-editar-btn" data-accion="importar-comp-todo" data-comp="copa" data-club-id="' +
+            (idClubActivo || "") + '" aria-label="Importar todo el texto">✏️</button>'
+          : "") +
         "</div>";
       var cuerpo;
       if (!ties.length) {
@@ -4212,7 +4196,7 @@
   // bloque; lo demás se deja como estaba.
   var _KAOCUP_RONDAS_TITULO = [
     ["previa", /^ronda previa/], ["r64", /^1\s*[ªa]?\s*ronda/], ["ronda2", /^2\s*[ªa]?\s*ronda/],
-    ["dieciseisavos", /^dieciseisavos/], ["octavos", /^octavos/], ["cuartos", /^cuartos/],
+    ["dieciseisavos", /^dieciseisavos|^3\s*[ªa]?\s*ronda/], ["octavos", /^octavos/], ["cuartos", /^cuartos/],
     ["semis", /^semifinal/], ["final", /^final/]
   ];
   var _KAOCUP_STAT_EMOJI = { "⚽": "pichichi", "⭐": "mvp", "🟨": "amarillas", "🟥": "rojas" };
@@ -4233,7 +4217,7 @@
         return;
       }
       var primero = Array.from(l)[0];
-      if (_KAOCUP_STAT_EMOJI[primero] && /kao cup/i.test(l)) {
+      if (_KAOCUP_STAT_EMOJI[primero] && l.indexOf("·") !== -1) {
         destino = { tipo: "stat", key: _KAOCUP_STAT_EMOJI[primero] };
         stats[destino.key] = [];
         return;
@@ -4252,40 +4236,44 @@
 
   // Guarda el reparto (sin el aviso "¿seguro?" de los editores sueltos: el
   // admin acaba de pedir EXACTAMENTE esto) y fuerza la subida al servidor.
-  function importarBloqueKaocup(texto) {
+  function importarBloqueKaocup(texto, comp) {
+    var pre = comp === "copa" ? "ef7_copa_" : "ef7_kaocup_";
     var r = dividirBloqueKaocup(texto);
     var n = { rondas: 0, stats: 0 };
     function escribir(clave, valor) {
       localStorage.setItem(clave, valor);
       if (window.Sync && typeof window.Sync.marcarParaForzar === "function") window.Sync.marcarParaForzar(clave);
     }
-    Object.keys(r.playoff).forEach(function (k) { escribir("ef7_kaocup_playoff_" + k + "_v1", r.playoff[k]); n.rondas++; });
-    Object.keys(r.stats).forEach(function (k) { escribir("ef7_kaocup_stat_" + k + "_v1", r.stats[k]); n.stats++; });
+    Object.keys(r.playoff).forEach(function (k) { escribir(pre + "playoff_" + k + "_v1", r.playoff[k]); n.rondas++; });
+    Object.keys(r.stats).forEach(function (k) { escribir(pre + "stat_" + k + "_v1", r.stats[k]); n.stats++; });
     if (window.Sync && typeof window.Sync.forzarCiclo === "function") window.Sync.forzarCiclo();
     return n;
   }
 
-  function pintarEditorKaocupImportar(contenedor, idClubActivo) {
+  function pintarEditorKaocupImportar(contenedor, idClubActivo, comp) {
+    comp = comp === "copa" ? "copa" : "kaocup";
+    var nombre = comp === "copa" ? "Copa del Rey" : "KAO Cup";
     contenedor.innerHTML = "";
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      "Pega TODO el texto de la KAO Cup de una vez (las rondas «— Ronda previa — … — Final —» y las listas " +
-      "«⚽ GOLEADORES · KAO Cup», «⭐ MVP…», «🟨 AMARILLAS…», «🟥 ROJAS…»). La app lo reparte sola en cada " +
-      "ronda y cada estadística y SUSTITUYE lo que ya hubiera en las partes que vengan en el texto.";
+      "Pega TODO el texto de la " + nombre + " de una vez (las rondas «— Ronda previa — … — Final —» y las listas " +
+      "«⚽ GOLEADORES · " + nombre + "», «⭐ MVP…», «🟨 AMARILLAS…», «🟥 ROJAS…»). La app lo reparte sola en cada " +
+      "ronda y cada estadística y SUSTITUYE lo que ya hubiera en las partes que vengan en el texto. " +
+      "Vale el formato a ida y vuelta: «A 2-5 B (ida 1-3) ✅ B».";
     contenedor.appendChild(nota);
     var ta = document.createElement("textarea");
-    ta.id = "kaocup-importar-textarea";
+    ta.id = "importar-textarea";
     ta.className = "admin-roadmap-textarea";
     ta.rows = 14;
-    ta.placeholder = "— Ronda previa —\nEquipo A 1-2 Equipo B ✅ Equipo B\n…\n\n⚽ GOLEADORES · KAO Cup\n1. Jugador · Equipo · 3 · 2 · 1.50";
+    ta.placeholder = "— Ronda previa —\nEquipo A 1-2 Equipo B ✅ Equipo B\n…\n\n⚽ GOLEADORES · " + nombre + "\n1. Jugador · Equipo · 3 · 2 · 1.50";
     contenedor.appendChild(ta);
     var acciones = document.createElement("div");
     acciones.className = "admin-roadmap-editor-acciones";
     acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
-      '<button type="button" class="btn-ghost" data-accion="vaciar-textarea" data-target="kaocup-importar-textarea">🗑 Vaciar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-kaocup-importar" data-club-id="' + (idClubActivo || "") + '">📥 Importar</button>';
+      '<button type="button" class="btn-ghost" data-accion="cancelar-comp-importar" data-comp="' + comp + '" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="btn-ghost" data-accion="vaciar-textarea" data-target="importar-textarea">🗑 Vaciar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-comp-importar" data-comp="' + comp + '" data-club-id="' + (idClubActivo || "") + '">📥 Importar</button>';
     contenedor.appendChild(acciones);
   }
 
@@ -6231,13 +6219,13 @@
   // partidos YA jugados esta ronda aporta el suyo auto-computado; el resto
   // sale del texto libre que el admin pega para ESA ronda concreta
   // ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
-  function _kaocupRondaDesdeTexto(datos, rondaKey) {
-    var equiposHumanos = _kaocupEquiposHumanos(datos);
+  function _rondaDesdeTextoGenerica(datos, rondaKey, cfg) {
+    var equiposHumanos = cfg.equipos(datos);
     var ties = [];
     var indexPorHumano = {};
 
     equiposHumanos.forEach(function (e) {
-      var t = _kaocupPlayoffHumano(datos, e, rondaKey);
+      var t = cfg.humano(datos, e, rondaKey);
       if (!t) return;
       indexPorHumano[e.id] = ties.length;
       ties.push({
@@ -6246,7 +6234,7 @@
       });
     });
 
-    var texto = window.Estado ? window.Estado.obtenerKaocupPlayoffTexto(rondaKey) : "";
+    var texto = cfg.texto(rondaKey);
     // Línea a línea (respeta el orden del texto): marcador normal, cruce
     // todavía sin jugar ("A vs B") o hueco por sortear ("? vs ?").
     var itemsTexto = [];
@@ -6285,7 +6273,8 @@
 
       ties.push({
         equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
-        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
+        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false,
+        idaA: it.idaA, idaB: it.idaB, ganadorLado: it.ganadorLado
       });
     });
     // Los humanos que no encajaron en ninguna línea ni hueco, arriba del todo.
@@ -6293,6 +6282,13 @@
     if (sobrantes.length) ties.unshift.apply(ties, sobrantes);
 
     return ties;
+  }
+
+  function _kaocupRondaDesdeTexto(datos, rondaKey) {
+    return _rondaDesdeTextoGenerica(datos, rondaKey, {
+      equipos: _kaocupEquiposHumanos, humano: _kaocupPlayoffHumano,
+      texto: function (k) { return window.Estado ? window.Estado.obtenerKaocupPlayoffTexto(k) : ""; }
+    });
   }
 
   // Punto ÚNICO que calcula el cuadro ENTERO — las 2 rondas son
@@ -6323,7 +6319,7 @@
         '<span class="copa-club-nombre">' + escapeHTML(meta.label) + "</span>" +
         // Solo la Ronda previa lleva ✏️: abre la importación de TODO el texto.
         (meta.key === "previa"
-          ? '<button type="button" class="liga1ref-editar-btn" data-accion="importar-kaocup-todo" data-club-id="' +
+          ? '<button type="button" class="liga1ref-editar-btn" data-accion="importar-comp-todo" data-comp="kaocup" data-club-id="' +
             (idClubActivo || "") + '" aria-label="Importar todo el texto">✏️</button>'
           : "") +
         "</div>";
@@ -7741,28 +7737,46 @@
     return l.replace(/\s*\(\s*pr[óo]rroga\s*\)\s*$/i, "").trim();
   }
 
+  // Añade al cruce el marcador de la IDA (de A y B, mismo orden que el global)
+  // y de qué lado ganó según el ✅ (necesario cuando el global queda igualado:
+  // gol de visitante, desempate…).
+  function _conIdaGanador(it, ida, ganadorRaw) {
+    if (ida) { it.idaA = ida[0]; it.idaB = ida[1]; }
+    if (ganadorRaw) {
+      var g = _normNombre(ganadorRaw);
+      if (g === _normNombre(it.equipoA)) it.ganadorLado = "A";
+      else if (g === _normNombre(it.equipoB)) it.ganadorLado = "B";
+    }
+    return it;
+  }
   function parsearChampionsPlayoffTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
+      // Ida y vuelta: "A 2-5 B (ida 1-3) ✅ B" -> marcador global 2-5, ida 1-3 y ganador B.
+      var ida = null, ganadorRaw = null;
+      var mIda = l.match(/\(\s*ida\s*(\d+)\s*-\s*(\d+)\s*(?:,\s*pr[óo]rroga)?\s*\)/i);
+      if (mIda) { ida = [Number(mIda[1]), Number(mIda[2])]; l = l.replace(mIda[0], " ").replace(/\s{2,}/g, " "); }
+      var mGan = l.match(/✅\s*(.+)$/);
+      if (mGan) ganadorRaw = mGan[1].trim();
       l = _normalizarLineaCruce(l);
       if (!l) return;
       var mp = l.match(_CHAMPIONS_MARCADOR_PEN_RE);
       if (mp) {
         var equipoAp = mp[1].trim(), equipoBp = mp[6].trim();
         if (!equipoAp || !equipoBp) return;
-        items.push({
+        items.push(_conIdaGanador({
           equipoA: equipoAp, golA: Number(mp[2]), penA: Number(mp[3]),
           penB: Number(mp[4]), golB: Number(mp[5]), equipoB: equipoBp
-        });
+        }, ida, ganadorRaw));
         return;
       }
       var m = l.match(_CHAMPIONS_MARCADOR_RE);
       if (!m) return;
       var equipoA = m[1].trim(), equipoB = m[4].trim();
       if (!equipoA || !equipoB) return;
-      items.push({ equipoA: equipoA, golA: Number(m[2]), golB: Number(m[3]), equipoB: equipoB });
+      items.push(_conIdaGanador({ equipoA: equipoA, golA: Number(m[2]), golB: Number(m[3]), equipoB: equipoB }, ida, ganadorRaw));
     });
     return items;
   }
@@ -8168,6 +8182,15 @@
     var hayPenaltis = !pendiente && !sinJugar && tie.penA !== null && tie.penA !== undefined && tie.penB !== null && tie.penB !== undefined && tie.golA === tie.golB;
     var esGanadorA = !pendiente && !sinJugar && (tie.golA > tie.golB || (hayPenaltis && tie.penA > tie.penB));
     var esGanadorB = !pendiente && !sinJugar && (tie.golB > tie.golA || (hayPenaltis && tie.penB > tie.penA));
+    // Global igualado sin penaltis: manda el ✅ del texto (gol de visitante…).
+    if (!pendiente && !sinJugar && !esGanadorA && !esGanadorB && tie.ganadorLado) {
+      esGanadorA = tie.ganadorLado === "A";
+      esGanadorB = tie.ganadorLado === "B";
+    }
+    var tieneIda = !pendiente && !sinJugar && tie.idaA !== undefined && tie.idaA !== null;
+    var idaHTML = tieneIda
+      ? '<span class="champions-tie-ida">ida ' + tie.idaA + "-" + tie.idaB + " · vta " + (tie.golA - tie.idaA) + "-" + (tie.golB - tie.idaB) + "</span>"
+      : "";
     var claseA = esGanadorA ? " champions-tie-lado--gano" : (esGanadorB ? " champions-tie-lado--perdio" : "");
     var claseB = esGanadorB ? " champions-tie-lado--gano" : (esGanadorA ? " champions-tie-lado--perdio" : "");
     var esTuyoA = !!(tie.equipoAObj && tie.equipoAObj.id === idClubActivo);
@@ -8183,7 +8206,7 @@
       ? '<span class="champions-tie-marcador champions-tie-marcador--pendiente">—</span>'
       : sinJugar
         ? '<span class="champions-tie-marcador champions-tie-marcador--pendiente">vs</span>'
-        : '<span class="champions-tie-marcador">' + tie.golA + " - " + tie.golB + penHTML + "</span>" +
+        : '<span class="champions-tie-marcador">' + tie.golA + " - " + tie.golB + penHTML + idaHTML + "</span>" +
           (tie.esAuto ? '<span class="champions-tie-auto">auto</span>' : "");
 
     var esperaHTML = tie.espera

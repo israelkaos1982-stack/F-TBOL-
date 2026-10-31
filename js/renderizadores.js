@@ -1622,7 +1622,9 @@
       candidatos = candidatos.concat(bloques[k].equipos || []);
     });
 
-    var exacto = candidatos.find(function (e) { return _normNombre(e.nombre) === norm; });
+    var exacto = candidatos.find(function (e) {
+      return _normNombre(e.nombre) === norm || (e.nombresAlt || []).some(function (a) { return _normNombre(a) === norm; });
+    });
     if (exacto) return exacto;
 
     var normSinPunto = _normSinPuntuacion(nombre);

@@ -102,6 +102,16 @@
       _estadiosLista = datos.estadios.estadios || [];
       _rivalesRealesMap = {};
       _rivalesAltMap = {};
+      Object.keys(datos.equiposIA.bloques || {}).forEach(function (kb) {
+        ((datos.equiposIA.bloques[kb] || {}).equipos || []).forEach(function (t2) {
+          if (!t2.alias) return; // solo los que traen alias de fábrica (ver _aliasEfootballDefault)
+          [t2.nombre].concat(t2.nombresAlt || []).forEach(function (a) {
+            var k1 = _normNombre(a), k2 = _normSinPuntuacion(a);
+            if (k1) _rivalesAltMap[k1] = t2;
+            if (k2) _rivalesAltMap[k2] = t2;
+          });
+        });
+      });
       (datos.rivalesReales.rivales || []).forEach(function (r2) {
         _rivalesRealesMap[r2.clave] = r2;
         // `nombresAlt`: otras grafías con las que el admin escribe el
@@ -1622,7 +1632,9 @@
       candidatos = candidatos.concat(bloques[k].equipos || []);
     });
 
-    var exacto = candidatos.find(function (e) { return _normNombre(e.nombre) === norm; });
+    var exacto = candidatos.find(function (e) {
+      return _normNombre(e.nombre) === norm || (e.nombresAlt || []).some(function (a) { return _normNombre(a) === norm; });
+    });
     if (exacto) return exacto;
 
     var normSinPunto = _normSinPuntuacion(nombre);

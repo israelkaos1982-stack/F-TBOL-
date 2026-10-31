@@ -5,7 +5,7 @@ Formato de salida: {"_meta":..., "c": {clave_club: "P:a,b/D:c/M:d/L:e"}, "s": {c
 Códigos de posición: P=POR D=DEF M=MED L=DEL (se expanden en js/acta.js)."""
 import json, re, sys, unicodedata
 
-COD = {"Por": "P", "Def": "D", "Med": "M", "Del": "L"}
+COD = {"Por": "P", "Def": "D", "Med": "M", "Del": "L", "?": "M"}   # posición desconocida -> Med (candidato a goleador)
 
 
 # nombre del equipo EN EL JUEGO (data/rivales_reales.json, normalizado) -> clave del texto de plantillas.
@@ -26,6 +26,9 @@ ALIAS = {
     "sumqay\u0131t fk": "sumqayit", "st patrick's athletic": "st patrick's", "breidablik": "breiðablik",
     "vaprus parnu": "parnu jk vaprus", "narva trans": "trans narva", "cardiff mu": "cardiff met",
     "tefelin bgc": "trefelin bgc", "fc bruno's magpies": "fcb magpies", "st joseph's fc": "st. joseph's",
+    "las palmas at.": "las palmas atletico", "pvo. el ejido": "poli ejido", "sevilla at.": "sevilla atletico",
+    "at. sanlueño": "at. sanluqueno", "blau-weiß linz": "blau-weiss linz", "corvinul 1921": "corvinul 1921 hunedoara",
+    "fc dinamo 1948": "fc dinamo 1948 bucarest",
     "ml vitebsk": "maxline vitebsk", "fc vitebsk": "vitebsk", "dynamo brest": "dinamo brest",
     "Bayern München": "bayern munich", "B. Leverkusen": "bayer leverkusen", "Colonia": "koln",
     "Stade Rennais": "rennes", "Nice": "niza", "Stade Brestois": "brest", "Crvena Zvezda": "estrella roja",
@@ -50,12 +53,12 @@ def parsear(ruta):
             continue
         if seccion.startswith("SIN PLANTILLA") or seccion.startswith("RESTO DEL MUNDO"):
             continue
-        m = re.match(r"^(.+?) - (\d+|\?)$", lin)
+        m = re.match(r"^(.+?) - (\d+|\?|sin ELO|sin nivel)$", lin)
         if m:
-            actual = {"n": m.group(1).strip(), "j": []}
+            actual = {"n": m.group(1).strip(), "j": [], "nivel": int(m.group(2)) if m.group(2).isdigit() else None}
             equipos.append(actual)
             continue
-        m = re.match(r"^(?:🧤)?\s*(.+?) \((Por|Def|Med|Del)\)$", lin)
+        m = re.match(r"^(?:🧤)?\s*(.+?) \((Por|Def|Med|Del|\?)\)$", lin)
         if m and actual is not None:
             actual["j"].append((m.group(1).strip(), COD[m.group(2)]))
     return equipos
@@ -71,10 +74,11 @@ def main(sel, *otros):
         "descripcion": "Plantillas REALES de equipos IA (5 mejores por club/seleccion; 11 titulares en Liga EA Sports/Hypermotion). Solo las lee js/acta.js cuando un humano juega contra una IA (carga perezosa, jamás se sincroniza ni se guarda en localStorage). Regenerar con tools/generar_plantillas_ia.py.",
         "codigos": "P=POR D=DEF M=MED L=DEL", "a": "alias: nombre del equipo en el juego (normalizado) -> clave de c"}, "c": {}, "s": {}, "a": {}}
     for e in parsear(sel):
-        out["s"][norm(e["n"])] = codificar(e["j"])
+        if e["j"]: out["s"][norm(e["n"])] = codificar(e["j"])
     for ruta in otros:
         for e in parsear(ruta):
             k = norm(e["n"])
+            if not e["j"]: continue          # "sin alineación": solo hay nivel, no plantilla
             if k in out["c"]:
                 print("DUPLICADO", k, file=sys.stderr)
             out["c"][k] = codificar(e["j"])

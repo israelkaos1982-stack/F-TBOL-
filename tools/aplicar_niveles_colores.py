@@ -83,6 +83,12 @@ def hashstr(s):
     for ch in s: h = (h * 31 + ord(ch)) & 0xFFFFFFFF
     return h
 
+def nucleo(n):
+    n = re.sub(r"[.'\u2019]", "", norm(n))
+    for _ in range(2): n = re.sub(r"^(fc|fk|sk|nk|kf|cd|ud|cf|ac|as|ss|sv|hnk|mfk|real|club|sd|ad|ce|ue)\s+", "", n)
+    n = re.sub(r"\s+(fc|fk|sk|cf|if|sv|bk|ac)$", "", n)
+    return re.sub(r"[^a-z0-9]+", " ", n).strip()
+
 def main(ruta, aplicar):
     datos = json.load(open("data/rivales_reales.json", encoding="utf-8"))
     R = datos["rivales"]
@@ -136,16 +142,36 @@ def main(ruta, aplicar):
     # equipos del texto que el juego no tiene: se AÑADEN como ficha nueva (así el color/nivel les llega en cualquier pantalla)
     nuevos = 0
     existentes = {r["clave"] for r in R}
+    nucleos = {nucleo(r["nombre"]): r for r in R}
     for sec, n, niv, col in leer(ruta):
         if sec == "S" or n not in sin or not col or niv is None or norm(n) in NO_CREAR: continue
         clave = norm(n)
         if clave in existentes: continue
+        if nucleo(n) in nucleos:        # ya existe con otro prefijo/sufijo (Brann = SK Brann): se actualiza esa ficha
+            r = nucleos[nucleo(n)]
+            r["valoracionPoder"] = niv; r["colorPrimario"] = col[0]
+            r["colorSecundario"] = col[1] if len(col) > 1 else "#FFFFFF"
+            if len(col) > 2: r["colorTerciario"] = col[2]
+            else: r.pop("colorTerciario", None)
+            continue
         ficha = {"clave": clave, "nombre": titulo(n), "siglas": siglas(n), "colorPrimario": col[0],
                  "colorSecundario": col[1] if len(col) > 1 else "#FFFFFF",
                  "escudoFormato": FORMATOS[hashstr(clave) % len(FORMATOS)], "valoracionPoder": niv}
         if len(col) > 2: ficha["colorTerciario"] = col[2]
         R.append(ficha); existentes.add(clave); nuevos += 1
     print("fichas nuevas:", nuevos)
+    ia = json.load(open("data/equipos_ia.json", encoding="utf-8"))
+    n_ia = 0
+    for sec, n, niv, col in leer(ruta):
+        if sec == "S": continue
+        for b in ia["bloques"].values():
+            for t in b["equipos"]:
+                if nucleo(t["nombre"]) == nucleo(n) or norm(t["nombre"]) == norm(n):
+                    if niv is not None: t["valoracionPoder"] = niv
+                    if col:
+                        t["colorPrimario"] = col[0]; t["colorSecundario"] = col[1] if len(col) > 1 else "#FFFFFF"
+                    n_ia += 1
+    print("equipos del catalogo IA actualizados:", n_ia)
     # selecciones: fichero aparte, muy pequeño ({clave: [nivel, color1, color2(, color3)]})
     sels = {}
     for sec, n, niv, col in leer(ruta):
@@ -153,6 +179,7 @@ def main(ruta, aplicar):
         sels[norm(n)] = [niv if niv is not None else 75] + [c for c in col[:3]] + ([] if len(col) > 1 else ["#FFFFFF"])
     print("selecciones:", len(sels))
     if aplicar:
+        json.dump(ia, open("data/equipos_ia.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         open("data/selecciones_ia.json", "w", encoding="utf-8").write(json.dumps(sels, ensure_ascii=False, separators=(",", ":")))
         json.dump(datos, open("data/rivales_reales.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         print("ESCRITO")

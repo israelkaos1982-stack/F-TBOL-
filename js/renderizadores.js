@@ -7900,19 +7900,20 @@
   // ganador resaltado en cuanto hay resultado. `tie.espera` (solo en
   // Dieciseisavos) pinta la flecha "→ espera en Octavos: …", el equivalente
   // ligero del "→ Chelsea" de la app real que enseñó el usuario.
-  function _championsLadoTieHTML(nombre, obj, clase, esTuyo) {
+  // `esLocal`: el LOCAL (lado A) va en espejo del visitante — nombre a la
+  // izquierda, escudo PEGADO al marcador —, así el escudo de cada lado
+  // queda junto al resultado (estilo Pro Evolution 6).
+  function _championsLadoTieHTML(nombre, obj, clase, esTuyo, esLocal) {
+    var cls = esLocal ? " champions-tie-lado--local" : "";
     if (!nombre) {
-      return (
-        '<div class="champions-tie-lado champions-tie-lado--pendiente">' +
-        '<div class="escudo escudo--ia escudo--sm"></div>' +
-        '<span class="champions-tie-nombre">Pendiente</span></div>'
-      );
+      var pendHTML = '<div class="escudo escudo--ia escudo--sm"></div><span class="champions-tie-nombre">Pendiente</span>';
+      if (esLocal) pendHTML = '<span class="champions-tie-nombre">Pendiente</span><div class="escudo escudo--ia escudo--sm"></div>';
+      return '<div class="champions-tie-lado champions-tie-lado--pendiente' + cls + '">' + pendHTML + "</div>";
     }
-    return (
-      '<div class="champions-tie-lado' + clase + '">' + crearEscudoHTML(obj, "escudo--sm") +
-      '<span class="champions-tie-nombre">' + escapeHTML(nombre) +
-      (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span></div>"
-    );
+    var nom = '<span class="champions-tie-nombre">' + escapeHTML(nombre) +
+      (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>";
+    var esc = crearEscudoHTML(obj, "escudo--sm");
+    return '<div class="champions-tie-lado' + clase + cls + '">' + (esLocal ? nom + esc : esc + nom) + "</div>";
   }
 
   function _championsTieRowHTML(tie, idClubActivo) {
@@ -7946,7 +7947,7 @@
 
     return (
       '<div class="champions-tie-row">' +
-      _championsLadoTieHTML(tie.equipoA, tie.equipoAObj, claseA, esTuyoA) +
+      _championsLadoTieHTML(tie.equipoA, tie.equipoAObj, claseA, esTuyoA, true) +
       marcadorHTML +
       _championsLadoTieHTML(tie.equipoB, tie.equipoBObj, claseB, esTuyoB) +
       "</div>" + esperaHTML

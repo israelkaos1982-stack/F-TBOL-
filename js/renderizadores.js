@@ -10198,6 +10198,8 @@
   }
   function irNationsDiv(idClubActivo, div) {
     if (window.Estado && window.Estado.fijarNationsDivision) window.Estado.fijarNationsDivision(div);
+    // Plata y Bronce no tienen eliminatorias: se cae a la fase de grupos.
+    if (_nationsDivActual() !== "oro" && _nationsTabActual === "playoffs") _nationsTabActual = "grupos";
     renderizarNations("nations-content", idClubActivo);
   }
 
@@ -10208,9 +10210,22 @@
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
   // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
-  function _nationsZona(pos) {
-    if (pos <= 2) return "octavos";
-    return "";
+  // v414: zonas por división (petición usuario):
+  //  🥇 Oro    · 1º-2º → Semifinales · 5º-6º-7º → descienden a Plata
+  //  🥈 Plata  · 1º-2º → ascienden a Oro · 6º-7º → descienden a Bronce
+  //  🥉 Bronce · 1º-2º → ascienden a Plata · sin descensos
+  function _nationsZona(pos, total) {
+    var div = _nationsDivActual(), n = total || 7;
+    if (div === "plata") return pos <= 2 ? "ascenso" : (pos >= n - 1 && n > 3 ? "descenso" : "");
+    if (div === "bronce") return pos <= 2 ? "ascenso" : "";
+    return pos <= 2 ? "octavos" : (pos >= n - 2 && n > 4 ? "descenso" : "");
+  }
+  function _nationsLeyendaHTML() {
+    var div = _nationsDivActual(), items;
+    if (div === "plata") items = ["🟩 1º y 2º de grupo: ascienden a 🥇 Liga Oro", "🟥 6º y 7º de grupo: descienden a 🥉 Liga Bronce"];
+    else if (div === "bronce") items = ["🟩 1º y 2º de grupo: ascienden a 🥈 Liga Plata", "Sin descensos"];
+    else items = ["🟦 1º y 2º de grupo: Semifinales", "🟥 5º, 6º y 7º de grupo: descienden a 🥈 Liga Plata"];
+    return '<div class="liga1ref-leyenda-grid">' + items.map(function (t) { return "<span>" + t + "</span>"; }).join("") + "</div>";
   }
 
   // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
@@ -10481,9 +10496,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_nationsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="nations-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_nationsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="nations-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="nations-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_nationsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="nations-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -10620,7 +10635,7 @@
         var wrap = document.createElement("div");
         wrap.className = "clasificacion-wrap";
         var tablaEl = document.createElement("table");
-        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+        tablaEl.className = "clasificacion-tabla liga1ref-tabla nations-grupo-tabla";
         tablaEl.innerHTML =
           "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
           "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
@@ -10628,9 +10643,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _nationsAppendStatsGrid(contenedor, idClubActivo);
@@ -10674,6 +10687,8 @@
     contenedor.innerHTML = "";
     contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
 
+    _nationsAutoSepararDivisiones();
+    if (_nationsDivActual() !== "oro" && _nationsTabActual === "playoffs") _nationsTabActual = "grupos";
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
       contenedor.insertAdjacentHTML("beforeend", _nationsTabsHTML(idClubActivo));
@@ -11183,9 +11198,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_slxTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="slx-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_slxTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="slx-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="slx-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_slxTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="slx-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -11854,9 +11869,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadeurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadeurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadeurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadeurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="roadeurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_roadeurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadeurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -12001,9 +12016,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);
@@ -12527,9 +12540,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_eurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="eurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_eurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="eurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="eurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_eurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="eurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -12674,9 +12687,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _eurocopaAppendStatsGrid(contenedor, idClubActivo);
@@ -13197,9 +13208,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadmundialTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadmundial-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadmundialTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadmundial-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="roadmundial-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_roadmundialTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadmundial-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -13344,9 +13355,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _roadmundialAppendStatsGrid(contenedor, idClubActivo);
@@ -13872,9 +13881,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_mundialselTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="mundialsel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_mundialselTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="mundialsel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="mundialsel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_mundialselTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="mundialsel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -14019,9 +14028,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _mundialselAppendStatsGrid(contenedor, idClubActivo);
@@ -14543,9 +14550,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadamericaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadamerica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadamericaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadamerica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="roadamerica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_roadamericaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadamerica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -14690,9 +14697,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _roadamericaAppendStatsGrid(contenedor, idClubActivo);
@@ -15208,9 +15213,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadafricaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadafrica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadafricaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadafrica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="roadafrica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_roadafricaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadafrica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -15355,9 +15360,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _roadafricaAppendStatsGrid(contenedor, idClubActivo);
@@ -15873,9 +15876,9 @@
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadasiaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadasia-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
+      (_nationsDivActual() !== "oro" ? "" : '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadasiaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadasia-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '" data-accion="roadasia-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>') +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
       (_roadasiaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadasia-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
@@ -16020,9 +16023,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: Semifinales (Liga Oro) / ascenso (Plata y Bronce)</span></div>'
-      ));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
     }
 
     _roadasiaAppendStatsGrid(contenedor, idClubActivo);
@@ -22945,12 +22946,38 @@
   }
   // «=============== NATIONS CUP · LIGA PLATA ===============» → bloques por
   // división; null si el texto no trae ninguna de esas líneas.
+  // Línea que marca la división: «===== NATIONS CUP · LIGA PLATA =====»
+  // (también con ═ ━ ─ - * # o sin adornos: «LIGA PLATA»). Nunca un título
+  // de estadística («⚽ GOLEADORES · Nations Cup · Liga Plata») ni una fila
+  // con cifras.
+  function _nationsEsSeparadorDivision(linea) {
+    var l = String(linea || "").trim();
+    if (!l || /\d/.test(l) || _repartoStatDe(l)) return false;
+    var n = _normNombre(l.replace(/[=═━─\-*#~_|]+/g, " ")).replace(/\s+/g, " ").trim();
+    if (!/\b(oro|plata|bronce)\b/.test(n)) return false;
+    return /^[=═━─\-*#~_]{3,}/.test(l) || /\b(liga|division|nations)\b/.test(n);
+  }
+  // Auto-reparación: si un texto de la Liga Oro guardado trae dentro las
+  // líneas de división (pegado antes de v413, o por otra vía), se reparte
+  // en sus 3 divisiones una sola vez.
+  function _nationsAutoSepararDivisiones() {
+    var E = window.Estado;
+    if (!E || !E.obtenerNationsTexto || !E.fijarNationsDivision) return;
+    var t = E.obtenerNationsTexto("oro");
+    if (!t || !_nationsPartirPorDivision(t)) return;
+    var prev = E.obtenerNationsDivision();
+    // Es nuestra propia reparación (no un recorte del admin): sin el aviso
+    // de «menos de la mitad» — el confirm se acepta solo y marca forzar.
+    var conf = window.confirm;
+    try { window.confirm = function () { return true; }; E.fijarNationsDivision("oro", true); E.guardarNationsTexto(t); }
+    finally { window.confirm = conf; E.fijarNationsDivision(prev, true); }
+  }
   function _nationsPartirPorDivision(texto) {
     var lineas = String(texto || "").replace(/\r/g, "").split("\n");
     var bloques = [], actual = null, hay = false;
     lineas.forEach(function (l) {
       var n = _normNombre(l);
-      var esSep = /^\s*={3,}/.test(l) && /(oro|plata|bronce)/.test(n);
+      var esSep = _nationsEsSeparadorDivision(l);
       if (esSep) {
         hay = true;
         var div = /oro/.test(n) ? "oro" : (/plata/.test(n) ? "plata" : "bronce");
@@ -22998,6 +23025,18 @@
               else okN = res !== false && okN;
             });
           } finally { E.fijarNationsDivision(divPrev, true); }
+          try {
+            var nombres = { oro: "🥇 Oro", plata: "🥈 Plata", bronce: "🥉 Bronce" };
+            var resumen = bloques.map(function (b) {
+              var r2 = repartirTextoCompeticion(b.texto, rondas) || { tabla: b.texto, rondas: {}, stats: {} };
+              var nG = (String(r2.tabla || "").match(/^\s*(grupo|group)\s+\S+/gim) || []).length;
+              var nR = Object.keys(r2.rondas).length, nS = Object.keys(r2.stats).length;
+              return nombres[b.div] + ": " + nG + " grupo" + (nG === 1 ? "" : "s") +
+                (nR ? " · " + nR + " ronda" + (nR > 1 ? "s" : "") : "") +
+                " · " + nS + " estadística" + (nS === 1 ? "" : "s");
+            });
+            if (okN) window.alert("✅ Nations Cup guardada por divisiones:\n" + resumen.join("\n"));
+          } catch (eR) {}
           return okN;
         }
       }

@@ -5304,3 +5304,41 @@ button { font-family: inherit; cursor: pointer; }
 #club-modal-overlay .tab-cq { container-type: normal; width: auto; }
 #club-modal-overlay .tab-cq .tab-largo { display: inline; }
 #club-modal-overlay .tab-cq .tab-corto { display: none; }
+
+/* ============================================================
+   v403: cruces de eliminatoria (Copa, KAO Cup, Champions playoff…)
+   - Nombre ENTERO del equipo, hasta 2 líneas (nunca "CD Ba…").
+   - TODAS las filas con la MISMA altura, quepa el nombre en 1 línea o
+     necesite 2 (y aunque el marcador lleve penaltis debajo).
+   - En el móvil la ventana gasta menos margen lateral (antes eran 3
+     capas: pantalla 16px + ventana 14px + caja 10px por cada lado).
+   ============================================================ */
+.champions-tie-row {
+  box-sizing: border-box;
+  height: 58px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  gap: 6px;
+}
+.champions-tie-nombre,
+.champions-tie-row--abierta .champions-tie-nombre {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+}
+@media (hover: hover) {
+  .champions-tie-row:hover .champions-tie-nombre { overflow: hidden; }
+}
+.champions-tie-marcador { min-width: 48px; padding: 2px 6px; }
+@media (max-width: 480px) {
+  #club-modal-overlay.club-modal-overlay { padding: 8px 6px; }
+  #club-modal-overlay .club-modal-card { max-height: 88vh; }
+  #club-modal-overlay .club-modal-body { padding: 8px 6px; }
+  #club-modal-overlay .champions-playoff-ronda { padding: 8px 5px; }
+}

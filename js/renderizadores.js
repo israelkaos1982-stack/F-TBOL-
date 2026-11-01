@@ -8209,10 +8209,10 @@
       esGanadorA = tie.ganadorLado === "A";
       esGanadorB = tie.ganadorLado === "B";
     }
-    var tieneIda = !pendiente && !sinJugar && tie.idaA !== undefined && tie.idaA !== null;
-    var idaHTML = tieneIda
-      ? '<span class="champions-tie-ida">ida ' + tie.idaA + "-" + tie.idaB + " · vta " + (tie.golA - tie.idaA) + "-" + (tie.golB - tie.idaB) + "</span>"
-      : "";
+    // v403: en ida y vuelta solo el GLOBAL (petición usuario: el desglose
+    // "ida X-Y · vta X-Y" ensanchaba el marcador y dejaba sin sitio a los
+    // nombres de los equipos).
+    var idaHTML = "";
     var claseA = esGanadorA ? " champions-tie-lado--gano" : (esGanadorB ? " champions-tie-lado--perdio" : "");
     var claseB = esGanadorB ? " champions-tie-lado--gano" : (esGanadorA ? " champions-tie-lado--perdio" : "");
     var esTuyoA = !!(tie.equipoAObj && tie.equipoAObj.id === idClubActivo);

@@ -526,6 +526,68 @@
     }
 
     actualizarTandaInfo();
+    _prepararBotonMinuto(sel);
+  }
+
+  // v412: selector de MINUTO estilo PES 6 (mismo panel azul/dorado que el
+  // de jugador) en vez de la lista nativa del móvil. El <select> sigue
+  // existiendo OCULTO y guarda el valor: el resto del acta no cambia.
+  function _prepararBotonMinuto(sel) {
+    sel.classList.add("live-jugador-nativo");
+    var btn = document.getElementById("live-minuto-btn");
+    if (!btn) {
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.id = "live-minuto-btn";
+      btn.className = "live-jugador-btn live-minuto-btn";
+      sel.parentNode.insertBefore(btn, sel.nextSibling);
+      btn.addEventListener("click", function () { _abrirPickerMinuto(sel, btn); });
+    }
+    _pintarBotonMinuto(sel, btn);
+  }
+  function _pintarBotonMinuto(sel, btn) {
+    var op = sel.options[sel.selectedIndex];
+    btn.innerHTML = '<span class="live-pes-btn-txt">' + (op ? op.textContent : "—") + '</span><span class="live-pes-btn-flecha">▾</span>';
+  }
+  function _abrirPickerMinuto(sel, btn) {
+    var viejo = document.getElementById("pes-picker-overlay");
+    if (viejo) viejo.remove();
+    var normal = [], prorroga = [], tanda = null;
+    Array.prototype.forEach.call(sel.options, function (op) {
+      if (op.value === MINUTO_TANDA) tanda = op;
+      else if (Number(op.value) > 95) prorroga.push(op);
+      else normal.push(op);
+    });
+    function chips(lista) {
+      return '<div class="pes-min-grid">' + lista.map(function (op) {
+        var sel2 = op.value === sel.value ? " is-selected" : "";
+        return '<button type="button" class="pes-min-chip' + sel2 + '" data-min="' + op.value + '">' + op.value + "'</button>";
+      }).join("") + "</div>";
+    }
+    function grupo(titulo, html) {
+      return '<div class="plantilla-grupo pes-picker-grupo"><div class="plantilla-grupo-titulo"><span class="plantilla-grupo-nombre">' +
+        titulo + "</span></div>" + html + "</div>";
+    }
+    var ov = document.createElement("div");
+    ov.id = "pes-picker-overlay";
+    ov.className = "pes-picker-overlay";
+    ov.innerHTML = '<div class="pes-picker-card"><div class="pes-picker-cab"><span>⏱️ Minuto</span>' +
+      '<button type="button" class="pes-picker-cerrar" aria-label="Cerrar">✕</button></div><div class="pes-picker-lista">' +
+      grupo("Partido · 1ª y 2ª parte", chips(normal)) +
+      (prorroga.length ? grupo("Prórroga", chips(prorroga)) : "") +
+      (tanda ? grupo("Penaltis", '<button type="button" class="pes-min-chip pes-min-chip--tanda' + (sel.value === MINUTO_TANDA ? " is-selected" : "") +
+        '" data-min="' + MINUTO_TANDA + '">🎯 Tanda de penaltis</button>') : "") +
+      "</div></div>";
+    ov.addEventListener("click", function (ev) {
+      if (ev.target === ov || ev.target.closest(".pes-picker-cerrar")) { ov.remove(); return; }
+      var c = ev.target.closest(".pes-min-chip");
+      if (!c) return;
+      sel.value = c.getAttribute("data-min");
+      ov.remove();
+      _pintarBotonMinuto(sel, btn);
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    document.body.appendChild(ov);
   }
 
   // Caja "🎯 Tanda de penaltis" — oculta salvo que el admin haya
@@ -659,7 +721,7 @@
   }
   function _pintarBotonJugador(sel, btn) {
     var op = sel.options[sel.selectedIndex];
-    btn.textContent = op ? op.textContent + "  ▾" : "Sin jugadores";
+    btn.innerHTML = '<span class="live-pes-btn-txt">' + (op ? op.textContent.replace(/[<>&]/g, "") : "Sin jugadores") + '</span><span class="live-pes-btn-flecha">▾</span>';
   }
 
   function seleccionarLado(lado) {

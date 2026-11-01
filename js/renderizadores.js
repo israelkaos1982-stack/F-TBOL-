@@ -19361,15 +19361,30 @@
   // escudo: "POS PJ PTS %  -  POS PJ PTS %" (petición usuario).
   function _htmlClasificacionDePartido(clas) {
     if (!clas) return "";
-    function chips(x) {
+    // v412: línea de cada dato en VERDE para el equipo que es mejor en ese
+    // dato y en ROJO para el peor (Nº: menor es mejor; PJ, PTS y %: mayor).
+    // Empate o dato que falta → se queda la línea dorada de siempre.
+    function nums(x) {
+      if (!x) return [null, null, null, null];
+      var pct = x.pj > 0 && x.pg != null && x.pg !== "" ? (x.pg / x.pj) * 100 : null;
+      function n(val) { var k = Number(val); return val != null && val !== "" && !isNaN(k) ? k : null; }
+      return [n(x.pos), n(x.pj), n(x.pts), pct];
+    }
+    var nl = nums(clas.local), nv = nums(clas.visitante);
+    function clase(i, propio, rival) {
+      if (propio == null || rival == null || propio === rival) return "";
+      var mejor = i === 0 ? propio < rival : propio > rival;
+      return mejor ? " previa-clas-chip--mejor" : " previa-clas-chip--peor";
+    }
+    function chips(x, mios, suyos) {
       function v(val) { return val != null && val !== "" ? val : "–"; }
       var pct = x && x.pj > 0 && x.pg != null && x.pg !== "" ? Math.round((x.pg / x.pj) * 100) + "%" : "–";
       var datos = [["Nº", x ? x.pos + "º" : "–"], ["PJ", x ? v(x.pj) : "–"], ["PTS", x ? v(x.pts) : "–"], ["%", pct]];
-      return '<div class="previa-clas-eq">' + datos.map(function (d) {
-        return '<span class="previa-clas-chip"><b>' + d[0] + "</b><i>" + d[1] + "</i></span>";
+      return '<div class="previa-clas-eq">' + datos.map(function (d, i) {
+        return '<span class="previa-clas-chip' + clase(i, mios[i], suyos[i]) + '"><b>' + d[0] + "</b><i>" + d[1] + "</i></span>";
       }).join("") + "</div>";
     }
-    return '<div class="previa-clas-h">' + chips(clas.local) + '<span class="previa-clas-sep">-</span>' + chips(clas.visitante) + "</div>";
+    return '<div class="previa-clas-h">' + chips(clas.local, nl, nv) + '<span class="previa-clas-sep">-</span>' + chips(clas.visitante, nv, nl) + "</div>";
   }
 
   // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga

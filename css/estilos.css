@@ -5433,3 +5433,17 @@ button { font-family: inherit; cursor: pointer; }
    el ancho mínimo de 520px de la clasificación de su competición — en
    Champions/Europa/Conference/selecciones la cifra quedaba fuera de pantalla. */
 #club-modal-overlay table.clasificacion-tabla.liga1ref-stat-tabla { min-width: 0 !important; width: 100%; }
+
+/* v409: PJ y promedio en las listas de estadísticas (Pichichi, MVP, tarjetas…) */
+#club-modal-overlay .liga1ref-stat-tabla tr {
+  grid-template-columns: 30px minmax(0, 1fr) 30px 42px auto;
+  grid-template-areas: "pos nom pj prom val" "pos eq pj prom val";
+}
+#club-modal-overlay .liga1ref-stat-tabla thead tr { grid-template-areas: "pos nom pj prom val"; }
+#club-modal-overlay .liga1ref-stat-tabla th.stat-pj-th,
+#club-modal-overlay .liga1ref-stat-tabla td.stat-pj-td { grid-area: pj; text-align: center; }
+#club-modal-overlay .liga1ref-stat-tabla th.stat-prom-th,
+#club-modal-overlay .liga1ref-stat-tabla td.stat-prom-td { grid-area: prom; text-align: center; }
+#club-modal-overlay .liga1ref-stat-tabla td.stat-pj-td,
+#club-modal-overlay .liga1ref-stat-tabla td.stat-prom-td { font-size: 13px; font-weight: 700; color: #b9cffc; }
+#club-modal-overlay .liga1ref-stat-tabla thead th:empty { display: none; }

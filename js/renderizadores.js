@@ -2127,7 +2127,11 @@
       if (l.indexOf(" · ") !== -1) {
         var cols = l.split(" · ").map(function (c) { return c.trim(); });
         if (cols.length >= 3 && /^\d+(?:[.,]\d+)?$/.test(cols[2]) && cols[0]) {
-          items.push({ nombre: cols[0], equipo: cols[1] || "", cantidad: Number(cols[2].replace(",", ".")) });
+          var _it = { nombre: cols[0], equipo: cols[1] || "", cantidad: Number(cols[2].replace(",", ".")) };
+          // v409: PJ y promedio («Coef.») tal cual vienen en el texto.
+          if (cols[3] && /^\d+$/.test(cols[3])) _it.pj = Number(cols[3]);
+          if (cols[4] && /^\d+(?:[.,]\d+)?$/.test(cols[4])) _it.coef = Number(cols[4].replace(",", "."));
+          items.push(_it);
         }
         return;
       }
@@ -2454,7 +2458,7 @@
       var key = _normNombre(it.nombre);
       var auto = porNombre[key];
       if (auto) {
-        filas.push({ nombre: auto.nombre, equipo: it.equipo || auto.equipo, equipoId: auto.equipoId, cantidad: it.cantidad });
+        filas.push({ nombre: auto.nombre, equipo: it.equipo || auto.equipo, equipoId: auto.equipoId, cantidad: it.cantidad, pj: it.pj, coef: it.coef });
         corregidos[key] = true;
       } else {
         filas.push(it);
@@ -2464,6 +2468,45 @@
       if (!corregidos[_normNombre(it.nombre)]) filas.push(it);
     });
     return filas;
+  }
+
+  // v409: PJ y promedio de los jugadores de equipos HUMANOS en las listas
+  // de estadísticas. Su PJ = partidos JUGADOS por su equipo en ESA
+  // competición (mismo criterio que el texto pegado de los IA: todos los
+  // jugadores de un equipo llevan los PJ del equipo); los torneos de verano
+  // no cuentan. Promedio = cantidad ÷ PJ (2 decimales).
+  function _pjEquipoEnComp(equipoId, compKey, datos, ligaId) {
+    if (!equipoId || !compKey || compKey === "verano") return 0;
+    try {
+      if (compKey === "supercopa" && typeof _scePartidosDelClub === "function") {
+        return _scePartidosDelClub(datos, equipoId).filter(function (p) { return p.jugado; }).length;
+      }
+      var todos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
+      if (compKey === "liga") {
+        var e = buscarEquipoPorId(equipoId, datos) || { id: equipoId };
+        var ck = _compKeyEsperadoParaDivision(ligaId || "1ref");
+        return todos.filter(function (p) { return p.jugado && _partidoPerteneceADivision(p, e, ck); }).length;
+      }
+      return todos.filter(function (p) {
+        return p.jugado && p.competicion === compKey && (p.local === equipoId || p.visitante === equipoId);
+      }).length;
+    } catch (err) { return 0; }
+  }
+  function _statFilasConPJ(filas, compKey, datos, ligaId) {
+    var cache = {};
+    (filas || []).forEach(function (f) {
+      if ((f.pj === undefined || f.pj === null) && f.equipoId) {
+        if (!(f.equipoId in cache)) cache[f.equipoId] = _pjEquipoEnComp(f.equipoId, compKey, datos, ligaId);
+        if (cache[f.equipoId] > 0) f.pj = cache[f.equipoId];
+      }
+      if ((f.coef === undefined || f.coef === null) && f.pj > 0) f.coef = Math.round((f.cantidad / f.pj) * 100) / 100;
+    });
+    return filas;
+  }
+  function _statPjCeldasHTML(f) {
+    var pj = f.pj > 0 ? String(f.pj) : "—";
+    var prom = (typeof f.coef === "number" && !isNaN(f.coef)) ? f.coef.toFixed(2) : "—";
+    return '<td class="stat-pj-td">' + pj + '</td><td class="stat-prom-td">' + prom + "</td>";
   }
 
   // ============================================================
@@ -3433,6 +3476,7 @@
       contenedor.appendChild(titulo);
 
       var filas = ligaId === "1ref" ? calcularLiga1RefStatsCombinado(datos, categoria) : calcularLigaExtraStatFilas(ligaId, categoria, datos);
+      filas = _statFilasConPJ(filas, "liga", datos, ligaId);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -3442,7 +3486,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         // Fila del propio jugador humano (equipoId = el club activo) —
@@ -3459,7 +3503,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + valor + "</td>" +
+          '<td class="clasificacion-pts">' + valor + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("1ref", ligaId, categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -4177,6 +4221,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularCopaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "copa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -4186,7 +4231,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -4197,7 +4242,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + (meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad) + "</td>" +
+          '<td class="clasificacion-pts">' + (meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad) + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("copa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -4763,6 +4808,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRecopaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "recopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -4772,7 +4818,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -4783,7 +4829,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("recopa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -5244,6 +5290,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularInterStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "intercontinental", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -5253,7 +5300,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -5264,7 +5311,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("intercontinental", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -5923,6 +5970,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUscStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "usc", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -5932,7 +5980,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -5943,7 +5991,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("usc", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -6456,6 +6504,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularKaocupStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "kaocup", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -6465,7 +6514,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -6476,7 +6525,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("kaocup", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -6930,6 +6979,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSuperekaoStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "superekao", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -6939,7 +6989,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -6950,7 +7000,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("superekao", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -7441,6 +7491,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSceStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "supercopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -7450,7 +7501,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -7461,7 +7512,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("sce", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -8429,6 +8480,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularChampionsStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "champions", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -8438,7 +8490,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -8449,7 +8501,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("champions", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -9126,6 +9178,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUelStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "uel", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -9135,7 +9188,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -9146,7 +9199,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("uel", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -9829,6 +9882,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUeclStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "uecl", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -9838,7 +9892,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -9849,7 +9903,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("uecl", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -10519,6 +10573,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularNationsStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "nations", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -10528,7 +10583,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _nationsIdActivo(idClubActivo));
@@ -10539,7 +10594,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("nations", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -11217,6 +11272,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSlxStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "superliga", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -11226,7 +11282,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _slxIdActivo(idClubActivo));
@@ -11237,7 +11293,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("superliga", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -11885,6 +11941,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadeurocopaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "roadeurocopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -11894,7 +11951,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadeurocopaIdActivo(idClubActivo));
@@ -11905,7 +11962,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadeurocopa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -12555,6 +12612,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularEurocopaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "eurocopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -12564,7 +12622,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _eurocopaIdActivo(idClubActivo));
@@ -12575,7 +12633,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("eurocopa", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -13222,6 +13280,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadmundialStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "roadmundial", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -13231,7 +13290,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadmundialIdActivo(idClubActivo));
@@ -13242,7 +13301,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadmundial", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -13894,6 +13953,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularMundialselStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "mundialsel", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -13903,7 +13963,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _mundialselIdActivo(idClubActivo));
@@ -13914,7 +13974,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("mundialsel", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -14562,6 +14622,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadamericaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "roadamerica", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -14571,7 +14632,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadamericaIdActivo(idClubActivo));
@@ -14582,7 +14643,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadamerica", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -15224,6 +15285,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadafricaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "roadafrica", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -15233,7 +15295,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadafricaIdActivo(idClubActivo));
@@ -15244,7 +15306,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadafrica", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -15886,6 +15948,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadasiaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "roadasia", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
         return;
@@ -15895,7 +15958,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th><th></th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th><th></th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadasiaIdActivo(idClubActivo));
@@ -15906,7 +15969,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + f.cantidad + "</td>" +
+          '<td class="clasificacion-pts">' + f.cantidad + "</td>" + _statPjCeldasHTML(f) +
           '<td class="stat-fila-editar-td">' + _statFilaEditarBtnHtml("roadasia", "", categoria, idClubActivo, f, meta) + "</td>";
         tbody.appendChild(tr);
       });
@@ -16425,6 +16488,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSuperligaStatsCombinado(datos, categoria);
+      filas = _statFilasConPJ(filas, "superliga", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Se suman solos al añadir eventos en un partido de Superliga."));
         return;
@@ -16434,7 +16498,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaEl = document.createElement("table");
       tablaEl.className = "clasificacion-tabla liga1ref-stat-tabla";
-      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + "</th></tr></thead>";
+      tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
@@ -16446,7 +16510,7 @@
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
           (esTuyo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
           '<td class="liga1ref-stat-equipo">' + escapeHTML(f.equipo || "—") + "</td>" +
-          '<td class="clasificacion-pts">' + valor + "</td>";
+          '<td class="clasificacion-pts">' + valor + "</td>" + _statPjCeldasHTML(f);
         tbody.appendChild(tr);
       });
       tablaEl.appendChild(tbody);
@@ -22868,6 +22932,7 @@
     obtenerComoSePuntuaTexto: obtenerComoSePuntuaTexto,
     extraerBanderaRival: extraerBanderaRival,
     repartirTextoCompeticion: repartirTextoCompeticion,
+    statFilasConPJ: _statFilasConPJ,
     renderizarKaocup: renderizarKaocup,
     irKaocupTab: irKaocupTab,
     renderizarKaocupStatDetalle: renderizarKaocupStatDetalle,

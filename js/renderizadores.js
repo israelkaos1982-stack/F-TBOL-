@@ -63,6 +63,8 @@
   var _seleccionesIAMap = {}; // clave normalizada -> [nivel, color1, color2, (color3)] (data/selecciones_ia.json)
   var _rivalesRealesMap = null; // caché síncrona clave normalizada -> ficha, para resolverRivalPorNombre
 
+  var _humanosIdsSet = {};
+  function _esIdHumano(id) { return !!id && (!!_humanosIdsSet[id] || /^sel-/.test(String(id))); }
   function cargarTodo() {
     return Promise.all([
       cargarJSON(DATA_URLS.equipos),
@@ -100,6 +102,11 @@
         titulos: r[6]
       };
       _estadiosLista = datos.estadios.estadios || [];
+      // v410: ids de los equipos HUMANOS (club y su selección "sel-<id>").
+      _humanosIdsSet = {};
+      ((datos.equipos && datos.equipos.equipos) || []).forEach(function (eh) {
+        if (eh && eh.id) { _humanosIdsSet[eh.id] = true; _humanosIdsSet["sel-" + eh.id] = true; }
+      });
       _rivalesRealesMap = {};
       _rivalesAltMap = {};
       Object.keys(datos.equiposIA.bloques || {}).forEach(function (kb) {
@@ -2457,7 +2464,15 @@
     filasTexto.forEach(function (it) {
       var key = _normNombre(it.nombre);
       var auto = porNombre[key];
-      if (auto) {
+      if (auto && !_esIdHumano(auto.equipoId)) {
+        // v410: jugador IA que ADEMÁS hizo estadística contra un humano: lo
+        // de esos partidos se SUMA a su línea del texto (el texto solo trae
+        // sus partidos IA vs IA). Los PJ vs humano se suman en _statFilasConPJ.
+        filas.push({ nombre: it.nombre, equipo: it.equipo || auto.equipo, cantidad: it.cantidad + auto.cantidad,
+          pj: it.pj, _iaIdVsHumano: auto.equipoId });
+        corregidos[key] = true;
+      } else if (auto) {
+        // Jugador de equipo HUMANO: la línea del texto es una corrección manual y GANA.
         filas.push({ nombre: auto.nombre, equipo: it.equipo || auto.equipo, equipoId: auto.equipoId, cantidad: it.cantidad, pj: it.pj, coef: it.coef });
         corregidos[key] = true;
       } else {
@@ -2478,6 +2493,14 @@
   function _pjEquipoEnComp(equipoId, compKey, datos, ligaId) {
     if (!equipoId || !compKey || compKey === "verano") return 0;
     try {
+      // v410: equipo HUMANO → total de partidos jugados en TODAS sus
+      // competiciones (sin torneos de verano), petición usuario.
+      if (_esIdHumano(equipoId)) {
+        return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+          return p.jugado && p.competicion !== "verano" && _resolverCompKeyBalon(p.competicion) !== "verano" &&
+            (p.local === equipoId || p.visitante === equipoId);
+        }).length;
+      }
       if (compKey === "supercopa" && typeof _scePartidosDelClub === "function") {
         return _scePartidosDelClub(datos, equipoId).filter(function (p) { return p.jugado; }).length;
       }
@@ -2495,6 +2518,14 @@
   function _statFilasConPJ(filas, compKey, datos, ligaId) {
     var cache = {};
     (filas || []).forEach(function (f) {
+      if (f._iaIdVsHumano) {
+        // IA del texto + sus partidos contra humanos en esta competición.
+        var extra = _pjEquipoEnComp(f._iaIdVsHumano, compKey, datos, ligaId);
+        f.pj = (f.pj || 0) + extra || undefined;
+        f.coef = f.pj > 0 ? Math.round((f.cantidad / f.pj) * 100) / 100 : undefined;
+        delete f._iaIdVsHumano;
+        return;
+      }
       if ((f.pj === undefined || f.pj === null) && f.equipoId) {
         if (!(f.equipoId in cache)) cache[f.equipoId] = _pjEquipoEnComp(f.equipoId, compKey, datos, ligaId);
         if (cache[f.equipoId] > 0) f.pj = cache[f.equipoId];

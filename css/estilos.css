@@ -5447,3 +5447,19 @@ button { font-family: inherit; cursor: pointer; }
 #club-modal-overlay .liga1ref-stat-tabla td.stat-pj-td,
 #club-modal-overlay .liga1ref-stat-tabla td.stat-prom-td { font-size: 13px; font-weight: 700; color: #b9cffc; }
 #club-modal-overlay .liga1ref-stat-tabla thead th:empty { display: none; }
+
+/* v411: un solo ✏️ por competición en las eliminatorias — solo la PRIMERA
+   ronda lo conserva (con el texto único, pegar todo ahí reparte cada ronda,
+   clasificación y estadísticas). El resto de rondas, sin lápiz. */
+.champions-playoff-ronda ~ .champions-playoff-ronda .copa-club-header .liga1ref-editar-btn { display: none !important; }
+
+/* v411: PJ · PROM. · GOLES alineados con sus cifras (columnas de ancho fijo
+   iguales en la cabecera y en cada fila). */
+#club-modal-overlay .liga1ref-stat-tabla tr { grid-template-columns: 30px minmax(0, 1fr) 34px 46px 54px; column-gap: 6px; }
+#club-modal-overlay .liga1ref-stat-tabla th.stat-pj-th,
+#club-modal-overlay .liga1ref-stat-tabla th.stat-prom-th,
+#club-modal-overlay .liga1ref-stat-tabla td.stat-pj-td,
+#club-modal-overlay .liga1ref-stat-tabla td.stat-prom-td { text-align: center; justify-self: stretch; }
+#club-modal-overlay .liga1ref-stat-tabla th:nth-child(4),
+#club-modal-overlay .liga1ref-stat-tabla td:nth-child(4) { text-align: center; justify-self: stretch; }
+#club-modal-overlay .liga1ref-stat-tabla thead th { white-space: nowrap; font-size: 10.5px; letter-spacing: 0.3px; }

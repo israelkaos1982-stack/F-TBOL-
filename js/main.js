@@ -3122,6 +3122,16 @@
       var accionBtn = ev.target.closest && ev.target.closest("[data-accion]");
       if (!accionBtn) return;
       var d = accionBtn.dataset;
+      // v403: al abrir CUALQUIER lista de estadísticas (Pichichi, MVP,
+      // tarjetas, Zamora… de cualquier competición) se empieza por el
+      // puesto 1 — antes la ventana conservaba el scroll de la cuadrícula
+      // de estadísticas (al fondo) y la lista aparecía desde el puesto ~8.
+      if (/^ver-[a-z0-9]+-stat$/.test(d.accion || "")) {
+        setTimeout(function () {
+          var cuerpos = document.querySelectorAll(".club-modal-body");
+          Array.prototype.forEach.call(cuerpos, function (b) { b.scrollTop = 0; });
+        }, 0);
+      }
       switch (d.accion) {
         case "anadir-estadio": anadirEstadioPrompt(); break;
         case "editar-estadio": editarEstadioPrompt(d.id, d.nombre, d.capacidad, d.categoria); break;

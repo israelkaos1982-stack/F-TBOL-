@@ -3771,21 +3771,30 @@
     contenedor.appendChild(statsGrid);
   }
 
+  // v403: icono "marcador de estadio" (HOME 00-00 AWAY) para la pestaña
+  // Resultados — SVG inline, < 1 KB, sin pedir ningún archivo.
+  var ICONO_MARCADOR = '<svg class="icono-marcador" viewBox="0 0 24 16" width="20" height="14" aria-hidden="true">' +
+    '<rect x=".5" y="2.5" width="23" height="13" rx="2.5" fill="#0b1630" stroke="#c9d3e6"/>' +
+    '<rect x="8" y=".5" width="8" height="4" rx="1" fill="#2a0508" stroke="#c9d3e6" stroke-width=".6"/>' +
+    '<rect x="2.5" y="6" width="7.5" height="7.5" rx="1" fill="#1a0306"/><rect x="14" y="6" width="7.5" height="7.5" rx="1" fill="#1a0306"/>' +
+    '<path d="M4 7.5h2v4.5h-2zM7 7.5h1.6v4.5h-1.6zM15.5 7.5h2v4.5h-2zM18.5 7.5h1.6v4.5h-1.6z" fill="none" stroke="#ff3b3b" stroke-width=".9"/>' +
+    '<path d="M10.2 2.5h3.6" stroke="#ff3b3b" stroke-width=".8"/></svg>';
+
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias ----------
   // Mismo patrón exacto que las pestañas de Champions (🔵 Fase Grupos /
   // 🟣 Playoffs, ver _championsTabsHTML más abajo): reutiliza
   // .liga-tab-boxes/.liga-tab-box/.liga-tab-box--activa tal cual.
-  var _copaTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _copaTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _copaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_copaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="copa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_copaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="copa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_copaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="copa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -4509,17 +4518,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Copa del Rey ----------
-  var _recopaTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _recopaTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _recopaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_recopaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="recopa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_recopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="recopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_recopaTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="recopa-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -5000,17 +5009,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Copa del Rey/Recopa ----------
-  var _interTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _interTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _interTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_interTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="inter-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_interTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="inter-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_interTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="inter-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -5682,17 +5691,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
-  var _uscTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _uscTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _uscTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_uscTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="usc-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_uscTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="usc-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_uscTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="usc-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -6155,17 +6164,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
-  var _kaocupTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _kaocupTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _kaocupTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_kaocupTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="kaocup-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_kaocupTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="kaocup-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_kaocupTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="kaocup-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -6676,17 +6685,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Copa del Rey/Recopa/Intercontinental/Verano ----------
-  var _superekaoTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _superekaoTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _superekaoTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_superekaoTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="superekao-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_superekaoTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="superekao-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_superekaoTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="superekao-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -7192,17 +7201,17 @@
 
   // ---------- Pestañas 👥️ Humanos / ⛓️ Eliminatorias — mismo patrón
   // exacto que las pestañas de Supercopa de Europa/Copa del Rey ----------
-  var _sceTabActual = "humanos"; // "humanos" | "eliminatorias" — no se persiste, siempre reabre en Humanos
+  var _sceTabActual = "eliminatorias"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _sceTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes copa-tabs">' +
+      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
+      (_sceTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
+      '" data-accion="sce-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">' + ICONO_MARCADOR + ' Resultados</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--copa-humanos' +
       (_sceTabActual === "humanos" ? " liga-tab-box--activa" : "") +
       '" data-accion="sce-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
-      '<button type="button" class="liga-tab-box liga-tab-box--copa-eliminatorias' +
-      (_sceTabActual === "eliminatorias" ? " liga-tab-box--activa" : "") +
-      '" data-accion="sce-tab-ir" data-tab="eliminatorias" data-club-id="' + (idClubActivo || "") + '">⛓️ Eliminatorias</button>' +
       "</div>"
     );
   }
@@ -7995,20 +8004,20 @@
     };
   }
 
-  var _championsTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _championsTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _championsTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes champions-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--champions-humanos' +
-      (_championsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="champions-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--champions-grupos' +
       (_championsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="champions-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🔵 Fase Grupos</span><span class="tab-corto">🔵 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--champions-playoffs' +
       (_championsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="champions-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟣 Playoffs</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--champions-humanos' +
+      (_championsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="champions-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -8844,20 +8853,20 @@
     };
   }
 
-  var _uelTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _uelTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _uelTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes uel-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--uel-humanos' +
-      (_uelTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-grupos' +
       (_uelTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="uel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟠 Fase Grupos</span><span class="tab-corto">🟠 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uel-playoffs' +
       (_uelTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="uel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟧 Playoffs</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--uel-humanos' +
+      (_uelTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="uel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -9547,20 +9556,20 @@
     };
   }
 
-  var _ueclTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _ueclTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _ueclTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes uecl-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--uecl-humanos' +
-      (_ueclTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="uecl-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uecl-grupos' +
       (_ueclTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="uecl-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟢 Fase Grupos</span><span class="tab-corto">🟢 Grupo</span></span></button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--uecl-playoffs' +
       (_ueclTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="uecl-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '">🟩 Playoffs</button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--uecl-humanos' +
+      (_ueclTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="uecl-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -10231,20 +10240,20 @@
     };
   }
 
-  var _nationsTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _nationsTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _nationsTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_nationsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="nations-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_nationsTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="nations-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_nationsTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="nations-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_nationsTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="nations-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -10929,20 +10938,20 @@
     };
   }
 
-  var _slxTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _slxTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _slxTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_slxTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="slx-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_slxTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="slx-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_slxTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="slx-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_slxTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="slx-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -11597,20 +11606,20 @@
     };
   }
 
-  var _roadeurocopaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _roadeurocopaTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _roadeurocopaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_roadeurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadeurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadeurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadeurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadeurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadeurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadeurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadeurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -12267,20 +12276,20 @@
     };
   }
 
-  var _eurocopaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _eurocopaTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _eurocopaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_eurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="eurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_eurocopaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="eurocopa-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_eurocopaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="eurocopa-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_eurocopaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="eurocopa-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -12934,20 +12943,20 @@
     };
   }
 
-  var _roadmundialTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _roadmundialTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _roadmundialTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_roadmundialTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadmundial-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadmundialTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadmundial-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadmundialTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadmundial-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadmundialTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadmundial-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -13606,20 +13615,20 @@
     };
   }
 
-  var _mundialselTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _mundialselTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _mundialselTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_mundialselTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="mundialsel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_mundialselTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="mundialsel-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_mundialselTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="mundialsel-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_mundialselTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="mundialsel-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -14274,20 +14283,20 @@
     };
   }
 
-  var _roadamericaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _roadamericaTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _roadamericaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_roadamericaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadamerica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadamericaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadamerica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadamericaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadamerica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadamericaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadamerica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -14936,20 +14945,20 @@
     };
   }
 
-  var _roadafricaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _roadafricaTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _roadafricaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_roadafricaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadafrica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadafricaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadafrica-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadafricaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadafrica-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadafricaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadafrica-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }
@@ -15598,20 +15607,20 @@
     };
   }
 
-  var _roadasiaTabActual = "humanos"; // "humanos" | "grupos" | "playoffs" — no se persiste, siempre reabre en Humanos
+  var _roadasiaTabActual = "grupos"; // v403: primera pestaña por defecto (Resultados / Fase Grupos); Humanos va al final
 
   function _roadasiaTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes nations-tabs">' +
-      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
-      (_roadasiaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
-      '" data-accion="roadasia-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-grupos' +
       (_roadasiaTabActual === "grupos" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadasia-tab-ir" data-tab="grupos" data-club-id="' + (idClubActivo || "") + '">🔵 Grupos</button>' +
       '<button type="button" class="liga-tab-box liga-tab-box--nations-playoffs' +
       (_roadasiaTabActual === "playoffs" ? " liga-tab-box--activa" : "") +
       '" data-accion="roadasia-tab-ir" data-tab="playoffs" data-club-id="' + (idClubActivo || "") + '"><span class="tab-cq"><span class="tab-largo">🟣 Eliminatorias</span><span class="tab-corto">🟣 Elim.</span></span></button>' +
+      '<button type="button" class="liga-tab-box liga-tab-box--nations-humanos' +
+      (_roadasiaTabActual === "humanos" ? " liga-tab-box--activa" : "") +
+      '" data-accion="roadasia-tab-ir" data-tab="humanos" data-club-id="' + (idClubActivo || "") + '">👥️ Humanos</button>' +
       "</div>"
     );
   }

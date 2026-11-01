@@ -3514,3 +3514,97 @@ document.addEventListener("click", function (ev) {
   }
   new MutationObserver(programar).observe(ov, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 })();
+
+// ============================================================
+// v405: 🅰️ CLASIFICACIÓN REDUCIDA — en TODAS las clasificaciones (ligas
+// de España, Champions/Europa/Conference, Nations/selecciones,
+// Superliga…). Botón 🅰️ a la izquierda del título: al pulsarlo la tabla
+// queda en  # · Equipo · PTS · PJ · DG · %  (oculta PG/PE/PP/G+/G-);
+// pulsando otra vez vuelve completa. Es SOLO CSS (clase en la ventana) +
+// el botón, que se añade solo tras cada pintado. La preferencia se
+// recuerda en este dispositivo (localStorage, conveniencia por usuario).
+// ============================================================
+(function () {
+  var KEY = "clasif_compacta_v1";
+  var compacta = false;
+  try { compacta = localStorage.getItem(KEY) === "1"; } catch (e) {}
+
+  function overlay() { return document.getElementById("club-modal-overlay"); }
+  function aplicarClase() {
+    var ov = overlay();
+    if (ov) ov.classList.toggle("clasif-compacta", compacta);
+    Array.prototype.forEach.call(document.querySelectorAll(".clasif-compacta-btn"), function (b) {
+      b.classList.toggle("clasif-compacta-btn--on", compacta);
+      b.setAttribute("aria-pressed", compacta ? "true" : "false");
+      b.title = compacta ? "Ver clasificación completa" : "Ver clasificación reducida";
+    });
+  }
+  function crearBoton() {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "clasif-compacta-btn";
+    b.textContent = "🅰️";
+    b.setAttribute("aria-label", "Clasificación reducida / completa");
+    return b;
+  }
+  // Busca la fila de título que va ANTES de la tabla dentro de su contenedor.
+  function tituloPrevio(tabla) {
+    var wrap = tabla.closest(".clasificacion-wrap") || tabla;
+    var n = wrap.previousElementSibling;
+    while (n) {
+      if (n.classList && n.classList.contains("liga1ref-titulo-row")) return n;
+      if (n.classList && n.classList.contains("clasif-compacta-fila")) return n;
+      n = n.previousElementSibling;
+    }
+    return null;
+  }
+  function asegurarBotones() {
+    var body = document.getElementById("club-modal-body");
+    if (!body) return;
+    var tablas = body.querySelectorAll("table.liga1ref-tabla:not(.liga1ref-stat-tabla)");
+    Array.prototype.forEach.call(tablas, function (t) {
+      if (t.dataset.clasifBtn === "1") return;
+      t.dataset.clasifBtn = "1";
+      var titulo = tituloPrevio(t);
+      if (titulo) {
+        if (titulo.querySelector(".clasif-compacta-btn")) return;
+        var spacer = titulo.querySelector(".liga1ref-titulo-spacer");
+        var btn = crearBoton();
+        if (spacer) spacer.replaceWith(btn); else titulo.insertBefore(btn, titulo.firstChild);
+      } else {
+        // Clasificación sin fila de título (p. ej. Superliga): fila propia.
+        var fila = document.createElement("div");
+        fila.className = "clasif-compacta-fila";
+        fila.appendChild(crearBoton());
+        var w = t.closest(".clasificacion-wrap") || t;
+        w.parentNode.insertBefore(fila, w);
+      }
+    });
+    aplicarClase();
+  }
+
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest && ev.target.closest(".clasif-compacta-btn");
+    if (!b) return;
+    compacta = !compacta;
+    try { localStorage.setItem(KEY, compacta ? "1" : "0"); } catch (e) {}
+    aplicarClase();
+  });
+
+  // Observer RESTRINGIDO al cuerpo de la ventana + debounce; solo añade el
+  // botón una vez por tabla (marca data-clasif-btn), así no se re-dispara.
+  var pend = false;
+  function programar() {
+    if (pend) return;
+    pend = true;
+    setTimeout(function () { pend = false; asegurarBotones(); }, 60);
+  }
+  function arrancar() {
+    var body = document.getElementById("club-modal-body");
+    if (!body) return;
+    new MutationObserver(programar).observe(body, { childList: true, subtree: true });
+    asegurarBotones();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", arrancar);
+  else arrancar();
+})();

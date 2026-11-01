@@ -1131,6 +1131,10 @@
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoUscTexto(), "usc", mostrarInfoUsc);
   }
+  function mostrarInfoPuntuacion() {
+    if (!window.Renderizadores) return;
+    _abrirInfoOverlay(window.Renderizadores.obtenerComoSePuntuaTexto(), "puntuacion", mostrarInfoPuntuacion);
+  }
   function mostrarInfoKaocup() {
     if (!window.Renderizadores) return;
     _abrirInfoOverlay(window.Renderizadores.obtenerFormatoKaocupTexto(), "kaocup", mostrarInfoKaocup);
@@ -3232,6 +3236,7 @@
         case "guardar-usc-playoff": guardarUscPlayoff(d.clubId, d.ronda); break;
         case "cancelar-usc-playoff": cancelarUscPlayoff(d.clubId); break;
         case "info-kaocup-formato": mostrarInfoKaocup(); break;
+        case "ver-como-se-puntua": ev.preventDefault(); mostrarInfoPuntuacion(); break;
         case "kaocup-tab-ir": irKaocupTab(d.clubId, d.tab); break;
         case "ver-kaocup-stat": verKaocupStat(d.clubId, d.categoria); break;
         case "volver-kaocup": volverKaocup(d.clubId); break;

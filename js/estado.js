@@ -725,9 +725,10 @@
           var mVsN = rivalTxt.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
           var defSel = R.seleccionHumanaDeClub ? R.seleccionHumanaDeClub(club.id) : null;
           if (mVsN && defSel) {
-            var selNorm = _normTxtExtra(defSel.nombre), lA = _normTxtExtra(mVsN[1]), lB = _normTxtExtra(mVsN[2]);
-            if (lA === selNorm && lB !== selNorm) { rivalTxt = mVsN[2].trim(); esVisN = false; }
-            else if (lB === selNorm && lA !== selNorm) { rivalTxt = mVsN[1].trim(); esVisN = true; }
+            var _sinBand = function (x) { return R.extraerBanderaRival ? R.extraerBanderaRival(x).nombre : x; };
+            var selNorm = _normTxtExtra(defSel.nombre), lA = _normTxtExtra(_sinBand(mVsN[1])), lB = _normTxtExtra(_sinBand(mVsN[2]));
+            if (lA === selNorm && lB !== selNorm) { rivalTxt = _sinBand(mVsN[2]).trim(); esVisN = false; }
+            else if (lB === selNorm && lA !== selNorm) { rivalTxt = _sinBand(mVsN[1]).trim(); esVisN = true; }
           }
           rival = R.resolverSeleccionPorNombre(rivalTxt, datos);
           esVisitanteLado = esVisN;
@@ -743,6 +744,8 @@
           // real de una supercopa nacional ("Supercoupe", "Community
           // Shield", "Supercoppa") aunque su compKey sea "supercopa".
           _competicionCruda: ex.competicion,
+          // v407: bandera del país del rival tecleada en el texto (🇧🇪) — solo display.
+          _banderaRival: ex.bandera || "",
           liga: compKey === "liga" ? club.ligaActual : null,
           ronda: ex.ronda,
           jornada: null,

@@ -1242,6 +1242,22 @@
   // cada una (ver idsVistos, abajo) precisamente para soportar el caso
   // LEGÍTIMO de Copa/Champions; en Liga ese mismo mecanismo esconde en
   // silencio un error de tecleo.
+  // v407: bandera del país del rival IA tecleada en el Calendario extra
+  // («🇧🇪 Club Brujas», «Lommel 🇧🇪»). Se SEPARA del nombre: el nombre limpio
+  // sigue resolviendo al mismo equipo y generando el MISMO id de partido
+  // (un resultado ya jugado no se queda huérfano por añadir la bandera), y
+  // la bandera se pinta aparte junto al escudo en la card.
+  var _BANDERA_RE_INI = /^\s*((?:[\u{1F1E6}-\u{1F1FF}]{2})|(?:\u{1F3F4}[\u{E0060}-\u{E007F}]+))\s*/u;
+  var _BANDERA_RE_FIN = /\s*((?:[\u{1F1E6}-\u{1F1FF}]{2})|(?:\u{1F3F4}[\u{E0060}-\u{E007F}]+))\s*$/u;
+  function extraerBanderaRival(txt) {
+    var t = String(txt || "");
+    var m = t.match(_BANDERA_RE_INI);
+    if (m) return { bandera: m[1], nombre: t.slice(m[0].length).trim() };
+    m = t.match(_BANDERA_RE_FIN);
+    if (m) return { bandera: m[1], nombre: t.slice(0, m.index).trim() };
+    return { bandera: "", nombre: t.trim() };
+  }
+
   function parsearPartidosExtraTexto(texto, nombreClubActivo, onIgnorada, onDuplicadoLiga) {
     var clubNorm = _normNombre(nombreClubActivo || "");
     var items = [];
@@ -1309,7 +1325,7 @@
       // ahora ADEMÁS decide casa/fuera con el mismo patrón.
       var mVs = rivalCrudo.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
       if (mVs && clubNorm) {
-        var ladoA = _normNombre(mVs[1]), ladoB = _normNombre(mVs[2]);
+        var ladoA = _normNombre(extraerBanderaRival(mVs[1]).nombre), ladoB = _normNombre(extraerBanderaRival(mVs[2]).nombre);
         var aEsClub = ladoA.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoA) !== -1;
         var bEsClub = ladoB.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoB) !== -1;
         if (aEsClub && !bEsClub) { rivalCrudo = mVs[2].trim(); esVisitante = false; }
@@ -1319,6 +1335,10 @@
         // (ver resolverRivalPorNombre) que adivinar mal cuál es cuál; se
         // respeta lo que ya se supiera por la marca (visitante)/(local).
       }
+
+      var _bandRival = extraerBanderaRival(rivalCrudo);
+      var banderaRival = _bandRival.bandera;
+      if (_bandRival.nombre) rivalCrudo = _bandRival.nombre;
 
       // Id ESTABLE (competición+ronda+rival, sin la posición en la lista):
       // reordenar/añadir líneas en el texto no le cambia el id a un partido
@@ -1337,6 +1357,7 @@
         competicion: competicion,
         ronda: ronda,
         rivalNombre: rivalCrudo,
+        bandera: banderaRival,
         fecha: fecha,
         jugado: jugado,
         esVisitante: esVisitante,
@@ -18003,10 +18024,15 @@
     return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(hex || "")) ? hex : "transparent";
   }
 
-  function _bloqueEquipoHTML(equipo, ladoClase) {
+  function _bloqueEquipoHTML(equipo, ladoClase, bandera) {
+    var escudo = crearEscudoHTML(equipo, "escudo--sm");
+    if (bandera) {
+      escudo = '<span class="match-card-escudo-band">' + escudo +
+        '<span class="match-card-bandera" title="País del rival">' + escapeHTML(bandera) + "</span></span>";
+    }
     return (
       '<div class="match-card-team ' + ladoClase + '" style="--team-color:' + _colorInlineSeguro(equipo && equipo.colorPrimario) + ';">' +
-      crearEscudoHTML(equipo, "escudo--sm") +
+      escudo +
       '<span class="match-card-nombre">' + escapeHTML(_nombreCortoEquipo(equipo)) + "</span>" +
       "</div>"
     );
@@ -18271,9 +18297,9 @@
         '<div class="match-card-center match-card-center--rapido">' + centroTop + "</div>" +
         "</div>"
       : '<div class="match-card-teams">' +
-        _bloqueEquipoHTML(local, "match-card-team--local") +
+        _bloqueEquipoHTML(local, "match-card-team--local", esLocal ? "" : partido._banderaRival) +
         '<div class="match-card-center">' + centroTop + '<span class="match-card-vs-sep">vs</span></div>' +
-        _bloqueEquipoHTML(visitante, "match-card-team--visitante") +
+        _bloqueEquipoHTML(visitante, "match-card-team--visitante", esLocal ? partido._banderaRival : "") +
         "</div>";
 
     card.innerHTML =
@@ -22676,6 +22702,7 @@
     calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas,
     obtenerFormatoKaocupTexto: obtenerFormatoKaocupTexto,
     obtenerComoSePuntuaTexto: obtenerComoSePuntuaTexto,
+    extraerBanderaRival: extraerBanderaRival,
     renderizarKaocup: renderizarKaocup,
     irKaocupTab: irKaocupTab,
     renderizarKaocupStatDetalle: renderizarKaocupStatDetalle,

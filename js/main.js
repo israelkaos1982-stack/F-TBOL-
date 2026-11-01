@@ -3313,6 +3313,7 @@
         case "cancelar-uecl-playoff": cancelarUeclPlayoff(d.clubId); break;
         case "info-uecl-formato": mostrarInfoUecl(); break;
         case "nations-tab-ir": irNationsTab(d.clubId, d.tab); break;
+        case "nations-div-ir": if (window.Renderizadores) window.Renderizadores.irNationsDiv(d.clubId, d.div); break;
         case "editar-nations-inline": editarNationsInline(d.clubId); break;
         case "guardar-nations": guardarNations(d.clubId); break;
         case "cancelar-nations": cancelarNations(d.clubId); break;

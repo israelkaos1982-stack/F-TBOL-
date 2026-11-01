@@ -3755,18 +3755,38 @@
   // con su PROPIA clave de almacenamiento — nunca comparte contador con
   // Champions ni con Europa League ni con Copa del Rey. Ver
   // js/renderizadores.js::calcularNationsCombinada.
+  // v413: 3 DIVISIONES (🥇 Oro · 🥈 Plata · 🥉 Bronce), cada una con SUS
+  // grupos, SUS playoffs y SUS estadísticas. Oro usa las claves de siempre
+  // (los datos que ya había siguen siendo la Liga Oro); Plata y Bronce
+  // llevan sufijo. La división que se está VIENDO es una preferencia de
+  // este dispositivo (fuera del prefijo ef7_, no se sincroniza).
+  var NATIONS_DIVISIONES = ["oro", "plata", "bronce"];
+  var _NATIONS_DIV_VISTA_KEY = "f7v_nations_div_v1";
+  var _nationsDiv = "oro";
+  try { var _dv = localStorage.getItem(_NATIONS_DIV_VISTA_KEY); if (NATIONS_DIVISIONES.indexOf(_dv) !== -1) _nationsDiv = _dv; } catch (e) {}
+  function obtenerNationsDivision() { return _nationsDiv; }
+  function fijarNationsDivision(div, noRecordar) {
+    if (NATIONS_DIVISIONES.indexOf(div) === -1) return;
+    _nationsDiv = div;
+    if (!noRecordar) { try { localStorage.setItem(_NATIONS_DIV_VISTA_KEY, div); } catch (e) {} }
+  }
+  function _nationsSuf(div) {
+    var d = div || _nationsDiv;
+    return d === "oro" ? "" : "_" + d;
+  }
   var NATIONS_TEXTO_KEY = "ef7_nations_clasificacion_v1";
-  function obtenerNationsTexto() {
+  function _nationsTextoKey(div) { return "ef7_nations_clasificacion" + _nationsSuf(div) + "_v1"; }
+  function obtenerNationsTexto(div) {
     try {
-      return localStorage.getItem(NATIONS_TEXTO_KEY) || "";
+      return localStorage.getItem(_nationsTextoKey(div)) || "";
     } catch (err) {
       return "";
     }
   }
   function guardarNationsTexto(texto) {
-    if (!_confirmarSiEncogeMucho(NATIONS_TEXTO_KEY, obtenerNationsTexto(), texto)) return false;
+    if (!_confirmarSiEncogeMucho(_nationsTextoKey(), obtenerNationsTexto(), texto)) return false;
     try {
-      localStorage.setItem(NATIONS_TEXTO_KEY, texto || "");
+      localStorage.setItem(_nationsTextoKey(), texto || "");
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de Nations Cup:", err);
@@ -3775,12 +3795,12 @@
     }
   }
 
-  function _nationsStatKey(categoria) {
-    return "ef7_nations_stat_" + categoria + "_v1";
+  function _nationsStatKey(categoria, div) {
+    return "ef7_nations_stat_" + categoria + _nationsSuf(div) + "_v1";
   }
-  function obtenerNationsStatTexto(categoria) {
+  function obtenerNationsStatTexto(categoria, div) {
     try {
-      return localStorage.getItem(_nationsStatKey(categoria)) || "";
+      return localStorage.getItem(_nationsStatKey(categoria, div)) || "";
     } catch (err) {
       return "";
     }
@@ -3797,12 +3817,12 @@
     }
   }
 
-  function _nationsPlayoffKey(ronda) {
-    return "ef7_nations_playoff_" + ronda + "_v1";
+  function _nationsPlayoffKey(ronda, div) {
+    return "ef7_nations_playoff_" + ronda + _nationsSuf(div) + "_v1";
   }
-  function obtenerNationsPlayoffTexto(ronda) {
+  function obtenerNationsPlayoffTexto(ronda, div) {
     try {
-      return localStorage.getItem(_nationsPlayoffKey(ronda)) || "";
+      return localStorage.getItem(_nationsPlayoffKey(ronda, div)) || "";
     } catch (err) {
       return "";
     }
@@ -4977,6 +4997,8 @@
     obtenerDivisionHumano: obtenerDivisionHumano,
     guardarDivisionHumano: guardarDivisionHumano,
     obtenerFormatoOverride: obtenerFormatoOverride,
+    obtenerNationsDivision: obtenerNationsDivision,
+    fijarNationsDivision: fijarNationsDivision,
     guardarFormatoOverride: guardarFormatoOverride,
     obtenerLigaExtraStatTexto: obtenerLigaExtraStatTexto,
     guardarLigaExtraStatTexto: guardarLigaExtraStatTexto,

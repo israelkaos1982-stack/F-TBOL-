@@ -2518,6 +2518,7 @@
   function _statFilasConPJ(filas, compKey, datos, ligaId) {
     var cache = {};
     (filas || []).forEach(function (f) {
+      if (f._sinProm) { f.coef = null; return; } // Zamora: el valor ya ES una media
       if (f._iaIdVsHumano) {
         // IA del texto + sus partidos contra humanos en esta competición.
         var extra = _pjEquipoEnComp(f._iaIdVsHumano, compKey, datos, ligaId);
@@ -2534,6 +2535,46 @@
     });
     return filas;
   }
+  // v413: ZAMORA en TODAS las competiciones (no solo en Liga): media de
+  // goles encajados por partido (menos es mejor). IA → del texto pegado
+  // («🧤 ZAMORA»); equipos humanos → su portero titular, con los partidos
+  // jugados de ESA competición. Ordenado de menor a mayor, 2 decimales.
+  var _SEL_COMPS_ZAMORA = { nations: true, eurocopa: true, mundialsel: true, roadeurocopa: true, roadmundial: true, roadamerica: true, roadafrica: true, roadasia: true };
+  function _filasZamoraComp(pref, compKey, datos) {
+    var E = window.Estado;
+    var txt = E && E["obtener" + pref + "StatTexto"] ? E["obtener" + pref + "StatTexto"]("zamora") : "";
+    var texto = parsearLiga1RefStatTexto(txt);
+    var humanos = _SEL_COMPS_ZAMORA[compKey] ? _seleccionesHumanasEntidades(datos) : ((datos.equipos && datos.equipos.equipos) || []);
+    if (compKey === "nations") {
+      var divAct = _nationsDivActual();
+      humanos = humanos.filter(function (e) { return (_nationsDivDeHumano(e) || "oro") === divAct; });
+    }
+    var todos = E ? E.listarPartidosResueltos(datos) : [];
+    var autos = [];
+    humanos.forEach(function (e) {
+      var partidos = compKey === "supercopa" && typeof _scePartidosDelClub === "function"
+        ? _scePartidosDelClub(datos, e.id)
+        : todos.filter(function (p) { return p.competicion === compKey && (p.local === e.id || p.visitante === e.id); });
+      var enc = 0, n = 0;
+      partidos.forEach(function (p) {
+        if (!p.jugado || !p.resultado) return;
+        enc += p.local === e.id ? p.resultado.golesVisitante : p.resultado.golesLocal;
+        n++;
+      });
+      if (!n) return;
+      var portero = _liga1RefPorteroPrincipal(e.id);
+      if (!portero) return;
+      autos.push({ nombre: portero.nombre, equipo: e.nombre, equipoId: e.id, cantidad: Math.round((enc / n) * 100) / 100, pj: n });
+    });
+    var filas = _fusionarStatFilasConOverride(texto, autos);
+    filas.sort(function (a, b) { return a.cantidad - b.cantidad || a.nombre.localeCompare(b.nombre); });
+    return filas.slice(0, 20).map(function (f) {
+      f._sinProm = true;
+      f.cantidad = Number(f.cantidad).toFixed(2);
+      return f;
+    });
+  }
+
   function _statPjCeldasHTML(f) {
     var pj = f.pj > 0 ? String(f.pj) : "—";
     var prom = (typeof f.coef === "number" && !isNaN(f.coef)) ? f.coef.toFixed(2) : "—";
@@ -3656,9 +3697,10 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
-    // Sin Zamora en Copa (petición usuario 2026-10-08, "En la Copa del Rey no
-    // queremos estadísticas de Zamora"): sustituye lo pedido el 2026-10-03.
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    // v413: Zamora en TODAS las competiciones, Copa incluida (petición usuario
+    // 2026-11-01, sustituye a la del 2026-10-08 que la quitaba).
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // PSG no juega la Copa del Rey — juega su propia Coupe de France (ni
@@ -4252,6 +4294,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularCopaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Copa", "copa", datos);
       filas = _statFilasConPJ(filas, "copa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -4596,7 +4639,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _recopaAppendStatsGrid(contenedor, idClubActivo) {
@@ -4839,6 +4883,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRecopaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Recopa", "recopa", datos);
       filas = _statFilasConPJ(filas, "recopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -5088,7 +5133,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _interAppendStatsGrid(contenedor, idClubActivo) {
@@ -5321,6 +5367,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularInterStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Inter", "intercontinental", datos);
       filas = _statFilasConPJ(filas, "intercontinental", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -5771,7 +5818,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _uscAppendStatsGrid(contenedor, idClubActivo) {
@@ -6001,6 +6049,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUscStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Usc", "usc", datos);
       filas = _statFilasConPJ(filas, "usc", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -6254,7 +6303,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _kaocupAppendStatsGrid(contenedor, idClubActivo) {
@@ -6535,6 +6585,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularKaocupStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Kaocup", "kaocup", datos);
       filas = _statFilasConPJ(filas, "kaocup", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -6776,7 +6827,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _superekaoAppendStatsGrid(contenedor, idClubActivo) {
@@ -7010,6 +7062,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSuperekaoStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Superekao", "superekao", datos);
       filas = _statFilasConPJ(filas, "superekao", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -7293,7 +7346,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   function _sceAppendStatsGrid(contenedor, idClubActivo) {
@@ -7522,6 +7576,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSceStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Sce", "supercopa", datos);
       filas = _statFilasConPJ(filas, "supercopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -7653,7 +7708,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — ida y vuelta las 5 (petición
@@ -8511,6 +8567,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularChampionsStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Champions", "champions", datos);
       filas = _statFilasConPJ(filas, "champions", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -8686,7 +8743,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — igual que Champions.
@@ -9209,6 +9267,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUelStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Uel", "uel", datos);
       filas = _statFilasConPJ(filas, "uel", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -9390,7 +9449,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — igual que Champions.
@@ -9913,6 +9973,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularUeclStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Uecl", "uecl", datos);
       filas = _statFilasConPJ(filas, "uecl", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -10083,7 +10144,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -10100,6 +10162,45 @@
   function _nationsEquiposHumanos(datos) {
     return _seleccionesHumanasEntidades(datos);
   }
+  // v413: divisiones de la Nations (🥇 Oro · 🥈 Plata · 🥉 Bronce).
+  var NATIONS_DIV_META = [
+    { key: "oro", icono: "🥇", label: "Liga Oro" },
+    { key: "plata", icono: "🥈", label: "Liga Plata" },
+    { key: "bronce", icono: "🥉", label: "Liga Bronce" }
+  ];
+  function _nationsDivActual() {
+    return window.Estado && window.Estado.obtenerNationsDivision ? window.Estado.obtenerNationsDivision() : "oro";
+  }
+  function _nationsDivMeta(div) {
+    return NATIONS_DIV_META.filter(function (d) { return d.key === (div || _nationsDivActual()); })[0] || NATIONS_DIV_META[0];
+  }
+  // División en la que juega una selección HUMANA: la del texto de grupos
+  // donde aparece su nombre. Si no aparece en ninguna → null.
+  function _nationsDivDeHumano(e) {
+    if (!e || !window.Estado) return null;
+    for (var i = 0; i < NATIONS_DIV_META.length; i++) {
+      var div = NATIONS_DIV_META[i].key;
+      var grupos = parsearNationsGruposTexto(window.Estado.obtenerNationsTexto(div));
+      var esta = grupos.some(function (g) {
+        return (g.filas || []).some(function (f) { return _liga1RefNombresCoinciden(f.nombre, e.nombre); });
+      });
+      if (esta) return div;
+    }
+    return null;
+  }
+  function _nationsDivBoxesHTML(idClubActivo) {
+    var act = _nationsDivActual();
+    return '<div class="liga-tab-boxes nations-div-tabs">' + NATIONS_DIV_META.map(function (d) {
+      return '<button type="button" class="liga-tab-box liga-tab-box--nations-' + d.key + (d.key === act ? " liga-tab-box--activa" : "") +
+        '" data-accion="nations-div-ir" data-div="' + d.key + '" data-club-id="' + (idClubActivo || "") + '">' +
+        d.icono + " " + escapeHTML(d.label.replace("Liga ", "")) + "</button>";
+    }).join("") + "</div>";
+  }
+  function irNationsDiv(idClubActivo, div) {
+    if (window.Estado && window.Estado.fijarNationsDivision) window.Estado.fijarNationsDivision(div);
+    renderizarNations("nations-content", idClubActivo);
+  }
+
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _nationsIdActivo(idClubActivo) {
     return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
@@ -10165,6 +10266,10 @@
       if (!partidosComp.length) return;
       var grupo = grupos.filter(function (g) { return g.humanosAqui.indexOf(e.id) !== -1; })[0];
       if (!grupo) {
+        // v413: si juega en OTRA división (Plata/Bronce), no se cuela aquí.
+        var divH = _nationsDivDeHumano(e);
+        if (divH && divH !== _nationsDivActual()) return;
+        if (!divH && _nationsDivActual() !== "oro") return;
         if (!sinGrupo) { sinGrupo = { nombre: "Sin grupo asignado", filas: [], humanosAqui: [] }; grupos.push(sinGrupo); }
         grupo = sinGrupo;
       }
@@ -10273,10 +10378,16 @@
 
   function calcularNationsStatsCombinado(datos, categoria) {
     var texto = window.Estado ? window.Estado.obtenerNationsStatTexto(categoria) : "";
-    var filas = _fusionarStatFilasConOverride(
-      parsearLiga1RefStatTexto(texto),
-      calcularNationsStatsHumanos(datos)[categoria] || []
-    );
+    // v413: los jugadores de una selección humana solo cuentan en SU división
+    // (sin división conocida → Oro). Los IA rivales de esos partidos, también.
+    var divAct = _nationsDivActual();
+    var divPorId = {};
+    _nationsEquiposHumanos(datos).forEach(function (e) { divPorId[e.id] = _nationsDivDeHumano(e) || "oro"; });
+    var autos = (calcularNationsStatsHumanos(datos)[categoria] || []).filter(function (f) {
+      if (divPorId[f.equipoId]) return divPorId[f.equipoId] === divAct;
+      return divAct === "oro";
+    });
+    var filas = _fusionarStatFilasConOverride(parsearLiga1RefStatTexto(texto), autos);
 
     filas.sort(function (a, b) { return b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre); });
     return filas.slice(0, 20);
@@ -10493,7 +10604,7 @@
     tituloRow.className = "liga1ref-titulo-row";
     tituloRow.innerHTML =
       '<span class="liga1ref-titulo-spacer"></span>' +
-      '<span class="liga1ref-titulo-actual">🔵 Nations Cup · Fase de Grupos</span>' +
+      '<span class="liga1ref-titulo-actual">' + _nationsDivMeta().icono + ' Nations Cup · ' + _nationsDivMeta().label + '</span>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-nations-inline" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
     contenedor.appendChild(tituloRow);
@@ -10566,6 +10677,7 @@
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
       contenedor.insertAdjacentHTML("beforeend", _nationsTabsHTML(idClubActivo));
+      if (_nationsTabActual !== "humanos") contenedor.insertAdjacentHTML("beforeend", _nationsDivBoxesHTML(idClubActivo));
 
       if (_nationsTabActual === "playoffs") _renderizarNationsPlayoffs(contenedor, datos, idClubActivo);
       else if (_nationsTabActual === "grupos") _renderizarNationsGrupos(contenedor, datos, idClubActivo);
@@ -10600,10 +10712,11 @@
 
       var titulo = document.createElement("p");
       titulo.className = "liga1ref-stat-titulo";
-      titulo.textContent = meta.icono + " " + meta.label;
+      titulo.textContent = meta.icono + " " + meta.label + " · " + _nationsDivMeta().icono + " " + _nationsDivMeta().label;
       contenedor.appendChild(titulo);
 
       var filas = calcularNationsStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Nations", "nations", datos);
       filas = _statFilasConPJ(filas, "nations", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -10785,7 +10898,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 clubes: los 11 primeros
@@ -11303,6 +11417,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularSlxStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Slx", "superliga", datos);
       filas = _statFilasConPJ(filas, "superliga", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -11454,7 +11569,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -11972,6 +12088,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadeurocopaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Roadeurocopa", "roadeurocopa", datos);
       filas = _statFilasConPJ(filas, "roadeurocopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -12121,7 +12238,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -12643,6 +12761,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularEurocopaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Eurocopa", "eurocopa", datos);
       filas = _statFilasConPJ(filas, "eurocopa", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -12793,7 +12912,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -13311,6 +13431,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadmundialStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Roadmundial", "roadmundial", datos);
       filas = _statFilasConPJ(filas, "roadmundial", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -13460,7 +13581,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -13984,6 +14106,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularMundialselStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Mundialsel", "mundialsel", datos);
       filas = _statFilasConPJ(filas, "mundialsel", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -14135,7 +14258,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -14653,6 +14777,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadamericaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Roadamerica", "roadamerica", datos);
       filas = _statFilasConPJ(filas, "roadamerica", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -14798,7 +14923,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -15316,6 +15442,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadafricaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Roadafrica", "roadafrica", datos);
       filas = _statFilasConPJ(filas, "roadafrica", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -15461,7 +15588,8 @@
     { key: "pichichi", icono: "⚽", label: "PICHICHI", columna: "Goles" },
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
-    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" }
+    { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -15979,6 +16107,7 @@
       contenedor.appendChild(titulo);
 
       var filas = calcularRoadasiaStatsCombinado(datos, categoria);
+      if (categoria === "zamora") filas = _filasZamoraComp("Roadasia", "roadasia", datos);
       filas = _statFilasConPJ(filas, "roadasia", datos);
       if (!filas.length) {
         contenedor.appendChild(nodoEstado(meta.icono, "Todavía no hay datos. Pulsa ✏️ para añadirlos, o suman solos al añadir eventos de un club humano."));
@@ -17239,6 +17368,11 @@
   // pegados (2 Oro · 3 Plata · 3 Bronce). Llegar al cuadro final (semis/
   // final) = Liga Oro.
   function _rankMultNations(clubId, datos, rk) {
+    try {
+      var eSel = buscarEquipoPorId("sel-" + clubId, datos) || buscarEquipoPorId(clubId, datos);
+      var divH = eSel ? _nationsDivDeHumano(eSel) : null;
+      if (divH) return divH === "oro" ? 4.0 : (divH === "plata" ? 2.0 : 1.0);
+    } catch (err0) { /* sigue con el criterio antiguo */ }
     if (rk && rk.kind !== "part") return 4.0;
     try {
       var grupos = calcularNationsGrupos(datos);
@@ -22809,6 +22943,27 @@
     Object.keys(out.stats).forEach(function (k) { out.stats[k] = limpio(out.stats[k]); });
     return out;
   }
+  // «=============== NATIONS CUP · LIGA PLATA ===============» → bloques por
+  // división; null si el texto no trae ninguna de esas líneas.
+  function _nationsPartirPorDivision(texto) {
+    var lineas = String(texto || "").replace(/\r/g, "").split("\n");
+    var bloques = [], actual = null, hay = false;
+    lineas.forEach(function (l) {
+      var n = _normNombre(l);
+      var esSep = /^\s*={3,}/.test(l) && /(oro|plata|bronce)/.test(n);
+      if (esSep) {
+        hay = true;
+        var div = /oro/.test(n) ? "oro" : (/plata/.test(n) ? "plata" : "bronce");
+        actual = { div: div, lineas: [] };
+        bloques.push(actual);
+        return;
+      }
+      if (!actual) return; // lo de antes de la primera división se ignora
+      actual.lineas.push(l);
+    });
+    if (!hay) return null;
+    return bloques.map(function (b) { return { div: b.div, texto: b.lineas.join("\n") }; });
+  }
   function _repartoAviso(pref, r) {
     var partes = [];
     if (r.tabla) partes.push("clasificación");
@@ -22828,6 +22983,24 @@
     E.__repartoInstalado = true;
     var reentrante = false;
     function repartir(pref, rondas, texto, guardarTabla, guardarRonda, guardarStat) {
+      // v413: Nations Cup con las 3 divisiones en el mismo texto, separadas
+      // por «===== NATIONS CUP · LIGA ORO =====» (Plata, Bronce): cada
+      // bloque se reparte en SU división (grupos, rondas y estadísticas).
+      if (pref === "Nations" && E.fijarNationsDivision) {
+        var bloques = _nationsPartirPorDivision(texto);
+        if (bloques) {
+          var divPrev = E.obtenerNationsDivision(), okN = true;
+          try {
+            bloques.forEach(function (b) {
+              E.fijarNationsDivision(b.div, true);
+              var res = repartir("Nations·" + b.div, rondas, b.texto, guardarTabla, guardarRonda, guardarStat);
+              if (res === undefined && b.texto.trim() && guardarTabla) { reentrante = true; try { okN = guardarTabla(b.texto) !== false && okN; } finally { reentrante = false; } }
+              else okN = res !== false && okN;
+            });
+          } finally { E.fijarNationsDivision(divPrev, true); }
+          return okN;
+        }
+      }
       var r = repartirTextoCompeticion(texto, rondas);
       if (!r) return undefined; // texto normal: lo guarda el original
       reentrante = true;
@@ -22978,6 +23151,7 @@
     obtenerComoSePuntuaTexto: obtenerComoSePuntuaTexto,
     extraerBanderaRival: extraerBanderaRival,
     repartirTextoCompeticion: repartirTextoCompeticion,
+    irNationsDiv: irNationsDiv,
     statFilasConPJ: _statFilasConPJ,
     renderizarKaocup: renderizarKaocup,
     irKaocupTab: irKaocupTab,

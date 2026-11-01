@@ -574,6 +574,21 @@
   // pinta esa imagen real, transparente sobre el fondo oscuro de la app.
   // Sin `crest` cae al blasón dibujado en CSS puro (0 KB, ni imagen ni
   // red) — nunca se rompe nada para un equipo sin imagen todavía.
+
+  // v415: bandera (emoji) de cada selección por nombre — su escudo redondo.
+  var _PAIS_ISO = (function () {
+    var o = {};
+    "alemania:de,austria:at,belgica:be,bielorrusia:by,bosniayherzegovina:ba,bosnia:ba,bulgaria:bg,croacia:hr,chipre:cy,republicacheca:cz,chequia:cz,dinamarca:dk,eslovaquia:sk,eslovenia:si,espana:es,estonia:ee,finlandia:fi,francia:fr,georgia:ge,grecia:gr,hungria:hu,irlanda:ie,islandia:is,israel:il,italia:it,kazajistan:kz,kosovo:xk,letonia:lv,liechtenstein:li,lituania:lt,luxemburgo:lu,macedoniadelnorte:mk,malta:mt,moldavia:md,montenegro:me,noruega:no,paisesbajos:nl,holanda:nl,polonia:pl,portugal:pt,rumania:ro,rusia:ru,sanmarino:sm,serbia:rs,suecia:se,suiza:ch,turquia:tr,ucrania:ua,albania:al,andorra:ad,armenia:am,azerbaiyan:az,gibraltar:gi,islasferoe:fo,irlandadelnorte:gb,ciudaddelvaticano:va,vaticano:va,argentina:ar,brasil:br,uruguay:uy,paraguay:py,chile:cl,peru:pe,bolivia:bo,ecuador:ec,colombia:co,venezuela:ve,mexico:mx,estadosunidos:us,eeuu:us,canada:ca,costarica:cr,panama:pa,honduras:hn,jamaica:jm,haiti:ht,marruecos:ma,argelia:dz,tunez:tn,egipto:eg,senegal:sn,nigeria:ng,ghana:gh,camerun:cm,costademarfil:ci,mali:ml,sudafrica:za,japon:jp,coreadelsur:kr,corea:kr,australia:au,iran:ir,arabiasaudi:sa,qatar:qa,catar:qa,irak:iq,iraq:iq,jordania:jo,emiratosarabesunidos:ae,uzbekistan:uz,china:cn,india:in,nuevazelanda:nz".split(",").forEach(function (p) { var kv = p.split(":"); o[kv[0]] = kv[1]; });
+    return o;
+  })();
+  var _PAIS_TAG = { inglaterra: "eng", escocia: "sct", gales: "wls" };
+  function banderaDePais(nombre) {
+    var k = _normNombre(nombre).replace(/[^a-z]/g, "");
+    if (_PAIS_TAG[k]) return String.fromCodePoint(0x1F3F4) + ("gb" + _PAIS_TAG[k]).replace(/./g, function (c) { return String.fromCodePoint(0xE0000 + c.charCodeAt(0)); }) + String.fromCodePoint(0xE007F);
+    var iso = _PAIS_ISO[k];
+    if (!iso) return "";
+    return iso.toUpperCase().replace(/./g, function (c) { return String.fromCodePoint(0x1F1A5 + c.charCodeAt(0)); });
+  }
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
 
@@ -591,7 +606,9 @@
     }
 
     // Selecciones (Nations Cup): su "escudo" es la bandera del país.
-    if (equipo.bandera) {
+    var _bnd = equipo.bandera || banderaDePais(equipo.nombre);
+    if (_bnd) {
+      equipo = { nombre: equipo.nombre, bandera: _bnd };
       return (
         '<div class="escudo escudo--bandera ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' +
         '<span class="escudo-bandera-emoji">' + equipo.bandera + "</span>" +
@@ -1664,6 +1681,14 @@
       return _normNombre(e.nombre) === norm || (e.nombresAlt || []).some(function (a) { return _normNombre(a) === norm; });
     });
     if (exacto) return exacto;
+    // v415: una selección («Portugal», «Países Bajos») nunca se confunde
+    // con un club parecido: ficha propia con su bandera como escudo.
+    var bandPais = banderaDePais(nombre);
+    if (bandPais) {
+      var idPais = "pais-" + norm.replace(/[^a-z0-9]+/g, "-");
+      if (!_sinteticosExtra[idPais]) _sinteticosExtra[idPais] = { id: idPais, nombre: String(nombre).trim(), bandera: bandPais };
+      return _sinteticosExtra[idPais];
+    }
 
     var normSinPunto = _normSinPuntuacion(nombre);
     var aliasId = null;

@@ -7858,6 +7858,13 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
+      // v408: formato ida/vuelta del texto único («A 5-1 B (ida 3-1) ✅ A»)
+      // — sin flecha ">" de "espera en Octavos": se lee igual que el resto
+      // de rondas (marcador global + ida + ganador).
+      if (l.indexOf(">") === -1 && /\(\s*ida\b|✅/i.test(l)) {
+        parsearChampionsPlayoffTexto(l).forEach(function (it) { it.espera = null; items.push(it); });
+        return;
+      }
       var partes = l.split(">");
       var izq = partes[0].trim();
       var espera = partes.length > 1 ? partes.slice(1).join(">").trim() : "";
@@ -22605,6 +22612,163 @@
   // (buscarEquipoPorId, crearEscudoHTML, formatFecha, COMP_LABEL y
   // TOTAL_JORNADAS_POR_LIGA se exponen para que js/acta.js y
   // js/sistema-temporadas.js no dupliquen esta lógica.)
+  // ============================================================
+  // v408: TEXTO ÚNICO por competición — el admin pega UNA vez todo lo de
+  // una competición (clasificación + «— Dieciseisavos —» … «— Final —» +
+  // «⚽ GOLEADORES» / «⭐ MVP» / «🟨 TARJETAS AMARILLAS» / «🟥 TARJETAS
+  // ROJAS» / «🧤 ZAMORA») en CUALQUIER ✏️ de esa competición (clasificación,
+  // una ronda o una estadística) y se reparte solo en cada pantalla. Si el
+  // texto no trae ningún encabezado de sección, se guarda como siempre.
+  // ============================================================
+  var _REPARTO_COMPS = {
+    Copa: COPA_PLAYOFF_RONDAS, Recopa: RECOPA_PLAYOFF_RONDAS, Inter: INTER_PLAYOFF_RONDAS,
+    Verano: VERANO_PLAYOFF_RONDAS, Usc: USC_PLAYOFF_RONDAS, Kaocup: KAOCUP_PLAYOFF_RONDAS,
+    Superekao: SUPEREKAO_PLAYOFF_RONDAS, Sce: SCE_PLAYOFF_RONDAS, Champions: CHAMPIONS_PLAYOFF_RONDAS,
+    Uel: UEL_PLAYOFF_RONDAS, Uecl: UECL_PLAYOFF_RONDAS, Nations: NATIONS_PLAYOFF_RONDAS,
+    Slx: SLX_PLAYOFF_RONDAS, Roadeurocopa: ROADEUROCOPA_PLAYOFF_RONDAS, Eurocopa: EUROCOPA_PLAYOFF_RONDAS,
+    Roadmundial: ROADMUNDIAL_PLAYOFF_RONDAS, Mundialsel: MUNDIALSEL_PLAYOFF_RONDAS,
+    Roadamerica: ROADAMERICA_PLAYOFF_RONDAS, Roadafrica: ROADAFRICA_PLAYOFF_RONDAS, Roadasia: ROADASIA_PLAYOFF_RONDAS
+  };
+  // Encabezado de ESTADÍSTICA → clave de categoría (o null si la línea no lo es).
+  function _repartoStatDe(linea) {
+    var l = String(linea || "").trim();
+    // Un encabezado no lleva cifras (las filas de datos, la tabla y los
+    // cruces «Estrella Roja 2-1 …» sí): así un equipo con "Roja" en el
+    // nombre nunca se toma por la sección de tarjetas rojas.
+    if (!l || /\d/.test(l)) return null;
+    var n = _normNombre(l);
+    if (/^#\s*jugador/.test(n)) return null;
+    if (/goleador|pichichi|⚽/.test(n)) return "pichichi";
+    if (/amarilla|🟨/.test(n)) return "amarillas";
+    if (/\broja|🟥/.test(n)) return "rojas";
+    if (/zamora|porteria|imbatid|🧤/.test(n)) return "zamora";
+    if (/\bmvp\b|⭐/.test(n)) return "mvp";
+    return null;
+  }
+  // Encabezado de RONDA («— Octavos de final —», «-- Final --», «=== Semis ===»).
+  function _repartoEsCabeceraRonda(linea) {
+    return /^\s*[—–\-=]{1,}\s*\S.*?\s*[—–\-=]{1,}\s*$/.test(linea) || /^\s*[—–]\s*\S/.test(linea);
+  }
+  function _repartoRondaKey(linea, rondas) {
+    var h = _normNombre(String(linea || "").replace(/[—–=]/g, " ").replace(/^\s*-+|-+\s*$/g, "")).replace(/\s+/g, " ").trim();
+    var keys = (rondas || []).map(function (r) { return r.key; });
+    function hay(k) { return keys.indexOf(k) !== -1 ? k : null; }
+    // 1) etiqueta exacta de esa competición («3ª Ronda», «Repesca 5»…)
+    for (var i = 0; i < rondas.length; i++) {
+      if (_normNombre(rondas[i].label) === h || rondas[i].key === h) return rondas[i].key;
+    }
+    // 2) sinónimos comunes (de lo más concreto a lo más general)
+    if (/dieciseis|1\s*\/\s*16/.test(h)) return hay("dieciseisavos");
+    if (/octavos|1\s*\/\s*8\b/.test(h)) return hay("octavos");
+    if (/cuartos|1\s*\/\s*4\b/.test(h)) return hay("cuartos");
+    if (/semi|1\s*\/\s*2\b/.test(h)) return hay("semis");
+    if (/previa|1\s*\/\s*128/.test(h)) return hay("previa");
+    if (/1\s*\/\s*64|1\s*[ªa]\s*ronda|primera ronda/.test(h)) return hay("r64");
+    if (/1\s*\/\s*32|2\s*[ªa]\s*ronda|segunda ronda|treintaidos/.test(h)) return hay("ronda2") || hay("dieciseisavos");
+    if (/\bfinal\b/.test(h)) return hay("final");
+    // 3) contiene la etiqueta («Repesca 5 · Ida»)
+    for (var j = 0; j < rondas.length; j++) {
+      var lb = _normNombre(rondas[j].label);
+      if (lb && h.indexOf(lb) !== -1) return rondas[j].key;
+    }
+    return null;
+  }
+  // → null si el texto no trae ninguna sección; si no
+  //   { tabla: "…" | "", rondas: {key: "…"}, stats: {key: "…"}, sinUbicar: [encabezados] }
+  function repartirTextoCompeticion(texto, rondas) {
+    var lineas = String(texto || "").replace(/\r/g, "").split("\n");
+    var hayCab = lineas.some(function (l) { return _repartoStatDe(l) || (rondas && rondas.length && _repartoEsCabeceraRonda(l)); });
+    if (!hayCab) return null;
+    var out = { tabla: [], rondas: {}, stats: {}, sinUbicar: [] };
+    var destino = out.tabla;
+    lineas.forEach(function (l) {
+      var cat = _repartoStatDe(l);
+      if (cat) { destino = out.stats[cat] = out.stats[cat] || []; return; }
+      if (rondas && rondas.length && _repartoEsCabeceraRonda(l)) {
+        var k = _repartoRondaKey(l, rondas);
+        if (k) { destino = out.rondas[k] = out.rondas[k] || []; }
+        else { out.sinUbicar.push(l.trim()); destino = []; }
+        return;
+      }
+      if (/^\s*#\s*jugador/i.test(l)) return; // cabecera de columnas de una estadística
+      destino.push(l);
+    });
+    function limpio(arr) { return arr.join("\n").replace(/^\s+|\s+$/g, ""); }
+    out.tabla = limpio(out.tabla);
+    Object.keys(out.rondas).forEach(function (k) { out.rondas[k] = limpio(out.rondas[k]); });
+    Object.keys(out.stats).forEach(function (k) { out.stats[k] = limpio(out.stats[k]); });
+    return out;
+  }
+  function _repartoAviso(pref, r) {
+    var partes = [];
+    if (r.tabla) partes.push("clasificación");
+    var nR = Object.keys(r.rondas).length, nS = Object.keys(r.stats).length;
+    if (nR) partes.push(nR + " ronda" + (nR > 1 ? "s" : ""));
+    if (nS) partes.push(nS + " estadística" + (nS > 1 ? "s" : ""));
+    var msg = "✅ Texto repartido: " + (partes.join(" · ") || "nada") + ".";
+    if (r.sinUbicar.length) msg += "\n⚠️ Sin ubicar (revisa el nombre): " + r.sinUbicar.join(" | ");
+    try { if (window.console) console.log("[reparto " + pref + "]", msg); } catch (e) {}
+    if (r.sinUbicar.length) { try { window.alert(msg); } catch (e2) {} }
+  }
+  // Envuelve los guardar* de Estado de cada competición. `orig` = guardado
+  // original de ESA pantalla (se usa solo para lo que le toca).
+  function _instalarRepartoTextoUnico() {
+    var E = window.Estado;
+    if (!E || E.__repartoInstalado) return;
+    E.__repartoInstalado = true;
+    var reentrante = false;
+    function repartir(pref, rondas, texto, guardarTabla, guardarRonda, guardarStat) {
+      var r = repartirTextoCompeticion(texto, rondas);
+      if (!r) return undefined; // texto normal: lo guarda el original
+      reentrante = true;
+      var ok = true;
+      try {
+        if (r.tabla && guardarTabla) ok = guardarTabla(r.tabla) !== false && ok;
+        Object.keys(r.rondas).forEach(function (k) { if (guardarRonda) ok = guardarRonda(k, r.rondas[k]) !== false && ok; });
+        Object.keys(r.stats).forEach(function (k) { if (guardarStat) ok = guardarStat(k, r.stats[k]) !== false && ok; });
+      } finally { reentrante = false; }
+      _repartoAviso(pref, r);
+      return ok;
+    }
+    Object.keys(_REPARTO_COMPS).forEach(function (pref) {
+      var rondas = _REPARTO_COMPS[pref];
+      var gT = E["guardar" + pref + "Texto"], gR = E["guardar" + pref + "PlayoffTexto"], gS = E["guardar" + pref + "StatTexto"];
+      var fT = typeof gT === "function" ? gT : null, fR = typeof gR === "function" ? gR : null, fS = typeof gS === "function" ? gS : null;
+      function wrapRes(res, fallback) { return res === undefined ? fallback() : res; }
+      if (fT) E["guardar" + pref + "Texto"] = function (texto) {
+        var args = arguments;
+        if (reentrante) return fT.apply(E, args);
+        return wrapRes(repartir(pref, rondas, texto, fT, fR, fS), function () { return fT.apply(E, args); });
+      };
+      if (fR) E["guardar" + pref + "PlayoffTexto"] = function (ronda, texto) {
+        var args = arguments;
+        if (reentrante) return fR.apply(E, args);
+        return wrapRes(repartir(pref, rondas, texto, fT, fR, fS), function () { return fR.apply(E, args); });
+      };
+      if (fS) E["guardar" + pref + "StatTexto"] = function (cat, texto) {
+        var args = arguments;
+        if (reentrante) return fS.apply(E, args);
+        return wrapRes(repartir(pref, rondas, texto, fT, fR, fS), function () { return fS.apply(E, args); });
+      };
+    });
+    // Ligas (sin rondas): clasificación + estadísticas en un solo texto.
+    var gL = E.guardarLiga1RefTexto, gLS = E.guardarLiga1RefStatTexto;
+    if (typeof gL === "function") E.guardarLiga1RefTexto = function (texto, opts) {
+      var args = arguments;
+      if (reentrante) return gL.apply(E, args);
+      var res = repartir("Liga1Ref", [], texto, function (t) { return gL.call(E, t, opts); }, null, gLS ? function (k, t) { return gLS.call(E, k, t); } : null);
+      return res === undefined ? gL.apply(E, args) : res;
+    };
+    var gX = E.guardarLigaExtraTexto, gXS = E.guardarLigaExtraStatTexto;
+    if (typeof gX === "function") E.guardarLigaExtraTexto = function (ligaId, texto, opts) {
+      var args = arguments;
+      if (reentrante) return gX.apply(E, args);
+      var res = repartir("LigaExtra:" + ligaId, [], texto, function (t) { return gX.call(E, ligaId, t, opts); }, null, gXS ? function (k, t) { return gXS.call(E, ligaId, k, t); } : null);
+      return res === undefined ? gX.apply(E, args) : res;
+    };
+  }
+  _instalarRepartoTextoUnico();
+
   window.Renderizadores = {
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
     obtenerEstadioDelEquipo: obtenerEstadioDelEquipo,
@@ -22703,6 +22867,7 @@
     obtenerFormatoKaocupTexto: obtenerFormatoKaocupTexto,
     obtenerComoSePuntuaTexto: obtenerComoSePuntuaTexto,
     extraerBanderaRival: extraerBanderaRival,
+    repartirTextoCompeticion: repartirTextoCompeticion,
     renderizarKaocup: renderizarKaocup,
     irKaocupTab: irKaocupTab,
     renderizarKaocupStatDetalle: renderizarKaocupStatDetalle,

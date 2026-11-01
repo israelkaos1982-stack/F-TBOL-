@@ -6133,6 +6133,15 @@
     "🏁RESOLUCIÓN KAO CUP:",
     " 🏆 Los ganadores de la KAO Cup juegan la SuperEKAO."
   ].join("\n");
+  // v406: «ℹ️ Cómo se puntúa» — la regla OFICIAL de puntuación (Ranking de
+  // equipos, Ranking de selecciones, Golden y motor), tal cual la redactó el
+  // usuario. Editable con el 📌 del overlay ℹ️ (clave "puntuacion").
+  var FORMATO_PUNTUACION_TEXTO = "F-TBOL · CÓMO SE PUNTÚA\n\n=== 1. RANKING DE EQUIPOS (España, Europa, Global) ===\nPuntos = puntos base por puesto o ronda × multiplicador de la competición × coeficiente del país (solo en competiciones nacionales).\n\nPuntos base:\n- Liga: 1º 200 · 2º 175 · 3º 150 · 4º 125 · 5º 100 · 6º 90 · 7º 80 · 8º 75 · 9º 70 · 10º 65 · 11º 61 · 12º 57 · 13º 53 · 14º 49 · 15º 45 · 16º 41 · 17º 37 · desde el 18º: 35, 33, 31…\n- Eliminatorias: campeón 200 · subcampeón 175 · semifinales 150/125 · cuartos 100/90 · octavos 80/70 · rondas anteriores, fase liga o de grupos 60. Entre los eliminados de una misma ronda, la mitad con mejor diferencia de goles se lleva el número mayor.\n\nMultiplicadores:\nMundial ×5 · Nations Cup Oro y Eurocopa ×4 · Champions ×3 · Mundialito ×2,8 · Liga de 1ª división ×2,5 · Nations Plata ×2 · Intercontinental ×2 · Recopa ×1,5 · Europa League ×1,2 · Copa nacional ×1 · Nations Bronce ×1 · SuperKAO ×1 · Supercopa de Europa ×0,8 · KAO Cup ×0,7 · Conference ×0,7 · Supercopa nacional ×0,6 · Hypermotion ×0,5 · 1ª RFEF ×0,3 · 2ª RFEF ×0,15.\nSin puntos: Superliga, torneos de verano, previas, promociones y Road Eurocopa/Mundial.\n\nCoeficiente del país (liga, copa, KAO y supercopa nacional):\nEspaña, Inglaterra, Italia, Alemania, Francia 1 · Portugal 0,8 · Países Bajos 0,78 · Bélgica 0,72 · Turquía 0,7 · Chequia 0,62 · Grecia 0,6 · Polonia, Dinamarca, Noruega, Escocia 0,58 · Suiza, Austria 0,56 · Israel, Chipre 0,5 · Suecia, Croacia, Serbia, Ucrania 0,48 · Rusia, Hungría, Rumanía 0,45 · Eslovenia, Eslovaquia, Bulgaria 0,42 · Azerbaiyán 0,4 · Kazajistán 0,38 · Moldavia, Irlanda, Bosnia 0,35 · Islandia, Letonia, Finlandia 0,33 · Lituania, Kosovo 0,32 · Armenia, Albania, Bielorrusia, Georgia 0,3 · Malta, Irlanda del Norte 0,28 · Luxemburgo, Macedonia del Norte 0,27 · Islas Feroe, Montenegro 0,25 · Estonia, Gales 0,24 · Liechtenstein, Gibraltar, Andorra 0,2 · San Marino 0,15. Las competiciones europeas y mundiales no llevan coeficiente.\nEjemplo: campeón de la Liga EA = 200 × 2,5 × 1 = 500. Campeón de la liga de Andorra = 200 × 2,5 × 0,2 = 100. Campeón de Champions = 200 × 3 = 600.\n\nPestañas: España = Liga EA, Hypermotion, 1ª y 2ª RFEF, Copa del Rey, Supercopa de España. Europa = Champions, Europa League, Conference, Recopa, SuperKAO, Supercopa de Europa, Intercontinental, Mundialito. Global = todo lo de clubes.\n\n=== 2. RANKING DE SELECCIONES ===\nMisma fórmula (puesto o ronda × multiplicador), solo con competiciones de selecciones: Mundial ×5 · Eurocopa ×4 · Nations Oro ×4 · Nations Plata ×2 · Nations Bronce ×1. Road Eurocopa y Road Mundial no dan puntos (solo clasifican).\n\n=== 3. GOLDEN (estadísticas de jugador) ===\nCada gol, MVP y portería a cero vale según la competición donde se consigue:\n- Champions, Mundial ×2\n- Eurocopa, Mundialito ×1,8\n- Nations Oro, Intercontinental ×1,6\n- Europa League, Supercopa de Europa ×1,5\n- Recopa, Nations Plata ×1,3\n- Conference, Road Eurocopa/Mundial ×1,2\n- Nations Bronce ×1,1\n- SuperKAO, Superliga ×1\n- Liga de 1ª: × coeficiente del país (Liga EA ×1, Liga de Andorra ×0,2)\n- Copa nacional: × 0,8 del coeficiente · KAO Cup: × 0,6 del coeficiente · Supercopa nacional: × 0,8 del coeficiente\n- Hypermotion ×0,4 · 1ª RFEF ×0,25 · 2ª RFEF ×0,15 · promociones ×0,3\n- Previas ×0,7 · torneos de verano ×0,3\n\nPuntos base (antes de multiplicar):\n⚽ gol 1 · ⭐ MVP 1,5 · 🧤 portería a cero 0,5 (solo el portero titular) · 🥇 Zamora de liga 10 × coeficiente del país.\n\n🏟️ Puntos de equipo: (puntos de su club en el ranking Global + la mitad de los puntos de su selección en el ranking de Selecciones) ÷ 40. Solo los cobra quien haya sumado algo por sí mismo (un gol, un MVP o una portería a cero).\n\nClub + selección: es el mismo jugador. Sus goles, MVP y porterías con la selección se suman a los de su club en una sola fila.\n\nTotal Golden = goles + MVP + porterías + Zamora (ya multiplicados) + puntos de equipo.\n🏆 Balón de Oro = el que más puntos Golden tiene.\n👟 Bota de Oro = el que más puntos de gol suma en TODAS las competiciones (cada gol con el valor de su competición).\n\n=== 4. MOTOR DE PARTIDOS (resumen) ===\n- Más nivel = más goles esperados. El local juega con su nivel +3 %.\n- En copas y KAO las diferencias de nivel pesan menos y hay más rotaciones (en copas y previas juega a menudo el portero suplente).\n- Hasta el equipo más fuerte encaja: el mejor portero de una liga top deja unas 13-16 porterías a cero en 38 partidos (≈40 %). Si un equipo pasa del 45 % tras 10 partidos, se le frena un poco.\n- Goleadores repartidos por posición (porteros no marcan; defensas poco) y con algo de goles de suplentes, de jugadores no apuntados en la plantilla y en propia puerta. Si la plantilla apuntada es corta, más goles van a jugadores que no están en la lista; en selecciones todavía más (convocan 26).\n- MVP: siempre del equipo ganador; si hay empate, el de mejores números (goles, asistencias, paradas).";
+  function obtenerComoSePuntuaTexto() {
+    var override = window.Estado ? window.Estado.obtenerFormatoOverride("puntuacion") : "";
+    return override || FORMATO_PUNTUACION_TEXTO;
+  }
+
   function obtenerFormatoKaocupTexto() {
     var override = window.Estado ? window.Estado.obtenerFormatoOverride("kaocup") : "";
     return override || FORMATO_KAOCUP_TEXTO;
@@ -17097,11 +17106,58 @@
   var RANK_MULT_LIGA = { easports: 2.5, ligue1: 2.5, premier: 2.5, seriea: 2.5, hypermotion: 0.5, "1ref": 0.3, "2ref": 0.15 };
   var RANK_MULT_COMP = {
     copa: 1.0, supercopa: 0.6, champions: 3.0, uel: 1.2, uecl: 0.7, recopa: 1.5,
-    intercontinental: 2.0, usc: 0.8, kaocup: 1.0, superekao: 0.8, mundialito: 2.8, nations: 4.0, eurocopa: 4.0, mundialsel: 4.0, roadeurocopa: 2.0, roadmundial: 2.0, roadamerica: 2.0, roadafrica: 2.0, roadasia: 2.0
+    intercontinental: 2.0, usc: 0.8, kaocup: 0.7, superekao: 1.0, mundialito: 2.8, nations: 4.0, eurocopa: 4.0, mundialsel: 5.0
+    // v406 «Cómo se puntúa»: las Road (Eurocopa/Mundial/América/África/Asia)
+    // NO dan puntos (solo clasifican) — por eso no están en esta tabla.
+    // Nations: Oro ×4 · Plata ×2 · Bronce ×1 (ver _rankMultNations).
   };
+  // División de la Nations de una selección: por el nombre del grupo
+  // («Liga Oro - Grupo A») y, si no lo dice, por el orden de los 8 grupos
+  // pegados (2 Oro · 3 Plata · 3 Bronce). Llegar al cuadro final (semis/
+  // final) = Liga Oro.
+  function _rankMultNations(clubId, datos, rk) {
+    if (rk && rk.kind !== "part") return 4.0;
+    try {
+      var grupos = calcularNationsGrupos(datos);
+      for (var i = 0; i < grupos.length; i++) {
+        var g = grupos[i];
+        var esta = (g.humanosAqui || []).indexOf(clubId) !== -1 ||
+          (g.filas || []).some(function (f) { return f.equipoId === clubId; });
+        if (!esta) continue;
+        var n = _normNombre(g.nombre || "");
+        if (/\boro\b/.test(n)) return 4.0;
+        if (/plata/.test(n)) return 2.0;
+        if (/bronce/.test(n)) return 1.0;
+        return i < 2 ? 4.0 : (i < 5 ? 2.0 : 1.0);
+      }
+    } catch (err) { /* sin grupos: Oro por defecto */ }
+    return 4.0;
+  }
+  // Coeficiente del país (solo liga, copa, KAO y supercopa NACIONALES).
+  // Las competiciones europeas y mundiales no llevan coeficiente.
+  var RANK_COEF_PAIS = {
+    espana: 1, inglaterra: 1, italia: 1, alemania: 1, francia: 1, portugal: 0.8, "paises bajos": 0.78,
+    belgica: 0.72, turquia: 0.7, chequia: 0.62, grecia: 0.6, polonia: 0.58, dinamarca: 0.58, noruega: 0.58,
+    escocia: 0.58, suiza: 0.56, austria: 0.56, israel: 0.5, chipre: 0.5, suecia: 0.48, croacia: 0.48,
+    serbia: 0.48, ucrania: 0.48, rusia: 0.45, hungria: 0.45, rumania: 0.45, eslovenia: 0.42,
+    eslovaquia: 0.42, bulgaria: 0.42, azerbaiyan: 0.4, kazajistan: 0.38, moldavia: 0.35, irlanda: 0.35,
+    bosnia: 0.35, islandia: 0.33, letonia: 0.33, finlandia: 0.33, lituania: 0.32, kosovo: 0.32,
+    armenia: 0.3, albania: 0.3, bielorrusia: 0.3, georgia: 0.3, malta: 0.28, "irlanda del norte": 0.28,
+    luxemburgo: 0.27, "macedonia del norte": 0.27, "islas feroe": 0.25, montenegro: 0.25, estonia: 0.24,
+    gales: 0.24, liechtenstein: 0.2, gibraltar: 0.2, andorra: 0.2, "san marino": 0.15
+  };
+  // País de la liga en la que juega el club (las divisiones que existen hoy:
+  // las 4 españolas, Ligue 1, Premier y Serie A).
+  var RANK_PAIS_DIVISION = { easports: "espana", hypermotion: "espana", "1ref": "espana", "2ref": "espana", ligue1: "francia", premier: "inglaterra", seriea: "italia" };
+  function _rankCoefPaisClub(clubId) {
+    var pais = RANK_PAIS_DIVISION[_divisionActualClub(clubId)] || "espana";
+    var c = RANK_COEF_PAIS[pais];
+    return typeof c === "number" ? c : 1;
+  }
+  var RANK_COMPS_NACIONALES = { copa: true, supercopa: true, kaocup: true };
   var RANK_TAB_COMP = {
     copa: "espana", supercopa: "espana", champions: "europa", uel: "europa", uecl: "europa", recopa: "europa",
-    intercontinental: "europa", usc: "europa", kaocup: "espana", superekao: "europa", mundialito: "europa", nations: "seleccion", roadeurocopa: "seleccion", eurocopa: "seleccion", roadmundial: "seleccion", mundialsel: "seleccion", roadamerica: "seleccion", roadafrica: "seleccion", roadasia: "seleccion"
+    intercontinental: "europa", usc: "europa", kaocup: "extra", superekao: "europa", mundialito: "europa", nations: "seleccion", roadeurocopa: "seleccion", eurocopa: "seleccion", roadmundial: "seleccion", mundialsel: "seleccion", roadamerica: "seleccion", roadafrica: "seleccion", roadasia: "seleccion"
   };
   var RANK_NOMBRE_COMP = {
     copa: "Copa", supercopa: "Supercopa", champions: "Champions", uel: "Europa League", uecl: "Conference",
@@ -17227,11 +17283,13 @@
           // ESPAÑA = Ligas españolas + Copa + Supercopa de España; la liga extranjera
           // (Ligue 1, Premier, Serie A) de un humano no español solo cuenta en GLOBAL.
           if (RANK_LIGAS_EXTRANJERAS.indexOf(L.ligaId) !== -1) return; // liga simulada: sus puntos ya vienen en la lista pegada
-          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult);
+          sumar("espana", "Liga " + (f.nombre || ""), L.pos + "º de " + L.total, _rankBaseLiga(L.pos), mult * _rankCoefPaisClub(clubId));
           return;
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];
         if (!mc || !f.rk) return;
+        if (k === "nations") mc = _rankMultNations(clubId, datos, f.rk);
+        if (RANK_COMPS_NACIONALES[k]) mc = mc * _rankCoefPaisClub(clubId);
         var r = _rankBaseElim(f.rk, k, clubId, datos);
         var tab = RANK_TAB_COMP[k];
         if (tab === "espana" && !_rankingJuegaEspana(clubId)) {
@@ -17568,6 +17626,7 @@
     header.className = "liga1ref-header";
     header.innerHTML =
       '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--objetivos">Puesto actual y objetivo</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="ver-como-se-puntua" aria-label="Cómo se puntúa">ℹ️</button>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-club" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Mi equipo y mi objetivo">🎯</button>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-ranking-lista" data-tab="' + _rankingTabActual +
@@ -21731,8 +21790,13 @@
       partes = partes.map(function (x) { return x.trim(); });
       if (!partes[0]) return;
       var gol = _numGolden(partes[2]), mvp = _numGolden(partes[3]), imb = _numGolden(partes[4]);
-      var zam = _numGolden(partes[5]), club = _numGolden(partes[6]) / 40;
-      var propio = gol + mvp * 1.5 + imb + zam * 10;
+      // v406 «Cómo se puntúa»: ⚽ 1 · ⭐ 1,5 · 🧤 0,5 · 🥇 Zamora 10 × coef.
+      // del país (escribe 1 para la Liga EA, 0,2 para Andorra…) · 🏟️ (puntos
+      // del club en el Global + la MITAD de los de su selección) ÷ 40.
+      // Goles/MVP/imbatidas se pegan YA multiplicados por su competición.
+      var zam = _numGolden(partes[5]);
+      var club = (_numGolden(partes[6]) + _numGolden(partes[7]) / 2) / 40;
+      var propio = gol + mvp * 1.5 + imb * 0.5 + zam * 10;
       out.push({
         jugador: partes[0], equipo: partes[1] || "", gol: gol, mvp: mvp, imb: imb, zam: zam,
         club: propio > 0 ? club : 0, pts: propio + (propio > 0 ? club : 0)
@@ -21778,11 +21842,11 @@
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-golden" aria-label="Editar golden">✏️</button></div>' +
       '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>" +
       '<p class="titulos-bloque-titulo golden-titulo">🏅 GOLDEN · 50 MEJORES DEL AÑO</p>' +
-      '<p class="golden-regla">Suma de todas las competiciones: ⚽ gol 1 · ⭐ MVP 1,5 · 🧤 imbatida 1 · 🥇 Zamora 10 · 🏟️ club = puntos del club ÷ 40 (solo lo cobra quien haya sumado algo por sí mismo).</p>' +
+      '<p class="golden-regla">Suma de todas las competiciones (cada una con su valor): ⚽ gol 1 · ⭐ MVP 1,5 · 🧤 portería a cero 0,5 · 🥇 Zamora 10 × coef. del país · 🏟️ (puntos del club + ½ de su selección) ÷ 40 (solo lo cobra quien haya sumado algo por sí mismo). <a href="#" data-accion="ver-como-se-puntua">ℹ️ Cómo se puntúa</a></p>' +
       (jugadores.length
         ? '<input type="search" class="golden-buscar" id="golden-buscar" placeholder="🔍 Buscar jugador o equipo…">' +
           '<div class="golden-scroll"><table class="golden-tabla"><thead><tr><th>Nº</th><th>Jugador</th><th>⚽</th><th>⭐</th><th>🧤</th><th>🥇</th><th>🏟️</th><th>Pts</th></tr></thead><tbody>' + filas + "</tbody></table></div>"
-        : '<div class="club-modal-proximamente">Pulsa ✏️ y pega una línea por jugador:<br><b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club</b></div>');
+        : '<div class="club-modal-proximamente">Pulsa ✏️ y pega una línea por jugador:<br><b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club; puntos de su selección</b></div>');
 
     var inp = document.getElementById("golden-buscar");
     if (inp) inp.addEventListener("input", function () {
@@ -21795,8 +21859,9 @@
 
   function pintarEditorGolden(contenedor) {
     contenedor.innerHTML =
-      '<p class="admin-nota">Una línea por jugador: <b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club</b>. ' +
-      "Ejemplo: Gonçalo Ramos; Milan; 48; 19; 0; 0; 520. Las líneas que empiezan por # se ignoran.</p>" +
+      '<p class="admin-nota">Una línea por jugador: <b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club; puntos de su selección</b>. ' +
+      "Goles, MVP e imbatidas ya multiplicados por el valor de su competición (Champions ×2, Liga EA ×1…). Zamora = coeficiente del país de su liga (1 Liga EA, 0,2 Andorra; 0 si no lo ganó). " +
+      "La última columna es opcional. Ejemplo: Gonçalo Ramos; Milan; 48; 19; 0; 0; 520; 300. Las líneas que empiezan por # se ignoran.</p>" +
       '<textarea id="golden-textarea" class="admin-roadmap-textarea" rows="18"></textarea>' +
       '<div class="admin-roadmap-editor-acciones">' +
       '<button type="button" class="btn-ghost" data-accion="cancelar-golden">✕ Cancelar</button>' +
@@ -22610,6 +22675,7 @@
     pintarEditorUscPlayoff: pintarEditorUscPlayoff,
     calcularUscPlayoffTodasLasRondas: calcularUscPlayoffTodasLasRondas,
     obtenerFormatoKaocupTexto: obtenerFormatoKaocupTexto,
+    obtenerComoSePuntuaTexto: obtenerComoSePuntuaTexto,
     renderizarKaocup: renderizarKaocup,
     irKaocupTab: irKaocupTab,
     renderizarKaocupStatDetalle: renderizarKaocupStatDetalle,

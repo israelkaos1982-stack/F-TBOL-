@@ -3273,7 +3273,11 @@
     var grid = '<div class="liga1ref-leyenda-grid' + claseExtra + '">' +
       items.map(function (it) { return "<span>" + it.e + " " + escapeHTML(it.t) + "</span>"; }).join("") +
       "</div>";
-    return _leyendaDetailsHTML(grid);
+    var desempate = '<div class="liga-desempate"><div class="liga-desempate-tit">Criterio de desempate:</div>' +
+      '<p>En el caso de que dos (o más) equipos tengan igual número de puntos, las siguientes reglas rompen el empate:</p><ol>' +
+      "<li>Enfrentamientos directos en todos sus partidos, si todos los equipos empatados tienen coincidencias internas</li>" +
+      "<li>Diferencia de goles</li><li>Goles marcados</li><li>Goles encajados</li><li>% de victorias</li></ol></div>";
+    return '<div class="liga-leyenda-sep"></div>' + _leyendaDetailsHTML(grid + desempate, "LEYENDA Y CRITERIO DESEMPATE");
   }
 
   // Envuelve una leyenda/nota en un <details> nativo (0 JS, CSS mínimo)
@@ -3281,10 +3285,10 @@
   // pantallas (2ª REF/1ª REF/Hypermotion/Ea Sports/Superliga/Copa del
   // Rey), reutilizado con cualquier `gridHTML` que ya lleve su propia
   // clase de rejilla.
-  function _leyendaDetailsHTML(gridHTML) {
+  function _leyendaDetailsHTML(gridHTML, titulo) {
     return (
       '<details class="liga1ref-leyenda-details">' +
-      '<summary class="liga1ref-leyenda-summary">LEYENDA</summary>' +
+      '<summary class="liga1ref-leyenda-summary">' + (titulo || "LEYENDA") + '</summary>' +
       gridHTML +
       "</details>"
     );

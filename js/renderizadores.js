@@ -20765,20 +20765,51 @@
   // traiga el texto pegado. Una línea que no case con el formato, o un
   // dorsal repetido, se ignora en silencio — mismo criterio que el resto
   // de parsers de texto libre de esta app (Calendario extra, Títulos).
+  // v419: también acepta el formato por SECCIONES (petición usuario):
+  //   ### 🧤 Porteros            ← la posición sale del título de sección
+  //   * 1. Joan García C         ← «* 1.» / «1.» / «#1» + nombre
+  //   * 11. Raphinha ⭐ ⚾ P      ← marcas finales (C ⭐ ⚾ 🏀 F P) se quitan del nombre
+  // El formato de siempre («#1 Jan Oblak (Por)») sigue valiendo, y una
+  // posición entre paréntesis gana siempre a la de la sección.
+  function _rosterPosDeSeccion(l) {
+    if (!/^#{2,}|^[🧤🛡️⚽👟]/.test(l) && !/^[^\d#*\-•]*(porter|defens|centrocamp|medio|delanter)/i.test(l)) return null;
+    var n = _normNombre(l);
+    if (/porter/.test(n)) return "POR";
+    if (/defens/.test(n)) return "DEF";
+    if (/centrocamp|medio/.test(n)) return "MED";
+    if (/delanter/.test(n)) return "DEL";
+    return null;
+  }
+  var _ROSTER_MARCAS_RE = /(\s+(?:C|F|P|⭐️?|🌟|⚾️?|🏀|\(C\)))+\s*$/;
   function parsearRosterTexto(texto, clubId) {
     var items = [];
     var vistos = {};
+    var posSeccion = null;
     String(texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
-      if (!l) return;
-      var m = l.match(/#\s*(\d+)\s+(.+?)\s*\(\s*(por|def|med|del)\s*\)\s*$/i);
+      if (!l || /^-{3,}$/.test(l)) return;
+      var sec = _rosterPosDeSeccion(l);
+      if (sec) { posSeccion = sec; return; }
+      var m = l.match(/^[*\-•]?\s*#?\s*(\d+)\s*[.)\-]?\s+(.+?)\s*$/);
       if (!m) return;
       var dorsal = Number(m[1]);
-      var nombre = m[2].trim();
-      var posicion = _ROSTER_POS_MAP[m[3].toLowerCase()];
+      var resto = m[2];
+      var posicion = null;
+      var mp = resto.match(/^(.*?)\s*\(\s*(por|def|med|del)\s*\)\s*(.*)$/i);
+      if (mp) { posicion = _ROSTER_POS_MAP[mp[2].toLowerCase()]; resto = (mp[1] + " " + mp[3]).trim(); }
+      else posicion = posSeccion;
+      var marcas = (resto.match(_ROSTER_MARCAS_RE) || [""])[0];
+      var nombre = resto.replace(_ROSTER_MARCAS_RE, "").trim();
       if (!nombre || !posicion || vistos[dorsal]) return;
       vistos[dorsal] = true;
-      items.push({ id: clubId + "-" + dorsal, dorsal: dorsal, nombre: nombre, posicion: posicion });
+      var it = { id: clubId + "-" + dorsal, dorsal: dorsal, nombre: nombre, posicion: posicion };
+      if (/\bC\b|\(C\)/.test(marcas)) it.capitan = true;
+      if (/⭐|🌟/.test(marcas)) it.estrella = true;
+      if (/⚾/.test(marcas)) it.goleadorNato = true;
+      if (/🏀/.test(marcas)) it.goleadorEstrella = true;
+      if (/\bF\b/.test(marcas)) it.faltas = true;
+      if (/\bP\b/.test(marcas)) it.penaltis = true;
+      items.push(it);
     });
     items.sort(function (a, b) { return a.dorsal - b.dorsal; });
     return items;
@@ -21814,6 +21845,8 @@
     nota.className = "admin-nota";
     nota.textContent =
       "Una línea por jugador: «#Dorsal Nombre (Posición)» — Posición es Por/Def/Med/Del. " +
+      "También vale por secciones: «### 🧤 Porteros» / «### 🛡️ Defensas» / «### ⚽ Centrocampistas» / " +
+      "«### 👟 Delanteros» y debajo «* 1. Nombre» (las marcas finales C ⭐ ⚾ F P se quitan del nombre). " +
       "Pega la plantilla real completa; estos jugadores son los que aparecen en la Plantilla " +
       "del club, en el selector de jugador del acta en vivo y al elegir a quién dar de baja " +
       "por lesión o sanción.";

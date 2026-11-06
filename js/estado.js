@@ -4604,12 +4604,53 @@
       return false;
     }
   }
+  // v430 (petición usuario): catálogo DEFINITIVO de balones por torneo
+  // (data/balones.json). Una sola vez (marca `_v` dentro del propio overlay,
+  // así viaja por la sync y no se repite en otro móvil) se quitan las
+  // reasignaciones viejas del Ball Store de esos torneos para que manden
+  // las nuevas, y se limpian del catálogo los renombres/borrados/duplicados
+  // de los balones que ahora son oficiales.
+  var _BALON_CATALOGO_V = 2;
+  var _BALON_COMPS_V2 = ["roadmundial", "roadeurocopa", "roadamerica", "roadasia", "nations", "seltorneos", "roadafrica",
+    "mundialsel", "eurocopa", "selecciones", "copaamerica", "copaasia", "copaafrica", "snow", "liga", "copa", "kaocup",
+    "supercopa", "champions", "uel", "uecl", "usc", "intercontinental", "mundialito", "superliga", "recopa", "superekao"];
+  var _BALON_IDS_V2 = ["nike-control-cbf", "orbita-africa", "trionda-pro", "efootball-max-vis-27", "puma-stellar-nitro-ultimate",
+    "resmi-mac-topudur", "efootball-contact-27", "puma-orbita-mfl-1", "paradise-purple", "paradise-blue", "vantaggio-5000",
+    "ligue1-mcdonalds", "eredivisie-vriendenloterij-26-27", "efootball-origin", "conext-26-pro", "f5n5000-tl", "steller-nitro-ultimate-spfl"];
+  function _migrarCatalogoBalonesV2() {
+    try {
+      // Sin overlay guardado en este móvil (recién instalado, aún sin sync)
+      // no hay nada viejo que limpiar — no se escribe nada, así nunca se
+      // sube un overlay vacío que pise lo del servidor.
+      if (!localStorage.getItem(BALON_ASIGNACION_KEY) && !localStorage.getItem(BALONES_KEY)) return;
+      var ov = _cargarAsignacionOverlay();
+      if ((Number(ov._v) || 0) >= _BALON_CATALOGO_V) return;
+      var ovB = _cargarOverlay(BALONES_KEY);
+      var conextCustom = {};
+      ovB.anadidos = (ovB.anadidos || []).filter(function (b) {
+        var dup = String(b.nombre || "").replace(/\s+/g, " ").trim().toLowerCase() === "conext 26 pro";
+        if (dup) conextCustom[b.id] = true;
+        return !dup;
+      });
+      _BALON_IDS_V2.forEach(function (id) { delete ovB.ediciones[id]; });
+      ovB.eliminados = (ovB.eliminados || []).filter(function (id) { return _BALON_IDS_V2.indexOf(id) === -1; });
+      _BALON_COMPS_V2.forEach(function (k) { delete ov[k]; });
+      for (var k in ov) {
+        if (ov.hasOwnProperty(k) && ov[k] && conextCustom[ov[k].balonId]) ov[k].balonId = "conext-26-pro";
+      }
+      ov._v = _BALON_CATALOGO_V;
+      _guardarAsignacionOverlay(ov);
+      if (localStorage.getItem(BALONES_KEY)) _guardarOverlay(BALONES_KEY, ovB);
+    } catch (err) { console.error("[estado] migración balones v2:", err); }
+  }
   function fusionarAsignacionBalones(baseAsignacion) {
     var ov = _cargarAsignacionOverlay();
+    _migrarCatalogoBalonesV2();
+    ov = _cargarAsignacionOverlay();
     var fusion = {};
     var base = baseAsignacion || {};
     for (var k in base) if (base.hasOwnProperty(k)) fusion[k] = base[k];
-    for (var k2 in ov) if (ov.hasOwnProperty(k2)) fusion[k2] = ov[k2];
+    for (var k2 in ov) if (ov.hasOwnProperty(k2) && k2.charAt(0) !== "_") fusion[k2] = ov[k2];
     return fusion;
   }
   function asignarBalonATorneo(compKey, balonId, comp, clima) {

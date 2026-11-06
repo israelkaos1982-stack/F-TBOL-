@@ -1247,7 +1247,7 @@
   // dentro de data/equipos.json en el momento de este fix, así que
   // excluirlo aquí NO reindexa a ningún otro club (0-6 se quedan tal
   // cual) y no rompe ningún "superliga-i-j-leg" ya jugado.
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["fc-barcelona", "psg"];
 
   // Localía FIJA por pareja (i<j, índices dentro de datos.equipos.equipos):
   // con 6 clubes, cada índice se enfrenta a los otros 5 y siempre termina
@@ -1530,7 +1530,8 @@
   // división correcta desde el primer momento, sin que el admin tenga que
   // pulsar 📌 manualmente para fijarla (un valor ya guardado en
   // localStorage SIGUE ganando siempre — ver obtenerDivisionClub).
-  var LIGA_DIVISION_DEFECTO_POR_CLUB = {};
+  // v417: el FC Barcelona (híbrido) solo juega como humano la Liga EA Sports.
+  var LIGA_DIVISION_DEFECTO_POR_CLUB = { "fc-barcelona": "easports" };
   // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
   // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
   // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este
@@ -1726,7 +1727,13 @@
   ];
   // Tarjetas de fábrica que NO existen para un club concreto (Barcelona no
   // dirige ninguna selección, así que no tiene Nations Cup).
-  var MENU_CLUB_EXCLUIDOS_POR_CLUB = {};
+  // v417: FC Barcelona (Ángel) y PSG (Izan) solo juegan como humanos las
+  // competiciones europeas (el Barça además Liga EA/Copa del Rey/KAO Cup/
+  // Supercopa de España, solo contra otro humano). Sin selección.
+  var MENU_CLUB_EXCLUIDOS_POR_CLUB = {
+    "fc-barcelona": { superliga: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
+    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, superliga: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
+  };
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
   // Coupe de France (ver COPA_HUMANOS_EXCLUIDOS/renderizarCoupeFrancia en

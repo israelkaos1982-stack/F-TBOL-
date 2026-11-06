@@ -5552,10 +5552,28 @@ button { font-family: inherit; cursor: pointer; }
 #partido-live-overlay .previa-team-alias:not(.previa-team-alias--vacio) {
   display: block; width: 100%; max-width: 100%; box-sizing: border-box;
   margin: 10px 0 4px; padding: 10px 12px;
-  border: none; border-left: 4px solid #2ee6c8; border-radius: 0;
-  background: linear-gradient(90deg, rgba(46, 230, 200, 0.45), rgba(46, 230, 200, 0.10));
+  border: none; border-top: 2px solid #2ee6c8; border-bottom: 2px solid #2ee6c8; border-radius: 0;
+  background: linear-gradient(90deg, rgba(46, 230, 200, 0.08), rgba(46, 230, 200, 0.45) 50%, rgba(46, 230, 200, 0.08));
   color: #fff; font-size: 12.5px; font-weight: 800; font-style: italic;
   text-transform: uppercase; letter-spacing: 0.3px; line-height: 1.3;
-  text-align: left; white-space: normal; word-break: break-word;
+  text-align: center; white-space: normal; word-break: break-word;
   box-shadow: 0 0 12px rgba(46, 230, 200, 0.25);
 }
+
+/* v422 — Calendario: barra fija 🌍 GLOBAL / 👥 HUMANOS arriba del todo */
+.cal-filtro-barra {
+  position: sticky; top: 0; z-index: 6;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  padding: 8px 4px; margin: 0 0 8px;
+  background: linear-gradient(180deg, rgba(6, 18, 51, 0.97), rgba(6, 18, 51, 0.88));
+  backdrop-filter: blur(4px);
+}
+.cal-filtro-btn {
+  padding: 9px 6px; border: 1px solid rgba(255, 255, 255, 0.18); border-bottom: 3px solid rgba(255, 210, 74, 0.35);
+  background: linear-gradient(135deg, #1b2c6b, #0e1a44); color: #cfd8ff;
+  font-size: 14px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0.4px;
+  transform: skewX(-8deg); border-radius: 4px;
+}
+.cal-filtro-btn--activo { background: linear-gradient(135deg, #ffd24a, #f39c12); color: #1a1200; border-bottom-color: #fff; }
+.cal-filtro-vacio { grid-column: 1 / -1; margin: 6px 0 0; text-align: center; color: var(--text-lo, #9aa); font-size: 13px; }
+.cal-solo-humanos .match-card:not([data-hvh]) { display: none !important; }

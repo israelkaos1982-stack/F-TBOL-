@@ -173,6 +173,7 @@
   // mismo partido); `final` = sede fija de la FINAL. Sin entrada (o sin
   // sedes en una ronda que no es final) → estadio del equipo local.
   var _EUR9 = ["wembley", "emirates-stadium", "old-trafford", "signal-iduna-park", "johan-cruijff-arena", "stadio-olimpico", "spotify-camp-nou", "san-siro", "giuseppe-meazza"];
+  var _SEDES_MUNDIAL = ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo", "estadio-del-martingal"];
   var _SEDES_COMP = {
     eurocopa: { sedes: _EUR9.slice(1), final: "wembley" },
     copaamerica: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "stadio-orione", "estadio-del-nuevo-triunfo"], final: "efootball-stadium" },
@@ -187,7 +188,8 @@
     usc: { sedes: _EUR9, final: "efootball-stadium" },
     recopa: { final: "stadio-olimpico" },
     intercontinental: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo"], final: "efootball-stadium" },
-    mundialito: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo", "estadio-del-martingal", "sports-park"], final: "efootball-stadium" },
+    mundialito: { sedes: _SEDES_MUNDIAL, final: "efootball-stadium" },
+    mundialsel: { sedes: _SEDES_MUNDIAL, final: "efootball-stadium" },
     superekao: { final: "efootball-stadium" }
   };
   function _estadioPorId(id) {

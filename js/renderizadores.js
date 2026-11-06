@@ -18418,13 +18418,13 @@
   // v423: marca de agua (emoji, 0 KB) de la competición en el fondo de cada card.
   var _MARCA_COMP = {
     copa: "🏆", supercopa: "🏆", kaocup: "🏆", superekao: "🏆", recopa: "🏆", promocion: "⬆️",
-    champions: "⭐", "ucl-previa": "⭐", uel: "🇪🇺", uecl: "🇪🇺", usc: "🛡️", intercontinental: "🌎",
+    champions: "⭐", "ucl-previa": "🇪🇺", uel: "🇪🇺", uecl: "🇪🇺", usc: "🛡️", intercontinental: "🌎",
     verano: "☀️", superliga: "👥", nations: "🌐", roadeurocopa: "🛣️", eurocopa: "🇪🇺", roadmundial: "🛤️",
     mundialsel: "🌍", roadamerica: "🌎", roadafrica: "🦁", roadasia: "🌏", selecciones: "🌐", "sel-clasif": "🌐"
   };
   function _marcaAguaComp(competicion) {
     var k = _resolverCompKeyBalon(competicion);
-    return _MARCA_COMP[k] || _MARCA_COMP[competicion] || "⚽";
+    return _MARCA_COMP[k] || _MARCA_COMP[competicion] || "🇪🇸";
   }
   var _CAL_FILTRO_KEY = "f7v_cal_filtro_v1"; // fuera de "ef7_": solo este dispositivo
   function _calFiltroActual() {

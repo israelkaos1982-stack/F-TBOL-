@@ -18415,6 +18415,38 @@
     );
   }
 
+  var _CAL_FILTRO_KEY = "f7v_cal_filtro_v1"; // fuera de "ef7_": solo este dispositivo
+  function _calFiltroActual() {
+    try { return localStorage.getItem(_CAL_FILTRO_KEY) === "humanos" ? "humanos" : "global"; } catch (e) { return "global"; }
+  }
+  function _calFiltroAplicar(contenedor) {
+    var f = _calFiltroActual();
+    contenedor.classList.toggle("cal-solo-humanos", f === "humanos");
+    Array.prototype.forEach.call(contenedor.querySelectorAll(".cal-filtro-btn"), function (b) {
+      b.classList.toggle("cal-filtro-btn--activo", b.getAttribute("data-filtro") === f);
+    });
+    var vacio = contenedor.querySelector(".cal-filtro-vacio");
+    if (vacio) vacio.hidden = !(f === "humanos" && !contenedor.querySelector(".match-card[data-hvh]"));
+  }
+  function _calFiltroBarra() {
+    var barra = document.createElement("div");
+    barra.className = "cal-filtro-barra";
+    barra.innerHTML =
+      '<button type="button" class="cal-filtro-btn" data-filtro="global">🌍 Global</button>' +
+      '<button type="button" class="cal-filtro-btn" data-filtro="humanos">👥 Humanos</button>' +
+      '<p class="cal-filtro-vacio" hidden>Todavía no hay partidos contra equipos humanos.</p>';
+    barra.addEventListener("click", function (ev) {
+      var b = ev.target.closest(".cal-filtro-btn");
+      if (!b) return;
+      try { localStorage.setItem(_CAL_FILTRO_KEY, b.getAttribute("data-filtro")); } catch (e) {}
+      var cont = barra.parentNode;
+      if (cont) _calFiltroAplicar(cont);
+      var sig = cont && (cont.querySelector(".match-card--siguiente:not([hidden])") || cont.querySelector(".match-card"));
+      if (sig && b.getAttribute("data-filtro") === "global") sig.scrollIntoView({ block: "center" });
+    });
+    return barra;
+  }
+
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente, esEliminado, esBloqueado) {
     // Partido de la SELECCIÓN del club (Nations Cup): el lado "activo" es
     // "sel-<clubId>", no el club.
@@ -18896,10 +18928,20 @@
         _avisarSiCambioProximoPartido(idEquipoHumanoActivo, idSiguiente, partidosPorId, datos, !!esActualizacionDeSync);
 
         var frag = document.createDocumentFragment();
+        // v422: barra fija 🌍 GLOBAL / 👥 HUMANOS (preferencia de este
+        // dispositivo). HUMANOS deja solo los partidos contra OTRO equipo
+        // humano (club o selección), sea cual sea la competición.
+        frag.appendChild(_calFiltroBarra());
+        var selActivo = _selIdDeClub(idEquipoHumanoActivo);
         partidosDelClub.forEach(function (p) {
-          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente, !!idsEliminados[p.id], !!idsBloqueados[p.id]));
+          var card = construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente, !!idsEliminados[p.id], !!idsBloqueados[p.id]);
+          var propioLocal = p.local === idEquipoHumanoActivo || p.local === selActivo;
+          var rivalId = propioLocal ? p.visitante : p.local;
+          if (rivalId && rivalId !== idEquipoHumanoActivo && rivalId !== selActivo && _esClubHumano(rivalId, datos)) card.setAttribute("data-hvh", "1");
+          frag.appendChild(card);
         });
         contenedor.appendChild(frag);
+        _calFiltroAplicar(contenedor);
 
         // Scroll inteligente + acortado por ancho REAL — deferidos al mismo
         // frame, para que el layout ya esté asentado. El acortado por

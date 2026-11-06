@@ -17869,8 +17869,8 @@
       "</div>"
     );
   }
-  function _rankingTarjetaHTML(t, est) {
-    var clase = "ranking-card";
+  function _rankingTarjetaHTML(t, est, idClubActivo) {
+    var clase = "ranking-card ranking-card--tipo-" + t.id + (_rankingTabActual === t.id ? " ranking-card--activa" : "");
     var puesto, detalle;
     if (est.objetivo === null && !est.nombre) {
       puesto = "—";
@@ -17886,11 +17886,12 @@
     }
     if (est.fila && est.objetivo !== null) clase += est.cumplido ? " ranking-card--ok" : " ranking-card--no";
     return (
-      '<div class="' + clase + '"><div class="ranking-card-tit">' + t.icono + " " + t.etiqueta + "</div>" +
+      '<button type="button" class="' + clase + '" data-accion="ranking-tab-ir" data-tab="' + t.id + '" data-club-id="' + (idClubActivo || "") +
+      '"><div class="ranking-card-tit">' + t.icono + " " + t.etiqueta + "</div>" +
       '<div class="ranking-card-puesto">' + puesto + "</div>" +
       '<div class="ranking-card-det">' + detalle + "</div>" +
       (est.fila && est.objetivo !== null ? '<div class="ranking-card-estado">' + (est.cumplido ? "✅ Conseguido" : "❌ Pendiente") + "</div>" : "") +
-      "</div>"
+      "</button>"
     );
   }
   function _rankingListaHTML(est) {
@@ -17959,12 +17960,12 @@
 
     var tarjetas = '<div class="ranking-cards">';
     window.Estado.RANKING_TIPOS.forEach(function (t) {
-      tarjetas += _rankingTarjetaHTML(t, _rankingEstado(t.id, idClubActivo));
+      tarjetas += _rankingTarjetaHTML(t, _rankingEstado(t.id, idClubActivo), idClubActivo);
     });
     tarjetas += "</div>";
 
     var tabsHost = document.createElement("div");
-    tabsHost.innerHTML = tarjetas + _rankingTabsHTML(idClubActivo) +
+    tabsHost.innerHTML = tarjetas +
       '<div class="ranking-lista">' +
       _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
     contenedor.appendChild(tabsHost);

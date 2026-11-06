@@ -1096,6 +1096,17 @@
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;
 
+    // v428: en la pantalla FINAL, Nº/PJ/PTS/% ya con este resultado sumado.
+    try {
+      var _RRf = window.Renderizadores, _gFin = document.getElementById("live-global");
+      if (_gFin && _partidoActivo.clas && _RRf && _RRf.clasificacionTrasResultado && _RRf.htmlClasificacionDePartido &&
+          !_partidoActivo.ida && !(_RRf.faseIdaVuelta && _RRf.faseIdaVuelta(_partidoActivo.partido) === "ida" &&
+            !(_RRf.esFaseDeGruposEuropea && _RRf.esFaseDeGruposEuropea(_partidoActivo.partido)))) {
+        _gFin.innerHTML = _RRf.htmlClasificacionDePartido(
+          _RRf.clasificacionTrasResultado(_partidoActivo.clas, _localU, _visitU, r.golesLocal, r.golesVisitante));
+      }
+    } catch (_eFin) { console.error("[acta] clasificación final:", _eFin); }
+
     // ☁️ Comprobación REAL de que el resultado llegó al servidor (lee el
     // servidor, no se fía de que "el POST salió"). Si no llega, se dice claro
     // y con el id del partido para poder rastrearlo.

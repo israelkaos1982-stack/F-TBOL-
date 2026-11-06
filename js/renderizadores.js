@@ -19611,7 +19611,33 @@
     }
     var l = buscar(local), v = buscar(visitante);
     if (!l && !v) return null;
-    return { local: l, visitante: v };
+    return { local: l, visitante: v, _filas: filas };
+  }
+  // v428: misma clasificación con el resultado del partido YA aplicado (para
+  // la pantalla FINAL): suma PJ/PTS/G a los 2 equipos sobre las filas de
+  // ANTES del partido y reordena (PTS → DG → GF) para sacar el Nº nuevo.
+  function _clasificacionTrasResultado(clas, local, visitante, gl, gv) {
+    if (!clas || !clas._filas) return clas;
+    function esDe(f, eq) { return (f.equipoId && f.equipoId === eq.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, eq.nombre)); }
+    var filas = clas._filas.map(function (f) {
+      var c = { ref: f, pts: Number(f.pts) || 0, pj: Number(f.pj) || 0, pe: Number(f.pe) || 0, pp: Number(f.pp) || 0, gf: Number(f.gf) || 0, gc: Number(f.gc) || 0 };
+      var lado = esDe(f, local) ? "l" : (esDe(f, visitante) ? "v" : null);
+      if (lado) {
+        var a = lado === "l" ? gl : gv, b = lado === "l" ? gv : gl;
+        c.pj++; c.gf += a; c.gc += b;
+        if (a > b) c.pts += 3; else if (a === b) { c.pts += 1; c.pe++; } else c.pp++;
+        c.lado = lado;
+      }
+      return c;
+    });
+    filas.sort(function (x, y) { return (y.pts - x.pts) || ((y.gf - y.gc) - (x.gf - x.gc)) || (y.gf - x.gf); });
+    var out = { local: clas.local, visitante: clas.visitante };
+    filas.forEach(function (c, i) {
+      if (!c.lado) return;
+      var o = { pos: i + 1, pts: c.pts, pj: c.pj, pg: c.pj - c.pe - c.pp };
+      if (c.lado === "l") out.local = o; else out.visitante = o;
+    });
+    return out;
   }
   // POS · PJ · PTS · % de CADA equipo, en horizontal, sobre su propio
   // escudo: "POS PJ PTS %  -  POS PJ PTS %" (petición usuario).
@@ -21897,18 +21923,12 @@
         // esta pantalla, es la referencia rápida de las 3 reglas para el
         // admin sin tener que recordarlas de memoria.
         var grupoSanciones = document.createElement("div");
-        grupoSanciones.className = "plantilla-grupo plantilla-grupo--sanciones";
-        grupoSanciones.insertAdjacentHTML(
-          "beforeend",
-          '<details class="liga1ref-leyenda-details">' +
-          '<summary class="liga1ref-leyenda-summary">⚠️ Sanciones y Lesiones</summary>' +
-          '<div class="liga1ref-leyenda-grid">' +
-          "<span>🚑 Jugador con ⬇️ se pierde ese partido y el siguiente.</span>" +
-          "<span>🟨 Acumulación de 3 amarillas se pierde el próximo partido.</span>" +
-          "<span>🟥 1 Roja se pierde el siguiente partido.</span>" +
-          "</div>" +
-          "</details>"
-        );
+        grupoSanciones.className = "plantilla-grupo plantilla-grupo--total plantilla-grupo--sanciones";
+        grupoSanciones.innerHTML =
+          '<div class="plantilla-grupo-titulo"><span class="plantilla-grupo-nombre">Sanciones y Lesiones</span></div>' +
+          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🚑</span> Jugador con ⬇️ se pierde ese partido y el siguiente.</div>' +
+          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🟨</span> Acumulación de 3 amarillas se pierde el próximo partido.</div>' +
+          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🟥</span> 1 Roja se pierde el siguiente partido.</div>';
         frag.appendChild(grupoSanciones);
 
         contenedor.appendChild(frag);
@@ -23502,6 +23522,7 @@
     htmlIdaGlobal: _htmlIdaGlobal,
     htmlIdaGlobalDeIda: _htmlIdaGlobalDeIda,
     clasificacionDePartido: _clasificacionDePartido,
+    clasificacionTrasResultado: _clasificacionTrasResultado,
     htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,
     cargarTodo: cargarTodo,

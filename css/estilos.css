@@ -5577,3 +5577,12 @@ button { font-family: inherit; cursor: pointer; }
 .cal-filtro-btn--activo { background: linear-gradient(135deg, #ffd24a, #f39c12); color: #1a1200; border-bottom-color: #fff; }
 .cal-filtro-vacio { grid-column: 1 / -1; margin: 6px 0 0; text-align: center; color: var(--text-lo, #9aa); font-size: 13px; }
 .cal-solo-humanos .match-card:not([data-hvh]) { display: none !important; }
+
+/* v423 — Marca de agua de la competición (emoji, 0 KB) al fondo de cada card */
+.match-card[data-marca] { isolation: isolate; }
+.match-card[data-marca]::after {
+  content: attr(data-marca);
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-12deg);
+  font-size: 120px; line-height: 1; opacity: 0.09; filter: grayscale(0.2);
+  z-index: -1; pointer-events: none;
+}

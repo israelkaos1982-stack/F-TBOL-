@@ -17961,7 +17961,7 @@
 
     var tabsHost = document.createElement("div");
     tabsHost.innerHTML = tarjetas + _rankingTabsHTML(idClubActivo) +
-      '<div class="ranking-lista">' + _rankingDesgloseHTML(_rankingEstado(_rankingTabActual, idClubActivo)) +
+      '<div class="ranking-lista">' +
       _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
     contenedor.appendChild(tabsHost);
 
@@ -18444,8 +18444,8 @@
     var barra = document.createElement("div");
     barra.className = "cal-filtro-barra";
     barra.innerHTML =
-      '<button type="button" class="cal-filtro-btn" data-filtro="global">🌍 Global</button>' +
-      '<button type="button" class="cal-filtro-btn" data-filtro="humanos">👥 Humanos</button>' +
+      '<button type="button" class="cal-filtro-btn" data-filtro="global"><span class="cal-filtro-ico">📅</span> Global</button>' +
+      '<button type="button" class="cal-filtro-btn" data-filtro="humanos"><span class="cal-filtro-ico">👥</span> Humanos</button>' +
       '<p class="cal-filtro-vacio" hidden>Todavía no hay partidos contra equipos humanos.</p>';
     barra.addEventListener("click", function (ev) {
       var b = ev.target.closest(".cal-filtro-btn");

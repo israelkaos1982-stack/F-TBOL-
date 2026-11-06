@@ -2202,7 +2202,7 @@
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
     {
-      key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true,
+      key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true,
       placeholder: "1 Sem Westerveld - Real Zaragoza  0.90\n2 Ramón Vila - Eldense  0.90"
     }
   ];
@@ -2524,7 +2524,8 @@
       if (portero && zamoraPartidos > 0) {
         acumulado.zamora[portero.id] = {
           nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
-          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
+          cantidad: zamoraEncajados, pj: zamoraPartidos,
+          coef: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
         };
       }
     });
@@ -2587,7 +2588,9 @@
     try {
       // v410: equipo HUMANO → total de partidos jugados en TODAS sus
       // competiciones (sin torneos de verano), petición usuario.
-      if (_esIdHumano(equipoId) && !_esClubHibrido(equipoId)) {
+      // v420: equipo HUMANO → SOLO sus partidos jugados en ESA competición
+      // (petición usuario: no se suman los de todas las competiciones).
+      if (false) {
         return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
           return p.jugado && p.competicion !== "verano" && _resolverCompKeyBalon(p.competicion) !== "verano" &&
             (p.local === equipoId || p.visitante === equipoId);
@@ -2610,7 +2613,8 @@
   function _statFilasConPJ(filas, compKey, datos, ligaId) {
     var cache = {};
     (filas || []).forEach(function (f) {
-      if (f._sinProm) { f.coef = null; return; } // Zamora: el valor ya ES una media
+      if (f._sinProm) { f.coef = null; return; }
+      if (f._zamoraOk) return; // v420: Zamora ya trae goles/PJ/media
       if (f._iaIdVsHumano) {
         // IA del texto + sus partidos contra humanos en esta competición.
         var extra = _pjEquipoEnComp(f._iaIdVsHumano, compKey, datos, ligaId);
@@ -2656,15 +2660,36 @@
       if (!n) return;
       var portero = _liga1RefPorteroPrincipal(e.id);
       if (!portero) return;
-      autos.push({ nombre: portero.nombre, equipo: e.nombre, equipoId: e.id, cantidad: Math.round((enc / n) * 100) / 100, pj: n });
+      autos.push({ nombre: portero.nombre, equipo: e.nombre, equipoId: e.id, cantidad: enc, pj: n, coef: Math.round((enc / n) * 100) / 100 });
     });
-    var filas = _fusionarStatFilasConOverride(texto, autos);
-    filas.sort(function (a, b) { return a.cantidad - b.cantidad || a.nombre.localeCompare(b.nombre); });
-    return filas.slice(0, 20).map(function (f) {
-      f._sinProm = true;
-      f.cantidad = Number(f.cantidad).toFixed(2);
-      return f;
+    var filas = _statFilasConPJ(_fusionarStatFilasConOverride(texto, autos), compKey, datos);
+    return _zamoraOrdenar(filas);
+  }
+  // v420: ZAMORA = goles ENCAJADOS (columna grande) + PJ + media («Prom.»),
+  // ordenada por la media de menor a mayor. Acepta el texto «Jugador ·
+  // Equipo · Goles recib. · PJ · Coef.» y también el antiguo «Nombre -
+  // Equipo 0.90» (solo la media: los goles se deducen con los PJ si los hay).
+  function _zamoraOrdenar(filas) {
+    (filas || []).forEach(function (f) {
+      if (f._zamoraOk) return;
+      var c = Number(f.cantidad);
+      var tieneCoef = typeof f.coef === "number" && !isNaN(f.coef);
+      if (!tieneCoef) {
+        if (f.pj > 0 && Number.isInteger(c)) {
+          f.coef = Math.round((c / f.pj) * 100) / 100;
+        } else {
+          // Texto antiguo: la cantidad ERA la media.
+          f.coef = c;
+          f.cantidad = f.pj > 0 ? Math.round(c * f.pj) : "—";
+        }
+      }
+      delete f._sinProm;
+      f._zamoraOk = true;
     });
+    filas.sort(function (a, b) {
+      return (a.coef - b.coef) || ((Number(a.cantidad) || 0) - (Number(b.cantidad) || 0)) || a.nombre.localeCompare(b.nombre);
+    });
+    return filas.slice(0, 20);
   }
 
   function _statPjCeldasHTML(f) {
@@ -2795,6 +2820,7 @@
       _filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
       calcularLiga1RefStatsHumanos(datos)[categoria] || []
     );
+    if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, "1ref"));
 
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
@@ -3595,6 +3621,7 @@
     var filas = statsHumanos
       ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos), statsHumanos[categoria] || [])
       : parsearLiga1RefStatTexto(texto);
+    if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, ligaId));
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);
@@ -3781,7 +3808,7 @@
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
     // v413: Zamora en TODAS las competiciones, Copa incluida (petición usuario
     // 2026-11-01, sustituye a la del 2026-10-08 que la quitaba).
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // PSG no juega la Copa del Rey — juega su propia Coupe de France (ni
@@ -4722,7 +4749,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _recopaAppendStatsGrid(contenedor, idClubActivo) {
@@ -5216,7 +5243,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _interAppendStatsGrid(contenedor, idClubActivo) {
@@ -5902,7 +5929,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _uscAppendStatsGrid(contenedor, idClubActivo) {
@@ -6388,7 +6415,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _kaocupAppendStatsGrid(contenedor, idClubActivo) {
@@ -6912,7 +6939,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _superekaoAppendStatsGrid(contenedor, idClubActivo) {
@@ -7432,7 +7459,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   function _sceAppendStatsGrid(contenedor, idClubActivo) {
@@ -7794,7 +7821,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — ida y vuelta las 5 (petición
@@ -8826,7 +8853,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — igual que Champions.
@@ -9529,7 +9556,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 5 rondas de Playoffs, en orden — igual que Champions.
@@ -10221,7 +10248,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -10985,7 +11012,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 clubes: los 11 primeros
@@ -11652,7 +11679,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -12314,7 +12341,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -12981,7 +13008,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -13643,7 +13670,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -14313,7 +14340,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -14971,7 +14998,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -15629,7 +15656,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Las 4 rondas de eliminatorias, en orden: Octavos → Final (16 selecciones: los 11 primeros
@@ -16299,7 +16326,7 @@
     { key: "mvp", icono: "⭐", label: "MVP", columna: "MVP" },
     { key: "amarillas", icono: "🟨", label: "T. AMARILLAS", columna: "Amarillas" },
     { key: "rojas", icono: "🟥", label: "T. ROJAS", columna: "Rojas" },
-    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Media", asc: true, decimales: true }
+    { key: "zamora", icono: "🧤", label: "ZAMORA", columna: "Goles enc.", asc: true }
   ];
 
   // Inter de Milán (Aléx) NO participa en la Superliga (petición usuario
@@ -16435,7 +16462,8 @@
       if (portero && zamoraPartidos > 0) {
         acumulado.zamora[portero.id] = {
           nombre: portero.nombre, equipo: e.nombre, equipoId: e.id,
-          cantidad: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
+          cantidad: zamoraEncajados, pj: zamoraPartidos,
+          coef: Math.round((zamoraEncajados / zamoraPartidos) * 100) / 100
         };
       }
     });
@@ -16458,6 +16486,7 @@
   function calcularSuperligaStatsCombinado(datos, categoria) {
     var meta = SUPERLIGA_STATS.filter(function (s) { return s.key === categoria; })[0];
     var filas = (calcularSuperligaStatsHumanos(datos)[categoria] || []).slice();
+    if (categoria === "zamora") return _zamoraOrdenar(filas);
     filas.sort(function (a, b) {
       var diff = meta && meta.asc ? a.cantidad - b.cantidad : b.cantidad - a.cantidad;
       return diff || a.nombre.localeCompare(b.nombre);

@@ -11010,7 +11010,8 @@
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
   // uno de los 5 puestos de mejor segundo (🟨), el resto eliminado.
   function _slxZona(pos) {
-    return pos <= 2 ? "octavos" : "";
+    // v418: 1º y 2º de grupo → Semifinales, en ROSA (petición usuario).
+    return pos <= 2 ? "semis" : "";
   }
 
   // Texto con los 11 grupos pegados JUNTOS. Cada grupo empieza con una línea
@@ -11412,7 +11413,7 @@
         contenedor.appendChild(wrap);
       });
       contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(
-        '<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: pasan a Semifinales</span></div>'
+        '<div class="liga1ref-leyenda-grid"><span>🩷 1º y 2º de grupo: pasan a Semifinales</span></div>'
       ));
     }
 
@@ -16308,8 +16309,8 @@
   // en el generador de partidos — si algún día se cambia esta lista, hay
   // que tocar LOS DOS SITIOS (aquí decide quién sale en la tabla/stats,
   // allí decide contra quién se generan los 15 partidos de cada club).
-  // v417: FC Barcelona y PSG no juegan la Superliga (solo Europa).
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["fc-barcelona", "psg"];
+  // v418: FC Barcelona y PSG SÍ juegan la Superliga.
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
 
   function _superligaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {

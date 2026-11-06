@@ -810,7 +810,9 @@
   // española). NO toca los partidos ya guardados en ef7_estado_liga_v1
   // (los comparten los clubes humanos que quedan).
   var FIXUP_PURGA_CLUBES_KEY = "ef7_fixup_purga_clubes_eliminados_v1";
-  var CLUBES_HUMANOS_ELIMINADOS = ["fc-barcelona", "psg", "manchester-city", "inter-milan", "chelsea"];
+  // v417: FC Barcelona y PSG vuelven como cajas humanas — fuera de la purga
+  // (un dispositivo nuevo la ejecutaría y borraría sus datos nuevos).
+  var CLUBES_HUMANOS_ELIMINADOS = ["manchester-city", "inter-milan", "chelsea"];
   function _fixupPurgarClubesEliminadosV1() {
     try {
       if (localStorage.getItem(FIXUP_PURGA_CLUBES_KEY)) return;

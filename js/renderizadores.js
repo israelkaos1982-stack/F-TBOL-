@@ -105,7 +105,7 @@
       // v410: ids de los equipos HUMANOS (club y su selección "sel-<id>").
       _humanosIdsSet = {};
       ((datos.equipos && datos.equipos.equipos) || []).forEach(function (eh) {
-        if (eh && eh.id) { _humanosIdsSet[eh.id] = true; _humanosIdsSet["sel-" + eh.id] = true; }
+        if (eh && eh.id) { _humanosIdsSet[eh.id] = true; _humanosIdsSet[_selIdDeClub(eh.id)] = true; }
       });
       _rivalesRealesMap = {};
       _rivalesAltMap = {};
@@ -447,28 +447,48 @@
   // (Estado.obtenerRosterTexto("sel-<clubId>")) y sus estadísticas son
   // SEPARADOS de los del club. Los rivales (selecciones IA) se resuelven por
   // nombre con su bandera (ver _banderaDePais).
-  var SELECCIONES_HUMANAS_POR_CLUB = {
+  // `SELECCIONES_HUMANAS` va por HUECO (la parte de después de "sel-" en el
+  // id de la selección: "sel-real-madrid" = hueco "real-madrid"). El hueco
+  // es la IDENTIDAD de la selección (plantilla, partidos, estadísticas
+  // guardadas) y NO cambia aunque cambie el club que la dirige.
+  // v417 (petición usuario): Real Madrid (Acsa) pasa a dirigir Inglaterra
+  // y Atlético Madrid (Isra) a España — cada selección conserva sus datos
+  // en su hueco de siempre; solo cambia el club que la lleva
+  // (_SEL_HUECO_DE_CLUB). Sin mover ni una clave guardada.
+  var SELECCIONES_HUMANAS = {
     liverpool: { nombre: "Francia", bandera: "🇫🇷", siglas: "FRA", c1: "#0055a4", c2: "#ef4135" },
     "real-madrid": { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#aa151b", c2: "#f1bf00" },
     "atletico-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" }
   };
-  function _idSeleccionDeClub(clubId) {
-    return SELECCIONES_HUMANAS_POR_CLUB[clubId] ? "sel-" + clubId : null;
+  var _SEL_HUECO_DE_CLUB = { liverpool: "liverpool", "real-madrid": "atletico-madrid", "atletico-madrid": "real-madrid" };
+  function _huecoSelDeClub(clubId) { return _SEL_HUECO_DE_CLUB[clubId] || null; }
+  function _clubDeHuecoSel(hueco) {
+    for (var c in _SEL_HUECO_DE_CLUB) if (_SEL_HUECO_DE_CLUB[c] === hueco) return c;
+    return null;
   }
-  // "sel-liverpool" -> "liverpool" (para tablas que están por id de CLUB:
-  // forma, nivel, FIFA...). Cualquier otro id se devuelve igual.
+  // Por CLUB: la selección que dirige ese club (o undefined).
+  var SELECCIONES_HUMANAS_POR_CLUB = {};
+  Object.keys(_SEL_HUECO_DE_CLUB).forEach(function (c) { SELECCIONES_HUMANAS_POR_CLUB[c] = SELECCIONES_HUMANAS[_SEL_HUECO_DE_CLUB[c]]; });
+  function _selIdDeClub(clubId) { var h = _huecoSelDeClub(clubId); return h ? "sel-" + h : "sel-" + clubId; }
+  function _idSeleccionDeClub(clubId) {
+    return _huecoSelDeClub(clubId) ? "sel-" + _huecoSelDeClub(clubId) : null;
+  }
+  // "sel-real-madrid" -> club que la dirige ahora (para tablas que están por
+  // id de CLUB: forma, nivel, FIFA...). Cualquier otro id se devuelve igual.
   function _idClubDeEquipoId(id) {
-    return typeof id === "string" && id.indexOf("sel-") === 0 && SELECCIONES_HUMANAS_POR_CLUB[id.slice(4)] ? id.slice(4) : id;
+    return typeof id === "string" && id.indexOf("sel-") === 0 && _clubDeHuecoSel(id.slice(4)) ? _clubDeHuecoSel(id.slice(4)) : id;
   }
   function _esIdSeleccionHumana(id) {
-    return typeof id === "string" && id.indexOf("sel-") === 0 && !!SELECCIONES_HUMANAS_POR_CLUB[id.slice(4)];
+    return typeof id === "string" && id.indexOf("sel-") === 0 && !!SELECCIONES_HUMANAS[id.slice(4)] && !!_clubDeHuecoSel(id.slice(4));
   }
-  function _entidadSeleccionHumana(clubId, datos) {
-    var def = SELECCIONES_HUMANAS_POR_CLUB[clubId];
-    if (!def) return null;
+  // `hueco` = id de la selección sin "sel-".
+  function _entidadSeleccionHumana(hueco, datos) {
+    var def = SELECCIONES_HUMANAS[hueco];
+    var clubId = _clubDeHuecoSel(hueco);
+    if (!def || !clubId) return null;
     var club = (datos.equipos.equipos || []).filter(function (e) { return e.id === clubId; })[0] || {};
     return {
-      id: "sel-" + clubId,
+      id: "sel-" + hueco,
       nombre: def.nombre,
       siglas: def.siglas,
       colorPrimario: def.c1,
@@ -484,8 +504,8 @@
     };
   }
   function _seleccionesHumanasEntidades(datos) {
-    return Object.keys(SELECCIONES_HUMANAS_POR_CLUB)
-      .map(function (clubId) { return _entidadSeleccionHumana(clubId, datos); })
+    return Object.keys(SELECCIONES_HUMANAS)
+      .map(function (hueco) { return _entidadSeleccionHumana(hueco, datos); })
       .filter(Boolean);
   }
   // Banderas de países (nombre normalizado sin tildes -> emoji). Código ISO de 2
@@ -545,9 +565,9 @@
   // cualquier otra -> selección IA con bandera.
   function resolverSeleccionPorNombre(nombre, datos) {
     var norm = _normNombre(nombre);
-    var humanas = Object.keys(SELECCIONES_HUMANAS_POR_CLUB);
+    var humanas = Object.keys(SELECCIONES_HUMANAS);
     for (var i = 0; i < humanas.length; i++) {
-      if (_normNombre(SELECCIONES_HUMANAS_POR_CLUB[humanas[i]].nombre) === norm) return _entidadSeleccionHumana(humanas[i], datos);
+      if (_normNombre(SELECCIONES_HUMANAS[humanas[i]].nombre) === norm) return _entidadSeleccionHumana(humanas[i], datos);
     }
     var id = "sel-ia-" + norm.replace(/[^a-z0-9]+/g, "-");
     if (!_sinteticosExtra[id]) _sinteticosExtra[id] = _crearSeleccionIA(nombre.trim());
@@ -761,7 +781,9 @@
     arsenal: { primario: "#7a1024", secundario: "#ef0107" },
     "atletico-madrid": { primario: "#192c5b", secundario: "#cb3524" },
     "real-madrid": { primario: "#e3b13c", secundario: "#5b2c8c" },
-    liverpool: { primario: "#170406", secundario: "#c8102e" }
+    liverpool: { primario: "#170406", secundario: "#c8102e" },
+    "fc-barcelona": { primario: "#004d98", secundario: "#a50044" },
+    psg: { primario: "#004170", secundario: "#da291c" }
   };
 
   function renderizarInicioEquipos() {
@@ -1002,7 +1024,7 @@
   // no depende de COMPS_ELIMINACION_DIRECTA ni de ningún cálculo por orden
   // de ronda.
   function _rivalDesconocido(p, clubId, datos) {
-    var esLocalP = p.local === clubId || p.local === "sel-" + clubId;
+    var esLocalP = p.local === clubId || p.local === _selIdDeClub(clubId);
     var rival = buscarEquipoPorId(esLocalP ? p.visitante : p.local, datos);
     return !!(rival && rival.desconocido);
   }
@@ -1647,8 +1669,39 @@
   var _ALIAS_CLUBES_HUMANOS = {
     liverpool: ["liverpool", "lfc"],
     "real-madrid": ["real madrid", "r madrid"],
-    "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"]
+    "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
+    "fc-barcelona": ["fc barcelona", "barcelona", "barca", "f c barcelona"],
+    psg: ["psg", "paris saint germain", "paris saint-germain", "paris sg", "paris"]
   };
+  // v417: clubes HÍBRIDOS — caja humana (Ángel/Izan) pero solo juegan como
+  // humanos las competiciones europeas (el Barça además Liga EA/Copa del
+  // Rey/KAO Cup/Supercopa de España, solo contra otro humano). En el resto
+  // son IA (texto pegado). Su fila de clasificación y las cifras de sus
+  // jugadores SUMAN lo pegado en texto + lo jugado en el calendario.
+  var _CLUBES_HIBRIDOS = { "fc-barcelona": true, psg: true };
+  function _esClubHibrido(id) { return !!_CLUBES_HIBRIDOS[id]; }
+  function _hibridoDeNombre(nombre, equiposHumanos) {
+    return (equiposHumanos || []).filter(function (e) {
+      return _esClubHibrido(e.id) && _liga1RefNombresCoinciden(nombre, e.nombre);
+    })[0] || null;
+  }
+  // Mete la fila del club humano: si es híbrido y su fila del texto ya está
+  // (marcada _hib), se le SUMA lo jugado en el calendario.
+  function _pushFilaHumana(filas, e, propia) {
+    var base = _esClubHibrido(e.id) ? filas.filter(function (f) { return f._hib === e.id; })[0] : null;
+    if (base) {
+      ["pts", "pj", "pe", "pp", "gf", "gc"].forEach(function (k) { base[k] = (base[k] || 0) + (propia[k] || 0); });
+      base.equipoId = e.id;
+      base.nombreMostrado = (e.misterEmoji || "") + e.nombre;
+      return;
+    }
+    filas.push({
+      nombre: e.nombre,
+      nombreMostrado: (e.misterEmoji || "") + e.nombre,
+      equipoId: e.id,
+      pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
+    });
+  }
   function _normSinPuntuacion(s) {
     return _normNombre(s).replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
   }
@@ -1873,7 +1926,8 @@
   // (Ea Sports) y su copa se leen del TEXTO pegado como las de los otros 3
   // — sus partidos de Liga/Copa ya no se suman a mano a la clasificación.
   // Sigue siendo humano en Superliga, Champions, Mundialito, etc.
-  var LIGA1REF_HUMANOS_EXCLUIDOS = [];
+  // v417: el PSG no juega ninguna liga española (su Ligue 1 la juega como IA).
+  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
 
   // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
   // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
@@ -2010,11 +2064,13 @@
     var filas = [];
 
     parsearLiga1RefTexto(texto).forEach(function (f) {
-      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo, nunca el texto
+      var _hibE = _hibridoDeNombre(f.nombre, equiposHumanos);
+      if (!_hibE && _liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo (salvo híbridos: su texto se suma)
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
         pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
       });
+      if (_hibE) filas[filas.length - 1]._hib = _hibE.id;
     });
 
     var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
@@ -2059,12 +2115,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      _pushFilaHumana(filas, e, propia);
     });
 
     filas.sort(function (a, b) {
@@ -2505,12 +2556,12 @@
     filasTexto.forEach(function (it) {
       var key = _normNombre(it.nombre);
       var auto = porNombre[key];
-      if (auto && !_esIdHumano(auto.equipoId)) {
+      if (auto && (!_esIdHumano(auto.equipoId) || _esClubHibrido(auto.equipoId))) {
         // v410: jugador IA que ADEMÁS hizo estadística contra un humano: lo
         // de esos partidos se SUMA a su línea del texto (el texto solo trae
         // sus partidos IA vs IA). Los PJ vs humano se suman en _statFilasConPJ.
         filas.push({ nombre: it.nombre, equipo: it.equipo || auto.equipo, cantidad: it.cantidad + auto.cantidad,
-          pj: it.pj, _iaIdVsHumano: auto.equipoId });
+          pj: it.pj, _iaIdVsHumano: auto.equipoId, equipoId: _esClubHibrido(auto.equipoId) ? auto.equipoId : undefined });
         corregidos[key] = true;
       } else if (auto) {
         // Jugador de equipo HUMANO: la línea del texto es una corrección manual y GANA.
@@ -2536,7 +2587,7 @@
     try {
       // v410: equipo HUMANO → total de partidos jugados en TODAS sus
       // competiciones (sin torneos de verano), petición usuario.
-      if (_esIdHumano(equipoId)) {
+      if (_esIdHumano(equipoId) && !_esClubHibrido(equipoId)) {
         return (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
           return p.jugado && p.competicion !== "verano" && _resolverCompKeyBalon(p.competicion) !== "verano" &&
             (p.local === equipoId || p.visitante === equipoId);
@@ -3742,7 +3793,8 @@
   // foto usuario: bloque "PSG" con su propio cuadro Octavos→Final dentro
   // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
   // humano de fuera de España, su id va aquí también.
-  var COPA_HUMANOS_EXCLUIDOS = [];
+  // v417: el PSG juega su copa francesa como IA, nunca la Copa del Rey.
+  var COPA_HUMANOS_EXCLUIDOS = ["psg"];
 
   function _copaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -5513,7 +5565,8 @@
   // penaltis, con editor"). Sin fase de grupos, sin exclusiones de club.
   // ============================================================
   function _veranoEquiposHumanos(datos) {
-    return datos.equipos.equipos || [];
+    // v417: FC Barcelona y PSG solo son humanos en competiciones europeas.
+    return (datos.equipos.equipos || []).filter(function (e) { return !_esClubHibrido(e.id); });
   }
 
   // Texto EXACTO del ℹ️ del Torneo de Verano — 4 rondas, TODAS a partido
@@ -6195,7 +6248,8 @@
   // editor". Sin fase de grupos, sin exclusiones de club.
   // ============================================================
   function _kaocupEquiposHumanos(datos) {
-    return datos.equipos.equipos || [];
+    // v417: el PSG juega la KAO Cup francesa como IA.
+    return (datos.equipos.equipos || []).filter(function (e) { return e.id !== "psg"; });
   }
 
   // Partidos de KAO Cup de UN club, ordenados por fecha —
@@ -7216,7 +7270,8 @@
   // manchester-city) e Inter juegan su propia supercopa nacional
   // (Supercoupe / Community Shield / Supercoppa, ver
   // renderizarSupercopaPropia) y no salen en este cuadro.
-  var SCE_HUMANOS_EXCLUIDOS = [];
+  // v417: el PSG juega su supercopa francesa como IA.
+  var SCE_HUMANOS_EXCLUIDOS = ["psg"];
   function _sceEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
       return SCE_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
@@ -7781,11 +7836,13 @@
 
     var texto = window.Estado ? window.Estado.obtenerChampionsTexto() : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
-      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo
+      var _hibE = _hibridoDeNombre(f.nombre, equiposHumanos);
+      if (!_hibE && _liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo (salvo híbridos: su texto se suma)
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
         pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
       });
+      if (_hibE) filas[filas.length - 1]._hib = _hibE.id;
     });
 
     var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
@@ -7830,12 +7887,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      _pushFilaHumana(filas, e, propia);
     });
 
     filas.sort(function (a, b) {
@@ -8815,11 +8867,13 @@
 
     var texto = window.Estado ? window.Estado.obtenerUelTexto() : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
-      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo
+      var _hibE = _hibridoDeNombre(f.nombre, equiposHumanos);
+      if (!_hibE && _liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo (salvo híbridos: su texto se suma)
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
         pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
       });
+      if (_hibE) filas[filas.length - 1]._hib = _hibE.id;
     });
 
     var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
@@ -8859,12 +8913,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      _pushFilaHumana(filas, e, propia);
     });
 
     filas.sort(function (a, b) {
@@ -9521,11 +9570,13 @@
 
     var texto = window.Estado ? window.Estado.obtenerUeclTexto() : "";
     parsearLiga1RefTexto(texto).forEach(function (f) {
-      if (_liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo
+      var _hibE = _hibridoDeNombre(f.nombre, equiposHumanos);
+      if (!_hibE && _liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo (salvo híbridos: su texto se suma)
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
         pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
       });
+      if (_hibE) filas[filas.length - 1]._hib = _hibE.id;
     });
 
     var todosPartidos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
@@ -9565,12 +9616,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      _pushFilaHumana(filas, e, propia);
     });
 
     filas.sort(function (a, b) {
@@ -10235,7 +10281,7 @@
 
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _nationsIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -10342,12 +10388,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -11052,12 +11093,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una club humana que aparece en el texto pero aún no tiene partidos
@@ -11634,7 +11670,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _roadeurocopaIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -11723,12 +11759,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -12303,7 +12334,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _eurocopaIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -12392,12 +12423,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -12973,7 +12999,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _roadmundialIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -13062,12 +13088,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -13643,7 +13664,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _mundialselIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -13732,12 +13753,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -14315,7 +14331,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _roadamericaIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -14404,12 +14420,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -14978,7 +14989,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _roadafricaIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -15067,12 +15078,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -15641,7 +15647,7 @@
   }
   // id de la selección del club activo (para marcar "TÚ" en tablas y filas).
   function _roadasiaIdActivo(idClubActivo) {
-    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? "sel-" + idClubActivo : idClubActivo;
+    return idClubActivo && SELECCIONES_HUMANAS_POR_CLUB[idClubActivo] ? _selIdDeClub(idClubActivo) : idClubActivo;
   }
 
   // Zona por posición DENTRO de su grupo: 1º → directo a Octavos (🟦), 2º → opta a
@@ -15730,12 +15736,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo.filas.push({
-        nombre: e.nombre,
-        nombreMostrado: (e.misterEmoji || "") + e.nombre,
-        equipoId: e.id,
-        pts: propia.pts, pj: propia.pj, pe: propia.pe, pp: propia.pp, gf: propia.gf, gc: propia.gc
-      });
+      grupo._pushFilaHumana(filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -16307,7 +16308,8 @@
   // en el generador de partidos — si algún día se cambia esta lista, hay
   // que tocar LOS DOS SITIOS (aquí decide quién sale en la tabla/stats,
   // allí decide contra quién se generan los 15 partidos de cada club).
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
+  // v417: FC Barcelona y PSG no juegan la Superliga (solo Europa).
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["fc-barcelona", "psg"];
 
   function _superligaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -17400,7 +17402,7 @@
   // final) = Liga Oro.
   function _rankMultNations(clubId, datos, rk) {
     try {
-      var eSel = buscarEquipoPorId("sel-" + clubId, datos) || buscarEquipoPorId(clubId, datos);
+      var eSel = buscarEquipoPorId(_selIdDeClub(clubId), datos) || buscarEquipoPorId(clubId, datos);
       var divH = eSel ? _nationsDivDeHumano(eSel) : null;
       if (divH) return divH === "oro" ? 4.0 : (divH === "plata" ? 2.0 : 1.0);
     } catch (err0) { /* sigue con el criterio antiguo */ }
@@ -18387,7 +18389,7 @@
     // Partido de la SELECCIÓN del club (Nations Cup): el lado "activo" es
     // "sel-<clubId>", no el club.
     var idLado = idActivo;
-    if (partido.local === "sel-" + idActivo || partido.visitante === "sel-" + idActivo) idLado = "sel-" + idActivo;
+    if (partido.local === _selIdDeClub(idActivo) || partido.visitante === _selIdDeClub(idActivo)) idLado = _selIdDeClub(idActivo);
     var esLocal = partido.local === idLado;
     var rivalId = esLocal ? partido.visitante : partido.local;
     var rival = buscarEquipoPorId(rivalId, datos);
@@ -19366,7 +19368,7 @@
   function _resolverGestionadoYRival(local, visitante, contexto) {
     var managedId = contexto && contexto.equipo ? contexto.equipo.id : null;
     // Partido de la SELECCIÓN del club activo ("sel-<clubId>").
-    if (visitante.id === managedId || (managedId && visitante.id === "sel-" + managedId)) return { managed: visitante, rival: local };
+    if (visitante.id === managedId || (managedId && visitante.id === _selIdDeClub(managedId))) return { managed: visitante, rival: local };
     return { managed: local, rival: visitante }; // default: cubre el caso normal + cualquier id inesperado
   }
 
@@ -21448,7 +21450,7 @@
     tituloEl.innerHTML =
       "👕 " +
       '<button type="button" class="plantilla-titulo-btn' + (enSel ? "" : " plantilla-titulo-btn--activo") + '" data-accion="plantilla-cambiar-vista" data-club-id="' + escapeHTML(clubBase) + '">' + escapeHTML(nombreClub) + "</button>" +
-      '<button type="button" class="plantilla-titulo-btn plantilla-titulo-btn--sel' + (enSel ? " plantilla-titulo-btn--activo" : "") + '" data-accion="plantilla-cambiar-vista" data-club-id="sel-' + escapeHTML(clubBase) + '">' +
+      '<button type="button" class="plantilla-titulo-btn plantilla-titulo-btn--sel' + (enSel ? " plantilla-titulo-btn--activo" : "") + '" data-accion="plantilla-cambiar-vista" data-club-id="' + escapeHTML(_selIdDeClub(clubBase)) + '">' +
       def.bandera + " " + escapeHTML(def.nombre.toUpperCase()) + "</button>";
   }
 

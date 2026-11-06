@@ -168,6 +168,44 @@
   // lista (p. ej. lo borró el admin desde el Stadium Hub), cae al algoritmo
   // correlativo de siempre. La IA nunca tiene estadioId, así que sigue
   // resolviendo igual que hasta ahora.
+  // v430 (petición usuario): sedes por competición. `sedes` = estadios donde
+  // se reparten los partidos (por hash del id, siempre el mismo para el
+  // mismo partido); `final` = sede fija de la FINAL. Sin entrada (o sin
+  // sedes en una ronda que no es final) → estadio del equipo local.
+  var _EUR9 = ["wembley", "emirates-stadium", "old-trafford", "signal-iduna-park", "johan-cruijff-arena", "stadio-olimpico", "spotify-camp-nou", "san-siro", "giuseppe-meazza"];
+  var _SEDES_COMP = {
+    eurocopa: { sedes: _EUR9.slice(1), final: "wembley" },
+    copaamerica: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "stadio-orione", "estadio-del-nuevo-triunfo"], final: "efootball-stadium" },
+    copaasia: { sedes: ["san-siro", "giuseppe-meazza", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo", "rose-park-stadium"], final: "efootball-stadium" },
+    copaafrica: { sedes: ["stadio-olimpico", "estadio-do-escorpiao", "burg-stadion", "coliseo-de-los-deportes", "sports-park", "estadio-del-martingal"], final: "efootball-stadium" },
+    copa: { final: "spotify-camp-nou" },
+    kaocup: { final: "spotify-camp-nou" },
+    supercopa: { sedes: ["new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo"], final: "efootball-stadium" },
+    champions: { final: "wembley" },
+    uel: { final: "old-trafford" },
+    uecl: { final: "emirates-stadium" },
+    usc: { sedes: _EUR9, final: "efootball-stadium" },
+    recopa: { final: "stadio-olimpico" },
+    intercontinental: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo"], final: "efootball-stadium" },
+    mundialito: { sedes: ["estadio-do-escorpiao", "coliseo-de-los-deportes", "rose-park-stadium", "new-balance-arena", "stadio-orione", "estadio-del-nuevo-triunfo", "estadio-del-martingal", "sports-park"], final: "efootball-stadium" },
+    superekao: { final: "efootball-stadium" }
+  };
+  function _estadioPorId(id) {
+    return (_estadiosLista || []).find(function (e) { return e.id === id; }) || null;
+  }
+  function obtenerEstadioDePartido(partido, local) {
+    var cfg = partido && _SEDES_COMP[_resolverCompKeyBalon(partido.competicion)];
+    if (cfg) {
+      var esFinal = /\bfinal\b/.test(_normNombre(partido.ronda || "")) && !/\bvuelta\b|\bida\b/.test(_normNombre(partido.ronda || ""));
+      if (esFinal && cfg.final && _estadioPorId(cfg.final)) return _estadioPorId(cfg.final);
+      if (!esFinal && cfg.sedes && cfg.sedes.length) {
+        var validas = cfg.sedes.map(_estadioPorId).filter(Boolean);
+        if (validas.length) return validas[_hashStr(String(partido.id || "")) % validas.length];
+      }
+    }
+    return obtenerEstadioDelEquipo(local);
+  }
+
   function obtenerEstadioDelEquipo(equipo) {
     if (equipo && equipo.estadioId && _estadiosLista && _estadiosLista.length) {
       var fijo = _estadiosLista.find(function (e) { return e.id === equipo.estadioId; });
@@ -344,6 +382,11 @@
     "road copa america": "roadamerica", "road america": "roadamerica", roadamerica: "roadamerica",
     "road copa africa": "roadafrica", "road africa": "roadafrica", roadafrica: "roadafrica",
     "road copa asia": "roadasia", "road copa asia-oceania": "roadasia", "road copa asia oceania": "roadasia", "road asia": "roadasia", roadasia: "roadasia",
+    "copa america": "copaamerica", copaamerica: "copaamerica",
+    "copa asia": "copaasia", "copa asia-oceania": "copaasia", "copa asia oceania": "copaasia", copaasia: "copaasia",
+    "copa africa": "copaafrica", copaafrica: "copaafrica",
+    seltorneos: "seltorneos", "torneo de selecciones": "seltorneos",
+    superkao: "superekao", "superkao cup": "superekao", "super kao": "superekao", "super kao cup": "superekao",
     recopa: "recopa", "recopa de europa": "recopa",
     usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc", "supercopa europa": "usc",
     kaocup: "kaocup", "kao cup": "kaocup", "kao-cup": "kaocup", "copa kao": "kaocup", "kao copa": "kaocup",
@@ -20021,7 +20064,7 @@
 
     var clima = calcularClimaParaPartido(partido, totalJornadas, inicioMs, finMs, local, visitante);
     var balon = resolverBalonPartido(partido.competicion, clima, datos.balones, partido.liga);
-    var estadio = obtenerEstadioDelEquipo(local);
+    var estadio = obtenerEstadioDePartido(partido, local);
 
     var ov = document.getElementById("previa-overlay");
     if (!ov) return;
@@ -23269,6 +23312,8 @@
   window.Renderizadores = {
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
     obtenerEstadioDelEquipo: obtenerEstadioDelEquipo,
+    obtenerEstadioDePartido: obtenerEstadioDePartido,
+    resolverBalonPartido: resolverBalonPartido,
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
     renderizarInicioEquipos: renderizarInicioEquipos,
     pintarTemporada: pintarTemporada,

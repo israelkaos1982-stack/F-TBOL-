@@ -1247,7 +1247,7 @@
   // dentro de data/equipos.json en el momento de este fix, así que
   // excluirlo aquí NO reindexa a ningún otro club (0-6 se quedan tal
   // cual) y no rompe ningún "superliga-i-j-leg" ya jugado.
-  var SUPERLIGA_HUMANOS_EXCLUIDOS = ["fc-barcelona", "psg"];
+  var SUPERLIGA_HUMANOS_EXCLUIDOS = [];
 
   // Localía FIJA por pareja (i<j, índices dentro de datos.equipos.equipos):
   // con 6 clubes, cada índice se enfrenta a los otros 5 y siempre termina
@@ -1731,8 +1731,8 @@
   // competiciones europeas (el Barça además Liga EA/Copa del Rey/KAO Cup/
   // Supercopa de España, solo contra otro humano). Sin selección.
   var MENU_CLUB_EXCLUIDOS_POR_CLUB = {
-    "fc-barcelona": { superliga: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
-    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, superliga: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
+    "fc-barcelona": { verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
+    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
   };
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia

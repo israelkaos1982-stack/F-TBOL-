@@ -2105,9 +2105,25 @@
   // esto lleva la MISMA regla a las filas reales para que nunca
   // vuelvan a divergir (bug 2ª REF: 6º en marrón, 7º-10º en rojo, sin
   // ninguna zona de descenso real a la que apuntar).
+  // v416 — formato de las categorías de España (petición usuario):
+  //  Hypermotion (22): 1º-2º suben directos · 3º-6º promoción · 19º-22º bajan
+  //  1ª RFEF (grupos de 20): 1º sube directo · 2º-5º promoción · 16º-20º bajan
+  //  2ª RFEF (grupos de 18): 1º sube directo · 2º-5º promoción · no baja nadie
+  var _PIRAMIDE_ZONAS = {
+    hypermotion: { directos: 2, promoHasta: 6, bajan: 4 },
+    "1ref": { directos: 1, promoHasta: 5, bajan: 5 },
+    "2ref": { directos: 1, promoHasta: 5, bajan: 0 }
+  };
   function _liga1RefZonaFn(ligaId) {
+    var cfg = _PIRAMIDE_ZONAS[ligaId];
     var tieneAbajo = LIGA_NAV_ORDEN.indexOf(ligaId) > 0;
     return function (pos, total) {
+      if (cfg) {
+        if (pos <= cfg.directos) return "ascenso";
+        if (pos <= cfg.promoHasta) return "promo-ascenso";
+        if (cfg.bajan && total && pos > total - cfg.bajan && pos > cfg.promoHasta) return "descenso";
+        return "";
+      }
       var z = _liga1RefZona(pos, total);
       if (!tieneAbajo && (z === "promo-descenso" || z === "descenso")) return "";
       return z;
@@ -2928,33 +2944,6 @@
   // El texto EXACTO del ℹ️ de 1ª REF (petición usuario, verbatim). Las
   // otras 3 (2ª REF/Hypermotion/Ea Sports) tienen el suyo propio más
   // abajo (FORMATO_LIGA_EXTRA_TEXTO).
-  var FORMATO_LIGA_1REF_TEXTO = [
-    "📋FORMATO LIGA:",
-    "Liga regular corta de 16 equipos a vuelta única (15 jornadas cada club)",
-    "",
-    " * Duración: 15 jornadas por equipo a partido único.",
-    " * Reparto de localía: Cada club juega 7 u 8 partidos como local y 7 u 8 como visitante.",
-    "",
-    "⚖️CRITERIOS DE DESEMPATE:",
-    "(Aplicados en estricto orden de prioridad en caso de igualdad de puntos)",
-    " * Puntos totales.",
-    " * Mayor diferencia de goles general (Goles marcados menos goles encajados).",
-    " * Mayor cantidad de goles marcados.",
-    " * Menor cantidad de goles encajados.",
-    " * Resultado del partido directo entre los equipos involucrados.",
-    "",
-    "🏁RESOLUCIÓN CLASIFICACIÓN:",
-    " 🟦 Puestos 1º al 4º: Ascenso directo a Liga Hypermotion.",
-    "",
-    " 🟨Puesto 5º: Promoción de ascenso en eliminatoria a ida y vuelta contra el 12º clasificado de Liga Hypermotion.",
-    "",
-    " ⬜️Puestos 6º al 11º: Permanencia asegurada en la categoría sin disputar fases adicionales.",
-    "",
-    "🟫 Puesto 12º: Promoción de permanencia en eliminatoria a ida y vuelta contra el 5º clasificado de 2ª RFEF.",
-    "",
-    "🟥 Puestos 13º al 16º: Descenso directo a 2ª RFEF."
-  ].join("\n");
-
   // Bloque de desempate compartido por 2ª REF/Hypermotion/Ea Sports
   // (mismo criterio que ya llevaba 1ª REF) — sin duplicarlo 3 veces.
   var FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO = [
@@ -2967,6 +2956,23 @@
     " * Resultado del partido directo entre los equipos involucrados."
   ].join("\n");
 
+  var FORMATO_LIGA_1REF_TEXTO = [
+    "📋FORMATO 1ª RFEF:",
+    "40 equipos en 2 grupos de 20, ida y vuelta, 38 jornadas.",
+    "",
+    FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
+    "",
+    "🏁RESOLUCIÓN CLASIFICACIÓN (en cada grupo):",
+    " 🟦 1º: Ascenso directo a Liga Hypermotion (2 equipos).",
+    "",
+    " 🟨 2º al 5º: Promoción de ascenso (8 equipos). Se ordenan por puesto y puntos y juega el mejor contra el peor: 1ª ronda 4 eliminatorias, 2ª ronda 2 eliminatorias. Suben los 2 ganadores.",
+    "",
+    " 🟥 16º al 20º: Descenso a 2ª RFEF (10 equipos).",
+    "",
+    "Total que suben: 4."
+  ].join("\n");
+
+
   // 2ª REF/Hypermotion/Ea Sports — clasificación de texto libre pegada
   // por el admin (petición usuario: dictar también sus reglas de
   // ascenso/descenso, antes solo 1ª REF tenía ℹ️). Mismas 4 zonas que
@@ -2975,38 +2981,38 @@
   // uno distinto según lo que pegue el admin).
   var FORMATO_LIGA_EXTRA_TEXTO = {
     "2ref": [
-      "📋FORMATO LIGA 2ª REF:",
-      "Clasificación de texto libre pegada por el admin.",
+      "📋FORMATO 2ª RFEF:",
+      "90 equipos en 5 grupos de 18, ida y vuelta, 34 jornadas.",
       "",
       FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
       "",
-      "🏁RESOLUCIÓN CLASIFICACIÓN:",
-      " 🟦 Puestos 1º al 4º: Ascenso directo a Liga 1ª REF.",
+      "🏁RESOLUCIÓN CLASIFICACIÓN (en cada grupo):",
+      " 🟦 1º: Ascenso directo a 1ª RFEF (5 equipos).",
       "",
-      " 🟨 Puesto 5º: Promoción de ascenso en eliminatoria contra Liga 1ª REF.",
+      " 🟨 2º al 5º: Promoción de ascenso (20 equipos). Se ordenan por puesto y puntos y juega el mejor contra el peor: 1ª ronda 10 eliminatorias, 2ª ronda 5 eliminatorias. Suben los 5 ganadores.",
       "",
-      " ⬜️ Resto de puestos: Permanencia asegurada en la categoría."
+      " ⬜️ No baja nadie (es la última categoría).",
+      "",
+      "Total que suben: 10."
     ].join("\n"),
     hypermotion: [
-      "📋FORMATO LIGA HYPERMOTION:",
-      "Clasificación de texto libre pegada por el admin.",
+      "📋FORMATO LALIGA HYPERMOTION:",
+      "22 equipos, ida y vuelta, 42 jornadas.",
       "",
       FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
       "",
       "🏁RESOLUCIÓN CLASIFICACIÓN:",
-      " 🟦 Puestos 1º al 4º: Ascenso directo a Liga Ea Sports.",
+      " 🟦 1º y 2º: Ascenso directo a Liga EA Sports.",
       "",
-      " 🟨 Puesto 5º: Promoción de ascenso en eliminatoria contra Liga Ea Sports.",
+      " 🟨 3º al 6º: Promoción de ascenso (semifinales 3º-6º y 4º-5º, final entre los ganadores). Sube 1.",
       "",
-      " ⬜️ Puestos intermedios: Permanencia asegurada en la categoría.",
+      " 🟥 19º al 22º: Descenso a 1ª RFEF.",
       "",
-      " 🟫 Penúltimo grupo de descenso: Promoción de permanencia en eliminatoria contra Liga 1ª REF.",
-      "",
-      " 🟥 Últimos clasificados: Descenso directo a Liga 1ª REF."
+      "Total que suben: 3."
     ].join("\n"),
     easports: [
       "📋FORMATO LIGA EA SPORTS:",
-      "Clasificación de texto libre pegada por el admin.",
+      "20 equipos, ida y vuelta, 38 jornadas.",
       "",
       FORMATO_LIGA_EXTRA_DESEMPATE_TEXTO,
       "",
@@ -3019,9 +3025,7 @@
       "",
       " 🟩 Puesto 8º: Conference League.",
       "",
-      " 🟫 Penúltimo grupo de descenso: Promoción de permanencia en eliminatoria contra Liga Hypermotion.",
-      "",
-      " 🟥 Últimos clasificados: Descenso directo a Liga Hypermotion."
+      " 🟥 18º, 19º y 20º: Descenso a Liga Hypermotion."
     ].join("\n"),
     ligue1: [
       "📋FORMATO LIGUE 1:",
@@ -3182,9 +3186,9 @@
       // a la liga de ARRIBA en la pirámide; Promoción descenso/Descenso
       // a la de ABAJO. 2ª REF (la más baja) no tiene liga debajo, así
       // que sus 2 filas de descenso no se pintan (abajo === "").
-      var zP = _ligaZonaPosiciones(_liga1RefZona, total);
-      if (arriba && zP.ascenso) items.push({ e: "🟦", t: "Ascenso" + subeTxt });
-      if (arriba && zP["promo-ascenso"]) items.push({ e: "🟨", t: "Promoción ascenso" + subeTxt });
+      var zP = _ligaZonaPosiciones(_liga1RefZonaFn(ligaId), total);
+      if (arriba && zP.ascenso) items.push({ e: "🟦", t: "Ascenso directo" + subeTxt });
+      if (arriba && zP["promo-ascenso"]) items.push({ e: "🟨", t: "Promoción de ascenso" + subeTxt });
       if (abajo && zP["promo-descenso"]) items.push({ e: "🟫", t: "Promoción descenso" + bajaTxt });
       if (abajo && zP.descenso) items.push({ e: "🟥", t: "Descenso" + bajaTxt });
     }
@@ -3220,7 +3224,8 @@
     // descensoN=4 (petición usuario): con 20 equipos, 17º-20º (4) bajan
     // directos y el 16º juega la promoción de permanencia — antes eran
     // solo 3 descensos directos (18º-20º) con el 17º en promoción.
-    easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: true, descensoN: 4 },
+    // v416 (petición usuario): bajan 3 directos a Hypermotion (18º-20º), sin promoción de permanencia.
+    easports: { champions: 4, previa: 5, eleagueHasta: 7, conference: 8, promoDescenso: false, descensoN: 3 },
     ligue1: { champions: 3, previa: 4, eleagueHasta: 6, conference: 7, promoDescenso: false, descensoN: 4 },
     // Premier League / Serie A (2026-09-25): 20 equipos, 3 descensos
     // directos (real, sin promoción de permanencia en ninguna de las 2).
@@ -12041,7 +12046,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);
@@ -12712,7 +12717,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _eurocopaAppendStatsGrid(contenedor, idClubActivo);
@@ -13380,7 +13385,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _roadmundialAppendStatsGrid(contenedor, idClubActivo);
@@ -14053,7 +14058,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _mundialselAppendStatsGrid(contenedor, idClubActivo);
@@ -14722,7 +14727,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _roadamericaAppendStatsGrid(contenedor, idClubActivo);
@@ -15385,7 +15390,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _roadafricaAppendStatsGrid(contenedor, idClubActivo);
@@ -16048,7 +16053,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML(_nationsLeyendaHTML()));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
     }
 
     _roadasiaAppendStatsGrid(contenedor, idClubActivo);

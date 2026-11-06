@@ -5562,9 +5562,12 @@ button { font-family: inherit; cursor: pointer; }
 
 /* v422 — Calendario: barra fija 🌍 GLOBAL / 👥 HUMANOS arriba del todo */
 .cal-filtro-barra {
-  position: sticky; top: 0; z-index: 6;
+  /* v425: FIJA bajo la cabecera del club (también fixed), así nunca se
+     esconde detrás de ella aunque el móvil desplace la pantalla. */
+  position: fixed; top: var(--club-header-h, 62px); left: 0; right: 0; z-index: 9;
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  padding: 8px 4px; margin: 0 0 8px;
+  padding: 8px 10px; margin: 0;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
   background: linear-gradient(180deg, rgba(6, 18, 51, 0.97), rgba(6, 18, 51, 0.88));
   backdrop-filter: blur(4px);
 }
@@ -5586,3 +5589,5 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 120px; line-height: 1; opacity: 0.09; filter: grayscale(0.2);
   z-index: -1; pointer-events: none;
 }
+
+#calendar-content.cal-con-filtro { padding-top: 66px; }

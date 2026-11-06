@@ -18432,6 +18432,7 @@
   }
   function _calFiltroAplicar(contenedor) {
     var f = _calFiltroActual();
+    contenedor.classList.add("cal-con-filtro");
     contenedor.classList.toggle("cal-solo-humanos", f === "humanos");
     Array.prototype.forEach.call(contenedor.querySelectorAll(".cal-filtro-btn"), function (b) {
       b.classList.toggle("cal-filtro-btn--activo", b.getAttribute("data-filtro") === f);

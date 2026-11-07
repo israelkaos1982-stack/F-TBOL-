@@ -3490,6 +3490,14 @@
         case "editar-ranking-club": editarRankingClub(d.clubId); break;
         case "guardar-ranking-club": guardarRankingClub(d.clubId); break;
         case "cancelar-ranking": cancelarRanking(d.clubId); break;
+        case "ranking-desglose-toggle": {
+          var sigD = accionBtn.nextElementSibling;
+          if (sigD && sigD.classList.contains("ranking-fila-desglose")) {
+            sigD.hidden = !sigD.hidden;
+            accionBtn.classList.toggle("ranking-fila--abierta", !sigD.hidden);
+          }
+          break;
+        }
         case "ranking-tab-ir": if (window.Renderizadores) window.Renderizadores.irRankingTab(d.clubId, d.tab); break;
         case "editar-derbys-inline": editarDerbysInline(d.clubId); break;
         case "guardar-derbys": guardarDerbys(d.clubId); break;

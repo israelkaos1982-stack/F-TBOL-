@@ -18221,6 +18221,7 @@
     var fila = filaDe[clubId] || null;
     var objetivo = (typeof cfg.objetivo === "number" && !isNaN(cfg.objetivo)) ? cfg.objetivo : null;
     return {
+      tipo: tipo,
       filas: filas,
       nombre: nombreDe[clubId] || "",
       fila: fila,
@@ -18292,12 +18293,24 @@
       var cols = f.texto.split(/\t| {2,}/);
       var nombre = cols[0], extra = cols.slice(1).join(" ");
       var propia = est.fila === f;
+      var conDesglose = !!(f.humano && f.hid && f.bonus);
       html +=
-        '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") + '">' +
+        '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") +
+        (conDesglose ? ' ranking-fila--toca" data-accion="ranking-desglose-toggle' : "") + '">' +
         '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
         (f.bonus ? ' <span class="ranking-fila-bonus">(+' + _fmtPts(f.bonus) + ")</span>" : "") + "</span></div>";
+      // v453: tocar un club humano despliega DE DÓNDE salen sus puntos extra
+      // (petición usuario: "¿por qué el PSG tiene +180?").
+      if (conDesglose) {
+        var desg = _rankingDesgloseHTML({
+          fila: f,
+          comp: _rankingPuntosComp(est.tipo, f.hid),
+          bonusObj: _rankingBonusObjetivos(est.tipo, f.hid)
+        }, (_rankingNombresClub[f.hid] || nombre));
+        if (desg) html += '<div class="ranking-fila-desglose" hidden>' + desg + "</div>";
+      }
       if (!marcaPuesta && i === ultimaConPuesto) {
         marcaPuesta = true;
         html += '<div class="ranking-meta">🎯 OBJETIVO: puesto ' + est.objetivo + "</div>";
@@ -18307,9 +18320,10 @@
   }
 
   // Desglose de los puntos que se suman al club en la pestaña activa.
-  function _rankingDesgloseHTML(est) {
+  function _rankingDesgloseHTML(est, nombreClub) {
     if (!est.fila || !(est.comp.filas.length || est.bonusObj)) return "";
-    var html = '<div class="ranking-desglose"><div class="ranking-desglose-tit">🧮 Puntos de mi club</div>';
+    var html = '<div class="ranking-desglose"><div class="ranking-desglose-tit">🧮 ' +
+      (nombreClub ? "Puntos extra de " + escapeHTML(nombreClub) : "Puntos de mi club") + "</div>";
     est.comp.filas.forEach(function (f) {
       html += '<div class="ranking-desglose-fila"><span class="ranking-desglose-nom">' + escapeHTML(f.nombre) +
         ' <span class="ranking-desglose-txt">' + escapeHTML(f.txt) + '</span></span>' +

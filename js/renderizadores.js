@@ -19764,7 +19764,7 @@
   // una eliminatoria a doble partido).
   var FINALES_ACTIVADAS_COMPS = {
     copa: true, supercopa: true, champions: true, uel: true, uecl: true,
-    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true, nations: true
+    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true, nations: true, eurocopa: true, mundialsel: true, copaamerica: true, copaasia: true, copaafrica: true
   };
   function _esFinalDeTorneo(partido) {
     if (!partido.competicion || !FINALES_ACTIVADAS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
@@ -19802,10 +19802,16 @@
       // v432 (petición usuario): Nations Cup = divisiones de LIGA. Solo los
       // Playoffs de Oro son eliminatoria: semis a ida y vuelta SIN prórroga
       // y la FINAL, la única con prórroga y penaltis.
-      if (_resolverCompKeyBalon(partido.competicion) === "nations") {
+      // v434: lo mismo para TODOS los torneos de selecciones (Roads,
+      // Eurocopa, Mundial...): las jornadas de grupo son de LIGA; solo las
+      // rondas de cuadro (Octavos/Cuartos/Semis/Final/Repesca) son
+      // eliminatoria.
+      var ckSel = _resolverCompKeyBalon(partido.competicion);
+      if (ckSel === "nations" || _SEL_COMPS_GRUPOS[ckSel] || ckSel === "copaamerica" || ckSel === "copaasia" || ckSel === "copaafrica" || ckSel === "seltorneos") {
         var rondaN = _normNombre(partido.ronda || "");
-        if (/\bfinal\b/.test(rondaN) && !/\bida\b|\bvuelta\b/.test(rondaN)) return "eliminatoria-unica";
-        return _faseIdaVuelta(partido) ? "ida-vuelta" : "liga";
+        if (_faseIdaVuelta(partido)) return "ida-vuelta";
+        if (/dieciseisavos|octavos|cuartos|semi|\bfinal\b|repesca|play-?offs?|eliminatoria/.test(rondaN)) return "eliminatoria-unica";
+        return "liga";
       }
     }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
@@ -19837,6 +19843,32 @@
       '<span class="live-acta-auto-motivo"> — ' + escapeHTML(entrada.motivo) + "</span></span></div>"
     );
   }
+  // v434 (petición usuario): en la previa de un partido de la SELECCIÓN,
+  // lesionados/sancionados (y su "+ Añadir") son los de la SELECCIÓN, nunca
+  // los del club que la dirige — son plantillas y listas separadas.
+  function _idHumanoPrevia() {
+    var m = window._idManagerActivo;
+    var p = _previaPartidoActual;
+    if (m && p) {
+      var sel = _selIdDeClub(_idClubDeEquipoId(m));
+      if (sel && (p.local === sel || p.visitante === sel)) return sel;
+    }
+    return m;
+  }
+  // Orden del partido de la previa DENTRO del calendario de ese humano
+  // (el de la selección tiene su propio orden, distinto del del club).
+  function _ordenPrevia() {
+    var p = _previaPartidoActual;
+    if (!p) return 0;
+    var id = _idHumanoPrevia();
+    if (id && id !== window._idManagerActivo && _ultimoContexto && _ultimoContexto.datos) {
+      try {
+        var hit = _partidosOrdenadosDelClub(id, _ultimoContexto.datos).filter(function (q) { return q.id === p.id; })[0];
+        if (hit && typeof hit._ordenClub === "number") return hit._ordenClub;
+      } catch (err) { /* cae al orden del club */ }
+    }
+    return p._ordenClub || 0;
+  }
   function _renderListaJugadores(tipo, contId, vacioTxt) {
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !window.Estado) return;
@@ -19844,8 +19876,8 @@
     // abierta (rango desde/hasta, ver estado.js) — no la lista entera
     // del club, que puede incluir lesiones/sanciones ya cerradas antes
     // de este partido o que todavía no empezaban en su momento.
-    var orden = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
-    var lista = window.Estado.obtenerListaJugadoresActivosPara(window._idManagerActivo, tipo, orden);
+    var orden = _ordenPrevia();
+    var lista = window.Estado.obtenerListaJugadoresActivosPara(_idHumanoPrevia(), tipo, orden);
     var htmlManual = lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("");
     // Sancionados AUTOMÁTICOS por tarjetas (roja/doble amarilla/ciclo de
     // 3) — se calculan SIEMPRE, además de lo que el admin haya añadido a
@@ -19855,7 +19887,7 @@
     if (tipo === "sancionados" && _ultimoContexto && _ultimoContexto.datos) {
       var nombresManual = {};
       lista.forEach(function (e) { nombresManual[_normNombre(e.nombre)] = true; });
-      var autos = calcularSancionadosAutomaticosPara(window._idManagerActivo, orden, _ultimoContexto.datos);
+      var autos = calcularSancionadosAutomaticosPara(_idHumanoPrevia(), orden, _ultimoContexto.datos);
       htmlAuto = autos
         .filter(function (a) { return !nombresManual[_normNombre(a.nombre)]; })
         .map(_filaJugadorListaAuto)
@@ -20321,6 +20353,21 @@
 
     var estilo = getComputedStyle(nodo);
     var esCirculo = nodo.classList.contains("escudo--ia");
+
+    // v434: selecciones — la bandera (emoji) dibujada a mano rellenando el
+    // círculo; html2canvas la dejaba como un círculo negro vacío.
+    if (nodo.classList.contains("escudo--bandera")) {
+      var emo = nodo.querySelector(".escudo-bandera-emoji");
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, Math.min(w, h) / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = Math.round(Math.min(w, h) * 1.35) + 'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+      ctx.fillText(emo ? emo.textContent : "", w / 2, h / 2 + Math.min(w, h) * 0.06);
+      return lienzo;
+    }
 
     if (nodo.classList.contains("escudo--chapa")) {
       _dibujarChapaEnCanvas(ctx, w, h, nodo, estilo);
@@ -22259,7 +22306,7 @@
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !_ultimoContexto) return;
 
-    var jugadores = obtenerJugadoresClub(window._idManagerActivo);
+    var jugadores = obtenerJugadoresClub(_idHumanoPrevia());
     if (!jugadores.length) {
       window.alert("Este club todavía no tiene plantilla. Pégala desde ✏️ Editar menú → 👕 Plantilla.");
       return;
@@ -22273,9 +22320,9 @@
         if (window._idManagerActivo && window.Estado) {
           // Lesionados dura ESE partido + el siguiente; Sancionados solo el
           // partido para el que se añade (ver estado.js::agregarJugadorALista).
-          var ordenAlta = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+          var ordenAlta = _ordenPrevia();
           var hastaAlta = ordenAlta + (tipoLista === "lesionados" ? 2 : 1);
-          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoLista, jug.nombre, ordenAlta, hastaAlta);
+          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoLista, jug.nombre, ordenAlta, hastaAlta);
         }
         renderListasJugadores();
       }
@@ -23048,9 +23095,9 @@
           // calcularSancionadosAutomaticosPara), así que "+ Añadir" aquí
           // queda para el caso excepcional del admin, nunca para el uso
           // normal.
-          var ordenAlta = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
+          var ordenAlta = _ordenPrevia();
           var hastaAlta = ordenAlta + (tipoPicker === "lesionados" ? 2 : 1);
-          window.Estado.agregarJugadorALista(window._idManagerActivo, tipoPicker, nombreElegido, ordenAlta, hastaAlta);
+          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoPicker, nombreElegido, ordenAlta, hastaAlta);
         }
       }
       renderListasJugadores();
@@ -23068,8 +23115,8 @@
           // Se cierra desde el partido cuya previa está abierta ahora —
           // los partidos ANTERIORES a este (ya jugados o no) lo siguen
           // mostrando lesionado/sancionado; este y los siguientes, no.
-          var ordenBaja = _previaPartidoActual ? _previaPartidoActual._ordenClub : 0;
-          window.Estado.quitarJugadorDeLista(window._idManagerActivo, tipoDel, entradaIdDel, ordenBaja);
+          var ordenBaja = _ordenPrevia();
+          window.Estado.quitarJugadorDeLista(_idHumanoPrevia(), tipoDel, entradaIdDel, ordenBaja);
           renderListasJugadores();
         }, "🔒 Quitar de la lista", "Solo el administrador puede quitar lesionados/sancionados.");
       }

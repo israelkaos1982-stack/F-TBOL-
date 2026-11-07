@@ -22449,6 +22449,25 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l || l.charAt(0) === "#") return;
+      // v438 (petición usuario): formato pegado "1. Jugador · Equipo ·
+      // [País ·] goles · MVP · imbatidas · zamora · club · pts". Los 6
+      // últimos campos son números (los Pts vienen ya calculados); delante,
+      // jugador, equipo y (opcional) país. Las líneas de cabecera (🏆 BALÓN
+      // DE ORO…, 👟 BOTA…, 🏅 GOLDEN…) no tienen esa forma y se ignoran.
+      var mNum = l.match(/^\d+\s*[.)]\s*(.+)$/);
+      if (mNum && mNum[1].indexOf("·") !== -1) {
+        var ps = mNum[1].split("·").map(function (x) { return x.trim(); });
+        if (ps.length < 8) return;
+        var nums = ps.slice(-6), textos = ps.slice(0, ps.length - 6);
+        var pts = _numGolden(nums[5]);
+        out.push({
+          jugador: textos[0] || "", equipo: textos[1] || "", pais: textos[2] || "",
+          gol: _numGolden(nums[0]), mvp: _numGolden(nums[1]), imb: _numGolden(nums[2]), zam: _numGolden(nums[3]),
+          club: _numGolden(nums[4]), pts: pts
+        });
+        return;
+      }
+      if (/·/.test(l)) return; // cabeceras "🏆 BALÓN DE ORO: … · …"
       var partes = /[;|\t]/.test(l) ? l.split(/[;|\t]/) : l.split(",");
       partes = partes.map(function (x) { return x.trim(); });
       if (!partes[0]) return;
@@ -22502,23 +22521,24 @@
     var filas = top.map(function (j, i) {
       return '<tr data-busca="' + escapeHTML(_normNombre(j.jugador + " " + j.equipo)) + '">' +
         '<td class="golden-pos">' + (i + 1) + "</td>" +
-        '<td class="golden-jug"><b>' + escapeHTML(j.jugador) + "</b><small>" + escapeHTML(j.equipo) + "</small></td>" +
+        '<td class="golden-jug"><b>' + escapeHTML(j.jugador) + "</b><small>" + escapeHTML(j.equipo + (j.pais ? " · " + j.pais : "")) + "</small></td>" +
         "<td>" + _fmtGolden(j.gol) + "</td><td>" + _fmtGolden(j.mvp) + "</td><td>" + _fmtGolden(j.imb) + "</td>" +
         "<td>" + _fmtGolden(j.zam) + "</td><td>" + _fmtGolden(j.club) + '</td><td class="golden-pts">' + _fmtGolden(j.pts) + "</td></tr>";
     }).join("");
 
-    contenedor.innerHTML =
-      '<div class="liga1ref-header"><span class="liga1ref-leyenda-mini">Salen del texto de jugadores</span>' +
-      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-golden" aria-label="Editar golden">✏️</button></div>' +
-      (modo
-        ? '<div class="trofeo-of-par trofeo-of-par--uno">' + (esBota ? _golderCardHTML(null, "bota", bota) : _golderCardHTML(null, "balon", balon)) + "</div>"
-        : '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>") +
-      '<p class="titulos-bloque-titulo golden-titulo">' + (esBota ? "👟 BOTA DE ORO · 50 MÁXIMOS GOLEADORES" : "🏅 GOLDEN · 50 MEJORES DEL AÑO") + '</p>' +
-      '<p class="golden-regla">Suma de todas las competiciones (cada una con su valor): ⚽ gol 1 · ⭐ MVP 1,5 · 🧤 portería a cero 0,5 · 🥇 Zamora 10 × coef. del país · 🏟️ (puntos del club + ½ de su selección) ÷ 40 (solo lo cobra quien haya sumado algo por sí mismo). <a href="#" data-accion="ver-como-se-puntua">ℹ️ Cómo se puntúa</a></p>' +
-      (jugadores.length
-        ? '<input type="search" class="golden-buscar" id="golden-buscar" placeholder="🔍 Buscar jugador o equipo…">' +
-          '<div class="golden-scroll"><table class="golden-tabla"><thead><tr><th>Nº</th><th>Jugador</th><th>⚽</th><th>⭐</th><th>🧤</th><th>🥇</th><th>🏟️</th><th>Pts</th></tr></thead><tbody>' + filas + "</tbody></table></div>"
-        : '<div class="club-modal-proximamente">Pulsa ✏️ y pega una línea por jugador:<br><b>Jugador; Equipo; goles; MVP; imbatidas; zamora; puntos del club; puntos de su selección</b></div>');
+    var lapiz = '<button type="button" class="liga1ref-editar-btn" data-accion="editar-golden" aria-label="Editar golden">✏️</button>';
+    var tabla = jugadores.length
+      ? '<input type="search" class="golden-buscar" id="golden-buscar" placeholder="🔍 Buscar jugador o equipo…">' +
+        '<div class="golden-scroll"><table class="golden-tabla"><thead><tr><th>Nº</th><th>Jugador</th><th>⚽</th><th>⭐</th><th>🧤</th><th>🥇</th><th>🏟️</th><th>Pts</th></tr></thead><tbody>' + filas + "</tbody></table></div>"
+      : '<div class="club-modal-proximamente">Pulsa ✏️ y pega la lista: una línea por jugador<br><b>1. Jugador · Equipo · goles · MVP · imbatidas · zamora · club · pts</b></div>';
+    // v438 (petición usuario): en Títulos Temporada (cajas Bota/Balón Oro)
+    // solo la tabla — sin texto de cabecera, sin tarjeta grande y sin la
+    // explicación de puntos; el ✏️ queda discreto abajo a la derecha.
+    contenedor.innerHTML = modo
+      ? tabla + '<div class="golden-editar-final">' + lapiz + "</div>"
+      : '<div class="liga1ref-header"><span class="liga1ref-leyenda-mini">Salen del texto de jugadores</span>' + lapiz + "</div>" +
+        '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>" +
+        '<p class="titulos-bloque-titulo golden-titulo">🏅 GOLDEN · 50 MEJORES DEL AÑO</p>' + tabla;
 
     var inp = document.getElementById("golden-buscar");
     if (inp) inp.addEventListener("input", function () {

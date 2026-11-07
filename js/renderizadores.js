@@ -14,7 +14,8 @@
     partidos: "data/partidos.json",
     rivalesReales: "data/rivales_reales.json",
     titulos: "data/titulos.json",
-    seleccionesIA: "data/selecciones_ia.json" // 3.5 KB: nivel + colores de las selecciones IA
+    seleccionesIA: "data/selecciones_ia.json", // 3.5 KB: nivel + colores de las selecciones IA
+    aliasIA: "data/alias_ia.json" // v441: alias eFootball de los equipos IA de las 44 ligas europeas
   };
 
   // Rango de valoracionPoder (correlativo con data/estadios.json) por liga —
@@ -59,6 +60,7 @@
   }
 
   var _estadiosLista = null; // caché síncrona para obtenerEstadioCorrelativoAjustado
+  var _aliasIAMap = {}; // v441: data/alias_ia.json normalizado
   var _rivalesAltMap = null; // nombre alternativo normalizado (ej. "club brujas") -> ficha
   var _seleccionesIAMap = {}; // clave normalizada -> [nivel, color1, color2, (color3)] (data/selecciones_ia.json)
   var _rivalesRealesMap = null; // caché síncrona clave normalizada -> ficha, para resolverRivalPorNombre
@@ -74,7 +76,8 @@
       cargarJSON(DATA_URLS.partidos),
       cargarJSON(DATA_URLS.rivalesReales),
       cargarJSON(DATA_URLS.titulos),
-      cargarJSON(DATA_URLS.seleccionesIA).catch(function () { return {}; })
+      cargarJSON(DATA_URLS.seleccionesIA).catch(function () { return {}; }),
+      cargarJSON(DATA_URLS.aliasIA).catch(function () { return {}; })
     ]).then(function (r) {
       _seleccionesIAMap = r[7] || {};
       // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
@@ -101,6 +104,13 @@
         rivalesReales: r[5],
         titulos: r[6]
       };
+      // v441: alias eFootball de fábrica (clave de rival o nombre normalizado -> alias).
+      _aliasIAMap = {};
+      Object.keys(r[8] || {}).forEach(function (ka) {
+        var va = r[8][ka]; if (!va) return;
+        _aliasIAMap[_normNombre(ka)] = va;
+        _aliasIAMap[_normSinPuntuacion(ka)] = va;
+      });
       _estadiosLista = datos.estadios.estadios || [];
       // v410: ids de los equipos HUMANOS (club y su selección "sel-<id>").
       _humanosIdsSet = {};
@@ -20081,7 +20091,20 @@
   // para heredar la MISMA tolerancia a erratas que ya usan escudo/
   // colores/poder — un club real resuelve igual esté como esté escrito.
   function _aliasEfootballDefault(clave) {
-    var r = clave && _buscarRivalReal(clave);
+    if (!clave) return "";
+    // v441: lista de alias de las 44 ligas europeas (data/alias_ia.json).
+    // Primero por nombre exacto; si no, por la ficha real del rival
+    // (misma tolerancia a grafías que escudo/poder) y sus otros nombres.
+    var a = _aliasIAMap[clave] || _aliasIAMap[_normSinPuntuacion(clave)];
+    if (a) return a;
+    var r = _buscarRivalReal(clave);
+    if (r) {
+      var noms = [r.clave, r.nombre].concat(r.nombresAlt || []);
+      for (var i = 0; i < noms.length; i++) {
+        var k = noms[i] && (_aliasIAMap[_normNombre(noms[i])] || _aliasIAMap[_normSinPuntuacion(noms[i])]);
+        if (k) return k;
+      }
+    }
     return (r && r.alias) || "";
   }
   function _previaAliasHTML(equipo, lado) {
@@ -23768,6 +23791,7 @@
     htmlIdaGlobalDeIda: _htmlIdaGlobalDeIda,
     clasificacionDePartido: _clasificacionDePartido,
     clasificacionTrasResultado: _clasificacionTrasResultado,
+    aliasEfootballDefault: _aliasEfootballDefault,
     htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,
     cargarTodo: cargarTodo,

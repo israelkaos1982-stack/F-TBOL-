@@ -451,6 +451,8 @@
   function _resolverCompKeyBalon(compKeyCrudo) {
     var norm = _normCompKey(compKeyCrudo || "");
     if (_BALON_COMP_ALIAS.hasOwnProperty(norm)) return _BALON_COMP_ALIAS[norm];
+    // v446: "Nations Cup · Liga Plata" / "Nations Cup - Oro"… = Nations Cup.
+    if (/^(nations( cup| league)?|liga de naciones)\b/.test(norm)) return "nations";
     // v443: cualquier TROFEO de pretemporada ("Trofeo Carranza", "T. Carranza",
     // "☀️ ...", "Trofeo Joan Gamper"...) es Torneo de Verano — sin tener que
     // dar de alta cada nombre nuevo a mano.

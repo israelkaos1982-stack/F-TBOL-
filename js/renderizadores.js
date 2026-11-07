@@ -450,7 +450,12 @@
   }
   function _resolverCompKeyBalon(compKeyCrudo) {
     var norm = _normCompKey(compKeyCrudo || "");
-    return _BALON_COMP_ALIAS.hasOwnProperty(norm) ? _BALON_COMP_ALIAS[norm] : compKeyCrudo;
+    if (_BALON_COMP_ALIAS.hasOwnProperty(norm)) return _BALON_COMP_ALIAS[norm];
+    // v443: cualquier TROFEO de pretemporada ("Trofeo Carranza", "T. Carranza",
+    // "☀️ ...", "Trofeo Joan Gamper"...) es Torneo de Verano — sin tener que
+    // dar de alta cada nombre nuevo a mano.
+    if (/\u2600/.test(String(compKeyCrudo || "")) || /^(trofeo|t\.?)\s+\S/.test(norm)) return "verano";
+    return compKeyCrudo;
   }
 
   // `ligaActualPartido` (opcional) = `partido.liga` ("LIGA_1RFEF"/
@@ -1936,9 +1941,12 @@
   // aunque el admin escriba su nombre por error ahí (se ignora).
   function parsearLiga1RefTexto(texto) {
     var items = [];
+    var grupoActual = null; // v443: "1ª RFEF · Grupo A" -> las filas siguientes son del grupo A
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
+      var mG = /\bgrupo\s+([a-z0-9]+)\s*$/i.exec(l);
+      if (mG && !/\d+\s+\d+\s+\d+\s*$/.test(l)) { grupoActual = mG[1].toUpperCase(); return; }
       var tokens = l.split(/\s+/);
       if (tokens.length < 7) return; // Nombre + al menos 6 números
 
@@ -1964,10 +1972,49 @@
       items.push({
         nombre: nombre,
         pts: numeros[0], pj: numeros[1], pe: numeros[2], pp: numeros[3],
-        gf: numeros[4], gc: numeros[5]
+        gf: numeros[4], gc: numeros[5],
+        grupo: grupoActual
       });
     });
     return items;
+  }
+
+  // v443: clasificaciones con GRUPOS (1ª RFEF: 2 de 20; 2ª RFEF: 5 de 18).
+  // Ordena primero por grupo (orden del texto) y dentro por Pts/DG/GF —
+  // la lista sigue siendo plana, pero cada grupo queda seguido.
+  function _ordenarFilasPorGrupo(filas) {
+    var orden = {}, letras = [];
+    filas.forEach(function (f) { if (f.grupo && letras.indexOf(f.grupo) < 0) letras.push(f.grupo); });
+    if (letras.length < 2) return filas;
+    letras.sort(function (x, y) { return x.localeCompare(y, undefined, { numeric: true }); });
+    letras.forEach(function (g, i) { orden[g] = i; });
+    var primero = letras[0];
+    filas.forEach(function (f) { if (!f.grupo) f.grupo = primero; });
+    filas.sort(function (a, b) {
+      if (orden[a.grupo] !== orden[b.grupo]) return orden[a.grupo] - orden[b.grupo];
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return filas;
+  }
+  // Posición/total DENTRO del grupo de la fila i (o de toda la tabla si no hay grupos).
+  function _posEnGrupo(filas, i) {
+    var g = filas[i] && filas[i].grupo;
+    if (!g) return { pos: i + 1, total: filas.length };
+    var del = filas.filter(function (f) { return f.grupo === g; });
+    return { pos: del.indexOf(filas[i]) + 1, total: del.length, grupo: g };
+  }
+  // Grupos en orden: [{grupo, filas}] (uno solo, grupo null, si no hay grupos).
+  function _gruposDeFilas(filas) {
+    var out = [];
+    filas.forEach(function (f) {
+      var g = f.grupo || null, ult = out[out.length - 1];
+      if (!ult || ult.grupo !== g) out.push({ grupo: g, filas: [f] }); else ult.filas.push(f);
+    });
+    return out.length > 1 ? out : [{ grupo: null, filas: filas }];
   }
 
   // PSG no juega en la pirámide española (2ª REF/1ª REF/Hypermotion/Ea
@@ -2123,7 +2170,7 @@
       if (!_hibE && _liga1RefEsNombreHumano(f.nombre, equiposHumanos)) return; // su fila la aporta el bloque de abajo (salvo híbridos: su texto se suma)
       filas.push({
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
-        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc, grupo: f.grupo
       });
       if (_hibE) filas[filas.length - 1]._hib = _hibE.id;
     });
@@ -2147,6 +2194,7 @@
       });
 
       var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
+      var cuentaGrupos = {};
 
       partidos.forEach(function (p) {
         var esLocal = p.local === e.id;
@@ -2168,9 +2216,13 @@
           filas.push(destino);
         }
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
+        if (destino.grupo) cuentaGrupos[destino.grupo] = (cuentaGrupos[destino.grupo] || 0) + 1;
       });
 
       _pushFilaHumana(filas, e, propia);
+      var gHum = Object.keys(cuentaGrupos).sort(function (a, b) { return cuentaGrupos[b] - cuentaGrupos[a]; })[0];
+      var filaHum = filas.filter(function (f) { return f.equipoId === e.id; })[0];
+      if (filaHum && !filaHum.grupo && gHum) filaHum.grupo = gHum;
     });
 
     filas.sort(function (a, b) {
@@ -2180,7 +2232,7 @@
       if (b.gf !== a.gf) return b.gf - a.gf;
       return a.nombre.localeCompare(b.nombre);
     });
-    return filas;
+    return _ordenarFilasPorGrupo(filas);
   }
 
   function calcularLiga1RefCombinada(datos) {
@@ -3394,7 +3446,7 @@
     var filas = parsearLiga1RefTexto(texto).map(function (f) {
       return {
         nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
-        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc, grupo: f.grupo
       };
     });
     filas.sort(function (a, b) {
@@ -3404,7 +3456,7 @@
       if (b.gf !== a.gf) return b.gf - a.gf;
       return a.nombre.localeCompare(b.nombre);
     });
-    return filas;
+    return _ordenarFilasPorGrupo(filas);
   }
 
   // Liga EXTRA cuyo ÚNICO club humano SÍ la juega DE VERDAD dentro de la
@@ -3624,17 +3676,27 @@
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ para añadirla."));
       } else {
-        var wrap = document.createElement("div");
-        wrap.className = "clasificacion-wrap";
-        var tablaEl = document.createElement("table");
-        tablaEl.className = "clasificacion-tabla liga1ref-tabla";
-        tablaEl.innerHTML =
-          "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-          "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
-        tablaEl.appendChild(_construirTbodyClasificacion(filas, idClubActivo, zonaFn));
-        wrap.appendChild(tablaEl);
-        contenedor.appendChild(wrap);
-        contenedor.insertAdjacentHTML("beforeend", _ligaLeyendaHTML(ligaId, filas.length));
+        // v443: una tabla POR GRUPO (1ª RFEF 2×20, 2ª RFEF 5×18) cuando el texto los trae.
+        var gruposTabla = _gruposDeFilas(filas);
+        gruposTabla.forEach(function (gt) {
+          if (gt.grupo) {
+            var hG = document.createElement("div");
+            hG.className = "liga-grupo-titulo";
+            hG.textContent = "Grupo " + gt.grupo;
+            contenedor.appendChild(hG);
+          }
+          var wrap = document.createElement("div");
+          wrap.className = "clasificacion-wrap";
+          var tablaEl = document.createElement("table");
+          tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+          tablaEl.innerHTML =
+            "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+            "<th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead>";
+          tablaEl.appendChild(_construirTbodyClasificacion(gt.filas, idClubActivo, zonaFn));
+          wrap.appendChild(tablaEl);
+          contenedor.appendChild(wrap);
+        });
+        contenedor.insertAdjacentHTML("beforeend", _ligaLeyendaHTML(ligaId, gruposTabla[0].filas.length));
       }
 
       contenedor.appendChild(nodoSeparador());
@@ -19716,7 +19778,7 @@
       for (var i = 0; i < filas.length; i++) {
         var f = filas[i];
         if ((f.equipoId && f.equipoId === equipo.id) || (!f.equipoId && _liga1RefNombresCoinciden(f.nombre, equipo.nombre))) {
-          return { pos: i + 1, pts: f.pts, pj: f.pj, pg: f.pj - f.pe - f.pp };
+          return { pos: _posEnGrupo(filas, i).pos, pts: f.pts, pj: f.pj, pg: f.pj - f.pe - f.pp };
         }
       }
       return null;
@@ -21546,7 +21608,8 @@
         if (filas[k].equipoId === clubId) {
           var meta = LIGA_NAV_META[ligaId] || {};
           var esEspanola = !meta.chip;
-          return { emoji: esEspanola ? "🇪🇸" : meta.chip, nombre: meta.corta || "Liga", pos: k + 1, total: filas.length, ligaId: ligaId, pj: Number(filas[k].pj) || 0 };
+          var pg = _posEnGrupo(filas, k);
+          return { emoji: esEspanola ? "🇪🇸" : meta.chip, nombre: meta.corta || "Liga", pos: pg.pos, total: pg.total, ligaId: ligaId, pj: Number(filas[k].pj) || 0 };
         }
       }
     }

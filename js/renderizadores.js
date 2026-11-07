@@ -22441,8 +22441,9 @@
     return isNaN(n) ? 0 : n;
   }
   function _fmtGolden(n) {
-    var r = Math.round(n * 10) / 10;
-    return String(r).replace(".", ",");
+    // v439 (petición usuario): sin decimales, redondeado hacia arriba
+    // (34,5 -> 35 · 150,7 -> 151) para ahorrar espacio en la tabla.
+    return String(Math.ceil((Number(n) || 0) - 1e-9));
   }
   function parsearGolden(texto) {
     var out = [];

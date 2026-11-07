@@ -17325,7 +17325,7 @@
   // cifra grande a la derecha.
   function _ttPremioValorHTML(v) {
     if (!v) return '<span class="tt-premio-valor">—</span>';
-    var partes = String(v).split(/\s+[-–·]\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var partes = String(v).split(/\s+[-–·]\s*|\s*[-–·]\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
     var num = "";
     if (partes.length > 1 && /^[+-]?\d+(?:[.,]\d+)?$/.test(partes[partes.length - 1])) num = partes.pop();
     var jugador = partes.shift() || "", equipo = partes.join(" · ");

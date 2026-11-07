@@ -73,6 +73,13 @@ def main(sel, *otros):
     out = {"_meta": {
         "descripcion": "Plantillas REALES de equipos IA (5 mejores por club/seleccion; 11 titulares en Liga EA Sports/Hypermotion). Solo las lee js/acta.js cuando un humano juega contra una IA (carga perezosa, jamás se sincroniza ni se guarda en localStorage). Regenerar con tools/generar_plantillas_ia.py.",
         "codigos": "P=POR D=DEF M=MED L=DEL", "a": "alias: nombre del equipo en el juego (normalizado) -> clave de c"}, "c": {}, "s": {}, "a": {}}
+    # FUSIÓN: se parte del JSON existente para no perder equipos que no vengan en los textos nuevos
+    # (1ª/2ª RFEF, selecciones de fuera de Europa, alias manuales). Lo nuevo sustituye a lo viejo.
+    try:
+        prev = json.load(open("data/plantillas_ia.json", encoding="utf-8"))
+        for k in "csa": out[k].update(prev.get(k, {}))
+    except Exception:
+        pass
     for e in parsear(sel):
         if e["j"]: out["s"][norm(e["n"])] = codificar(e["j"])
     for ruta in otros:

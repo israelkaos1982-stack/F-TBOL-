@@ -19099,6 +19099,7 @@
 
     card.innerHTML =
       (esSiguiente ? _pinProximoHTML() : "") +
+      (esHumanoVsHumano ? '<span class="match-card-hvh-ico" title="Humano vs Humano">🤝</span>' : "") + // v461
       (mostrarPospuestoBtn ? _pospuestoIconoHTML(partido) : "") +
       (mostrarResetBtn ? _resetPartidoIconoHTML(partido) : "") +
       '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(etiquetaCompTexto) + "</div>" +

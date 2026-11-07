@@ -18080,9 +18080,13 @@
     if (/espana|liga|copa|supercopa|hypermotion|1 ref|primera/.test(n)) return "espana";
     return null;
   }
-  // "5 pt" -> 5 · "20K" -> 20000
+  // "5 pt" -> 5. v454: SOLO cuentan las recompensas en PUNTOS ("5 pt",
+  // "10 pts", "8 puntos"); "20K" / "300" son MONEDAS 🪙 del objetivo y no
+  // suman al Ranking (el PSG salía con +76.180 al marcar sus objetivos).
   function _objetivoPuntos(recompensa) {
-    var m = String(recompensa || "").match(/(\d[\d.,]*)\s*(k)?/i);
+    var r = String(recompensa || "");
+    if (!/\d\s*(pt|pts|puntos?)\b/i.test(r)) return 0;
+    var m = r.match(/(\d[\d.,]*)\s*(k)?/i);
     if (!m) return 0;
     var v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
     if (isNaN(v)) return 0;
@@ -18364,6 +18368,15 @@
       '<div class="ranking-lista">' +
       _rankingListaHTML(_rankingEstado(_rankingTabActual, idClubActivo)) + "</div>";
     contenedor.appendChild(tabsHost);
+    // v454: la caja de la pestaña elegida se queda VISIBLE (la fila de cajas
+    // tiene scroll horizontal y se quedaba siempre en ESPAÑA).
+    try {
+      var cajasR = tabsHost.querySelector(".ranking-cards");
+      var activaR = tabsHost.querySelector(".ranking-card--activa");
+      if (cajasR && activaR) {
+        cajasR.scrollLeft = Math.max(0, activaR.getBoundingClientRect().left - cajasR.getBoundingClientRect().left + cajasR.scrollLeft - (cajasR.clientWidth - activaR.offsetWidth) / 2);
+      }
+    } catch (errS) { /* sin scroll */ }
 
     // Los puntos por competición necesitan cargar los datos: se calculan en
     // segundo plano y, si cambian, se repinta UNA vez.

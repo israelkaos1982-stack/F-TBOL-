@@ -3078,8 +3078,18 @@
   // PROPIO compKey exclusivo, así que basta comparar `p.competicion`
   // (normalizado, por si quedó sin alias y llegó con la grafía cruda
   // tal cual la tecleó el admin — "2ª REF"/"2ª ref"/etc).
+  // v460: «Liga EA Sports - 1ª Jornada - …» del Calendario extra resuelve al
+  // compKey legacy "liga" (alias de _BALON_COMP_ALIAS, mantiene la card roja
+  // y su balón), pero la tabla EA Sports busca "ea sports" — el Racing 1-2
+  // Atlético (Liga J1) no sumaba ni a la clasificación ni a las estadísticas.
+  function _esLigaEaCruda(p) {
+    var n = _normNombre(p && p._competicionCruda || "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+    return /^(liga )?ea( sports)?$/.test(n);
+  }
   function _partidoPerteneceADivision(p, e, compKeyEsperado) {
-    if (compKeyEsperado === "liga") return p.competicion === "liga" && p.liga === e.ligaActual;
+    var esEa = p.competicion === "liga" && _esLigaEaCruda(p);
+    if (compKeyEsperado === "liga") return p.competicion === "liga" && !esEa && (!e || p.liga === e.ligaActual);
+    if (esEa) return compKeyEsperado === _compKeyEsperadoParaDivision("easports");
     return _normNombre(p.competicion) === compKeyEsperado;
   }
 
@@ -22327,7 +22337,13 @@
         var mayorDerrota = null; // { p, margen } — margen < 0 (derrota)
         if (window.Estado) {
           window.Estado.listarPartidosResueltos(datos).forEach(function (p) {
-            if (p.competicion === "superliga" || !p.jugado || !p.resultado) return;
+            // v460 (petición usuario): la Superliga SÍ cuenta para J/G/E/P y
+            // Mayor goleada/derrota (no para las estadísticas de los jugadores);
+            // los Torneos de Verano NO cuentan para nada de la plantilla.
+            if (_resolverCompKeyBalon(p.competicion) === "verano" || !p.jugado || !p.resultado) return;
+            // Cruces de Superliga AUTO-GENERADOS (superliga-i-j-leg): el mismo
+            // partido ya está en el calendario del club — no contarlo 2 veces.
+            if (p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id)) return;
             var esLocal = p.local === idEquipoHumanoActivo;
             if (!esLocal && p.visitante !== idEquipoHumanoActivo) return;
             totalesEquipo.pj++;

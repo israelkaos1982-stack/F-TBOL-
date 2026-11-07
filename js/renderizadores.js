@@ -23375,7 +23375,8 @@
         );
         if (!ok) return;
         window.Main.pedirPinAdmin(function () {
-          window.Estado.reiniciarResultadoPartido(idReiniciar, descPartido);
+          var okR = window.Estado.reiniciarResultadoPartido(idReiniciar, descPartido, partidoAReiniciar, _ultimoContexto.datos);
+          if (!okR) window.alert("⚠️ No se encontró ningún resultado guardado que reiniciar para este partido.");
           if (window._idManagerActivo) generarCalendarioLateralDerecho(window._idManagerActivo);
         }, "🔒 Reiniciar partido", "Solo el administrador puede reiniciar un partido ya jugado.");
       }

@@ -2944,6 +2944,20 @@
     if (!window.Estado.guardarTitulosTemporadaTexto(textoFinal)) return;
     window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
   }
+  // v448: Equipo del Año (pestaña de Títulos Temporada)
+  function editarEquipoAno() {
+    if (!window.Renderizadores) return;
+    abrirCandado(ADMIN_PASSWORD, function () {
+      var cont = document.getElementById("titulos-temporada-content");
+      if (cont) window.Renderizadores.pintarEditorEquipoAno(cont);
+    }, "🔒 Editar Equipo del Año", "Introduce el PIN de administrador.");
+  }
+  function guardarEquipoAno() {
+    var ta = document.getElementById("equipo-ano-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    if (!window.Estado.guardarEquipoAnoTexto(ta.value)) return;
+    window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
+  }
   function cancelarTitulosTemporada() {
     if (window.Renderizadores) window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
   }
@@ -3454,6 +3468,9 @@
         case "titulos-temporada-tab": if (window.Renderizadores) window.Renderizadores.irTitulosTemporadaTab(d.tab); break;
         case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
         case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;
+        case "editar-equipo-ano": editarEquipoAno(); break;
+        case "guardar-equipo-ano": guardarEquipoAno(); break;
+        case "cancelar-equipo-ano": cancelarTitulosTemporada(); break;
         case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;
         case "guardar-objetivos": guardarObjetivos(d.clubId); break;
         case "cancelar-objetivos": cancelarObjetivos(d.clubId); break;

@@ -5824,3 +5824,20 @@ button { font-family: inherit; cursor: pointer; }
 /* v450 — "CAMPEÓN" más grande y brillante; cifras de premios más pequeñas */
 .tt-campeon-label { font-size: 15px; letter-spacing: 1.5px; color: #ffe27a; text-shadow: 0 0 6px rgba(255, 210, 74, 0.9), 0 0 14px rgba(255, 190, 40, 0.6); }
 .tt-premio-num { font-size: 16px; }
+
+/* v451 — Escudos pegados a PREVIA (local a la derecha, visitante a la izquierda),
+   nombres un tamaño menos y halo blanco a los escudos en cards con fondo rojo. */
+#screen-club .match-card-team--local > :first-child { justify-self: end; margin-right: 6px; }
+#screen-club .match-card-team--visitante > :first-child { justify-self: start; margin-left: 6px; }
+#screen-club .match-card-nombre { font-size: 13.5px; }
+.match-card.comp-liga .escudo--real img[src*="liverpool" i],
+.match-card.comp-copa .escudo--real img[src*="liverpool" i],
+.match-card.match-card--siguiente .escudo--real img,
+.match-card.comp-liga .escudo--real img[src*="arsenal" i] {
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 7px rgba(255,255,255,0.7)) !important;
+}
+.match-card.comp-liga .escudo--real img[src*="liverpool" i],
+.match-card.comp-copa .escudo--real img[src*="liverpool" i],
+.match-card.match-card--siguiente .escudo--real img {
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 8px rgba(255,255,255,0.8)) !important;
+}

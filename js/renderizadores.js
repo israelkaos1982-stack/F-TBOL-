@@ -625,7 +625,11 @@
   // Resuelve el nombre de una selección escrito en el Calendario extra de la
   // Nations Cup: una selección humana (Francia, España...) -> su equipo "sel-*";
   // cualquier otra -> selección IA con bandera.
+  // v451: otras grafías de una misma selección -> su nombre canónico.
+  var _SEL_ALIAS_NOMBRE = { "macedonia norte": "Macedonia del Norte", "macedonia": "Macedonia del Norte", "n. macedonia": "Macedonia del Norte", "macedonia n.": "Macedonia del Norte" };
   function resolverSeleccionPorNombre(nombre, datos) {
+    var aliasSel = _SEL_ALIAS_NOMBRE[_normNombre(nombre).replace(/\s+/g, " ")];
+    if (aliasSel) nombre = aliasSel;
     var norm = _normNombre(nombre);
     var humanas = Object.keys(SELECCIONES_HUMANAS);
     for (var i = 0; i < humanas.length; i++) {
@@ -660,7 +664,7 @@
   // v415: bandera (emoji) de cada selección por nombre — su escudo redondo.
   var _PAIS_ISO = (function () {
     var o = {};
-    "alemania:de,austria:at,belgica:be,bielorrusia:by,bosniayherzegovina:ba,bosnia:ba,bulgaria:bg,croacia:hr,chipre:cy,republicacheca:cz,chequia:cz,dinamarca:dk,eslovaquia:sk,eslovenia:si,espana:es,estonia:ee,finlandia:fi,francia:fr,georgia:ge,grecia:gr,hungria:hu,irlanda:ie,islandia:is,israel:il,italia:it,kazajistan:kz,kosovo:xk,letonia:lv,liechtenstein:li,lituania:lt,luxemburgo:lu,macedoniadelnorte:mk,malta:mt,moldavia:md,montenegro:me,noruega:no,paisesbajos:nl,holanda:nl,polonia:pl,portugal:pt,rumania:ro,rusia:ru,sanmarino:sm,serbia:rs,suecia:se,suiza:ch,turquia:tr,ucrania:ua,albania:al,andorra:ad,armenia:am,azerbaiyan:az,gibraltar:gi,islasferoe:fo,irlandadelnorte:gb,ciudaddelvaticano:va,vaticano:va,argentina:ar,brasil:br,uruguay:uy,paraguay:py,chile:cl,peru:pe,bolivia:bo,ecuador:ec,colombia:co,venezuela:ve,mexico:mx,estadosunidos:us,eeuu:us,canada:ca,costarica:cr,panama:pa,honduras:hn,jamaica:jm,haiti:ht,marruecos:ma,argelia:dz,tunez:tn,egipto:eg,senegal:sn,nigeria:ng,ghana:gh,camerun:cm,costademarfil:ci,mali:ml,sudafrica:za,japon:jp,coreadelsur:kr,corea:kr,australia:au,iran:ir,arabiasaudi:sa,qatar:qa,catar:qa,irak:iq,iraq:iq,jordania:jo,emiratosarabesunidos:ae,uzbekistan:uz,china:cn,india:in,nuevazelanda:nz".split(",").forEach(function (p) { var kv = p.split(":"); o[kv[0]] = kv[1]; });
+    "alemania:de,austria:at,belgica:be,bielorrusia:by,bosniayherzegovina:ba,bosnia:ba,bulgaria:bg,croacia:hr,chipre:cy,republicacheca:cz,chequia:cz,dinamarca:dk,eslovaquia:sk,eslovenia:si,espana:es,estonia:ee,finlandia:fi,francia:fr,georgia:ge,grecia:gr,hungria:hu,irlanda:ie,islandia:is,israel:il,italia:it,kazajistan:kz,kosovo:xk,letonia:lv,liechtenstein:li,lituania:lt,luxemburgo:lu,macedoniadelnorte:mk,macedonianorte:mk,macedonia:mk,malta:mt,moldavia:md,montenegro:me,noruega:no,paisesbajos:nl,holanda:nl,polonia:pl,portugal:pt,rumania:ro,rusia:ru,sanmarino:sm,serbia:rs,suecia:se,suiza:ch,turquia:tr,ucrania:ua,albania:al,andorra:ad,armenia:am,azerbaiyan:az,gibraltar:gi,islasferoe:fo,irlandadelnorte:gb,ciudaddelvaticano:va,vaticano:va,argentina:ar,brasil:br,uruguay:uy,paraguay:py,chile:cl,peru:pe,bolivia:bo,ecuador:ec,colombia:co,venezuela:ve,mexico:mx,estadosunidos:us,eeuu:us,canada:ca,costarica:cr,panama:pa,honduras:hn,jamaica:jm,haiti:ht,marruecos:ma,argelia:dz,tunez:tn,egipto:eg,senegal:sn,nigeria:ng,ghana:gh,camerun:cm,costademarfil:ci,mali:ml,sudafrica:za,japon:jp,coreadelsur:kr,corea:kr,australia:au,iran:ir,arabiasaudi:sa,qatar:qa,catar:qa,irak:iq,iraq:iq,jordania:jo,emiratosarabesunidos:ae,uzbekistan:uz,china:cn,india:in,nuevazelanda:nz".split(",").forEach(function (p) { var kv = p.split(":"); o[kv[0]] = kv[1]; });
     return o;
   })();
   var _PAIS_TAG = { inglaterra: "eng", escocia: "sct", gales: "wls" };

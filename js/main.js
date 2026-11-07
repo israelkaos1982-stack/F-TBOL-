@@ -2955,7 +2955,10 @@
   function guardarEquipoAno() {
     var ta = document.getElementById("equipo-ano-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    if (!window.Estado.guardarEquipoAnoTexto(ta.value)) return;
+    var partes = window.Renderizadores.separarTextoTemporadaGolden ? window.Renderizadores.separarTextoTemporadaGolden(ta.value) : { golden: "", equipo: ta.value };
+    // v449: si se pega también el Golden (Balón/Bota de Oro + los 50), va a su sitio.
+    if (partes.equipo && /^\s*\d+\s*[.)].*·/m.test(partes.golden) && window.Estado.guardarGoldenTexto) window.Estado.guardarGoldenTexto(partes.golden);
+    if (!window.Estado.guardarEquipoAnoTexto(partes.equipo || ta.value)) return;
     window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
   }
   function cancelarTitulosTemporada() {
@@ -3460,7 +3463,14 @@
           break;
         case "guardar-golden": {
           var tg = document.getElementById("golden-textarea");
-          if (tg && window.Estado.guardarGoldenTexto(tg.value)) window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista");
+          if (!tg) break;
+          // v449: si viene pegado también el Equipo del Año, se guarda aparte.
+          var partesG = window.Renderizadores.separarTextoTemporadaGolden ? window.Renderizadores.separarTextoTemporadaGolden(tg.value) : { golden: tg.value, equipo: "" };
+          if (partesG.equipo && window.Estado.guardarEquipoAnoTexto) window.Estado.guardarEquipoAnoTexto(partesG.equipo);
+          if (window.Estado.guardarGoldenTexto(partesG.equipo ? partesG.golden : tg.value)) {
+            if (document.getElementById("titulos-temporada-content")) window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
+            else window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista");
+          }
           break;
         }
         case "cancelar-golden": window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista"); break;

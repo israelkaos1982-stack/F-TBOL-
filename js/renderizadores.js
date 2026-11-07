@@ -18798,7 +18798,10 @@
     function esSemiCopa(p) { return _resolverCompKeyBalon(p.competicion) === "copa" && /semi/.test(normRonda(p)); }
     function esDisparador(p) {
       if (_resolverCompKeyBalon(p.competicion) === "copa") return false;
-      return _esSupercopaLike(p.competicion) || /\bfinal\b/.test(normRonda(p));
+      // v442: solo SUPERCOPAS. Antes cualquier "Final" (p.ej. la del Trofeo
+      // Carranza de pretemporada) arrastraba las semis de Copa al principio
+      // del calendario — se respeta el orden que pega el admin.
+      return _esSupercopaLike(p.competicion);
     }
     var idxSemis = [], primeroDisp = -1;
     for (var i = 0; i < lista.length; i++) {
@@ -18840,6 +18843,10 @@
       // "Próximo partido" como los de cualquier otra competición.
       if (p.competicion === "superliga" && _RE_SUPERLIGA_ID.test(p.id)) return false;
       if (p.competicion === "liga") return p.liga === ligaActual;
+      // v442: un cruce humano-vs-humano del Calendario extra que SOLO está en
+      // el texto de OTRO humano (este club ya no lo tiene en el suyo) es de
+      // una temporada pasada: no se muestra en el calendario de este club.
+      if (p._fallbackPorClub && typeof p._fallbackPorClub[clubId] !== "number") return false;
       return true;
     });
     // Posición de cada partido SIN fecha en el texto de ESTE club: un cruce

@@ -17126,17 +17126,15 @@
     { key: "copaamerica", label: "Copa América", tab: "sel", icono: "☀️", sub: _PMZ, color: "#22c55e" },
     { key: "copaasia", label: "Copa Asia", tab: "sel", icono: "🌏", sub: _PMZ, color: "#e11d48" },
     { key: "copaafrica", label: "Copa África", tab: "sel", icono: "🦁", sub: _PMZ, color: "#d97706" },
-    // Ya no salen en ninguna caja, pero se conservan en el texto para no
-    // perder lo que estuviera escrito.
-    { key: "1ref", label: "1ª REF", tab: null, sub: _PMZ, color: "#8bc34a" },
-    { key: "2ref", label: "2ª REF", tab: null, sub: _PMZ, color: "#c98a4a" }
+    { key: "1ref", label: "1ª RFEF", alias: ["1ª REF"], tab: "espana", icono: "🥉", fija: true, sub: _PMZ, color: "#8bc34a" },
+    { key: "2ref", label: "2ª RFEF", alias: ["2ª REF"], tab: "espana", icono: "🔰", fija: true, sub: _PMZ, color: "#c98a4a" }
   ];
   var TITULOS_TEMP_TABS = [
-    { id: "espana", icono: "🇪🇸", label: "Títulos España", c: "#ff3b5c" },
-    { id: "europa", icono: "🇪🇺", label: "Títulos Europa", c: "#3ba7ff" },
-    { id: "sel", icono: "🌐", label: "Títulos Selecciones", c: "#9aad34" },
-    { id: "bota", icono: "👟", label: "Bota de Oro", c: "#ffb020" },
-    { id: "balon", icono: "⚽", label: "Balón de Oro", c: "#ffd24a" }
+    { id: "espana", icono: "🇪🇸", label: "España", c: "#ff3b5c" },
+    { id: "europa", icono: "🇪🇺", label: "Europa", c: "#3ba7ff" },
+    { id: "sel", icono: "🌐", label: "Selecciones", c: "#9aad34" },
+    { id: "bota", icono: "👟", label: "Bota Oro", c: "#ffb020" },
+    { id: "balon", icono: "⚽", label: "Balón Oro", c: "#ffd24a" }
   ];
   var _titulosTempTab = "espana";
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];

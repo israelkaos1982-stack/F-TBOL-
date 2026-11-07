@@ -19764,7 +19764,7 @@
   // una eliminatoria a doble partido).
   var FINALES_ACTIVADAS_COMPS = {
     copa: true, supercopa: true, champions: true, uel: true, uecl: true,
-    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true
+    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true, nations: true
   };
   function _esFinalDeTorneo(partido) {
     if (!partido.competicion || !FINALES_ACTIVADAS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
@@ -19799,6 +19799,13 @@
         return _normNombre(LIGA_NAV_META[ligaId].corta) === compNorm;
       });
       if (esDivisionPiramide) return "liga";
+      // v432 (petición usuario): Nations Cup = divisiones de LIGA. Solo los
+      // Playoffs de Oro son eliminatoria: semis a ida y vuelta SIN prórroga
+      // y la FINAL, la única con prórroga y penaltis.
+      if (_resolverCompKeyBalon(partido.competicion) === "nations") {
+        var rondaN = _normNombre(partido.ronda || "");
+        return (/\bfinal\b/.test(rondaN) && !/\bida\b|\bvuelta\b/.test(rondaN)) ? "eliminatoria-unica" : "liga";
+      }
     }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
     // Fase de grupos de Champions/Europa League/Conference League:

@@ -4546,7 +4546,15 @@
   var BALONES_KEY = "ef7_balones_custom_v1";
   var ESTADIOS_KEY = "ef7_estadios_custom_v1";
 
-  function fusionarBalones(baseBalones) { return _fusionarOverlay(baseBalones, BALONES_KEY); }
+  function fusionarBalones(baseBalones) {
+    // Balones oficiales ya incluidos de serie: un "añadido" a mano con el
+    // MISMO nombre se oculta (no se borra) para no salir repetido.
+    var nombresBase = {};
+    (baseBalones || []).forEach(function (b) { nombresBase[String(b.nombre || "").replace(/\s+/g, " ").trim().toLowerCase()] = true; });
+    return _fusionarOverlay(baseBalones, BALONES_KEY).filter(function (b) {
+      return !(_esIdCustom(b.id) && nombresBase[String(b.nombre || "").replace(/\s+/g, " ").trim().toLowerCase()]);
+    });
+  }
   function fusionarEstadios(baseEstadios) { return _fusionarOverlay(baseEstadios, ESTADIOS_KEY); }
 
   function anadirBalon(nombre) {
@@ -4622,25 +4630,24 @@
       // Sin overlay guardado en este móvil (recién instalado, aún sin sync)
       // no hay nada viejo que limpiar — no se escribe nada, así nunca se
       // sube un overlay vacío que pise lo del servidor.
-      if (!localStorage.getItem(BALON_ASIGNACION_KEY) && !localStorage.getItem(BALONES_KEY)) return;
+      // v432: el catálogo de balones (ef7_balones_custom_v1) NO se toca: el
+      // servidor protege esa clave contra copias "más pequeñas" y avisaba
+      // con un error al quitar el CONEXT duplicado. El duplicado se oculta
+      // al fusionar (_esCustomDuplicadoDeBase) en vez de borrarlo.
+      if (!localStorage.getItem(BALON_ASIGNACION_KEY)) return;
       var ov = _cargarAsignacionOverlay();
       if ((Number(ov._v) || 0) >= _BALON_CATALOGO_V) return;
       var ovB = _cargarOverlay(BALONES_KEY);
       var conextCustom = {};
-      ovB.anadidos = (ovB.anadidos || []).filter(function (b) {
-        var dup = String(b.nombre || "").replace(/\s+/g, " ").trim().toLowerCase() === "conext 26 pro";
-        if (dup) conextCustom[b.id] = true;
-        return !dup;
+      (ovB.anadidos || []).forEach(function (b) {
+        if (String(b.nombre || "").replace(/\s+/g, " ").trim().toLowerCase() === "conext 26 pro") conextCustom[b.id] = true;
       });
-      _BALON_IDS_V2.forEach(function (id) { delete ovB.ediciones[id]; });
-      ovB.eliminados = (ovB.eliminados || []).filter(function (id) { return _BALON_IDS_V2.indexOf(id) === -1; });
       _BALON_COMPS_V2.forEach(function (k) { delete ov[k]; });
       for (var k in ov) {
         if (ov.hasOwnProperty(k) && ov[k] && conextCustom[ov[k].balonId]) ov[k].balonId = "conext-26-pro";
       }
       ov._v = _BALON_CATALOGO_V;
       _guardarAsignacionOverlay(ov);
-      if (localStorage.getItem(BALONES_KEY)) _guardarOverlay(BALONES_KEY, ovB);
     } catch (err) { console.error("[estado] migración balones v2:", err); }
   }
   function fusionarAsignacionBalones(baseAsignacion) {

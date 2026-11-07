@@ -19764,7 +19764,7 @@
   // una eliminatoria a doble partido).
   var FINALES_ACTIVADAS_COMPS = {
     copa: true, supercopa: true, champions: true, uel: true, uecl: true,
-    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true
+    recopa: true, usc: true, intercontinental: true, mundialito: true, verano: true, kaocup: true, superekao: true, nations: true
   };
   function _esFinalDeTorneo(partido) {
     if (!partido.competicion || !FINALES_ACTIVADAS_COMPS[_resolverCompKeyBalon(partido.competicion)]) return false;
@@ -19799,6 +19799,14 @@
         return _normNombre(LIGA_NAV_META[ligaId].corta) === compNorm;
       });
       if (esDivisionPiramide) return "liga";
+      // v432 (petición usuario): Nations Cup = divisiones de LIGA. Solo los
+      // Playoffs de Oro son eliminatoria: semis a ida y vuelta SIN prórroga
+      // y la FINAL, la única con prórroga y penaltis.
+      if (_resolverCompKeyBalon(partido.competicion) === "nations") {
+        var rondaN = _normNombre(partido.ronda || "");
+        if (/\bfinal\b/.test(rondaN) && !/\bida\b|\bvuelta\b/.test(rondaN)) return "eliminatoria-unica";
+        return _faseIdaVuelta(partido) ? "ida-vuelta" : "liga";
+      }
     }
     if (_faseIdaVuelta(partido)) return "ida-vuelta";
     // Fase de grupos de Champions/Europa League/Conference League:
@@ -21622,6 +21630,44 @@
       }
       filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon, compKey: k, rk: r.rk || null });
     });
+    // v433 (petición usuario): una SELECCIÓN muestra SIEMPRE sus
+    // competiciones (Nations Cup con su división, Road Eurocopa,
+    // Eurocopa...) aunque todavía no haya jugado ningún partido.
+    if (_esIdSeleccionHumana(clubId)) {
+      var yaEsta = {};
+      filas.forEach(function (f) { if (f.compKey) yaEsta[f.compKey] = true; });
+      var selEq = buscarEquipoPorId(clubId, datos);
+      var clubBaseC = _idClubDeEquipoId(clubId);
+      Object.keys(_SEL_COMPS_GRUPOS).forEach(function (k) {
+        var ibC = _iconoYNombreCompPlantilla(clubBaseC, k, COMP_LABEL[k] || k);
+        if (k === "nations") {
+          var div = selEq ? _nationsDivDeHumano(selEq) : null;
+          if (!div) return;
+          var meta = _nationsDivMeta(div);
+          var posD = null;
+          parsearNationsGruposTexto(window.Estado.obtenerNationsTexto(div)).some(function (g) {
+            var ix = (g.filas || []).findIndex(function (f) { return _liga1RefNombresCoinciden(f.nombre, selEq.nombre); });
+            if (ix >= 0) { posD = { pos: ix + 1, grupo: g.nombre }; return true; }
+            return false;
+          });
+          var nomN = ibC.nombre + " · " + meta.label;
+          var fN = filas.filter(function (f) { return f.compKey === "nations"; })[0];
+          if (fN) { fN.nombre = nomN; return; }
+          filas.push({ emoji: ibC.emoji, nombre: nomN, estado: posD ? "Fase Grupos · " + _posicionOrdinal(posD.pos) : "Por jugar", compKey: k });
+          return;
+        }
+        if (yaEsta[k]) return;
+        var posG = null;
+        try {
+          _SEL_COMPS_GRUPOS[k](datos).some(function (g) {
+            var ix = (g.filas || []).findIndex(function (f) { return f.equipoId === clubId; });
+            if (ix >= 0) { posG = ix + 1; return true; }
+            return false;
+          });
+        } catch (errS) { posG = null; }
+        if (posG) filas.push({ emoji: ibC.emoji, nombre: ibC.nombre, estado: "Fase Grupos · " + _posicionOrdinal(posG), compKey: k });
+      });
+    }
     return filas;
   }
 
@@ -21671,38 +21717,9 @@
           return;
         }
 
-        // 📌 Corrección MANUAL de estadísticas (candado 646) — arriba a la
-        // derecha de la Plantilla, petición usuario: "donde puedo editar
-        // manualmente cada estadística de cada jugador" para cuando el
-        // cálculo automático no cuadra con partidos que se registraron mal
-        // (o antes de existir la app). Ver parsearStatsOverrideTexto.
-        var pinWrap = document.createElement("div");
-        pinWrap.className = "plantilla-header-acciones";
-        pinWrap.innerHTML =
-          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-stats-plantilla-inline" ' +
-          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Corregir estadísticas a mano">📌</button>' +
-          // 🧮 BASE de temporada (candado 646) — ver
-          // pintarEditorBaseStatsPlantilla/fijarBaseStatsPlantilla: fija el
-          // TOTAL real de cada jugador AHORA y deja que los partidos
-          // nuevos se sigan sumando encima (a diferencia del 📌, que
-          // congela el número para siempre).
-          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-base-stats-plantilla-inline" ' +
-          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Fijar el total real de hoy (los partidos nuevos se siguen sumando encima)">🧮</button>' +
-          // 🔁 Renombres de plantilla (candado 646) — ver
-          // resolverRenombreJugador/pintarEditorRenombresPlantilla: para
-          // cuando un jugador cambia de nombre con el tiempo dentro de la
-          // MISMA plantilla (ej. PSG 2023→2027) y un partido ya jugado se
-          // quedó con el nombre viejo.
-          '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-renombres-plantilla-inline" ' +
-          'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Renombrar jugadores de esta plantilla">🔁</button>';
-        // ✏️ Roster de la selección (PIN) — el cambio club/selección vive en el
-        // título del modal (ver _pintarTituloPlantilla).
-        if (_esIdSeleccionHumana(idEquipoHumanoActivo)) {
-          pinWrap.insertAdjacentHTML("afterbegin",
-            '<button type="button" class="plantilla-stats-pin-btn" data-accion="editar-roster-plantilla-inline" ' +
-            'data-club-id="' + escapeHTML(idEquipoHumanoActivo) + '" title="Pegar/editar la plantilla de la selección">✏️</button>');
-        }
-        contenedor.appendChild(pinWrap);
+        // v433 (petición usuario): sin la barra 📌 🧮 🔁 de arriba (no se
+        // usaba). El ✏️ de la plantilla de la selección va al FINAL de la
+        // pantalla, debajo de Sanciones y Lesiones.
 
         var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
         function statsDe(j) {
@@ -21870,10 +21887,10 @@
         // .plantilla-grupo que separa el resto de bloques de esta pantalla).
         function _lineaMayorPartido(etiqueta, entry) {
           var linea = document.createElement("div");
-          linea.className = "plantilla-mayor-linea";
+          linea.className = "plantilla-mayor-linea" + (etiqueta === "Mayor Goleada" ? " plantilla-mayor-linea--win" : " plantilla-mayor-linea--loss");
           var datosPartido = _textoMayorPartido(entry);
           linea.innerHTML =
-            '<span class="plantilla-mayor-etiqueta">' + etiqueta + ":</span>" +
+            '<span class="plantilla-mayor-etiqueta">' + (etiqueta === "Mayor Goleada" ? "🔥 " : "💔 ") + etiqueta + "</span>" +
             (datosPartido
               ? '<span class="plantilla-mayor-comp">' + datosPartido.cabecera + "</span>" +
                 '<span class="plantilla-mayor-valor">' + datosPartido.marcador + "</span>"
@@ -21972,10 +21989,17 @@
         grupoSanciones.className = "plantilla-grupo plantilla-grupo--total plantilla-grupo--sanciones";
         grupoSanciones.innerHTML =
           '<div class="plantilla-grupo-titulo"><span class="plantilla-grupo-nombre">Sanciones y Lesiones</span></div>' +
-          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🚑</span> Jugador con ⬇️ se pierde ese partido y el siguiente.</div>' +
-          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🟨</span> Acumulación de 3 amarillas se pierde el próximo partido.</div>' +
-          '<div class="plantilla-comp-linea"><span class="plantilla-lider-emoji">🟥</span> 1 Roja se pierde el siguiente partido.</div>';
+          '<div class="plantilla-sancion-linea">🚑 Jugador con ⬇️ se pierde ese partido y el siguiente.</div>' +
+          '<div class="plantilla-sancion-linea">🟨 Acumulación de 3 amarillas se pierde el próximo partido.</div>' +
+          '<div class="plantilla-sancion-linea">🟥 1 Roja se pierde el siguiente partido.</div>';
         frag.appendChild(grupoSanciones);
+        if (_esIdSeleccionHumana(idEquipoHumanoActivo)) {
+          var editSel = document.createElement("div");
+          editSel.className = "plantilla-editar-final";
+          editSel.innerHTML = '<button type="button" class="plantilla-editar-final-btn" data-accion="editar-roster-plantilla-inline" data-club-id="' +
+            escapeHTML(idEquipoHumanoActivo) + '">✏️ Editar plantilla de la selección</button>';
+          frag.appendChild(editSel);
+        }
 
         contenedor.appendChild(frag);
       })

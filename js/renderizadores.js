@@ -21572,8 +21572,23 @@
   // porteros todavía, ese club simplemente no aporta ninguna — nunca se
   // inventa un nombre. Mismo criterio ya usado para la Zamora de Liga
   // 1ª REF (ver _liga1RefPorteroPrincipal, más abajo).
+  // v466 (petición usuario): portero TITULAR fijo de cada club humano — el
+  // que se lleva las porterías imbatidas y la Zamora (antes era el primer
+  // POR por dorsal: J. Musso en vez de Oblak en el Atlético).
+  var _PORTERO_TITULAR_CLUB = {
+    "atletico-madrid": "oblak", "real-madrid": "courtois", "fc-barcelona": "garcia",
+    "liverpool": "alisson", "psg": "safonov"
+  };
   function _porteroPrincipalClub(clubId) {
-    var porteros = obtenerJugadoresClub(clubId).filter(function (j) { return j.posicion === "POR"; });
+    var plantilla = obtenerJugadoresClub(clubId);
+    var porteros = plantilla.filter(function (j) { return j.posicion === "POR"; });
+    var clave = _PORTERO_TITULAR_CLUB[clubId];
+    if (clave) {
+      var re = new RegExp("(^|\\s)" + clave + "(\\s|$)");
+      var hit = porteros.filter(function (j) { return re.test(_normNombre(j.nombre)); })[0] ||
+        plantilla.filter(function (j) { return re.test(_normNombre(j.nombre)); })[0];
+      if (hit) return hit;
+    }
     return porteros.length ? porteros[0] : null;
   }
 

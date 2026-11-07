@@ -5658,3 +5658,49 @@ button { font-family: inherit; cursor: pointer; }
 .plantilla-editar-final-btn { font-size: 15px; padding: 4px 8px; border: 0; background: transparent; opacity: 0.45; }
 .plantilla-editar-final-btn:hover, .plantilla-editar-final-btn:focus { opacity: 1; }
 .plantilla-comp-linea--sel { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ===== v436 — TÍTULOS TEMPORADA (pantalla única, estilo PES 6) ===== */
+.tt-tabs { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 10px; margin-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.tt-tab {
+  flex: 0 0 42%; min-width: 140px; scroll-snap-align: start;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-height: 78px; padding: 8px 6px; font: inherit; cursor: pointer;
+  border: 2px solid color-mix(in srgb, var(--tt-c) 60%, transparent);
+  border-radius: 6px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tt-c) 30%, #0b1a44) 0%, #08133a 100%);
+  color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 3px 8px rgba(0,0,0,.35);
+}
+.tt-tab-ico { font-size: 26px; line-height: 1; }
+.tt-tab-txt { font-size: 12px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: .3px; text-align: center; text-shadow: 1px 1px 0 rgba(0,0,0,.6); }
+.tt-tab--activa { background: linear-gradient(160deg, #ffd24a, #f39c12); border-color: #fff4c2; box-shadow: 0 0 14px rgba(255,210,74,.5); }
+.tt-tab--activa .tt-tab-txt { color: #1a1200; text-shadow: none; }
+
+.tt-lista { display: flex; flex-direction: column; gap: 14px; }
+.tt-card {
+  border: 1px solid color-mix(in srgb, var(--tt-c) 55%, transparent);
+  border-left: 5px solid var(--tt-c);
+  background: repeating-linear-gradient(115deg, rgba(255,255,255,.035) 0 1px, transparent 1px 8px), linear-gradient(180deg, #0f2463, #081644);
+  box-shadow: 0 4px 12px rgba(0,0,0,.45);
+  overflow: hidden;
+}
+.tt-card-cab {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px;
+  background: linear-gradient(90deg, var(--tt-c), color-mix(in srgb, var(--tt-c) 35%, #0b1a44) 85%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%);
+  margin-right: 30%;
+}
+.tt-card-ico { font-size: 18px; font-style: normal; }
+.tt-card-nombre { font-size: 14px; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: .4px; color: #fff; text-shadow: 1px 1px 0 rgba(0,0,0,.65); white-space: nowrap; }
+.tt-card-cuerpo { display: grid; grid-template-columns: 38% 1fr; gap: 10px; align-items: center; padding: 10px 12px 12px; }
+.tt-campeon { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.tt-campeon-label { font-size: 10px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: #ffd24a; }
+.tt-campeon .escudo--lg { width: 70px; height: 70px; min-width: 70px; }
+.tt-campeon-nombre { font-size: 13px; font-weight: 800; color: #fff; line-height: 1.15; }
+.tt-campeon-nombre--humano { color: var(--neon, #39ff6a); }
+.tt-campeon-nombre--vacio { color: rgba(255,255,255,.5); font-style: italic; }
+.tt-campeon-vacio { display: flex; align-items: center; justify-content: center; width: 70px; height: 70px; border-radius: 50%; border: 2px dashed rgba(255,255,255,.25); color: rgba(255,255,255,.35); font-size: 30px; font-weight: 900; }
+.tt-premios { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tt-premio { display: flex; flex-direction: column; gap: 2px; padding: 5px 8px; background: rgba(0,0,0,.28); border-left: 3px solid var(--tt-c); }
+.tt-premio-chapa { font-size: 10px; font-weight: 900; font-style: italic; letter-spacing: .5px; text-transform: uppercase; color: color-mix(in srgb, var(--tt-c) 70%, #fff); }
+.tt-premio-valor { font-size: 12.5px; font-weight: 700; color: #fff; line-height: 1.2; overflow-wrap: anywhere; }
+.trofeo-of-par--uno { grid-template-columns: 1fr !important; }

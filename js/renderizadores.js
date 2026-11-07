@@ -17093,23 +17093,52 @@
   // Petición usuario: "el texto de cada competición en color llamativo
   // para diferenciarlas" (foto: título "LIGA EA SPORTS"/"COPA DEL REY"
   // en gris uniforme, indistinguibles entre sí de un vistazo).
+  // v436 (petición usuario): pantalla ÚNICA "Títulos Temporada" con 5
+  // cajas (España / Europa / Selecciones / Bota de Oro / Balón de Oro).
+  // `tab` = caja donde sale cada competición; `alias` = etiquetas viejas
+  // del texto guardado (no se pierde nada de lo ya escrito). Todas llevan
+  // Pichichi, MVP y Zamora. `fija` = sale aunque no tenga datos; el resto
+  // de selecciones solo sale la temporada en que se rellena.
+  var _PMZ = ["Pichichi", "MVP", "Zamora"];
   var TITULOS_TEMPORADA_COMPS = [
-    { key: "liga", label: "Liga EA Sports", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff3b5c" },
-    { key: "copa", label: "Copa del Rey", sub: ["Pichichi", "MVP"], color: "#f1c40f" },
-    { key: "supercopa", label: "Supercopa España", sub: [], color: "#c48a5c" },
-    { key: "superliga", label: "Superliga", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff4d9e" },
-    { key: "hypermotion", label: "Liga Hypermotion", sub: ["Pichichi", "MVP", "Zamora"], color: "#ff8c00" },
-    { key: "1ref", label: "1ª REF", sub: ["Pichichi", "MVP", "Zamora"], color: "#8bc34a" },
-    { key: "2ref", label: "2ª REF", sub: ["Pichichi", "MVP", "Zamora"], color: "#c98a4a" },
-    { key: "champions", label: "Champions", sub: ["Pichichi", "MVP"], color: "#3ba7ff" },
-    { key: "uel", label: "Europa League", sub: ["Pichichi", "MVP"], color: "#ff7a29" },
-    { key: "uecl", label: "Conference", sub: ["Pichichi", "MVP"], color: "#39ff6a" },
-    { key: "recopa", label: "Recopa", sub: ["Pichichi", "MVP"], color: "#e0a458" },
-    { key: "usc", label: "Supercopa Europa", sub: [], color: "#8ecae6" },
-    { key: "kaocup", label: "KAO Cup", sub: ["Pichichi", "MVP"], color: "#9d4edd" },
-    { key: "superekao", label: "SuperEKAO", sub: ["Pichichi", "MVP"], color: "#7a6cff" },
-    { key: "intercontinental", label: "Intercontinental", sub: ["Pichichi", "MVP"], color: "#ffe600" }
+    { key: "liga", label: "Liga EA Sports", tab: "espana", icono: "🇪🇸", sub: _PMZ, color: "#ff3b5c", fija: true },
+    { key: "copa", label: "Copa del Rey", tab: "espana", icono: "🏆", sub: _PMZ, color: "#f1c40f", fija: true },
+    { key: "kaocup", label: "KAO Cup", tab: "espana", icono: "🎮", sub: _PMZ, color: "#9d4edd", fija: true },
+    { key: "supercopa", label: "Supercopa España", tab: "espana", icono: "🏅", sub: _PMZ, color: "#c48a5c", fija: true },
+    { key: "hypermotion", label: "Liga Hypermotion", tab: "espana", icono: "⚡", sub: _PMZ, color: "#14a89d", fija: true },
+    { key: "champions", label: "Champions League", alias: ["Champions"], tab: "europa", icono: "⭐", sub: _PMZ, color: "#3ba7ff", fija: true },
+    { key: "uel", label: "Europa League", tab: "europa", icono: "🟠", sub: _PMZ, color: "#ff7a29", fija: true },
+    { key: "uecl", label: "Conference League", alias: ["Conference"], tab: "europa", icono: "🟢", sub: _PMZ, color: "#39ff6a", fija: true },
+    { key: "recopa", label: "Recopa Europa", alias: ["Recopa"], tab: "europa", icono: "📜", sub: _PMZ, color: "#e0a458", fija: true },
+    { key: "superekao", label: "SuperKao Cup", alias: ["SuperEKAO", "SuperKAO"], tab: "europa", icono: "🛡️", sub: _PMZ, color: "#7a6cff", fija: true },
+    { key: "usc", label: "Supercopa Europa", tab: "europa", icono: "🏅", sub: _PMZ, color: "#c9d3dc", fija: true },
+    { key: "superliga", label: "SuperLiga", alias: ["Superliga"], tab: "europa", icono: "👥", sub: _PMZ, color: "#ff4d9e", fija: true },
+    { key: "intercontinental", label: "Intercontinental", tab: "europa", icono: "🌍", sub: _PMZ, color: "#ffe600", fija: true },
+    { key: "mundialito", label: "Mundialito Clubes", tab: "europa", icono: "🟡", sub: _PMZ, color: "#ffd24a", fija: true },
+    { key: "nations", label: "Nations Cup", tab: "sel", icono: "🌐", sub: _PMZ, color: "#9aad34", fija: true },
+    { key: "roadeurocopa", label: "Road Eurocopa", tab: "sel", icono: "🛣️", sub: _PMZ, color: "#b0548c" },
+    { key: "roadmundial", label: "Road Mundial", tab: "sel", icono: "🛣️", sub: _PMZ, color: "#b0548c" },
+    { key: "roadamerica", label: "Road Copa América", tab: "sel", icono: "🛣️", sub: _PMZ, color: "#b0548c" },
+    { key: "roadasia", label: "Road Copa Asia", tab: "sel", icono: "🛣️", sub: _PMZ, color: "#b0548c" },
+    { key: "roadafrica", label: "Road Copa África", tab: "sel", icono: "🛣️", sub: _PMZ, color: "#b0548c" },
+    { key: "eurocopa", label: "Eurocopa", tab: "sel", icono: "🇪🇺", sub: _PMZ, color: "#0ea5e9" },
+    { key: "mundialsel", label: "Mundial", tab: "sel", icono: "🌎", sub: _PMZ, color: "#ff4fa8" },
+    { key: "copaamerica", label: "Copa América", tab: "sel", icono: "☀️", sub: _PMZ, color: "#22c55e" },
+    { key: "copaasia", label: "Copa Asia", tab: "sel", icono: "🌏", sub: _PMZ, color: "#e11d48" },
+    { key: "copaafrica", label: "Copa África", tab: "sel", icono: "🦁", sub: _PMZ, color: "#d97706" },
+    // Ya no salen en ninguna caja, pero se conservan en el texto para no
+    // perder lo que estuviera escrito.
+    { key: "1ref", label: "1ª REF", tab: null, sub: _PMZ, color: "#8bc34a" },
+    { key: "2ref", label: "2ª REF", tab: null, sub: _PMZ, color: "#c98a4a" }
   ];
+  var TITULOS_TEMP_TABS = [
+    { id: "espana", icono: "🇪🇸", label: "Títulos España", c: "#ff3b5c" },
+    { id: "europa", icono: "🇪🇺", label: "Títulos Europa", c: "#3ba7ff" },
+    { id: "sel", icono: "🌐", label: "Títulos Selecciones", c: "#9aad34" },
+    { id: "bota", icono: "👟", label: "Bota de Oro", c: "#ffb020" },
+    { id: "balon", icono: "⚽", label: "Balón de Oro", c: "#ffd24a" }
+  ];
+  var _titulosTempTab = "espana";
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
   // Emoji de cada subpremio en la card GANADOR — sustituye a la etiqueta
   // en negrita ("Pichichi:") por un emoji identificativo, mismos iconos
@@ -17137,7 +17166,9 @@
       if (!valor) return;
 
       var comp = TITULOS_TEMPORADA_COMPS.filter(function (c) {
-        return etiqueta === _normNombre("campeon " + c.label) || etiqueta === _normNombre(c.label);
+        return [c.label].concat(c.alias || []).some(function (lb) {
+          return etiqueta === _normNombre("campeon " + lb) || etiqueta === _normNombre(lb);
+        });
       })[0];
       if (comp) { campeones[comp.key] = valor; actual = comp; return; }
 
@@ -17156,21 +17187,78 @@
   // mismo espíritu que _construirTextoEdicionTitulos, adaptado a texto
   // libre con valor (no solo un número). El admin nunca teclea el
   // nombre de una competición a mano; solo rellena tras los ":".
-  function _construirTextoEdicionTitulosTemporada(textoGuardado) {
-    var parsed = parsearTitulosTemporadaTexto(textoGuardado);
+  // v436: el editor ✏️ muestra SOLO las competiciones de la caja activa
+  // (España / Europa / Selecciones) — y al guardar se FUSIONA con lo ya
+  // guardado de las otras cajas (fusionarTitulosTemporadaTexto), así
+  // nunca se pierde nada de lo que no se estaba editando.
+  function _serializarTitulosTemporada(parsed, soloTab) {
     var lineas = [];
-    TITULOS_TEMPORADA_COMPS.forEach(function (comp, i) {
-      if (i > 0) lineas.push("");
+    TITULOS_TEMPORADA_COMPS.forEach(function (comp) {
+      if (soloTab && comp.tab !== soloTab) return;
+      if (lineas.length) lineas.push("");
       lineas.push("Campeón " + comp.label + ": " + (parsed.campeones[comp.key] || ""));
-      comp.sub.forEach(function (s) {
-        lineas.push(s + ": " + ((parsed.subs[comp.key] || {})[s] || ""));
+      comp.sub.forEach(function (sb) {
+        lineas.push(sb + ": " + ((parsed.subs[comp.key] || {})[sb] || ""));
       });
     });
-    lineas.push("");
-    TITULOS_TEMPORADA_INDIVIDUALES.forEach(function (nombreCampo) {
-      lineas.push(nombreCampo + ": " + (parsed.individuales[nombreCampo] || ""));
-    });
+    if (!soloTab) {
+      lineas.push("");
+      TITULOS_TEMPORADA_INDIVIDUALES.forEach(function (nombreCampo) {
+        lineas.push(nombreCampo + ": " + (parsed.individuales[nombreCampo] || ""));
+      });
+    }
     return lineas.join("\n");
+  }
+  function _construirTextoEdicionTitulosTemporada(textoGuardado) {
+    var tab = (_titulosTempTab === "espana" || _titulosTempTab === "europa" || _titulosTempTab === "sel") ? _titulosTempTab : null;
+    return _serializarTitulosTemporada(parsearTitulosTemporadaTexto(textoGuardado), tab);
+  }
+  function fusionarTitulosTemporadaTexto(textoNuevo) {
+    var viejo = parsearTitulosTemporadaTexto(window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "");
+    var nuevo = parsearTitulosTemporadaTexto(textoNuevo);
+    var tab = (_titulosTempTab === "espana" || _titulosTempTab === "europa" || _titulosTempTab === "sel") ? _titulosTempTab : null;
+    TITULOS_TEMPORADA_COMPS.forEach(function (c) {
+      if (tab && c.tab !== tab) return; // otras cajas: se quedan como estaban
+      if (nuevo.campeones[c.key]) viejo.campeones[c.key] = nuevo.campeones[c.key]; else delete viejo.campeones[c.key];
+      if (nuevo.subs[c.key]) viejo.subs[c.key] = nuevo.subs[c.key]; else delete viejo.subs[c.key];
+    });
+    if (!tab) viejo.individuales = nuevo.individuales;
+    return _serializarTitulosTemporada(viejo, null);
+  }
+
+
+  function irTitulosTemporadaTab(tab) {
+    _titulosTempTab = TITULOS_TEMP_TABS.some(function (t) { return t.id === tab; }) ? tab : "espana";
+    renderizarTitulosTemporada("titulos-temporada-content");
+  }
+
+  // Card de UNA competición, estilo PES 6: franja de cabecera inclinada en
+  // el color de la competición, campeón (escudo + nombre) a la izquierda y
+  // Pichichi / MVP / Zamora en 3 filas con su chapa a la derecha.
+  function _tituloTempCardHTML(comp, parsed, datos) {
+    var nombreCampeon = parsed.campeones[comp.key];
+    var subVals = parsed.subs[comp.key] || {};
+    var campeonHTML;
+    if (nombreCampeon) {
+      var equipo = resolverRivalPorNombre(nombreCampeon, datos, null);
+      var nombreMostrado = (equipo && equipo.nombre) || nombreCampeon;
+      var esHumano = !!(equipo && equipo.mister);
+      if (esHumano) nombreMostrado += " · " + equipo.mister;
+      campeonHTML = crearEscudoHTML(equipo, "escudo--lg") +
+        '<span class="tt-campeon-nombre' + (esHumano ? " tt-campeon-nombre--humano" : "") + '">' + escapeHTML(nombreMostrado) + "</span>";
+    } else {
+      campeonHTML = '<span class="tt-campeon-vacio">?</span><span class="tt-campeon-nombre tt-campeon-nombre--vacio">Por decidir</span>';
+    }
+    var premios = comp.sub.map(function (sb) {
+      var v = subVals[sb];
+      return '<div class="tt-premio tt-premio--' + _normNombre(sb) + '">' +
+        '<span class="tt-premio-chapa">' + (TITULOS_TEMP_SUB_EMOJI[sb] || "🏅") + " " + sb + "</span>" +
+        '<span class="tt-premio-valor">' + (v ? escapeHTML(v) : "—") + "</span></div>";
+    }).join("");
+    return '<div class="tt-card" style="--tt-c:' + comp.color + '">' +
+      '<div class="tt-card-cab"><span class="tt-card-ico">' + (comp.icono || "🏆") + '</span><span class="tt-card-nombre">' + escapeHTML(comp.label) + "</span></div>" +
+      '<div class="tt-card-cuerpo"><div class="tt-campeon"><span class="tt-campeon-label">🏆 Campeón</span>' + campeonHTML + "</div>" +
+      '<div class="tt-premios">' + premios + "</div></div></div>";
   }
 
   function renderizarTitulosTemporada(contenedorId) {
@@ -17181,85 +17269,48 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
-
       var texto = window.Estado ? window.Estado.obtenerTitulosTemporadaTexto() : "";
       var parsed = parsearTitulosTemporadaTexto(texto);
+      var tab = _titulosTempTab;
+
+      // 5 cajas arriba, desplazables de izquierda a derecha.
+      var cajas = document.createElement("div");
+      cajas.className = "tt-tabs";
+      cajas.innerHTML = TITULOS_TEMP_TABS.map(function (t) {
+        return '<button type="button" class="tt-tab' + (t.id === tab ? " tt-tab--activa" : "") + '" style="--tt-c:' + t.c +
+          '" data-accion="titulos-temporada-tab" data-tab="' + t.id + '"><span class="tt-tab-ico">' + t.icono +
+          '</span><span class="tt-tab-txt">' + escapeHTML(t.label) + "</span></button>";
+      }).join("");
+      contenedor.appendChild(cajas);
+      setTimeout(function () {
+        var act = cajas.querySelector(".tt-tab--activa");
+        if (act && act.scrollIntoView) act.scrollIntoView({ block: "nearest", inline: "center" });
+      }, 0);
+
+      if (tab === "balon" || tab === "bota") {
+        var g = document.createElement("div");
+        g.id = "inicio-trofeos-vista";
+        contenedor.appendChild(g);
+        renderizarTrofeosOficiales("inicio-trofeos-vista", tab);
+        return;
+      }
 
       var header = document.createElement("div");
       header.className = "liga1ref-header";
       header.innerHTML =
-        '<span class="liga1ref-leyenda-mini">Campeones y premios individuales de la temporada</span>' +
+        '<span class="liga1ref-leyenda-mini">Campeón, Pichichi, MVP y Zamora de cada competición</span>' +
         '<button type="button" class="liga1ref-editar-btn" data-accion="editar-titulos-temporada-inline" aria-label="Editar títulos de la temporada">✏️</button>';
       contenedor.appendChild(header);
 
-      TITULOS_TEMPORADA_COMPS.forEach(function (comp, i) {
-        if (i > 0) contenedor.appendChild(nodoSeparador());
-        var nombreCampeon = parsed.campeones[comp.key];
-        var subVals = parsed.subs[comp.key] || {};
-        var html = '<p class="titulos-bloque-titulo" style="color:' + comp.color + '">🏆 ' + escapeHTML(comp.label) + "</p>";
-
-        var izqHtml;
-        if (nombreCampeon) {
-          var equipo = resolverRivalPorNombre(nombreCampeon, datos, null);
-          var nombreMostrado = (equipo && equipo.nombre) || nombreCampeon;
-          // Campeón HUMANO (data/equipos.json trae "mister" solo en los
-          // 6 clubes de los usuarios, nunca en la IA) -> el nombre del
-          // entrenador va pegado al del equipo, petición usuario:
-          // "Copa del rey / Liverpool-Toñín". Además, el nombre entero se
-          // pinta en verde (--neon, el verde de siempre de la app) para
-          // diferenciar de un vistazo a un campeón HUMANO de uno IA,
-          // petición usuario: "Cuando es un equipo humano el campeón de
-          // 1 torneo, liga copa etc el texto en color verde".
-          var esHumano = !!(equipo && equipo.mister);
-          if (esHumano) nombreMostrado += "-" + equipo.mister;
-          var claseNombre = "titulos-temp-ganador-nombre" + (esHumano ? " titulos-temp-ganador-nombre--humano" : "");
-          izqHtml =
-            '<span class="titulos-temp-ganador-label">GANADOR</span>' +
-            crearEscudoHTML(equipo, "escudo--lg") +
-            '<span class="' + claseNombre + '">' + escapeHTML(nombreMostrado) + "</span>";
-        } else {
-          izqHtml = '<p class="admin-nota">Sin campeón todavía.</p>';
-        }
-
-        if (comp.sub.length) {
-          // Escudo+nombre a la izquierda, Pichichi/MVP/Zamora apilados a
-          // la derecha (mismo recuadro) — petición usuario, foto de la
-          // Liga EA Sports con el escudo centrado y los premios sueltos
-          // debajo: "podemos mover el escudo y nombre a la izquierda del
-          // todo y en ese mismo recuadro a la derecha ponemos" cada
-          // premio como "<emoji><ganador> - <equipo> - <cifra>".
-          var derHtml = comp.sub.map(function (s) {
-            var v = subVals[s];
-            var emoji = TITULOS_TEMP_SUB_EMOJI[s] || "🏅";
-            return '<p class="titulos-temp-sub-linea">' + emoji + (v ? escapeHTML(v) : "—") + "</p>";
-          }).join("");
-          html +=
-            '<div class="titulos-temp-card">' +
-            '<div class="titulos-temp-card-izq">' + izqHtml + "</div>" +
-            '<div class="titulos-temp-card-der">' + derHtml + "</div>" +
-            "</div>";
-        } else {
-          // Sin subpremios (Supercopa España/Europa) — la card centrada
-          // de siempre, sin columna derecha vacía.
-          html += '<div class="titulos-temp-ganador">' + izqHtml + "</div>";
-        }
-
-        var bloque = document.createElement("div");
-        bloque.className = "titulos-bloque";
-        bloque.innerHTML = html;
-        contenedor.appendChild(bloque);
+      var comps = TITULOS_TEMPORADA_COMPS.filter(function (c) {
+        if (c.tab !== tab) return false;
+        if (c.fija) return true;
+        return !!(parsed.campeones[c.key] || Object.keys(parsed.subs[c.key] || {}).length);
       });
-
-      contenedor.appendChild(nodoSeparador());
-      var indivBloque = document.createElement("div");
-      indivBloque.className = "titulos-bloque";
-      indivBloque.innerHTML =
-        '<p class="titulos-bloque-titulo">🥇 Individuales</p>' +
-        TITULOS_TEMPORADA_INDIVIDUALES.map(function (nombreCampo) {
-          var v = parsed.individuales[nombreCampo];
-          return '<p class="titulos-temp-sub"><b>' + escapeHTML(nombreCampo) + ":</b> " + (v ? escapeHTML(v) : "—") + "</p>";
-        }).join("");
-      contenedor.appendChild(indivBloque);
+      var lista = document.createElement("div");
+      lista.className = "tt-lista";
+      lista.innerHTML = comps.map(function (c) { return _tituloTempCardHTML(c, parsed, datos); }).join("");
+      contenedor.appendChild(lista);
     });
   }
 
@@ -22432,14 +22483,21 @@
       "</div>";
   }
 
-  function renderizarTrofeosOficiales(contenedorId) {
+  function renderizarTrofeosOficiales(contenedorId, modo) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
+    // Dentro de "Títulos Temporada" (cajas Bota/Balón de Oro): al guardar o
+    // cancelar el editor se repinta la pantalla entera con su caja activa.
+    if (!modo && contenedor.closest && contenedor.closest("#titulos-temporada-content")) {
+      renderizarTitulosTemporada("titulos-temporada-content");
+      return;
+    }
     var texto = window.Estado ? window.Estado.obtenerGoldenTexto() : "";
     var jugadores = parsearGolden(texto);
     var balon = jugadores.slice().sort(function (a, b) { return b.pts - a.pts; })[0];
     var bota = jugadores.slice().sort(function (a, b) { return b.gol - a.gol; })[0];
-    var top = jugadores.slice().sort(function (a, b) { return b.pts - a.pts; }).slice(0, 50);
+    var esBota = modo === "bota";
+    var top = jugadores.slice().sort(function (a, b) { return esBota ? (b.gol - a.gol) : (b.pts - a.pts); }).slice(0, 50);
     if (balon && balon.pts <= 0) balon = null;
     if (bota && bota.gol <= 0) bota = null;
 
@@ -22454,8 +22512,10 @@
     contenedor.innerHTML =
       '<div class="liga1ref-header"><span class="liga1ref-leyenda-mini">Salen del texto de jugadores</span>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-golden" aria-label="Editar golden">✏️</button></div>' +
-      '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>" +
-      '<p class="titulos-bloque-titulo golden-titulo">🏅 GOLDEN · 50 MEJORES DEL AÑO</p>' +
+      (modo
+        ? '<div class="trofeo-of-par trofeo-of-par--uno">' + (esBota ? _golderCardHTML(null, "bota", bota) : _golderCardHTML(null, "balon", balon)) + "</div>"
+        : '<div class="trofeo-of-par">' + _golderCardHTML(null, "balon", balon) + _golderCardHTML(null, "bota", bota) + "</div>") +
+      '<p class="titulos-bloque-titulo golden-titulo">' + (esBota ? "👟 BOTA DE ORO · 50 MÁXIMOS GOLEADORES" : "🏅 GOLDEN · 50 MEJORES DEL AÑO") + '</p>' +
       '<p class="golden-regla">Suma de todas las competiciones (cada una con su valor): ⚽ gol 1 · ⭐ MVP 1,5 · 🧤 portería a cero 0,5 · 🥇 Zamora 10 × coef. del país · 🏟️ (puntos del club + ½ de su selección) ÷ 40 (solo lo cobra quien haya sumado algo por sí mismo). <a href="#" data-accion="ver-como-se-puntua">ℹ️ Cómo se puntúa</a></p>' +
       (jugadores.length
         ? '<input type="search" class="golden-buscar" id="golden-buscar" placeholder="🔍 Buscar jugador o equipo…">' +
@@ -23653,6 +23713,8 @@
     renderizarTitulos: renderizarTitulos,
     pintarEditorTitulos: pintarEditorTitulos,
     renderizarTitulosTemporada: renderizarTitulosTemporada,
+    irTitulosTemporadaTab: irTitulosTemporadaTab,
+    fusionarTitulosTemporadaTexto: fusionarTitulosTemporadaTexto,
     pintarEditorTitulosTemporada: pintarEditorTitulosTemporada,
     parsearTitulosTexto: parsearTitulosTexto,
     renderizarObjetivos: renderizarObjetivos,

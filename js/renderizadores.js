@@ -17965,6 +17965,7 @@
     }
     var filas = [];
     try { filas = _filasCompeticionesClub(clubId, datos); } catch (err) { console.error("[ranking] puntos:", err); }
+    out.juegaEuropa = filas.some(function (f) { return f.compKey && RANK_TAB_COMP[f.compKey] === "europa"; });
     filas.forEach(function (f) {
       try {
         if (f.rkLiga) {
@@ -17978,6 +17979,9 @@
         }
         var k = f.compKey, mc = RANK_MULT_COMP[k];
         if (!mc || !f.rk) return;
+        // v452: sin ningún partido jugado en esa competición no suma nada
+        // (FC Barcelona/PSG salían con 330 en Europa sin haber jugado).
+        if (f.jugados === 0) return;
         if (k === "nations") mc = _rankMultNations(clubId, datos, f.rk);
         if (RANK_COMPS_NACIONALES[k]) mc = mc * _rankCoefPaisClub(clubId);
         var r = _rankBaseElim(f.rk, k, clubId, datos);
@@ -18054,9 +18058,16 @@
     var n = _rankingNorm(nombre);
     if (!n) return null;
     var pad = " " + n + " ";
+    // v452: "Real Madrid" NO es "Real Madrid C" (ni B, Castilla, Promesas…):
+    // un filial nunca se confunde con el primer equipo.
+    var FILIAL = /^(b|c|d|ii|iii|castilla|promesas|fortuna|vetusta|ilicitano|atletic|at|fabril)( |$)/;
     for (var i = 0; i < filas.length; i++) {
       if (filas[i].sep) continue;
-      if ((" " + filas[i].norm + " ").indexOf(pad) !== -1) return filas[i];
+      var t = " " + filas[i].norm + " ", ix = t.indexOf(pad);
+      if (ix === -1) continue;
+      var resto = t.slice(ix + pad.length).trim();
+      if (FILIAL.test(resto)) continue;
+      return filas[i];
     }
     return null;
   }
@@ -18159,7 +18170,7 @@
     if (tipo === "espana") filas = filas.filter(function (f) { return f.sep || !/^arsenal( |$)/.test(f.norm); });
     var humanos = _rankingHumanos(clubId).filter(function (h) {
       if (tipo === "espana") return _rankingJuegaEspana(h);
-      if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
+      if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.juegaEuropa || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
       return true;
     });
     var hayLista = filas.some(function (f) { return !f.sep; });
@@ -18218,6 +18229,7 @@
       bonus: fila ? _rankingBonusClub(tipo, clubId) : 0,
       bonusObj: fila ? _rankingBonusObjetivos(tipo, clubId) : 0,
       comp: fila ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
+      noParticipa: tipo === "europa" && !!_rankingPuntosCache[clubId] && !_rankingPuntosCache[clubId].juegaEuropa && !_rankingPuntosCache[clubId].europa.filas.length,
       cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
     };
   }
@@ -18238,7 +18250,10 @@
   function _rankingTarjetaHTML(t, est, idClubActivo) {
     var clase = "ranking-card ranking-card--tipo-" + t.id + (_rankingTabActual === t.id ? " ranking-card--activa" : "");
     var puesto, detalle;
-    if (est.objetivo === null && !est.nombre) {
+    if (est.noParticipa) {
+      puesto = "—";
+      detalle = "No participa";
+    } else if (est.objetivo === null && !est.nombre) {
       puesto = "—";
       detalle = "";
     } else if (!est.fila) {
@@ -22017,7 +22032,7 @@
         if (!jug) return; // sin ningún partido jugado no hay nada que contar todavía
         r = { estado: jug + "/" + lista.length + " partidos" };
       }
-      filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon, compKey: k, rk: r.rk || null });
+      filas.push({ emoji: ib.emoji, nombre: nombre, estado: r.estado, eliminado: !!r.eliminado, campeon: !!r.campeon, compKey: k, rk: r.rk || null, jugados: jugadosComp });
     });
     // v433 (petición usuario): una SELECCIÓN muestra SIEMPRE sus
     // competiciones (Nations Cup con su división, Road Eurocopa,

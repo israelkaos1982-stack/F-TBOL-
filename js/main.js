@@ -2940,7 +2940,8 @@
   function guardarTitulosTemporada() {
     var ta = document.getElementById("titulos-temporada-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
-    if (!window.Estado.guardarTitulosTemporadaTexto(ta.value)) return;
+    var textoFinal = window.Renderizadores.fusionarTitulosTemporadaTexto ? window.Renderizadores.fusionarTitulosTemporadaTexto(ta.value) : ta.value;
+    if (!window.Estado.guardarTitulosTemporadaTexto(textoFinal)) return;
     window.Renderizadores.renderizarTitulosTemporada("titulos-temporada-content");
   }
   function cancelarTitulosTemporada() {
@@ -3450,6 +3451,7 @@
         }
         case "cancelar-golden": window.Renderizadores.renderizarTrofeosOficiales("inicio-trofeos-vista"); break;
         case "editar-titulos-temporada-inline": editarTitulosTemporadaInline(); break;
+        case "titulos-temporada-tab": if (window.Renderizadores) window.Renderizadores.irTitulosTemporadaTab(d.tab); break;
         case "guardar-titulos-temporada": guardarTitulosTemporada(); break;
         case "cancelar-titulos-temporada": cancelarTitulosTemporada(); break;
         case "editar-objetivos-inline": editarObjetivosInline(d.clubId); break;

@@ -1044,7 +1044,7 @@
   }
   function _etiquetaCompRondaTexto(compKeyResuelto, competicionCruda, ronda, jornada) {
     if (compKeyResuelto === "verano") {
-      return "☀️ " + _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : "");
+      return _abreviarNombreTorneoVerano(competicionCruda) + (ronda ? " - " + _uneRondaConGuion(compKeyResuelto, ronda) : "");
     }
     var compLabel = COMP_LABEL[compKeyResuelto] || competicionCruda;
     if (compKeyResuelto === "supercopa") compLabel = _nombreSupercopaPropia(competicionCruda) || compLabel;
@@ -1399,6 +1399,20 @@
       // todas "Competición - Ronda", sin rival, así que NINGUNA cargaba.
       var rivalCrudo = partes.length >= 3 ? partes[2].trim() : "?";
       var fecha = partes.length > 3 ? partes.slice(3).join(" - ").trim() : "";
+      // v445: «Superliga - Fase de grupos - 5ª Jornada - PSG vs Atlético»: el
+      // cruce está en el 4º trozo, no en el 3º. Los trozos intermedios son la
+      // ronda ("Fase de grupos" sobra si detrás va la jornada).
+      if (partes.length >= 4 && !/\svs\.?\s/i.test(partes[2])) {
+        var kVs = -1;
+        for (var kp = 3; kp < partes.length; kp++) { if (/\svs\.?\s/i.test(partes[kp])) { kVs = kp; break; } }
+        if (kVs > 0) {
+          var trozosRonda = partes.slice(1, kVs).map(function (x) { return x.trim(); }).filter(Boolean);
+          if (trozosRonda.length > 1) trozosRonda = trozosRonda.filter(function (x) { return !/^fase de (grupos|liga)$/i.test(x); });
+          ronda = trozosRonda.join(" ");
+          rivalCrudo = partes[kVs].trim();
+          fecha = partes.slice(kVs + 1).join(" - ").trim();
+        }
+      }
       if (!competicion || !ronda) { if (onIgnorada) onIgnorada(l); return; }
 
       // Marcador ya jugado: SIEMPRE (goles del club activo - goles del

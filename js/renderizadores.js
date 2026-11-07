@@ -22441,9 +22441,9 @@
     return isNaN(n) ? 0 : n;
   }
   function _fmtGolden(n) {
-    // v439 (petición usuario): sin decimales, redondeado hacia arriba
-    // (34,5 -> 35 · 150,7 -> 151) para ahorrar espacio en la tabla.
-    return String(Math.ceil((Number(n) || 0) - 1e-9));
+    // v440 (petición usuario): sin decimales, redondeo normal — de ,5 para
+    // arriba sube (86,5 -> 87), por debajo baja (86,4 -> 86).
+    return String(Math.round((Number(n) || 0) + 1e-9));
   }
   function parsearGolden(texto) {
     var out = [];

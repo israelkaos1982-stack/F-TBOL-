@@ -840,8 +840,8 @@
   var CAJA_INICIO_COLORES = {
     arsenal: { primario: "#7a1024", secundario: "#ef0107" },
     "atletico-madrid": { primario: "#192c5b", secundario: "#cb3524" },
-    "real-madrid": { primario: "#e3b13c", secundario: "#5b2c8c" },
-    liverpool: { primario: "#170406", secundario: "#c8102e" },
+    "real-madrid": { primario: "#00529f", secundario: "#c9a227" },
+    liverpool: { primario: "#6e0816", secundario: "#c8102e" },
     "fc-barcelona": { primario: "#004d98", secundario: "#a50044" },
     psg: { primario: "#004170", secundario: "#da291c" }
   };
@@ -17305,6 +17305,18 @@
   // Card de UNA competición, estilo PES 6: franja de cabecera inclinada en
   // el color de la competición, campeón (escudo + nombre) a la izquierda y
   // Pichichi / MVP / Zamora en 3 filas con su chapa a la derecha.
+  // v444: "Rapinha - FC Barcelona - 22" -> jugador arriba, equipo abajo y la
+  // cifra grande a la derecha.
+  function _ttPremioValorHTML(v) {
+    if (!v) return '<span class="tt-premio-valor">—</span>';
+    var partes = String(v).split(/\s+[-–·]\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var num = "";
+    if (partes.length > 1 && /^[+-]?\d+(?:[.,]\d+)?$/.test(partes[partes.length - 1])) num = partes.pop();
+    var jugador = partes.shift() || "", equipo = partes.join(" · ");
+    return '<span class="tt-premio-fila"><span class="tt-premio-quien"><span class="tt-premio-jugador">' + escapeHTML(jugador) + "</span>" +
+      (equipo ? '<span class="tt-premio-equipo">' + escapeHTML(equipo) + "</span>" : "") + "</span>" +
+      (num ? '<span class="tt-premio-num">' + escapeHTML(num) + "</span>" : "") + "</span>";
+  }
   function _tituloTempCardHTML(comp, parsed, datos) {
     var nombreCampeon = parsed.campeones[comp.key];
     var subVals = parsed.subs[comp.key] || {};
@@ -17323,7 +17335,7 @@
       var v = subVals[sb];
       return '<div class="tt-premio tt-premio--' + _normNombre(sb) + '">' +
         '<span class="tt-premio-chapa">' + (TITULOS_TEMP_SUB_EMOJI[sb] || "🏅") + " " + sb + "</span>" +
-        '<span class="tt-premio-valor">' + (v ? escapeHTML(v) : "—") + "</span></div>";
+        _ttPremioValorHTML(v) + "</div>";
     }).join("");
     return '<div class="tt-card" style="--tt-c:' + comp.color + '">' +
       '<div class="tt-card-cab"><span class="tt-card-ico">' + (comp.icono || "🏆") + '</span><span class="tt-card-nombre">' + escapeHTML(comp.label) + "</span></div>" +

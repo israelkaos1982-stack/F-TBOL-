@@ -5717,3 +5717,45 @@ button { font-family: inherit; cursor: pointer; }
 
 /* v443: título de cada grupo en 1ª/2ª RFEF */
 .liga-grupo-titulo { margin: 14px 4px 6px; font-weight: 900; font-style: italic; letter-spacing: .06em; text-transform: uppercase; color: #ffd54a; font-size: 0.95rem; border-left: 4px solid #ffd54a; padding-left: 8px; }
+
+/* v444 — Cajas de inicio: las 5 con franjas al final, más finas que antes.
+   Liverpool (rojo + oro/blanco del escudo) y Real Madrid (azul + oro/blanco). */
+.team-box[data-team-id="atletico-madrid"]::before {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 86%,
+    var(--primary) 89%, #ffffff 89%, #ffffff 91.5%, var(--primary) 91.5%, var(--primary) 94.5%,
+    #ffffff 94.5%, #ffffff 97%, var(--primary) 97%, var(--primary) 100%);
+}
+.team-box[data-team-id="fc-barcelona"]::before {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 86%,
+    var(--primary) 89%, #a50044 89%, #a50044 91.5%, #004d98 91.5%, #004d98 94%,
+    #a50044 94%, #a50044 96.5%, #004d98 96.5%, #004d98 100%);
+}
+.team-box[data-team-id="psg"]::before {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--bg-1) 40%, var(--primary) 82%,
+    var(--primary) 88%, #ffffff 88%, #ffffff 89.2%, #da291c 89.2%, #da291c 95%,
+    #ffffff 95%, #ffffff 96.2%, var(--primary) 96.2%, var(--primary) 100%);
+}
+.team-box[data-team-id="liverpool"]::before {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 86%,
+    var(--primary) 89%, #f6eb61 89%, #f6eb61 91.5%, var(--primary) 91.5%, var(--primary) 94.5%,
+    #ffffff 94.5%, #ffffff 97%, var(--primary) 97%, var(--primary) 100%);
+}
+.team-box[data-team-id="real-madrid"]::before {
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 86%,
+    var(--primary) 89%, #ffffff 89%, #ffffff 91.5%, #febe10 91.5%, #febe10 94%,
+    #ffffff 94%, #ffffff 96.5%, var(--primary) 96.5%, var(--primary) 100%);
+}
+
+/* v444 — Marca de agua: pequeña y visible en la esquina superior izquierda */
+.match-card[data-marca]::after {
+  top: 8px; left: 10px; transform: rotate(-12deg);
+  font-size: 24px; opacity: 0.8; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  z-index: 3;
+}
+
+/* v444 — Premios de Títulos Temporada: jugador / equipo en 2 líneas + cifra grande */
+.tt-premio-fila { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.tt-premio-quien { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tt-premio-jugador { font-weight: 900; font-size: 15px; color: #fff; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-premio-equipo { font-size: 12.5px; font-weight: 700; color: #8fb4ff; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-premio-num { flex: 0 0 auto; font-size: 24px; font-weight: 900; font-style: italic; color: #ffd24a; text-shadow: 0 0 8px rgba(255, 210, 74, 0.45), 2px 2px 0 rgba(0,0,0,.5); font-variant-numeric: tabular-nums; }

@@ -1061,7 +1061,16 @@
     items.forEach(function (p) {
       var par = [p.local, p.visitante].slice().sort().join("|");
       var clave = _normTxtExtra(p.competicion) + "|" + _legDeRondaExtra(p.ronda, p.competicion) + "|" + par;
-      var registro = vistoPorClave[clave];
+      // v457: el MISMO par puede repetirse en una competición sin ida/vuelta
+      // en la ronda (Superliga J3 PSG-Barça y J6 Barça-PSG). Cada aparición
+      // de un club se empareja con la MISMA aparición (1.ª con 1.ª, 2.ª con
+      // 2.ª) del otro club — antes la 2.ª del 2.º club se colaba duplicada y
+      // fuera de orden (J6 dos veces y antes que J4/J5).
+      var lista = vistoPorClave[clave] || (vistoPorClave[clave] = []);
+      var registro = null;
+      for (var ir = 0; ir < lista.length; ir++) {
+        if (!lista[ir].clubes[p._origenClubId]) { registro = lista[ir]; break; }
+      }
       if (!registro) {
         registro = { partido: p, clubes: {} };
         registro.clubes[p._origenClubId] = true;
@@ -1072,13 +1081,7 @@
         // la J29 porque se ordenaba por el texto del Liverpool).
         p._fallbackPorClub = {};
         p._fallbackPorClub[p._origenClubId] = p._fechaFallbackMs;
-        vistoPorClave[clave] = registro;
-        out.push(p);
-        return;
-      }
-      if (registro.clubes[p._origenClubId]) {
-        // Repetición intencional del MISMO club (ida/vuelta sin
-        // distinguir en la ronda) — se conservan las 2 líneas.
+        lista.push(registro);
         out.push(p);
         return;
       }

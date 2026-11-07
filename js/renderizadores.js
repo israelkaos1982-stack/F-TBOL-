@@ -17222,7 +17222,8 @@
     { id: "europa", icono: "🇪🇺", label: "Europa", c: "#3ba7ff" },
     { id: "sel", icono: "🌐", label: "Selecciones", c: "#9aad34" },
     { id: "bota", icono: "👟", label: "Bota Oro", c: "#ffb020" },
-    { id: "balon", icono: "⚽", label: "Balón Oro", c: "#ffd24a" }
+    { id: "balon", icono: "⚽", label: "Balón Oro", c: "#ffd24a" },
+    { id: "equipoano", icono: '<svg class="tt-ico-campo" viewBox="0 0 40 28" aria-hidden="true"><rect x="1" y="1" width="38" height="26" rx="3" fill="#2f9e44" stroke="#fff" stroke-width="2"/><line x1="20" y1="1" x2="20" y2="27" stroke="#fff" stroke-width="1.6"/><circle cx="20" cy="14" r="5" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="1" y="8" width="6" height="12" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="33" y="8" width="6" height="12" fill="none" stroke="#fff" stroke-width="1.6"/></svg>', label: "Equipo Año", c: "#2f9e44", html: true }
   ];
   var _titulosTempTab = "espana";
   var TITULOS_TEMPORADA_INDIVIDUALES = ["Balón de Oro", "Bota de Oro"];
@@ -17376,7 +17377,7 @@
       cajas.className = "tt-tabs";
       cajas.innerHTML = TITULOS_TEMP_TABS.map(function (t) {
         return '<button type="button" class="tt-tab' + (t.id === tab ? " tt-tab--activa" : "") + '" style="--tt-c:' + t.c +
-          '" data-accion="titulos-temporada-tab" data-tab="' + t.id + '"><span class="tt-tab-ico">' + t.icono +
+          '" data-accion="titulos-temporada-tab" data-tab="' + t.id + '"><span class="tt-tab-ico tt-tab-ico--' + t.id + '">' + t.icono +
           '</span><span class="tt-tab-txt">' + escapeHTML(t.label) + "</span></button>";
       }).join("");
       contenedor.appendChild(cajas);
@@ -17385,6 +17386,10 @@
         if (act && act.scrollIntoView) act.scrollIntoView({ block: "nearest", inline: "center" });
       }, 0);
 
+      if (tab === "equipoano") {
+        _renderEquipoAno(contenedor);
+        return;
+      }
       if (tab === "balon" || tab === "bota") {
         var g = document.createElement("div");
         g.id = "inicio-trofeos-vista";
@@ -17410,6 +17415,130 @@
       lista.innerHTML = comps.map(function (c) { return _tituloTempCardHTML(c, parsed, datos); }).join("");
       contenedor.appendChild(lista);
     });
+  }
+
+  // ---------- v448: EQUIPO DEL AÑO ----------
+  // Texto libre:
+  //   EQUIPO 1
+  //   Entrenador: PSG - Izan
+  //   POR: Verbruggen - Brighton - 9,8
+  //   DEF: A. Hakimi - PSG - 9,8 | De Winter - Milan - 9,1
+  //   MED: ...   DEL: ...
+  //   EQUIPO 2 ...
+  // (también vale un jugador por línea debajo de "DEF"/"Defensas"...).
+  var EQUIPO_ANO_EJEMPLO = [
+    "EQUIPO 1",
+    "Entrenador: PSG - Izan",
+    "POR: Verbruggen - Brighton - 9,8",
+    "DEF: A. Hakimi - PSG - 9,8 | De Winter - Milan - 9,1 | Rafa Marín - Napoli - 9,0 | Jakub Kiwior - FC Porto - 8,7",
+    "MED: Çalhanoğlu - Inter - 9,8 | André - Lille - 8,8 | Olise - Bayern Múnich - 8,4",
+    "DEL: E. Haaland - Manchester City - 9,8 | Gonçalo Ramos - Milan - 8,8 | Kane - Bayern Múnich - 8,4",
+    "",
+    "EQUIPO 2",
+    "Entrenador: RB Leipzig - ",
+    "POR: Zadro - Aris Limassol - 9,6",
+    "DEF: Orbán - RB Leipzig - 8,6 | Pavlović - Milan - 8,4 | Bisseck - Inter - 8,3 | Diawara - Milan - 8,3",
+    "MED: Eze - Arsenal - 8,3 | Reitz - RB Leipzig - 8,3 | Rayan Cherki - Manchester City - 7,7",
+    "DEL: Gyökeres - Arsenal - 8,3 | Ferran Torres - PSG - 8,3 | Rômulo - RB Leipzig - 7,8"
+  ].join("\n");
+  function parsearEquipoAno(texto) {
+    var equipos = { 1: { ent: null, pos: { POR: [], DEF: [], MED: [], DEL: [] } }, 2: { ent: null, pos: { POR: [], DEF: [], MED: [], DEL: [] } } };
+    var eq = 1, pos = null;
+    function posDe(w) {
+      w = _normNombre(w);
+      if (/^(por|portero|porteros|pt)$/.test(w)) return "POR";
+      if (/^(def|defensa|defensas|defensor|defensores)$/.test(w)) return "DEF";
+      if (/^(med|medio|medios|mc|centrocampista|centrocampistas|centrocampo)$/.test(w)) return "MED";
+      if (/^(del|delantero|delanteros|dc)$/.test(w)) return "DEL";
+      return null;
+    }
+    function jugador(txt) {
+      var partes = txt.split(/\s+[-–·]\s+|\s+[-–·]$|^[-–·]\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+      if (!partes.length) return null;
+      var nota = "";
+      if (partes.length > 1 && /^\d+(?:[.,]\d+)?$/.test(partes[partes.length - 1])) nota = partes.pop().replace(".", ",");
+      return { nombre: partes[0], equipo: partes.slice(1).join(" · "), nota: nota };
+    }
+    String(texto || "").split("\n").forEach(function (lin) {
+      var l = lin.replace(/^[\s🥇🥈🏅•*-]+/u, "").trim();
+      if (!l) return;
+      var mE = /^equipo\s*(\d)/i.exec(l);
+      if (mE) { eq = mE[1] === "2" ? 2 : 1; pos = null; return; }
+      var mEnt = /^entrenador(?:es)?\s*[:·\-]?\s*(.*)$/i.exec(l);
+      if (mEnt) {
+        var pe = mEnt[1].split(/\s+[-–·]\s*|\s*[-–·]\s+/).map(function (x) { return x.trim(); });
+        equipos[eq].ent = { club: pe[0] || "", nombre: pe.slice(1).join(" ").trim() };
+        return;
+      }
+      var mP = /^([a-záéíóúñ]+)\s*[:.]?\s*(.*)$/i.exec(l);
+      var pNueva = mP ? posDe(mP[1]) : null;
+      var resto = l;
+      if (pNueva) { pos = pNueva; resto = mP[2]; }
+      if (!pos || !resto) return;
+      resto.split(/\s*[|;]\s*/).forEach(function (t) { var j = jugador(t); if (j) equipos[eq].pos[pos].push(j); });
+    });
+    return equipos;
+  }
+  function _equipoAnoNotaClase(nota) {
+    var n = parseFloat(String(nota).replace(",", "."));
+    if (isNaN(n)) return "";
+    return n >= 9 ? "ea-nota--oro" : (n >= 8 ? "ea-nota--verde" : "ea-nota--oliva");
+  }
+  function _equipoAnoFilaHTML(lista) {
+    if (!lista || !lista.length) return "";
+    return '<div class="ea-fila ea-fila--' + lista.length + '">' + lista.map(function (j) {
+      return '<div class="ea-jug"><span class="ea-jug-nombre">' + escapeHTML(j.nombre) + "</span>" +
+        (j.equipo ? '<span class="ea-jug-equipo">' + escapeHTML(j.equipo) + "</span>" : "") +
+        (j.nota ? '<span class="ea-nota ' + _equipoAnoNotaClase(j.nota) + '">' + escapeHTML(j.nota) + "</span>" : "") + "</div>";
+    }).join("") + "</div>";
+  }
+  function _equipoAnoEntHTML(ent, medalla) {
+    var club = ent && ent.club ? " · " + escapeHTML(ent.club) : "";
+    return '<div class="ea-ent"><span class="ea-ent-club">' + medalla + " Entrenador" + club + "</span>" +
+      (ent && ent.nombre ? '<span class="ea-ent-nombre">🎮 ' + escapeHTML(ent.nombre) + "</span>" : "") + "</div>";
+  }
+  function _renderEquipoAno(contenedor) {
+    var texto = window.Estado && window.Estado.obtenerEquipoAnoTexto ? window.Estado.obtenerEquipoAnoTexto() : "";
+    var header = document.createElement("div");
+    header.className = "liga1ref-header";
+    header.innerHTML = '<span class="liga1ref-leyenda-mini">Los 2 mejores onces de la temporada</span>' +
+      '<button type="button" class="liga1ref-editar-btn" data-accion="editar-equipo-ano" aria-label="Editar Equipo del Año">✏️</button>';
+    contenedor.appendChild(header);
+    if (!texto.trim()) {
+      contenedor.appendChild(nodoEstado("⚽", "Todavía no hay Equipo del Año. Pulsa ✏️ para pegarlo."));
+      return;
+    }
+    var e = parsearEquipoAno(texto);
+    var p1 = e[1].pos, p2 = e[2].pos;
+    var html = '<div class="ea-wrap">' + _equipoAnoEntHTML(e[2].ent, "🥈") +
+      '<div class="ea-campo">' +
+      '<span class="ea-tag ea-tag--arriba">🥈 Equipo 2</span>' +
+      _equipoAnoFilaHTML(p2.POR) + _equipoAnoFilaHTML(p2.DEF) + _equipoAnoFilaHTML(p2.MED) + _equipoAnoFilaHTML(p2.DEL) +
+      '<div class="ea-medio"><span class="ea-circulo"></span></div>' +
+      _equipoAnoFilaHTML(p1.DEL) + _equipoAnoFilaHTML(p1.MED) + _equipoAnoFilaHTML(p1.DEF) + _equipoAnoFilaHTML(p1.POR) +
+      '<span class="ea-tag ea-tag--abajo">🥇 Equipo 1</span>' +
+      "</div>" + _equipoAnoEntHTML(e[1].ent, "🥇") + "</div>";
+    contenedor.insertAdjacentHTML("beforeend", html);
+  }
+  function pintarEditorEquipoAno(contenedor) {
+    contenedor.innerHTML = "";
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = "Pega los 2 equipos. Formato: «EQUIPO 1» / «Entrenador: Club - Nombre» / «POR: Jugador - Equipo - 9,8» " +
+      "y en DEF / MED / DEL varios jugadores separados por «|» (o uno por línea debajo). El Equipo 1 va abajo en el campo y el 2 arriba.";
+    contenedor.appendChild(nota);
+    var ta = document.createElement("textarea");
+    ta.id = "equipo-ano-textarea";
+    ta.className = "admin-roadmap-textarea";
+    ta.rows = 22;
+    var actual = window.Estado && window.Estado.obtenerEquipoAnoTexto ? window.Estado.obtenerEquipoAnoTexto() : "";
+    ta.value = actual || EQUIPO_ANO_EJEMPLO;
+    contenedor.appendChild(ta);
+    var acc = document.createElement("div");
+    acc.className = "admin-roadmap-editor-acciones";
+    acc.innerHTML = '<button type="button" class="btn-ghost" data-accion="cancelar-equipo-ano">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-equipo-ano">💾 Guardar</button>';
+    contenedor.appendChild(acc);
   }
 
   // Editor inline (candado 646, texto libre — a diferencia de la Sala de
@@ -23889,6 +24018,7 @@
     htmlIdaGlobalDeIda: _htmlIdaGlobalDeIda,
     clasificacionDePartido: _clasificacionDePartido,
     clasificacionTrasResultado: _clasificacionTrasResultado,
+    pintarEditorEquipoAno: pintarEditorEquipoAno,
     aliasEfootballDefault: _aliasEfootballDefault,
     htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,

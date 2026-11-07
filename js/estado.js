@@ -2205,6 +2205,17 @@
     }
   }
 
+  // ---------- v448: Equipo del Año (texto libre) ----------
+  var EQUIPO_ANO_KEY = "ef7_equipo_ano_v1";
+  function obtenerEquipoAnoTexto() {
+    try { var v = localStorage.getItem(EQUIPO_ANO_KEY); return v !== null ? v : ""; } catch (err) { return ""; }
+  }
+  function guardarEquipoAnoTexto(texto) {
+    if (!_confirmarSiEncogeMucho(EQUIPO_ANO_KEY, obtenerEquipoAnoTexto(), texto)) return false;
+    try { localStorage.setItem(EQUIPO_ANO_KEY, texto || ""); return true; }
+    catch (err) { console.error("[estado] no se pudo guardar el Equipo del Año:", err); _avisarFalloGuardado(err); return false; }
+  }
+
   // ---------- Golden (Balón de Oro / Bota de Oro) ----------
   // Texto libre: una línea por jugador "Jugador; Equipo; goles; MVP;
   // imbatidas; zamora; puntos del club". Se sincroniza solo (prefijo ef7_).
@@ -5011,6 +5022,8 @@
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerTitulosTemporadaTexto: obtenerTitulosTemporadaTexto,
+    obtenerEquipoAnoTexto: obtenerEquipoAnoTexto,
+    guardarEquipoAnoTexto: guardarEquipoAnoTexto,
     obtenerGoldenTexto: obtenerGoldenTexto,
     guardarGoldenTexto: guardarGoldenTexto,
     guardarTitulosTemporadaTexto: guardarTitulosTemporadaTexto,

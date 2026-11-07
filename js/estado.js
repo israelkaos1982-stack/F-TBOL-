@@ -532,11 +532,32 @@
   // PIN de administrador (ver js/renderizadores.js, window.Main.pedirPinAdmin).
   // `descripcion` (opcional, string) es solo para que la papelera se
   // pueda leer sin adivinar de qué partido se trataba.
-  function reiniciarResultadoPartido(partidoId, descripcion) {
+  function reiniciarResultadoPartido(partidoId, descripcion, partido, datos) {
     var e = cargarEstado();
     var actual = e.resultados[partidoId];
+    // v455: el resultado puede NO estar en su id exacto sino "pegado" por
+    // identidad de reserva (listarPartidosResueltos → _identidadFallbackDePartido)
+    // desde un partido viejo con el MISMO cruce y ronda (bug usuario: PSG 4-0
+    // AEK Athens, Champions J1 sin jugar, imposible de borrar — este reinicio
+    // solo miraba el id exacto y no hacía nada). Se busca también por
+    // identidad y se deja una TUMBA en el id exacto, que gana siempre al
+    // fallback, además de tumbar el resultado viejo de origen.
+    var idOrigen = null;
+    if ((!actual || actual.jugado === false) && partido && datos && window.Renderizadores) {
+      try {
+        var clave = _identidadFallbackDePartido(partido, datos, window.Renderizadores);
+        if (clave) {
+          Object.keys(e.resultados).some(function (id) {
+            var r = e.resultados[id];
+            if (id !== partidoId && r && r._identidad === clave && r.jugado !== false) { idOrigen = id; actual = r; return true; }
+            return false;
+          });
+        }
+      } catch (errI) { idOrigen = null; }
+    }
     if (!actual || actual.jugado === false) return false; // no había nada que reiniciar (o ya lo estaba)
-    _archivarEnPapelera(partidoId, actual, descripcion);
+    _archivarEnPapelera(partidoId, actual, descripcion); // restaurar lo devuelve a ESTE partido
+    if (idOrigen) e.resultados[idOrigen] = _tumbaDeResultado(actual);
     e.resultados[partidoId] = _tumbaDeResultado(actual);
     return guardarEstado();
   }

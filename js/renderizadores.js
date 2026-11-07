@@ -21714,6 +21714,51 @@
         } catch (errS) { posG = null; }
         if (posG) filas.push({ emoji: ibC.emoji, nombre: ibC.nombre, estado: "Fase Grupos · " + _posicionOrdinal(posG), compKey: k });
       });
+      // v435 (petición usuario): formato corto y uniforme en la fase de
+      // grupos — "Nations: Liga Plata - 0/6 • 0 pts", "Road Euro: Grupo -
+      // 0/8 • 0 pts". Las rondas de cuadro (Dieciseisavos...) no cambian.
+      var _CORTO_SEL = { nations: "Nations", roadeurocopa: "Road Euro", roadmundial: "Road Mundial", roadamerica: "Road América",
+        roadafrica: "Road África", roadasia: "Road Asia", eurocopa: "Eurocopa", mundialsel: "Mundial" };
+      var partidosSel = _partidosOrdenadosDelClub(clubId, datos);
+      var esKoS = function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b|repesca|play-?offs?/.test(_normNombre(p.ronda || "")); };
+      filas.forEach(function (f) {
+        var k2 = f.compKey;
+        if (!k2 || !_CORTO_SEL[k2]) return;
+        f.sel = true;
+        if (!/^(Fase Grupos|Por jugar)/.test(String(f.estado || ""))) { f.nombre = _CORTO_SEL[k2]; return; }
+        var lista2 = partidosSel.filter(function (p) { return _resolverCompKeyBalon(p.competicion) === k2 && !esKoS(p); });
+        var jug2 = 0, pts2 = 0;
+        lista2.forEach(function (p) {
+          if (!p.jugado || !p.resultado) return;
+          jug2++;
+          var loc = p.local === clubId;
+          var gp = loc ? p.resultado.golesLocal : p.resultado.golesVisitante;
+          var gr = loc ? p.resultado.golesVisitante : p.resultado.golesLocal;
+          pts2 += gp > gr ? 3 : (gp === gr ? 1 : 0);
+        });
+        var tamGrupo = 0, etiqueta = "Grupo";
+        try {
+          if (k2 === "nations") {
+            var divS = selEq ? _nationsDivDeHumano(selEq) : null;
+            if (divS) {
+              etiqueta = _nationsDivMeta(divS).label;
+              parsearNationsGruposTexto(window.Estado.obtenerNationsTexto(divS)).some(function (g) {
+                if ((g.filas || []).some(function (r) { return _liga1RefNombresCoinciden(r.nombre, selEq.nombre); })) { tamGrupo = g.filas.length; return true; }
+                return false;
+              });
+            }
+          } else {
+            _SEL_COMPS_GRUPOS[k2](datos).some(function (g) {
+              var enG = (g.filas || []).some(function (r) { return r.equipoId === clubId; });
+              if (enG) { tamGrupo = g.filas.length; return true; }
+              return false;
+            });
+          }
+        } catch (errT) { tamGrupo = 0; }
+        var total2 = Math.max(lista2.length, tamGrupo > 1 ? tamGrupo - 1 : 0);
+        f.nombre = _CORTO_SEL[k2];
+        f.estado = etiqueta + " - " + jug2 + "/" + total2 + " • " + pts2 + " pts";
+      });
     }
     return filas;
   }
@@ -22014,7 +22059,7 @@
           grupoComp.appendChild(tituloComp);
           filasComp.forEach(function (f) {
             var linea = document.createElement("div");
-            linea.className = "plantilla-comp-linea" + (f.eliminado ? " plantilla-comp-linea--eliminado" : "") + (f.campeon ? " plantilla-comp-linea--campeon" : "");
+            linea.className = "plantilla-comp-linea" + (f.eliminado ? " plantilla-comp-linea--eliminado" : "") + (f.campeon ? " plantilla-comp-linea--campeon" : "") + (f.sel ? " plantilla-comp-linea--sel" : "");
             linea.innerHTML =
               '<span class="plantilla-lider-emoji">' + f.emoji + "</span>" +
               '<span class="plantilla-comp-nombre">' + escapeHTML(_nombreCompNormal(f.nombre)) + ":</span> " +
@@ -22044,7 +22089,7 @@
           var editSel = document.createElement("div");
           editSel.className = "plantilla-editar-final";
           editSel.innerHTML = '<button type="button" class="plantilla-editar-final-btn" data-accion="editar-roster-plantilla-inline" data-club-id="' +
-            escapeHTML(idEquipoHumanoActivo) + '">✏️ Editar plantilla de la selección</button>';
+            escapeHTML(idEquipoHumanoActivo) + '" title="Editar plantilla de la selección" aria-label="Editar plantilla de la selección">✏️</button>';
           frag.appendChild(editSel);
         }
 

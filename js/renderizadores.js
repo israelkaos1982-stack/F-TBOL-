@@ -1378,6 +1378,12 @@
       var l = linea.trim();
       if (!l) return;
       l = l.replace(/^\d+[.)]\s*/, ""); // número de lista inicial opcional, cosmético
+      // v459: «⚠️ Hypermotion - 38ª Jornada - …» = partido SIN VALOR (pendiente
+      // de una temporada pasada): se juega y se guarda el resultado, pero no
+      // suma a clasificación, estadísticas, ranking ni sanciones.
+      var sinValor = false;
+      var mSV = l.match(/^\u26A0\uFE0F?\s*/);
+      if (mSV) { sinValor = true; l = l.slice(mSV[0].length).trim(); if (!l) return; }
 
       // Tolerante a que falte el espacio en UNO de los 2 lados del guion
       // separador (ej. "Ida Semifinal- Atlético Madrid" en vez de "Ida
@@ -1488,7 +1494,8 @@
         jugado: jugado,
         esVisitante: esVisitante,
         golesClub: golesClub,
-        golesRival: golesRival
+        golesRival: golesRival,
+        sinValor: sinValor
       });
     });
     return items;
@@ -19158,7 +19165,7 @@
     var equipo = buscarEquipoPorId(clubId, datos);
     var ligaActual = equipo ? equipo.ligaActual : null;
     var todosLosPartidos = window.Estado
-      ? window.Estado.listarPartidosResueltos(datos)
+      ? window.Estado.listarPartidosResueltos(datos, { incluirSinValor: true }) // v459: el calendario SÍ los muestra (⚠️)
       : (datos.partidos.partidos || []);
     var partidosDelClub = todosLosPartidos.filter(function (p) {
       var esSuyo = p.local === clubId || p.visitante === clubId || (selId && (p.local === selId || p.visitante === selId));
@@ -19392,7 +19399,9 @@
           var propioLocal = p.local === idEquipoHumanoActivo || p.local === selActivo;
           var rivalId = propioLocal ? p.visitante : p.local;
           if (rivalId && rivalId !== idEquipoHumanoActivo && rivalId !== selActivo && _esClubHumano(rivalId, datos)) card.setAttribute("data-hvh", "1");
-          card.setAttribute("data-marca", _marcaAguaComp(p.competicion));
+          card.setAttribute("data-marca", p._sinValor ? "⚠️" : _marcaAguaComp(p.competicion));
+          // v459: ⚠️ partido sin valor (temporada pasada) — se juega, no suma nada.
+          if (p._sinValor) { card.classList.add("match-card--sin-valor"); card.title = "⚠️ Partido sin valor: solo se guarda el resultado (no suma a clasificación, estadísticas ni ranking)"; }
           frag.appendChild(card);
         });
         contenedor.appendChild(frag);
@@ -21748,10 +21757,11 @@
     var _COMPS_EXCLUIDAS = { superliga: true, verano: true };
     var partidosClub = _partidosOrdenadosDelClub(clubId, datos);
     var anterior = null;
+    // v459: un partido ⚠️ sin valor nunca genera sanciones (ver bucle de abajo).
     for (var i = 0; i < partidosClub.length; i++) {
       if (partidosClub[i]._ordenClub === ordenPartidoActual - 1) { anterior = partidosClub[i]; break; }
     }
-    if (!anterior || !anterior.jugado || _COMPS_EXCLUIDAS[anterior.competicion] || !anterior.jug || !anterior.jug.length) return [];
+    if (!anterior || anterior._sinValor || !anterior.jugado || _COMPS_EXCLUIDAS[anterior.competicion] || !anterior.jug || !anterior.jug.length) return [];
 
     var nombresPorId = {};
     obtenerJugadoresClub(clubId).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
@@ -22008,6 +22018,7 @@
     var clavesDivision = {};
     LIGA_NAV_ORDEN.forEach(function (id) { clavesDivision[_compKeyEsperadoParaDivision(id)] = true; });
     _partidosOrdenadosDelClub(clubId, datos).forEach(function (p) {
+      if (p._sinValor) return; // v459: ⚠️ partido sin valor — no es competición de esta temporada
       if (p.competicion === "liga" || clavesDivision[p.competicion]) return; // la Liga va por su tabla (arriba)
       (porComp[p.competicion] = porComp[p.competicion] || []).push(p);
     });
@@ -22125,7 +22136,7 @@
       // 0/8 • 0 pts". Las rondas de cuadro (Dieciseisavos...) no cambian.
       var _CORTO_SEL = { nations: "Nations", roadeurocopa: "Road Euro", roadmundial: "Road Mundial", roadamerica: "Road América",
         roadafrica: "Road África", roadasia: "Road Asia", eurocopa: "Eurocopa", mundialsel: "Mundial" };
-      var partidosSel = _partidosOrdenadosDelClub(clubId, datos);
+      var partidosSel = _partidosOrdenadosDelClub(clubId, datos).filter(function (p) { return !p._sinValor; });
       var esKoS = function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b|repesca|play-?offs?/.test(_normNombre(p.ronda || "")); };
       filas.forEach(function (f) {
         var k2 = f.compKey;

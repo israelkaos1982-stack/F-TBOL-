@@ -782,6 +782,7 @@
           // Solo para _deduplicarExtraHumanoVsHumano — se quita antes de
           // devolver la lista (mismo shape que data/partidos.json siempre).
           _origenClubId: club.id,
+          _sinValor: !!ex.sinValor,
           jugado: ex.jugado,
           resultado: ex.jugado ? {
             golesLocal: esVisitanteLado ? ex.golesRival : ex.golesClub,
@@ -1347,10 +1348,14 @@
   // local superpuesto si existe. Es la ÚNICA fuente de verdad que debe
   // leer cualquier pantalla (calendario, clasificación, estadísticas de
   // jugador).
-  function listarPartidosResueltos(datos) {
+  function listarPartidosResueltos(datos, opciones) {
     var e = cargarEstado();
     var base = (datos.partidos.partidos || []).slice();
     var extra = _partidosExtraDeTodosLosClubes(datos, e.resultados);
+    // v459: los partidos ⚠️ SIN VALOR (pendientes de una temporada pasada)
+    // solo los ve el calendario del club (incluirSinValor); para todo lo
+    // demás — clasificación, estadísticas, ranking, Pichichi… — no existen.
+    if (!(opciones && opciones.incluirSinValor)) extra = extra.filter(function (p) { return !p._sinValor; });
     var superliga = _partidosSuperliga(datos);
     var generados = Object.keys(e.partidosGenerados).map(function (id) { return e.partidosGenerados[id]; });
     var todos = base.concat(extra).concat(superliga).concat(generados);

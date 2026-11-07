@@ -3421,7 +3421,7 @@
       '<p>En el caso de que dos (o más) equipos tengan igual número de puntos, las siguientes reglas rompen el empate:</p><ol>' +
       "<li>Enfrentamientos directos en todos sus partidos, si todos los equipos empatados tienen coincidencias internas</li>" +
       "<li>Diferencia de goles</li><li>Goles marcados</li><li>Goles encajados</li><li>% de victorias</li></ol></div>";
-    return '<div class="liga-leyenda-sep"></div>' + _leyendaDetailsHTML(grid + desempate, "LEYENDA Y CRITERIO DESEMPATE");
+    return _leyendaDetailsHTML(grid + desempate, "LEYENDA Y CRITERIO DESEMPATE");
   }
 
   // Envuelve una leyenda/nota en un <details> nativo (0 JS, CSS mínimo)
@@ -3430,7 +3430,9 @@
   // Rey), reutilizado con cualquier `gridHTML` que ya lleve su propia
   // clase de rejilla.
   function _leyendaDetailsHTML(gridHTML, titulo) {
+    // v465: línea separadora encima de TODA leyenda (antes solo Ea Sports/Ligue 1).
     return (
+      '<div class="liga-leyenda-sep"></div>' +
       '<details class="liga1ref-leyenda-details">' +
       '<summary class="liga1ref-leyenda-summary">' + (titulo || "LEYENDA") + '</summary>' +
       gridHTML +

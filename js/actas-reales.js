@@ -39,7 +39,14 @@
     "atletico-madrid": {
       corte: 1791016596000, // 2026-10-03 08:36 UTC
       divisionLiga: "hypermotion",
-      partidos: [
+      // v458 (petición usuario: "la plantilla del Atlético tiene 58 goles sin
+      // haber jugado ni un partido / resetéala a cero"): NUEVA TEMPORADA. Las
+      // 26 actas de la temporada pasada ya NO suman — se guardan aquí solo
+      // como archivo. `partidos: []` + el bloque presente mantiene ignorados
+      // la 🧮 base y el 📌 viejos del club; los partidos de esta temporada
+      // (jugados después del `corte`) suman solos, como siempre.
+      partidos: [],
+      partidosTemporadaAnterior: [
         { comp: "liga", rival: "Leganés", local: true, gf: 3, gc: 4,
           atl: [["Kang-In Lee", 1, 0, 0, 0], ["Álex Baena", 1, 0, 0, 0], ["Dávid Hancko", 0, 0, 1, 0],
                 ["J. David", 1, 0, 0, 0], ["R. Le Normand", 0, 0, 1, 1], ["Cristian Romero", 0, 0, 1, 0]],

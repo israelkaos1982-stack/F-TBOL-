@@ -17459,11 +17459,37 @@
       if (partes.length > 1 && /^\d+(?:[.,]\d+)?$/.test(partes[partes.length - 1])) nota = partes.pop().replace(".", ",");
       return { nombre: partes[0], equipo: partes.slice(1).join(" · "), nota: nota };
     }
+    // v449: formato "🥇 EQUIPO 1 · 4-3-3 · Entrenador: Izan (PSG) 9,8" y líneas
+    // 🧤 POR / 🛡️ DEF / ⚽ MED / 👟 DEL con "Jugador (Equipo · País) 9,8 · …".
+    var ICONO_POS = { "🧤": "POR", "🛡": "DEF", "⚽": "MED", "👟": "DEL" };
+    function jugadoresParen(txt) {
+      var out = [], re = /([^()·]+?)\s*\(([^)]*)\)\s*(\d+(?:[.,]\d+)?)?/g, m;
+      while ((m = re.exec(txt))) {
+        out.push({ nombre: m[1].trim(), equipo: m[2].split(/\s*·\s*/)[0].trim(), nota: (m[3] || "").replace(".", ",") });
+      }
+      return out;
+    }
     String(texto || "").split("\n").forEach(function (lin) {
+      var l0 = lin.trim();
+      var icoPos = null;
+      Object.keys(ICONO_POS).forEach(function (ic) { if (l0.indexOf(ic) === 0) icoPos = ICONO_POS[ic]; });
+      if (icoPos && /\(/.test(l0)) {
+        pos = icoPos;
+        jugadoresParen(l0.replace(/^\S+\s*/, "")).forEach(function (j) { equipos[eq].pos[pos].push(j); });
+        return;
+      }
       var l = lin.replace(/^[\s🥇🥈🏅•*-]+/u, "").trim();
       if (!l) return;
+      if (/^equipo\s+del\s+a/i.test(l.replace(/^\S*\s/, "")) || /equipo\s+del\s+a[ñn]o/i.test(l)) { return; }
       var mE = /^equipo\s*(\d)/i.exec(l);
-      if (mE) { eq = mE[1] === "2" ? 2 : 1; pos = null; return; }
+      if (mE) {
+        eq = mE[1] === "2" ? 2 : 1; pos = null;
+        var mEnt2 = /entrenador\s*:\s*([^(]+?)\s*\(([^)]*)\)\s*(\d+(?:[.,]\d+)?)?/i.exec(l);
+        if (mEnt2) equipos[eq].ent = { club: mEnt2[2].trim(), nombre: mEnt2[1].trim(), nota: (mEnt2[3] || "").replace(".", ",") };
+        var mForm = /(\d-\d-\d(?:-\d)?)/.exec(l);
+        if (mForm) equipos[eq].formacion = mForm[1];
+        return;
+      }
       var mEnt = /^entrenador(?:es)?\s*[:·\-]?\s*(.*)$/i.exec(l);
       if (mEnt) {
         var pe = mEnt[1].split(/\s+[-–·]\s*|\s*[-–·]\s+/).map(function (x) { return x.trim(); });
@@ -17495,7 +17521,8 @@
   function _equipoAnoEntHTML(ent, medalla) {
     var club = ent && ent.club ? " · " + escapeHTML(ent.club) : "";
     return '<div class="ea-ent"><span class="ea-ent-club">' + medalla + " Entrenador" + club + "</span>" +
-      (ent && ent.nombre ? '<span class="ea-ent-nombre">🎮 ' + escapeHTML(ent.nombre) + "</span>" : "") + "</div>";
+      '<span class="ea-ent-der">' + (ent && ent.nombre ? '<span class="ea-ent-nombre">🎮 ' + escapeHTML(ent.nombre) + "</span>" : "") +
+      (ent && ent.nota ? '<span class="ea-nota ' + _equipoAnoNotaClase(ent.nota) + '">' + escapeHTML(ent.nota) + "</span>" : "") + "</span></div>";
   }
   function _renderEquipoAno(contenedor) {
     var texto = window.Estado && window.Estado.obtenerEquipoAnoTexto ? window.Estado.obtenerEquipoAnoTexto() : "";
@@ -17519,6 +17546,18 @@
       '<span class="ea-tag ea-tag--abajo">🥇 Equipo 1</span>' +
       "</div>" + _equipoAnoEntHTML(e[1].ent, "🥇") + "</div>";
     contenedor.insertAdjacentHTML("beforeend", html);
+  }
+  // v449: el admin pega TODO junto (Balón de Oro + Bota + Golden + Equipo del
+  // Año). Se parte por la cabecera "EQUIPO DEL AÑO": lo de antes es Golden,
+  // lo de después el Equipo del Año.
+  function separarTextoTemporadaGolden(texto) {
+    var lineas = String(texto || "").split("\n");
+    for (var i = 0; i < lineas.length; i++) {
+      if (/equipo\s+del\s+a[ñn]o/i.test(lineas[i])) {
+        return { golden: lineas.slice(0, i).join("\n").trim(), equipo: lineas.slice(i).join("\n").trim() };
+      }
+    }
+    return { golden: String(texto || ""), equipo: "" };
   }
   function pintarEditorEquipoAno(contenedor) {
     contenedor.innerHTML = "";
@@ -24019,6 +24058,7 @@
     clasificacionDePartido: _clasificacionDePartido,
     clasificacionTrasResultado: _clasificacionTrasResultado,
     pintarEditorEquipoAno: pintarEditorEquipoAno,
+    separarTextoTemporadaGolden: separarTextoTemporadaGolden,
     aliasEfootballDefault: _aliasEfootballDefault,
     htmlClasificacionDePartido: _htmlClasificacionDePartido,
     esFinalDeTorneo: _esFinalDeTorneo,

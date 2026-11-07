@@ -23866,7 +23866,32 @@
       if (fR) E["guardar" + pref + "PlayoffTexto"] = function (ronda, texto) {
         var args = arguments;
         if (reentrante) return fR.apply(E, args);
-        return wrapRes(repartir(pref, rondas, texto, fT, fR, fS), function () { return fR.apply(E, args); });
+        // v464: desde la PRIMERA ronda (1/16 en Champions) se pegan todas las
+        // rondas en un solo texto — y desde ahí también se tienen que poder
+        // BORRAR. Antes, vaciar el texto de 1/16 dejaba Octavos/Cuartos/Semis/
+        // Final de la temporada pasada sin ninguna forma de quitarlas.
+        var gO = E["obtener" + pref + "PlayoffTexto"];
+        var esPrimera = rondas && rondas.length && ronda === rondas[0].key;
+        var incluidas = {};
+        if (esPrimera) {
+          var rr = repartirTextoCompeticion(texto, rondas);
+          if (rr) Object.keys(rr.rondas).forEach(function (k) { incluidas[k] = true; });
+          incluidas[ronda] = true;
+        }
+        var res = wrapRes(repartir(pref, rondas, texto, fT, fR, fS), function () { return fR.apply(E, args); });
+        if (res !== false && esPrimera && typeof gO === "function") {
+          var sobran = rondas.filter(function (r) { return !incluidas[r.key] && String(gO.call(E, r.key) || "").trim(); });
+          if (sobran.length && window.confirm("Hay rondas guardadas que no están en este texto (" +
+              sobran.map(function (r) { return r.label; }).join(", ") +
+              ").\n\n¿Borrarlas también? (por ejemplo, las de la temporada pasada)")) {
+            var confirmOrig = window.confirm;
+            reentrante = true;
+            window.confirm = function () { return true; }; // ya confirmado arriba (una sola vez)
+            try { sobran.forEach(function (r) { fR.call(E, r.key, ""); }); }
+            finally { window.confirm = confirmOrig; reentrante = false; }
+          }
+        }
+        return res;
       };
       if (fS) E["guardar" + pref + "StatTexto"] = function (cat, texto) {
         var args = arguments;

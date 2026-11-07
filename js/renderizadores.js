@@ -18041,7 +18041,7 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
-      var m = _normNombre(l).match(/^(espana|liga|europa|global|seleccion)\s*[-:]\s*/);
+      var m = _normNombre(l).match(/^(espana|francia|liga|europa|global|seleccion)\s*[-:]\s*/);
       if (!m) return;
       var tipoClave = m[1] === "liga" ? "espana" : m[1];
       var resto = l.slice(l.search(/[-:]/) + 1).trim();
@@ -18117,6 +18117,7 @@
       });
       return tot;
     }
+    if (tipo === "francia") tipo = "extra"; // Supercopa de Francia (su liga y copa ya vienen en la lista pegada)
     return c && c[tipo] ? c[tipo] : { total: 0, filas: [] };
   }
   // Puntos de los objetivos YA logrados del club que suman a este ranking.
@@ -18131,7 +18132,7 @@
     window.Estado.obtenerObjetivosFallados(clubId).forEach(function (c) { fallados[c] = true; });
     var total = 0;
     parseo.orden.forEach(function (sec) {
-      if (_objetivoRankingTipo(sec) !== tipo) return;
+      if (_objetivoRankingTipo(sec) !== (tipo === "francia" ? "espana" : tipo)) return;
       parseo.secciones[sec].forEach(function (o) {
         if (fallados[o.clave]) return;
         var completo = logrados[o.clave] || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
@@ -18165,7 +18166,26 @@
   }
   // En ESPAÑA solo van los humanos que juegan las competiciones españolas: el único
   // extranjero que juega la Liga es el Liverpool (Inter, PSG, Chelsea no).
+  // v456: el PSG juega en Francia — su caja ESPAÑA es FRANCIA, con su propia
+  // lista pegada (ef7_ranking_lista_v1_francia). Solo para clubes de Ligue 1.
+  var _RANK_TIPO_FRANCIA = { id: "francia", icono: "🇫🇷", etiqueta: "FRANCIA" };
+  function _rankingEsFrances(h) {
+    if (h === "psg") return true;
+    try { return _divisionActualClub(h) === "ligue1"; } catch (err) { return false; }
+  }
+  function _rankingTiposDe(clubId) {
+    var tipos = window.Estado.RANKING_TIPOS;
+    if (!_rankingEsFrances(clubId)) return tipos;
+    return tipos.map(function (t) { return t.id === "espana" ? _RANK_TIPO_FRANCIA : t; });
+  }
+  function _rankingTabValido(clubId, tab) {
+    var tipos = _rankingTiposDe(clubId);
+    if (tipos.some(function (t) { return t.id === tab; })) return tab;
+    if (tab === "espana" || tab === "francia") return tipos[0].id;
+    return tipos[0].id;
+  }
   function _rankingJuegaEspana(h) {
+    if (_rankingEsFrances(h)) return false;
     return h === "liverpool" || RANK_LIGAS_EXTRANJERAS.indexOf(_divisionActualClub(h)) === -1;
   }
   function _rankingEstado(tipo, clubId) {
@@ -18174,6 +18194,7 @@
     if (tipo === "espana") filas = filas.filter(function (f) { return f.sep || !/^arsenal( |$)/.test(f.norm); });
     var humanos = _rankingHumanos(clubId).filter(function (h) {
       if (tipo === "espana") return _rankingJuegaEspana(h);
+      if (tipo === "francia") return _rankingEsFrances(h);
       if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.juegaEuropa || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
       return true;
     });
@@ -18243,7 +18264,7 @@
   function _rankingTabsHTML(idClubActivo) {
     return (
       '<div class="liga-tab-boxes ranking-tabs">' +
-      window.Estado.RANKING_TIPOS.map(function (t) {
+      _rankingTiposDe(idClubActivo).map(function (t) {
         return '<button type="button" class="liga-tab-box liga-tab-box--ranking-' + t.id +
           (_rankingTabActual === t.id ? " liga-tab-box--activa" : "") +
           '" data-accion="ranking-tab-ir" data-tab="' + t.id + '" data-club-id="' + (idClubActivo || "") + '">' +
@@ -18358,7 +18379,8 @@
     contenedor.appendChild(header);
 
     var tarjetas = '<div class="ranking-cards">';
-    window.Estado.RANKING_TIPOS.forEach(function (t) {
+    _rankingTabActual = _rankingTabValido(idClubActivo, _rankingTabActual);
+    _rankingTiposDe(idClubActivo).forEach(function (t) {
       tarjetas += _rankingTarjetaHTML(t, _rankingEstado(t.id, idClubActivo), idClubActivo);
     });
     tarjetas += "</div>";
@@ -18403,15 +18425,15 @@
     }
   }
   function irRankingTab(clubId, tab) {
-    var valido = window.Estado.RANKING_TIPOS.some(function (t) { return t.id === tab; });
-    _rankingTabActual = valido ? tab : "espana";
+    _rankingTabActual = _rankingTabValido(clubId, tab);
     renderizarRanking("ranking-content", clubId);
   }
 
   // Editor de la lista COMPARTIDA de una clasificación (candado 646).
   function pintarEditorRankingLista(contenedor, idClubActivo, tipo) {
     contenedor.innerHTML = "";
-    var info = window.Estado.RANKING_TIPOS.filter(function (t) { return t.id === tipo; })[0] || window.Estado.RANKING_TIPOS[0];
+    var tiposEd = _rankingTiposDe(idClubActivo);
+    var info = tiposEd.filter(function (t) { return t.id === tipo; })[0] || tiposEd[0];
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
@@ -18441,7 +18463,7 @@
     nota.className = "admin-nota";
     nota.textContent =
       "Una línea por clasificación: TIPO - nombre de tu equipo TAL COMO SALE EN LA LISTA - puesto objetivo. " +
-      "Ejemplo: ESPAÑA - Mersey Reds - 50. Se cumple si estás en ese puesto o en uno mejor.";
+      "Ejemplo: ESPAÑA - Mersey Reds - 50 (el PSG usa FRANCIA - PSG - 5). Se cumple si estás en ese puesto o en uno mejor.";
     contenedor.appendChild(nota);
     var textarea = document.createElement("textarea");
     textarea.id = "ranking-club-textarea";

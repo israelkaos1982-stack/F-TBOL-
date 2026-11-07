@@ -5892,3 +5892,13 @@ button { font-family: inherit; cursor: pointer; }
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
 }
 .match-card--siguiente .match-card-hvh-ico { top: 16px; right: 18px; }
+
+/* v462 — 📌 del próximo partido: "toque" suave cada pocos segundos (solo CSS, ~0 KB) */
+@keyframes pinToque {
+  0%, 78%, 100% { transform: rotate(18deg) translateY(0); }
+  84% { transform: rotate(8deg) translateY(4px); }
+  90% { transform: rotate(22deg) translateY(-2px); }
+  95% { transform: rotate(16deg) translateY(1px); }
+}
+.match-card-pin { animation: pinToque 3.2s ease-in-out infinite; transform-origin: 70% 85%; }
+@media (prefers-reduced-motion: reduce) { .match-card-pin { animation: none; } }

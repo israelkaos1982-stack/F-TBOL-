@@ -1134,6 +1134,10 @@
   alias("West Ham", "West Ham United");
   alias("Wolves", "Wolverhampton Wanderers");
   alias("Marino", "Marino de Luanco");
+  alias("Ironi Kiryat Shmona", "Hapoel Kiryat Shmona");
+  alias("Inter Club d'Escaldes", "Inter Escaldes");
+  alias("GC Zürich", "Grasshopper");
+  alias("Corvinul 1921", "Hunedoara");
   // Homónimos que NO son el mismo club (ver CLAUDE.md): nunca por prefijo.
   var DISTINTOS = {};
   ["CE Europa", "Rangers FC", "Rangers"].forEach(function (n) { DISTINTOS[norm(n)] = 1; });

@@ -10600,7 +10600,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -11306,7 +11306,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una club humana que aparece en el texto pero aún no tiene partidos
@@ -11972,7 +11972,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -12636,7 +12636,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -13301,7 +13301,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -13966,7 +13966,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -14633,7 +14633,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -15291,7 +15291,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos
@@ -15949,7 +15949,7 @@
         _liga1RefSumar(destino, _liga1RefResultadoLado(golesRival, golesE));
       });
 
-      grupo._pushFilaHumana(filas, e, propia);
+      _pushFilaHumana(grupo.filas, e, propia);
     });
 
     // Una selección humana que aparece en el texto pero aún no tiene partidos

@@ -58,13 +58,14 @@
     // ---- LIGA DE ANDORRA ----
     "Atlètic Escaldes|ATL|s|#0D6AD0||#fff",
     "Carroi|CAR|v|#6A3570|#FFFFFF|#fff|#6A3570",
-    "Casa de Portugal|CDP|m|#0F5A2A|#D01010|#fff|#0F5A2A",
+    "CE Casa de Portugal|CDP|m|#0F5A2A|#D01010|#fff|#0F5A2A",
     "Esperança|ESP|d|#0D0D0D|#FFFFFF|#fff",
     "FC Rangers|RAN|s|#1A2558||#FFE020",
     "Inter Escaldes|INT|v|#1565C0|#333333|#fff|#333333",
     "Ordino|ORD|h|#0D4FA0|#FFFFFF|#0D4FA0",
     "Penya Encarnada|PEN|s|#2A2A2A||#F0A818",
-    "Santa Coloma|SCO|m|#3530A0|#F5E020|#F5E020|#3530A0",
+    "FC Santa Coloma|SCO|m|#3530A0|#F5E020|#F5E020|#3530A0",
+    "UE Santa Coloma|UES|m|#D7191F|#111111|#fff|#D7191F",
     "Sporting Escaldes|SPO|h|#2F9A50|#FFFFFF|#111",
     // ---- LIGA DE GIBRALTAR ----
     "College 1975|COL|s|#2A5AAA||#fff",

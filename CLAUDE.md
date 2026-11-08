@@ -4,6 +4,9 @@
 - **NO son duplicados** (clubes distintos, no fusionar): AC Escaldes ≠ CE Escaldes, SD Logroñés ≠ UD Logroñés, FC Vitebsk ≠ ML Vitebsk, CE Europa ≠ Europa FC (Gibraltar). Tampoco Arsenal Tivat / Arsenal Dzyarzhynsk vs Arsenal.
 - FC Rangers (Andorra) ≠ Rangers FC (Escocia): clubes distintos, cada uno con su ficha y su plantilla (`rangers fc` es alias de `rangers` en `plantillas_ia.json`).
 - "CDP" = **CDP Porthmadog** (Gales), clave `cdp porthmadog`.
+- **Liga de Andorra — 3 clubes que NUNCA se fusionan ni se confunden (petición usuario 2026-11-08, "guárdatelo a fuego")**:
+  - **CE Casa de Portugal** (Andorra, siglas CDP, verde/rojo) ≠ **CDP Porthmadog** (Gales). Que compartan siglas "CDP" NO los hace el mismo club: "Casa de Portugal"/"CE Casa de Portugal" PROHIBIDO como `nombresAlt` de Porthmadog.
+  - **FC Santa Coloma** ≠ **UE Santa Coloma**: los dos juegan en la liga de Andorra, cada uno con su ficha. PROHIBIDO poner "FC Santa Coloma" como `nombresAlt` de UE Santa Coloma (ni al revés).
 - Sabadell/CE Sabadell, Ceuta/AD Ceuta FC y Extremadura/CD Extremadura SÍ son el mismo club (fusionados).
 
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL

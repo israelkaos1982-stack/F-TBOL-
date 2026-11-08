@@ -4338,7 +4338,7 @@
     if (rondaKey === "previa") return /ronda previa|\bprevia\b/.test(t);
     if (rondaKey === "ronda2") return /\b2\s*[ªa]?\s*ronda\b/.test(t);
     if (rondaKey === "dieciseisavos") return /1\s*\/\s*16|\b3\s*[ªa]?\s*ronda\b|dieciseisavos/.test(t);
-    if (rondaKey === "r32") return /1\s*\/\s*32|dieciseisavos/.test(t);
+    if (rondaKey === "r32") return /1\s*\/\s*32|dieciseisavos|\b1\s*[ªa]?\s*ronda\b/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
     if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
     if (rondaKey === "semis") return /\bsemi/.test(t);
@@ -5853,35 +5853,12 @@
   // sale del texto libre que el admin pega para ESA ronda concreta
   // ("Equipo A 3-1 Equipo B", parsearChampionsPlayoffTexto).
   function _veranoRondaDesdeTexto(datos, rondaKey) {
-    var equiposHumanos = _veranoEquiposHumanos(datos);
-    var ties = [];
-    var indexPorHumano = {};
-
-    equiposHumanos.forEach(function (e) {
-      var t = _veranoPlayoffHumano(datos, e, rondaKey);
-      if (!t) return;
-      indexPorHumano[e.id] = ties.length;
-      ties.push({
-        equipoA: t.equipoA, equipoAObj: t.equipoAObj, golA: t.golA, golB: t.golB,
-        equipoB: t.equipoB, equipoBObj: t.equipoBObj, esAuto: true
-      });
+    // v484: mismo motor que Copa del Rey / KAO Cup — respeta el orden del
+    // texto, acepta «A vs B» (pendiente), «? vs ?» y «pasa directo».
+    return _rondaDesdeTextoGenerica(datos, rondaKey, {
+      equipos: _veranoEquiposHumanos, humano: _veranoPlayoffHumano,
+      texto: function (k) { return window.Estado ? window.Estado.obtenerVeranoPlayoffTexto(k) : ""; }
     });
-
-    var texto = window.Estado ? window.Estado.obtenerVeranoPlayoffTexto(rondaKey) : "";
-    parsearChampionsPlayoffTexto(texto).forEach(function (it) {
-      var objA = resolverRivalPorNombre(it.equipoA, datos, null);
-      var objB = resolverRivalPorNombre(it.equipoB, datos, null);
-      var idxHumanoA = objA && objA.mister ? indexPorHumano[objA.id] : undefined;
-      var idxHumanoB = objB && objB.mister ? indexPorHumano[objB.id] : undefined;
-      if (idxHumanoA !== undefined || idxHumanoB !== undefined) return; // su cruce ya lo aportó el auto-cómputo humano
-
-      ties.push({
-        equipoA: objA ? objA.nombre : it.equipoA, equipoAObj: objA, golA: it.golA, penA: it.penA,
-        penB: it.penB, golB: it.golB, equipoB: objB ? objB.nombre : it.equipoB, equipoBObj: objB, esAuto: false
-      });
-    });
-
-    return ties;
   }
 
   // Punto ÚNICO que calcula el cuadro ENTERO — las 4 rondas son
@@ -23754,7 +23731,7 @@
     if (/cuartos|1\s*\/\s*4\b/.test(h)) return hay("cuartos");
     if (/semi|1\s*\/\s*2\b/.test(h)) return hay("semis");
     if (/previa|1\s*\/\s*128/.test(h)) return hay("previa");
-    if (/1\s*\/\s*64|1\s*[ªa]\s*ronda|primera ronda/.test(h)) return hay("r64");
+    if (/1\s*\/\s*64|1\s*[ªa]\s*ronda|primera ronda/.test(h)) return hay("r64") || hay("r32");
     if (/1\s*\/\s*32|2\s*[ªa]\s*ronda|segunda ronda|treintaidos/.test(h)) return hay("ronda2") || hay("dieciseisavos") || hay("r32");
     if (/\bfinal\b/.test(h)) return hay("final");
     // 3) contiene la etiqueta («Repesca 5 · Ida»)

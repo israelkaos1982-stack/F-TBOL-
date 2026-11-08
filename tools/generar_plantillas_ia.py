@@ -29,7 +29,7 @@ ALIAS = {
     "las palmas at.": "las palmas atletico", "pvo. el ejido": "poli ejido", "sevilla at.": "sevilla atletico",
     "at. sanlueño": "at. sanluqueno", "blau-weiß linz": "blau-weiss linz", "corvinul 1921": "corvinul 1921 hunedoara",
     "fc dinamo 1948": "fc dinamo 1948 bucarest",
-    "ksk beveren": "sk beveren", "sc cambuur": "cambuur", "academico": "academico viseu", "maritimo m.": "maritimo",
+    "inter club d'escaldes": "inter escaldes", "ksk beveren": "sk beveren", "sc cambuur": "cambuur", "academico": "academico viseu", "maritimo m.": "maritimo",
     "ml vitebsk": "maxline vitebsk", "fc vitebsk": "vitebsk", "dynamo brest": "dinamo brest",
     "Bayern München": "bayern munich", "B. Leverkusen": "bayer leverkusen", "Colonia": "koln",
     "Stade Rennais": "rennes", "Nice": "niza", "Stade Brestois": "brest", "Crvena Zvezda": "estrella roja",

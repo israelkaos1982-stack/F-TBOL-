@@ -80,6 +80,12 @@
       cargarJSON(DATA_URLS.aliasIA).catch(function () { return {}; })
     ]).then(function (r) {
       _seleccionesIAMap = r[7] || {};
+      // v469: escudo real de los 5 humanos por nombre — también cuando su
+      // nombre llega como rival IA (texto pegado, híbridos Barça/PSG).
+      _crestHumanoPorNombre = {};
+      ((r[0] && r[0].equipos) || []).forEach(function (h) {
+        if (h && h.crest) _crestHumanoPorNombre[_normNombre(h.nombre)] = h.crest;
+      });
       // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
       // referencia en cada llamada a cargarTodo) — NUNCA se mutan
       // directamente, se copian antes de fusionar el overlay de
@@ -675,6 +681,7 @@
     if (!iso) return "";
     return iso.toUpperCase().replace(/./g, function (c) { return String.fromCodePoint(0x1F1A5 + c.charCodeAt(0)); });
   }
+  var _crestHumanoPorNombre = {};
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
 
@@ -698,6 +705,24 @@
       return (
         '<div class="escudo escudo--bandera ' + claseTamano + '" title="' + (equipo.nombre || "") + '">' +
         '<span class="escudo-bandera-emoji">' + equipo.bandera + "</span>" +
+        "</div>"
+      );
+    }
+
+    // v469 (petición usuario 2026-11-08): TODOS los escudos IA se borran y
+    // se sustituyen por las CHAPAS de js/chapas.js (siglas + colores +
+    // dibujo, ~40 bytes por club). Solo los 5 humanos conservan su escudo
+    // real (crest) y las selecciones su bandera (arriba).
+    if (!equipo.crest && !equipo.mister && _crestHumanoPorNombre[_normNombre(equipo.nombre)]) {
+      equipo = { nombre: equipo.nombre, crest: _crestHumanoPorNombre[_normNombre(equipo.nombre)] };
+    }
+    if (!equipo.crest && !equipo.mister && window.Chapas) {
+      var chapa = window.Chapas.buscar(equipo.nombre);
+      var caraChapa = chapa ? window.Chapas.svg(chapa) : window.Chapas.neutra(equipo.siglas || equipo.nombre);
+      var svgC = '<svg viewBox="0 0 80 80" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + caraChapa + "</svg>";
+      return (
+        '<div class="escudo escudo--ia escudo--chapa escudo--vector ' + claseTamano + '" data-patron="vector" title="' + (equipo.nombre || "") + '">' +
+        '<span class="escudo-cara">' + svgC + "</span>" +
         "</div>"
       );
     }

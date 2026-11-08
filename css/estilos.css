@@ -5920,14 +5920,13 @@ button { font-family: inherit; cursor: pointer; }
     inset 0 1px 1px rgba(255, 255, 255, 0.9),
     inset 0 -1px 2px rgba(0, 0, 0, 0.45);
 }
-/* v479 — el aro blanco va POR DENTRO del borde (como el PSG): el canto de
-   la chapa queda oscuro y la línea blanca rodea la cara del dibujo. */
-.escudo.escudo--chapa { background: #0d1b3a; }
-.escudo.escudo--chapa .escudo-cara { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 0 3px #fff; inset: 9%; }
-.escudo.escudo--chapa::after { inset: 9%; }
-.escudo.escudo--chapa.escudo--sm { box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); }
-.escudo.escudo--chapa.escudo--sm .escudo-cara { box-shadow: 0 0 0 1px #fff; inset: 11%; }
-.escudo.escudo--chapa.escudo--sm::after { inset: 11%; }
+/* v480 — aro BLANCO FINO pegado al borde (como el PSG), sin canto oscuro. */
+.escudo.escudo--chapa { background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.55); }
+.escudo.escudo--chapa .escudo-cara { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45); inset: 4%; }
+.escudo.escudo--chapa::after { inset: 4%; }
+.escudo.escudo--chapa.escudo--sm { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.5); }
+.escudo.escudo--chapa.escudo--sm .escudo-cara { box-shadow: none; inset: 6%; }
+.escudo.escudo--chapa.escudo--sm::after { inset: 6%; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) > .match-card-team--local > :first-child { grid-column: 1 / 3; justify-self: center; margin: 0; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) > .match-card-team--visitante > :first-child { grid-column: 3 / 5; justify-self: center; margin: 0; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) > .match-card-center { position: relative; z-index: 2; }

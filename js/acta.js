@@ -105,7 +105,7 @@
   function cargarPlantillasIA() {
     if (_plantillasIA) return Promise.resolve(_plantillasIA);
     if (!_plantillasIAPromesa) {
-      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=470")
+      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=471")
         .then(function (r) { if (!r.ok) throw new Error("plantillas_ia " + r.status); return r.json(); })
         .then(function (d) { _plantillasIA = d || {}; _plantillasIACache = {}; return _plantillasIA; })
         .catch(function () { _plantillasIAPromesa = null; return null; });

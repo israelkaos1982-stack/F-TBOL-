@@ -985,7 +985,23 @@
     "Rangers|RAN|s|#0A2AA0||#fff",
     "Ross County|ROS|h|#2A2A5A|#FFFFFF|#2A2A5A",
     "St Johnstone|STJ|s|#1A5AA8||#C8B060",
-    "St Mirren|STM|v|#111111|#FFFFFF|#fff|#111111"
+    "St Mirren|STM|v|#111111|#FFFFFF|#fff|#111111",
+    // ---- EQUIPOS DE LA WEB SIN LÁMINA (colores reales del club) ----
+    "KSK Beveren|BEV|s|#F5D000||#1A3A9A",
+    "Lommel SK|LOM|h|#1A8A3A|#FFFFFF|#1A8A3A",
+    "RAAL La Louvière|RAA|s|#0E7A3A||#fff",
+    "Gençlerbirliği|GEN|m|#D8101A|#111111|#fff|#D8101A",
+    "Erzurum FK|ERZ|s|#1A4CA0||#fff",
+    "Amed|AMD|m|#D8101A|#1A8A3A|#fff|#D8101A",
+    "Çorum FK|COR|v|#D8101A|#111111|#fff|#D8101A",
+    "Middlesbrough|MID|h|#D8101A|#FFFFFF|#D8101A",
+    "Le Mans|LMS|s|#D8101A||#F5D000",
+    "Excelsior|EXC|v|#D8101A|#111111|#fff|#D8101A",
+    "SC Cambuur|CAM|m|#F5D000|#1A3A9A|#1A3A9A|#F5D000",
+    "Telstar|TEL|s|#FFFFFF||#D8101A",
+    "Académico|ACA|s|#111111||#fff",
+    "FC Alverca|ALV|v|#D8101A|#FFFFFF|#fff|#D8101A",
+    "Marítimo M.|MAR|v|#0E8A3A|#D8101A|#fff|#0E8A3A"
   ];
 
   function norm(s) {

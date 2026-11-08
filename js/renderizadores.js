@@ -4338,6 +4338,7 @@
     if (rondaKey === "previa") return /ronda previa|\bprevia\b/.test(t);
     if (rondaKey === "ronda2") return /\b2\s*[ªa]?\s*ronda\b/.test(t);
     if (rondaKey === "dieciseisavos") return /1\s*\/\s*16|\b3\s*[ªa]?\s*ronda\b|dieciseisavos/.test(t);
+    if (rondaKey === "r32") return /1\s*\/\s*32|dieciseisavos/.test(t);
     if (rondaKey === "octavos") return /\boctavos\b/.test(t);
     if (rondaKey === "cuartos") return /\bcuartos\b/.test(t);
     if (rondaKey === "semis") return /\bsemi/.test(t);
@@ -5813,6 +5814,7 @@
   // Octavos YA es la primera ronda del cuadro de 16 clubes (igual que
   // Intercontinental) — las 4 rondas se ven todas aquí.
   var VERANO_PLAYOFF_RONDAS = [
+    { key: "r32", label: "1/32 de Final" },
     { key: "octavos", label: "Octavos de Final" },
     { key: "cuartos", label: "Cuartos de Final" },
     { key: "semis", label: "Semifinales" },
@@ -5887,6 +5889,7 @@
   // admin pegó para ESA ronda.
   function calcularVeranoPlayoffTodasLasRondas(datos) {
     return {
+      r32: _veranoRondaDesdeTexto(datos, "r32"),
       octavos: _veranoRondaDesdeTexto(datos, "octavos"),
       cuartos: _veranoRondaDesdeTexto(datos, "cuartos"),
       semis: _veranoRondaDesdeTexto(datos, "semis"),
@@ -5909,8 +5912,8 @@
         "</div>";
       var cuerpo;
       if (!ties.length) {
-        cuerpo = meta.key === "octavos"
-          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 8 duelos de Octavos.</p>'
+        cuerpo = meta.key === "r32"
+          ? '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los 16 duelos de 1/32.</p>'
           : '<p class="admin-nota">Todavía no has creado los cruces. Pulsa ✏️ para definir los cruces de ' + escapeHTML(meta.label) + '.</p>';
       } else {
         cuerpo = '<div class="champions-playoff-ties">' + ties.map(function (t) { return _championsTieRowHTML(t, idClubActivo); }).join("") + "</div>";
@@ -8608,7 +8611,7 @@
   // (.champions-playoff-ronda, uno por entrada de `metaList`, en orden):
   // inserta la tira de cajas arriba y deja visible SOLO la ronda elegida.
   var _rondaSelPES6 = {}; // compKey -> key de la ronda elegida (solo mientras la app está abierta)
-  var _RONDA_CORTA_PES6 = { previa: "1/128", r64: "1/64", ronda2: "1/32", dieciseisavos: "1/16", octavos: "1/8", cuartos: "1/4", semis: "1/2", final: "FINAL" };
+  var _RONDA_CORTA_PES6 = { previa: "1/128", r64: "1/64", ronda2: "1/32", dieciseisavos: "1/16", r32: "1/32", octavos: "OCTAVOS", cuartos: "CUARTOS", semis: "SEMIS", final: "FINAL" };
   function _cajasRondasPES6(contenedor, metaList, compKey, idClubActivo) {
     var bloques = Array.prototype.slice.call(contenedor.querySelectorAll(".champions-playoff-ronda"));
     bloques = bloques.slice(bloques.length - metaList.length);
@@ -23746,13 +23749,13 @@
       if (_normNombre(rondas[i].label) === h || rondas[i].key === h) return rondas[i].key;
     }
     // 2) sinónimos comunes (de lo más concreto a lo más general)
-    if (/dieciseis|1\s*\/\s*16/.test(h)) return hay("dieciseisavos");
+    if (/dieciseis|1\s*\/\s*16/.test(h)) return hay("dieciseisavos") || hay("r32");
     if (/octavos|1\s*\/\s*8\b/.test(h)) return hay("octavos");
     if (/cuartos|1\s*\/\s*4\b/.test(h)) return hay("cuartos");
     if (/semi|1\s*\/\s*2\b/.test(h)) return hay("semis");
     if (/previa|1\s*\/\s*128/.test(h)) return hay("previa");
     if (/1\s*\/\s*64|1\s*[ªa]\s*ronda|primera ronda/.test(h)) return hay("r64");
-    if (/1\s*\/\s*32|2\s*[ªa]\s*ronda|segunda ronda|treintaidos/.test(h)) return hay("ronda2") || hay("dieciseisavos");
+    if (/1\s*\/\s*32|2\s*[ªa]\s*ronda|segunda ronda|treintaidos/.test(h)) return hay("ronda2") || hay("dieciseisavos") || hay("r32");
     if (/\bfinal\b/.test(h)) return hay("final");
     // 3) contiene la etiqueta («Repesca 5 · Ida»)
     for (var j = 0; j < rondas.length; j++) {

@@ -874,7 +874,8 @@
     "real-madrid": { primario: "#00529f", secundario: "#c9a227" },
     liverpool: { primario: "#6e0816", secundario: "#c8102e" },
     "fc-barcelona": { primario: "#004d98", secundario: "#a50044" },
-    psg: { primario: "#004170", secundario: "#da291c" }
+    psg: { primario: "#004170", secundario: "#da291c" },
+    "manchester-city": { primario: "#1c2c5b", secundario: "#6cabdd" }
   };
 
   function renderizarInicioEquipos() {
@@ -1783,14 +1784,15 @@
     "real-madrid": ["real madrid", "r madrid"],
     "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
     "fc-barcelona": ["fc barcelona", "barcelona", "barca", "f c barcelona"],
-    psg: ["psg", "paris saint germain", "paris saint-germain", "paris sg", "paris"]
+    psg: ["psg", "paris saint germain", "paris saint-germain", "paris sg", "paris"],
+    "manchester-city": ["manchester city", "man city", "man. city", "mcfc", "city"]
   };
   // v417: clubes HÍBRIDOS — caja humana (Ángel/Izan) pero solo juegan como
   // humanos las competiciones europeas (el Barça además Liga EA/Copa del
   // Rey/KAO Cup/Supercopa de España, solo contra otro humano). En el resto
   // son IA (texto pegado). Su fila de clasificación y las cifras de sus
   // jugadores SUMAN lo pegado en texto + lo jugado en el calendario.
-  var _CLUBES_HIBRIDOS = { "fc-barcelona": true, psg: true };
+  var _CLUBES_HIBRIDOS = { "fc-barcelona": true, psg: true, "manchester-city": true };
   function _esClubHibrido(id) { return !!_CLUBES_HIBRIDOS[id]; }
   function _hibridoDeNombre(nombre, equiposHumanos) {
     return (equiposHumanos || []).filter(function (e) {
@@ -2081,7 +2083,7 @@
   // — sus partidos de Liga/Copa ya no se suman a mano a la clasificación.
   // Sigue siendo humano en Superliga, Champions, Mundialito, etc.
   // v417: el PSG no juega ninguna liga española (su Ligue 1 la juega como IA).
-  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
+  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg", "manchester-city"];
 
   // División ACTUAL de un club (ver Estado.obtenerDivisionHumano/
   // guardarDivisionHumano) — envoltorio con fallback si Estado aún no
@@ -4006,7 +4008,7 @@
   // de la pantalla "Copa del Rey"). Si en el futuro se añade otro club
   // humano de fuera de España, su id va aquí también.
   // v417: el PSG juega su copa francesa como IA, nunca la Copa del Rey.
-  var COPA_HUMANOS_EXCLUIDOS = ["psg"];
+  var COPA_HUMANOS_EXCLUIDOS = ["psg", "manchester-city"];
 
   function _copaEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
@@ -6441,7 +6443,7 @@
   // ============================================================
   function _kaocupEquiposHumanos(datos) {
     // v417: el PSG juega la KAO Cup francesa como IA.
-    return (datos.equipos.equipos || []).filter(function (e) { return e.id !== "psg"; });
+    return (datos.equipos.equipos || []).filter(function (e) { return e.id !== "psg" && e.id !== "manchester-city"; });
   }
 
   // Partidos de KAO Cup de UN club, ordenados por fecha —
@@ -7463,7 +7465,7 @@
   // (Supercoupe / Community Shield / Supercoppa, ver
   // renderizarSupercopaPropia) y no salen en este cuadro.
   // v417: el PSG juega su supercopa francesa como IA.
-  var SCE_HUMANOS_EXCLUIDOS = ["psg"];
+  var SCE_HUMANOS_EXCLUIDOS = ["psg", "manchester-city"];
   function _sceEquiposHumanos(datos) {
     return (datos.equipos.equipos || []).filter(function (e) {
       return SCE_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
@@ -18065,7 +18067,7 @@
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
-      var m = _normNombre(l).match(/^(espana|francia|liga|europa|global|seleccion)\s*[-:]\s*/);
+      var m = _normNombre(l).match(/^(espana|francia|inglaterra|liga|europa|global|seleccion)\s*[-:]\s*/);
       if (!m) return;
       var tipoClave = m[1] === "liga" ? "espana" : m[1];
       var resto = l.slice(l.search(/[-:]/) + 1).trim();
@@ -18141,7 +18143,7 @@
       });
       return tot;
     }
-    if (tipo === "francia") tipo = "extra"; // Supercopa de Francia (su liga y copa ya vienen en la lista pegada)
+    if (_esTipoRankPais(tipo)) tipo = "extra"; // Supercopa de Francia/Inglaterra (su liga y copa ya vienen en la lista pegada)
     return c && c[tipo] ? c[tipo] : { total: 0, filas: [] };
   }
   // Puntos de los objetivos YA logrados del club que suman a este ranking.
@@ -18156,7 +18158,7 @@
     window.Estado.obtenerObjetivosFallados(clubId).forEach(function (c) { fallados[c] = true; });
     var total = 0;
     parseo.orden.forEach(function (sec) {
-      if (_objetivoRankingTipo(sec) !== (tipo === "francia" ? "espana" : tipo)) return;
+      if (_objetivoRankingTipo(sec) !== (_esTipoRankPais(tipo) ? "espana" : tipo)) return;
       parseo.secciones[sec].forEach(function (o) {
         if (fallados[o.clave]) return;
         var completo = logrados[o.clave] || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total);
@@ -18192,24 +18194,38 @@
   // extranjero que juega la Liga es el Liverpool (Inter, PSG, Chelsea no).
   // v456: el PSG juega en Francia — su caja ESPAÑA es FRANCIA, con su propia
   // lista pegada (ef7_ranking_lista_v1_francia). Solo para clubes de Ligue 1.
-  var _RANK_TIPO_FRANCIA = { id: "francia", icono: "🇫🇷", etiqueta: "FRANCIA" };
-  function _rankingEsFrances(h) {
-    if (h === "psg") return true;
-    try { return _divisionActualClub(h) === "ligue1"; } catch (err) { return false; }
+  // v488: el Manchester City (Rubén) juega en Inglaterra — su caja ESPAÑA es
+  // INGLATERRA (ef7_ranking_lista_v1_inglaterra), mismo mecanismo que el PSG.
+  var _RANK_TIPOS_PAIS = {
+    francia: { id: "francia", icono: "🇫🇷", etiqueta: "FRANCIA" },
+    inglaterra: { id: "inglaterra", icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "INGLATERRA" }
+  };
+  var _RANK_PAIS_CLUB = { psg: "francia", "manchester-city": "inglaterra" };
+  function _esTipoRankPais(t) { return !!_RANK_TIPOS_PAIS[t]; }
+  function _rankingPaisClub(h) {
+    if (_RANK_PAIS_CLUB[h]) return _RANK_PAIS_CLUB[h];
+    try {
+      var d = _divisionActualClub(h);
+      if (d === "ligue1") return "francia";
+      if (d === "premier") return "inglaterra";
+    } catch (err) {}
+    return null;
   }
+  function _rankingEsFrances(h) { return _rankingPaisClub(h) === "francia"; }
   function _rankingTiposDe(clubId) {
     var tipos = window.Estado.RANKING_TIPOS;
-    if (!_rankingEsFrances(clubId)) return tipos;
-    return tipos.map(function (t) { return t.id === "espana" ? _RANK_TIPO_FRANCIA : t; });
+    var pais = _rankingPaisClub(clubId);
+    if (!pais) return tipos;
+    return tipos.map(function (t) { return t.id === "espana" ? _RANK_TIPOS_PAIS[pais] : t; });
   }
   function _rankingTabValido(clubId, tab) {
     var tipos = _rankingTiposDe(clubId);
     if (tipos.some(function (t) { return t.id === tab; })) return tab;
-    if (tab === "espana" || tab === "francia") return tipos[0].id;
+    if (tab === "espana" || _esTipoRankPais(tab)) return tipos[0].id;
     return tipos[0].id;
   }
   function _rankingJuegaEspana(h) {
-    if (_rankingEsFrances(h)) return false;
+    if (_rankingPaisClub(h)) return false;
     return h === "liverpool" || RANK_LIGAS_EXTRANJERAS.indexOf(_divisionActualClub(h)) === -1;
   }
   function _rankingEstado(tipo, clubId) {
@@ -18218,7 +18234,7 @@
     if (tipo === "espana") filas = filas.filter(function (f) { return f.sep || !/^arsenal( |$)/.test(f.norm); });
     var humanos = _rankingHumanos(clubId).filter(function (h) {
       if (tipo === "espana") return _rankingJuegaEspana(h);
-      if (tipo === "francia") return _rankingEsFrances(h);
+      if (_esTipoRankPais(tipo)) return _rankingPaisClub(h) === tipo;
       if (tipo === "europa") { var c = _rankingPuntosCache[h]; return !c || c.juegaEuropa || c.europa.filas.length > 0; } // solo los que juegan competiciones europeas
       return true;
     });
@@ -18487,7 +18503,7 @@
     nota.className = "admin-nota";
     nota.textContent =
       "Una línea por clasificación: TIPO - nombre de tu equipo TAL COMO SALE EN LA LISTA - puesto objetivo. " +
-      "Ejemplo: ESPAÑA - Mersey Reds - 50 (el PSG usa FRANCIA - PSG - 5). Se cumple si estás en ese puesto o en uno mejor.";
+      "Ejemplo: ESPAÑA - Mersey Reds - 50 (el PSG usa FRANCIA - PSG - 5; el City, INGLATERRA - Manchester City - 3). Se cumple si estás en ese puesto o en uno mejor.";
     contenedor.appendChild(nota);
     var textarea = document.createElement("textarea");
     textarea.id = "ranking-club-textarea";
@@ -19846,8 +19862,15 @@
     liverpool: { icono: "↘️", label: "Irregular" },
     arsenal: { icono: "↘️", label: "Irregular" },
     "real-madrid": { icono: "🎲", label: "Impredecible" },
-    "atletico-madrid": { icono: "🎲", label: "Impredecible" }
+    "atletico-madrid": { icono: "🎲", label: "Impredecible" },
+    // v488: FC Barcelona y PSG contra IA — Tu🎲-⬇️Rival (nivel Crack).
+    "fc-barcelona": { icono: "⬇️", label: "Mala" },
+    psg: { icono: "⬇️", label: "Mala" }
   };
+  // v488 (petición usuario): el Manchester City (Rubén) va SIEMPRE con
+  // Forma City⬆️ - Rival🎲; el resto de cruces entre clubes humanos
+  // (Liverpool, Real Madrid, Atlético, FC Barcelona, PSG) son 🎲-🎲.
+  var _CLUB_FORMA_ARRIBA = "manchester-city";
   // Forma en partidos HUMANO vs HUMANO (petición usuario 2026-09-15) —
   // SUPERSEDE el "Tu⬆️-⬆️Rival" fijo de cualquier HvH: cada pareja de
   // clubes humanos tiene SU PROPIO par de iconos ("tu" = el icono del
@@ -19906,7 +19929,9 @@
   // 4 datos salen "Al Azar" (petición usuario 2026-10-06). Duración 8 min y
   // nivel "Profesional". Contra otro HUMANO (incluido el otro club FIFA) se
   // siguen las reglas normales de eFootball.
-  var _CLUBES_FIFA = {};
+  // v488: el Manchester City (Rubén) juega desde FC27 — contra IA en Europa y
+  // Superliga: Estadio/Clima/Balón "Aleatorio", ⏱️ 8 min, 🤖 Clase Mundial.
+  var _CLUBES_FIFA = { "manchester-city": true };
   function _esPartidoFifaVsIA(local, visitante, datos) {
     if (!local || !visitante) return false;
     var fifaL = !!_CLUBES_FIFA[_idClubDeEquipoId(local.id)], fifaV = !!_CLUBES_FIFA[_idClubDeEquipoId(visitante.id)];
@@ -19954,28 +19979,28 @@
     var esHvH = _esPartidoHvH(local, visitante, datos);
     var esFinal = !!partido && _esFinalDeTorneo(partido);
     var midClub = _idClubDeEquipoId(par.managed.id), ridClub = _idClubDeEquipoId(par.rival.id);
-    var cruceHvH = esHvH && _FORMA_HVH[midClub] && _FORMA_HVH[midClub][ridClub];
     var forma = _FORMA_POR_CLUB[midClub];
     var formaIconoTu, formaIconoRival;
-    if (midClub === "liverpool") {
+    if (midClub === _CLUB_FORMA_ARRIBA) {
+      formaIconoTu = "⬆️"; formaIconoRival = "🎲";
+    } else if (esHvH && ridClub === _CLUB_FORMA_ARRIBA) {
+      formaIconoTu = "🎲"; formaIconoRival = "⬆️";
+    } else if (midClub === "liverpool") {
       // Petición usuario 2026-10-10: TODOS los partidos del Liverpool (liga,
       // copa, Europa, HvH, finales...) van con Forma Tu🎲-🎲Rival. Gana por
       // encima de la tabla HvH y de la regla de las finales.
       formaIconoTu = "🎲"; formaIconoRival = "🎲";
     } else if (esFinal) {
       formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
-    } else if (cruceHvH) {
-      formaIconoTu = cruceHvH.tu; formaIconoRival = cruceHvH.rival;
     } else if (esHvH) {
-      // Red de seguridad: un cruce HvH que por lo que sea no esté en la
-      // tabla (nunca debería pasar con los 6 clubes actuales) cae al
-      // ⬆️-⬆️ histórico en vez de quedarse sin icono.
-      formaIconoTu = "⬆️"; formaIconoRival = "⬆️";
+      // v488: cualquier cruce entre humanos sin el City es 🎲-🎲 (supersede
+      // la tabla por pareja _FORMA_HVH, que queda sin uso).
+      formaIconoTu = "🎲"; formaIconoRival = "🎲";
     } else {
       formaIconoTu = "🎲"; formaIconoRival = forma ? forma.icono : "➡️";
     }
     if (_esPartidoFifaVsIA(local, visitante, datos)) {
-      return { tiempo: "⏱️ 8 min", nivel: "🤖 Profesional", forma: "🔋 Al Azar" };
+      return { tiempo: "⏱️ 8 min", nivel: "🤖 Clase Mundial", forma: "🔋 Tu" + formaIconoTu + "-" + formaIconoRival + "Rival" };
     }
     return {
       tiempo: esFinal ? "⏱️ 10 min" : "⏱️ " + (rivalEsHumano ? "10 min" : "8 min"),
@@ -20601,11 +20626,11 @@
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">- Nieve</span>' : "");
 
-    // Inter/Chelsea (FIFA) vs IA: estadio, clima y balón "Al Azar".
+    // Manchester City (FC27) vs IA: estadio, clima y balón "Aleatorio".
     if (_esPartidoFifaVsIA(local, visitante, datos)) {
-      document.getElementById("previa-estadio").textContent = "Al Azar";
-      document.getElementById("previa-clima").textContent = "Al Azar";
-      document.getElementById("previa-balon").textContent = "Al Azar";
+      document.getElementById("previa-estadio").textContent = "Aleatorio";
+      document.getElementById("previa-clima").textContent = "Aleatorio";
+      document.getElementById("previa-balon").textContent = "Aleatorio";
     }
 
     var metaPartido = _calcularMetaPartido(local, visitante, datos, _ultimoContexto, partido);
@@ -21582,7 +21607,7 @@
   // POR por dorsal: J. Musso en vez de Oblak en el Atlético).
   var _PORTERO_TITULAR_CLUB = {
     "atletico-madrid": "oblak", "real-madrid": "courtois", "fc-barcelona": "garcia",
-    "liverpool": "alisson", "psg": "safonov"
+    "liverpool": "alisson", "psg": "safonov", "manchester-city": "donnarumma"
   };
   function _porteroPrincipalClub(clubId) {
     var plantilla = obtenerJugadoresClub(clubId);

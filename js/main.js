@@ -812,7 +812,8 @@
   var FIXUP_PURGA_CLUBES_KEY = "ef7_fixup_purga_clubes_eliminados_v1";
   // v417: FC Barcelona y PSG vuelven como cajas humanas — fuera de la purga
   // (un dispositivo nuevo la ejecutaría y borraría sus datos nuevos).
-  var CLUBES_HUMANOS_ELIMINADOS = ["manchester-city", "inter-milan", "chelsea"];
+  // v488: el Manchester City (Rubén) vuelve como caja humana híbrida — fuera de la purga.
+  var CLUBES_HUMANOS_ELIMINADOS = ["inter-milan", "chelsea"];
   function _fixupPurgarClubesEliminadosV1() {
     try {
       if (localStorage.getItem(FIXUP_PURGA_CLUBES_KEY)) return;

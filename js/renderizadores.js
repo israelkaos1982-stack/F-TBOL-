@@ -20550,6 +20550,146 @@
   }
 
   // ============================================================
+  // v491 — PANTALLA "INFORMACIÓN DEL TORNEO" (estilo Pro Evolution Soccer 6)
+  // Petición usuario: la PRIMERA vez que un club humano va a jugar una
+  // Liga/Copa/competición/torneo (club o selección), al pulsar PREVIA sale
+  // antes una pantalla con el texto del ℹ️ de ese torneo. Solo una vez por
+  // club, competición y temporada; después ya no vuelve a salir.
+  // ============================================================
+  var _INTRO_TORNEO_KEY = "ef7_intro_torneo_v1_";
+  var _INTRO_FORMATO_FN = {
+    copa: function () { return obtenerFormatoCopaTexto(); },
+    recopa: function () { return obtenerFormatoRecopaTexto(); },
+    intercontinental: function () { return obtenerFormatoInterTexto(); },
+    verano: function () { return obtenerFormatoVeranoTexto(); },
+    usc: function () { return obtenerFormatoUscTexto(); },
+    kaocup: function () { return obtenerFormatoKaocupTexto(); },
+    superekao: function () { return obtenerFormatoSuperekaoTexto(); },
+    supercopa: function () { return obtenerFormatoSceTexto(); },
+    champions: function () { return obtenerFormatoChampionsTexto(); },
+    uel: function () { return obtenerFormatoUelTexto(); },
+    uecl: function () { return obtenerFormatoUeclTexto(); },
+    nations: function () { return obtenerFormatoNationsTexto(); },
+    superliga: function () { return obtenerFormatoSlxTexto(); },
+    roadeurocopa: function () { return obtenerFormatoRoadeurocopaTexto(); },
+    eurocopa: function () { return obtenerFormatoEurocopaTexto(); },
+    roadmundial: function () { return obtenerFormatoRoadmundialTexto(); },
+    mundialsel: function () { return obtenerFormatoMundialselTexto(); },
+    roadamerica: function () { return obtenerFormatoRoadamericaTexto(); },
+    roadafrica: function () { return obtenerFormatoRoadafricaTexto(); },
+    roadasia: function () { return obtenerFormatoRoadasiaTexto(); }
+  };
+  // { clave, titulo, texto } del torneo de este partido, o null si no tiene ℹ️.
+  function _introTorneoDe(partido, clubId) {
+    var key = _resolverCompKeyBalon(partido.competicion);
+    if (key === "liga" || key === "hypermotion" || key === "2ref") {
+      var div = key === "liga" ? _divisionActualClub(clubId) : key;
+      var textoLiga = obtenerFormatoLigaTexto(div);
+      if (!textoLiga) return null;
+      var meta = LIGA_NAV_META[div];
+      return { clave: "liga_" + div, compKey: key, titulo: meta ? (meta.tituloLargo || ("🇪🇸 Liga " + meta.corta)) : "Liga", texto: textoLiga };
+    }
+    var fn = _INTRO_FORMATO_FN[key];
+    var texto = fn ? fn() : "";
+    if (!texto) return null;
+    var titulo = key === "verano" ? String(partido._competicionCruda || partido.competicion || COMP_LABEL[key]) : (COMP_LABEL[key] || partido.competicion);
+    return { clave: key, compKey: key, titulo: titulo, texto: texto };
+  }
+  function _introVistos(clubId) {
+    var temporada = window.Estado && window.Estado.obtenerTemporada ? window.Estado.obtenerTemporada() : "";
+    try {
+      var o = JSON.parse(localStorage.getItem(_INTRO_TORNEO_KEY + clubId) || "null");
+      if (o && o.temporada === temporada && o.vistos) return o;
+    } catch (err) {}
+    return { temporada: temporada, vistos: {} };
+  }
+  function _introMarcarVisto(clubId, clave) {
+    var o = _introVistos(clubId);
+    o.vistos[clave] = true;
+    try {
+      localStorage.setItem(_INTRO_TORNEO_KEY + clubId, JSON.stringify(o));
+      if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar(_INTRO_TORNEO_KEY + clubId);
+    } catch (err) {}
+  }
+  // ¿El club (o su selección) ya jugó algún partido de esta competición?
+  function _introYaJugoTorneo(partido, clubId, info, datos) {
+    var ids = [clubId, _selIdDeClub(clubId)];
+    var lista = [];
+    try { lista = window.Estado.listarPartidosResueltos(datos) || []; } catch (err) { lista = []; }
+    return lista.some(function (p) {
+      if (!p.jugado || p.id === partido.id) return false;
+      if (ids.indexOf(p.local) === -1 && ids.indexOf(p.visitante) === -1) return false;
+      return _resolverCompKeyBalon(p.competicion) === info.compKey;
+    });
+  }
+  function _introTextoPes6HTML(texto) {
+    return String(texto || "").split("\n").map(function (linea) {
+      var l = linea.replace(/\r/g, "");
+      if (!l.trim()) return '<div class="pes6-sep"></div>';
+      var t = l.trim();
+      // Cabecera = empieza por un emoji (no letra/número/viñeta) y acaba en ":".
+      var esCabecera = /:\s*$/.test(t) && !/^[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ*•\-–—(]/.test(t);
+      var esSub = /^[*•]/.test(t);
+      if (esSub) return '<div class="pes6-sub">' + _escHtmlIntro(t.replace(/^[*•]\s*/, "")) + "</div>";
+      var esc = _escHtmlIntro(l.trim());
+      return esCabecera ? '<div class="pes6-cab">' + esc + "</div>" : '<div class="pes6-fila">' + esc + "</div>";
+    }).join("");
+  }
+  function _escHtmlIntro(t) {
+    return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function _mostrarIntroTorneo(info, alContinuar) {
+    var ov = document.getElementById("pes6-intro-overlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "pes6-intro-overlay";
+      ov.className = "pes6-intro-overlay";
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML =
+      '<div class="pes6-intro-panel" role="dialog" aria-modal="true">' +
+        '<div class="pes6-intro-tab">INFORMACIÓN DEL TORNEO</div>' +
+        '<div class="pes6-intro-titulo">' + _escHtmlIntro(info.titulo) + "</div>" +
+        '<div class="pes6-intro-cuerpo">' + _introTextoPes6HTML(info.texto) + "</div>" +
+        '<button type="button" class="pes6-intro-btn" id="pes6-intro-ok">▶ CONTINUAR</button>' +
+      "</div>";
+    ov.hidden = false;
+    var btn = document.getElementById("pes6-intro-ok");
+    var hecho = false;
+    function seguir() {
+      if (hecho) return;
+      hecho = true;
+      ov.hidden = true;
+      alContinuar();
+    }
+    if (btn) btn.addEventListener("click", seguir);
+  }
+  // Entrada desde el botón PREVIA de las cards: muestra la información del
+  // torneo si toca y después abre la previa de siempre.
+  function abrirPreviaConIntroTorneo(partidoId) {
+    try {
+      var ctx = _ultimoContexto;
+      var partido = ctx ? _resolverPartidoPorId(partidoId, ctx) : null;
+      var clubId = ctx && ctx.equipo ? _idClubDeEquipoId(ctx.equipo.id) : null;
+      if (partido && clubId && !partido.jugado) {
+        var info = _introTorneoDe(partido, clubId);
+        if (info && !_introVistos(clubId).vistos[info.clave]) {
+          if (_introYaJugoTorneo(partido, clubId, info, ctx.datos)) {
+            _introMarcarVisto(clubId, info.clave);
+          } else {
+            _introMarcarVisto(clubId, info.clave);
+            _mostrarIntroTorneo(info, function () { abrirPreviaPartido(partidoId); });
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[intro torneo]", err);
+    }
+    abrirPreviaPartido(partidoId);
+  }
+
+  // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
   function abrirPreviaPartido(partidoId) {
@@ -23430,7 +23570,7 @@
 
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest(".match-card-btn");
-    if (btn) { abrirPreviaPartido(btn.dataset.partidoId); return; }
+    if (btn) { abrirPreviaConIntroTorneo(btn.dataset.partidoId); return; }
 
     var btnRestaurarSnapshot = ev.target.closest && ev.target.closest('[data-accion="restaurar-snapshot"]');
     if (btnRestaurarSnapshot) {

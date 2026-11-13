@@ -3500,6 +3500,9 @@ button { font-family: inherit; cursor: pointer; }
   gap: 10px;
   margin-bottom: 10px;
 }
+/* v492 — sin esto `display:flex` gana al atributo hidden y la fila JUGADOR
+   seguía visible (con la plantilla del humano) al elegir el equipo IA. */
+.live-form-row[hidden] { display: none; }
 .live-label {
   display: flex;
   flex-direction: column;
@@ -5999,3 +6002,6 @@ button { font-family: inherit; cursor: pointer; }
   cursor: pointer; box-shadow: 0 3px 0 #7a4500;
 }
 .pes6-intro-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a4500; }
+
+/* v492 — botón de pausa en modo PENALTIS (eliminatorias con prórroga). */
+#partido-live-overlay .live-card .live-evt-btn.live-evt-btn--penaltis { background: linear-gradient(160deg, #c0392b, #7a1b12); border-bottom-color: #ffd24a; }

@@ -20074,6 +20074,16 @@
       var ck = _compKeyEsperadoParaDivision(id);
       return esLigaLegacy ? ck === "liga" : ck === compNorm;
     });
+    // v490: "Liga" a secas = la división ACTUAL del club humano del partido
+    // (Atlético en Ea Sports, etc.) — antes solo se miraba 1ª REF y la fila
+    // Nº/PJ/PTS/% de la previa salía vacía.
+    if (esLigaLegacy || compNorm === "liga") {
+      [local, visitante].forEach(function (eq) {
+        var div = null;
+        try { if (_esClubHumano(eq.id, datos)) div = _divisionActualClub(_idClubDeEquipoId(eq.id)); } catch (err) { div = null; }
+        if (div && LIGA_NAV_ORDEN.indexOf(div) !== -1 && candidatas.indexOf(div) === -1) candidatas.unshift(div);
+      });
+    }
     for (var i = 0; i < candidatas.length; i++) {
       var ligaId = candidatas[i], filas = [];
       try {

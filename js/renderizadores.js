@@ -23218,12 +23218,17 @@
     var kb = (espacio.bytes / 1024).toFixed(2);
 
     var estado = window.Estado ? window.Estado.cargarEstado() : { resultados: {}, partidosGenerados: {} };
-    var nPartidos = Object.keys(estado.resultados || {}).length;
+    // v487: solo los partidos JUGADOS (antes contaba también las entradas
+    // reiniciadas/sin jugar que se guardan como marca para la sincronización,
+    // y salía un número muy por encima de lo jugado de verdad).
+    var _res = estado.resultados || {};
+    var nPartidos = Object.keys(_res).filter(function (id) { return _res[id] && _res[id].jugado === true; }).length;
+    var nMarcas = Object.keys(_res).length - nPartidos;
     var nGenerados = Object.keys(estado.partidosGenerados || {}).length;
 
     var filas = [
       { titulo: "Espacio usado en total", sub: espacio.nClaves + " clave(s) guardadas (ef7_*)", valor: kb + " KB" },
-      { titulo: "Partidos confirmados", sub: "resultados guardados", valor: String(nPartidos) },
+      { titulo: "Partidos jugados", sub: "de todos los clubes (humanos e IA) · " + nMarcas + " marcas de partidos reiniciados", valor: String(nPartidos) },
       { titulo: "Partidos de desempate generados", sub: "terceros partidos de eliminatoria", valor: String(nGenerados) }
     ];
 

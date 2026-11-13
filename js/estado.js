@@ -1761,7 +1761,8 @@
   // Supercopa de España, solo contra otro humano). Sin selección.
   var MENU_CLUB_EXCLUIDOS_POR_CLUB = {
     "fc-barcelona": { verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
-    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
+    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
+    "manchester-city": { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
   };
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia

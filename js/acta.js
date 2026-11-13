@@ -105,7 +105,7 @@
   function cargarPlantillasIA() {
     if (_plantillasIA) return Promise.resolve(_plantillasIA);
     if (!_plantillasIAPromesa) {
-      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=491")
+      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=492")
         .then(function (r) { if (!r.ok) throw new Error("plantillas_ia " + r.status); return r.json(); })
         .then(function (d) { _plantillasIA = d || {}; _plantillasIACache = {}; return _plantillasIA; })
         .catch(function () { _plantillasIAPromesa = null; return null; });
@@ -222,6 +222,7 @@
         p: _partidoActivo.partido.id,
         l: _partidoActivo.lado || "local",
         pr: !!_partidoActivo.prorroga,
+        fp: _partidoActivo.fasePausa || 0,
         a: actaTemporal,
         t: Date.now(),
         d: _idDispositivo()
@@ -265,6 +266,8 @@
     _partidoActivo.lado = g.l || "local";
     _partidoActivo.prorroga = !!g.pr || _partidoActivo.prorroga;
     actaTemporal = Array.isArray(g.a) ? g.a : [];
+    _partidoActivo.fasePausa = Number(g.fp) || 0;
+    _pintarBotonPausa();
     poblarSelectMinuto();
     seleccionarLado(_partidoActivo.lado);
     pintarActaLista();
@@ -548,6 +551,45 @@
   function _pintarBotonMinuto(sel, btn) {
     var op = sel.options[sel.selectedIndex];
     btn.innerHTML = '<span class="live-pes-btn-txt">' + (op ? op.textContent : "—") + '</span><span class="live-pes-btn-flecha">▾</span>';
+  }
+  // v492 — Botón de pausa del grid (9ª caja). En eliminatorias con
+  // prórroga y penaltis cambia según el momento del partido:
+  //   0 DESCANSO (1ª parte) → 1 PRÓRROGA (fin de los 90') →
+  //   2 DESCANSO (media prórroga) → 3 PENALTIS.
+  // Cada paso (salvo PENALTIS) abre la vista limpia para compartir la
+  // captura por WhatsApp; al compartirla, el botón pasa al siguiente paso.
+  // Sin prórroga siempre es DESCANSO.
+  var _FASES_PAUSA = [
+    { emoji: "🛌", btn: "DESCANSO", titulo: "🛌 DESCANSO", seguir: "▶ Continuar 2ª parte" },
+    { emoji: "⏱️", btn: "PRÓRROGA", titulo: "⏱️ FINAL 90' · PRÓRROGA", seguir: "▶ Empezar prórroga" },
+    { emoji: "🛌", btn: "DESCANSO", titulo: "🛌 DESCANSO PRÓRROGA", seguir: "▶ Continuar 2ª parte de la prórroga" },
+    { emoji: "🎯", btn: "PENALTIS", titulo: "🎯 PENALTIS", seguir: "" }
+  ];
+  function _fasePausa() {
+    if (!_partidoActivo || !_partidoActivo.prorroga) return 0;
+    return Math.max(0, Math.min(3, Number(_partidoActivo.fasePausa) || 0));
+  }
+  function _pintarBotonPausa() {
+    var f = _FASES_PAUSA[_fasePausa()];
+    var b = document.getElementById("live-descanso");
+    if (b) {
+      b.innerHTML = f.emoji + "<span>" + f.btn + "</span>";
+      b.classList.toggle("live-evt-btn--penaltis", _fasePausa() === 3);
+    }
+    var t = document.querySelector("#live-descanso-vista .live-resumen-titulo");
+    if (t) t.textContent = f.titulo;
+    var c = document.getElementById("live-continuar-2parte");
+    if (c && f.seguir) c.textContent = f.seguir;
+  }
+  function _seleccionarMinuto(valor) {
+    var sel = document.getElementById("live-minuto");
+    if (!sel) return;
+    var existe = Array.prototype.some.call(sel.options, function (op) { return op.value === valor; });
+    if (!existe) return;
+    sel.value = valor;
+    var btn = document.getElementById("live-minuto-btn");
+    if (btn) _pintarBotonMinuto(sel, btn);
+    actualizarTandaInfo();
   }
   function _abrirPickerMinuto(sel, btn) {
     var viejo = document.getElementById("pes-picker-overlay");
@@ -918,6 +960,8 @@
       ida: R.datosIdaDeVuelta ? R.datosIdaDeVuelta(partido, datos) : null,
       clas: R.clasificacionDePartido ? R.clasificacionDePartido(partido, datos, local, visitante) : null
     };
+    _partidoActivo.fasePausa = 0;
+    _pintarBotonPausa();
 
     // Mismo color de competición que la previa (clase .comp-XXX): sin esto la
     // pantalla en vivo y la captura de WhatsApp salían siempre oscuras.
@@ -1151,6 +1195,14 @@
     // alert() bloqueando la vista (petición usuario 2026-09-03 #3).
     var descansoBtn = ev.target.closest && ev.target.closest("#live-descanso");
     if (descansoBtn) {
+      if (_fasePausa() === 3) {
+        // PENALTIS: pasa el minuto a la tanda y enseña el marcador de penaltis.
+        _seleccionarMinuto(MINUTO_TANDA);
+        var tandaBox = document.getElementById("live-tanda-info");
+        if (tandaBox && tandaBox.scrollIntoView) tandaBox.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      _pintarBotonPausa();
       document.getElementById("live-entrada").hidden = true;
       document.getElementById("live-descanso-vista").hidden = false;
       return;
@@ -1180,6 +1232,14 @@
         btnContinuar2.dataset.enCurso = "";
         document.getElementById("live-descanso-vista").hidden = true;
         document.getElementById("live-entrada").hidden = false;
+        if (_partidoActivo && _partidoActivo.prorroga) {
+          var faseAntes = _fasePausa();
+          _partidoActivo.fasePausa = Math.min(3, faseAntes + 1);
+          if (faseAntes === 1) _seleccionarMinuto("100");
+          if (faseAntes === 2) _seleccionarMinuto("110");
+          _persistirVivo();
+        }
+        _pintarBotonPausa();
       };
       if (window.Renderizadores && window.Renderizadores.capturarYCompartirPreviaWhatsapp) {
         var liveCardEl = document.querySelector("#partido-live-overlay .live-card");

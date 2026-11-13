@@ -494,6 +494,18 @@
     } catch (err) {}
   }
 
+  // v485: si el servidor rechaza el envío, el motivo REAL (código HTTP +
+  // error del servidor) viaja al aviso de abajo — antes todo salía como
+  // «respuesta no válida» y no había forma de saber por qué.
+  function _leerRespuestaServidor(r) {
+    if (r.ok) return r.json();
+    return r.text().then(function (txt) {
+      var err = "";
+      try { err = (JSON.parse(txt) || {}).error || ""; } catch (e) {}
+      throw new Error("HTTP " + r.status + (err ? " " + err : ""));
+    }, function () { throw new Error("HTTP " + r.status); });
+  }
+
   function _empujarDelta(info, valorActual) {
     var K = CLAVE_RESULTADOS;
     if (info.n === 0 && !info.gCambio) {
@@ -514,7 +526,7 @@
       body: texto,
       keepalive: texto.length < 60000 // el límite de keepalive es ~64 KB
     })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(_leerRespuestaServidor)
       .then(function (resp) {
         if (!resp || !resp.ok) throw new Error("respuesta no válida");
         var enviados = Object.keys(info.delta);
@@ -1080,7 +1092,7 @@
         keepalive: texto.length < 60000,
         signal: ctl ? ctl.signal : undefined
       })
-        .then(function (r) { clearTimeout(t); return r.ok ? r.json() : null; })
+        .then(function (r) { clearTimeout(t); return _leerRespuestaServidor(r); })
         .then(function (resp) {
           if (!resp || !resp.ok) throw new Error("respuesta no válida");
           _marcarSubidos(act, Object.keys(info.delta));

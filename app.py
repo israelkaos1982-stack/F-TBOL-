@@ -6500,10 +6500,13 @@ def _ef7_tomar_snapshot_si_toca():
     debe romper la sincronización normal de calendarios/plantillas.
     """
     try:
-        ultimo = Ef7Snapshot.query.order_by(Ef7Snapshot.id.desc()).first()
+        # Solo la FECHA del último snapshot (antes .first() traía también su
+        # payload_json entero —todos los datos— en CADA GET: era la mitad del
+        # tráfico que agotó el cupo de Neon, 13/11/2026).
+        ultimo = db.session.query(Ef7Snapshot.created_at).order_by(Ef7Snapshot.id.desc()).first()
         if ultimo is not None:
             try:
-                creado = datetime.fromisoformat(ultimo.created_at.replace("Z", "+00:00"))
+                creado = datetime.fromisoformat(ultimo[0].replace("Z", "+00:00"))
                 edad_s = (datetime.now(timezone.utc) - creado).total_seconds()
             except (TypeError, ValueError):
                 edad_s = _EF7_SNAPSHOT_INTERVALO_S  # fecha ilegible: mejor tomar uno nuevo que ninguno
@@ -6580,17 +6583,55 @@ def api_ef7_snapshot_restore(snapshot_id):
     return jsonify({"ok": True, "restauradas": restauradas, "created_at": fila.created_at})
 
 
+# CACHÉ del GET /api/ef7/state (por proceso de gunicorn). Antes cada GET
+# —cada dispositivo abierto, cada 10 s— descargaba de la base de datos el
+# valor COMPLETO de todas las filas ef7_* (cientos de KB): en noviembre de
+# 2026 eso sumó 5,5 GB de transferencia y agotó el cupo gratuito de Neon
+# (todo el servidor en 500). Ahora cada GET pide a la BD solo la FIRMA de
+# cada fila (clave + updated_at + longitud, unos pocos KB) y relee el valor
+# únicamente de las filas que cambiaron. Por seguridad, una recarga completa
+# cada 10 minutos.
+_EF7_GET_CACHE = {"filas": {}, "completo_ms": 0}
+_EF7_GET_RECARGA_TOTAL_MS = 10 * 60 * 1000
+
+
+def _ef7_filas_cacheadas():
+    cache = _EF7_GET_CACHE
+    ahora_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    firmas = db.session.query(
+        GlobalState.clave, GlobalState.updated_at, db.func.length(GlobalState.valor_json)
+    ).filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
+    actuales = {c: (u or "", n or 0) for c, u, n in firmas}
+    total = ahora_ms - cache["completo_ms"] > _EF7_GET_RECARGA_TOTAL_MS
+    a_leer = [c for c, firma in actuales.items()
+              if total or c not in cache["filas"] or cache["filas"][c][0] != firma]
+    nuevas = dict(cache["filas"]) if not total else {}
+    for i in range(0, len(a_leer), 200):
+        lote = a_leer[i:i + 200]
+        for clave, valor in db.session.query(GlobalState.clave, GlobalState.valor_json).filter(
+                GlobalState.clave.in_(lote)).all():
+            try:
+                parsed = json.loads(valor) if valor else None
+            except Exception:
+                nuevas.pop(clave, None)
+                continue
+            nuevas[clave] = (actuales[clave], parsed)
+    for c in list(nuevas.keys()):
+        if c not in actuales:
+            nuevas.pop(c, None)  # fila borrada en la BD
+    cache["filas"] = nuevas
+    if total:
+        cache["completo_ms"] = ahora_ms
+    return nuevas
+
+
 @app.route("/api/ef7/state", methods=["GET"])
 def api_ef7_state_get():
-    filas = GlobalState.query.filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
     claves = {}
     actualizados = {}
-    for f in filas:
-        try:
-            claves[f.clave] = json.loads(f.valor_json) if f.valor_json else None
-        except Exception:
-            continue
-        actualizados[f.clave] = f.updated_at or ""
+    for clave, (firma, valor) in _ef7_filas_cacheadas().items():
+        claves[clave] = valor
+        actualizados[clave] = firma[0]
     # El GET es el tráfico MÁS frecuente (cada dispositivo abierto lo pide
     # cada 10 s, haya o no cambios que subir) — es el punto más fiable
     # para disparar el snapshot perezoso, ver _ef7_tomar_snapshot_si_toca.

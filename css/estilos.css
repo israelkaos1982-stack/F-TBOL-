@@ -5938,3 +5938,64 @@ button { font-family: inherit; cursor: pointer; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) > .match-card-team--visitante > :first-child { grid-column: 3 / 5; justify-self: center; margin: 0; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) > .match-card-center { position: relative; z-index: 2; }
 #screen-club .match-card-teams:not(.match-card-teams--rapido) .match-card-nombre { text-align: center; }
+
+/* v491 — Pantalla "INFORMACIÓN DEL TORNEO" estilo Pro Evolution Soccer 6:
+   panel gris-azulado con pestaña naranja inclinada, título en cursiva y
+   filas tipo tabla alternas. Sale una sola vez al pulsar PREVIA en el
+   primer partido de cada torneo. */
+.pes6-intro-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: radial-gradient(ellipse at 50% 20%, rgba(30, 60, 110, 0.55), rgba(0, 0, 0, 0.88));
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.pes6-intro-overlay[hidden] { display: none; }
+.pes6-intro-panel {
+  position: relative; width: 100%; max-width: 440px; max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #3a475c 0%, #232d3d 18%, #161d29 100%);
+  border: 2px solid #8fa3c2; border-radius: 4px;
+  box-shadow: 0 0 0 1px #0a0f17, 0 0 0 4px rgba(143, 163, 194, 0.25), 0 18px 40px rgba(0, 0, 0, 0.7);
+  padding: 34px 0 14px; font-family: "Arial Narrow", Arial, sans-serif;
+  animation: pes6-entrada 0.28s ease-out;
+}
+@keyframes pes6-entrada { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.pes6-intro-tab {
+  position: absolute; top: -2px; left: 14px;
+  background: linear-gradient(180deg, #ffd23a 0%, #f39200 100%);
+  color: #111; font-weight: 900; font-style: italic; font-size: 13px; letter-spacing: 1px;
+  padding: 6px 22px 6px 16px; transform: skewX(-18deg);
+  box-shadow: 2px 2px 0 #7a4500;
+}
+.pes6-intro-titulo {
+  margin: 0 14px 10px; padding: 8px 12px;
+  background: linear-gradient(90deg, #1d4f9a 0%, #2f6fd0 60%, rgba(47, 111, 208, 0) 100%);
+  border-left: 5px solid #ffd23a;
+  color: #fff; font-size: 20px; font-weight: 900; font-style: italic; text-transform: uppercase;
+  letter-spacing: 0.5px; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+}
+.pes6-intro-cuerpo {
+  overflow-y: auto; margin: 0 14px; padding: 4px 0;
+  border-top: 1px solid #5d6f8c; border-bottom: 1px solid #5d6f8c;
+}
+.pes6-intro-cuerpo .pes6-cab {
+  margin: 8px 0 4px; padding: 4px 8px;
+  background: linear-gradient(90deg, #f39200, rgba(243, 146, 0, 0));
+  color: #fff; font-weight: 900; font-style: italic; font-size: 14px; text-transform: uppercase;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+.pes6-intro-cuerpo .pes6-sub {
+  margin: 6px 0 2px; padding: 3px 8px; color: #ffd23a; font-weight: 800; font-size: 14px;
+}
+.pes6-intro-cuerpo .pes6-fila {
+  padding: 5px 8px; color: #e4ebf5; font-size: 14px; line-height: 1.35;
+  border-bottom: 1px solid rgba(143, 163, 194, 0.12);
+}
+.pes6-intro-cuerpo .pes6-fila:nth-child(even) { background: rgba(255, 255, 255, 0.04); }
+.pes6-intro-cuerpo .pes6-sep { height: 4px; }
+.pes6-intro-btn {
+  margin: 14px 14px 0; padding: 12px; border: 2px solid #fff3b0; border-radius: 3px;
+  background: linear-gradient(180deg, #ffd23a 0%, #f39200 100%);
+  color: #111; font-weight: 900; font-style: italic; font-size: 16px; letter-spacing: 1px;
+  cursor: pointer; box-shadow: 0 3px 0 #7a4500;
+}
+.pes6-intro-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #7a4500; }

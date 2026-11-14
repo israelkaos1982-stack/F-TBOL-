@@ -1412,6 +1412,7 @@
       for (var k in p) if (p.hasOwnProperty(k)) copia[k] = p[k];
       copia.jugado = override.jugado;
       copia.resultado = { golesLocal: override.golesLocal, golesVisitante: override.golesVisitante };
+      copia._actualizadoEn = override._actualizadoEn || 0; // v497: lo usan los Derbys automáticos
       // Resumen compacto del acta (ver _compactarEventosPartido) — NUNCA
       // el acta completa, que no se persiste desde este cambio.
       copia.jug = override.jug || [];

@@ -4,6 +4,8 @@
 - **NO son duplicados** (clubes distintos, no fusionar): AC Escaldes ≠ CE Escaldes, SD Logroñés ≠ UD Logroñés, FC Vitebsk ≠ ML Vitebsk, CE Europa ≠ Europa FC (Gibraltar). Tampoco Arsenal Tivat / Arsenal Dzyarzhynsk vs Arsenal.
 - FC Rangers (Andorra) ≠ Rangers FC (Escocia): clubes distintos, cada uno con su ficha y su plantilla (`rangers fc` es alias de `rangers` en `plantillas_ia.json`).
 - "CDP" = **CDP Porthmadog** (Gales), clave `cdp porthmadog`.
+- **Fusionados 2026-11-14 (mismo club, una ficha)**: Atlètic Escaldes → **AC Escaldes** (siglas ATL); FC Rangers (Andorra) → **CF Rànger's**; Enosis Neon Ypsona → **Krasava Ypsonas** (siglas ENY). Las grafías viejas viven en `nombresAlt` y en `alias(...)` de js/chapas.js. **City Escaldes FC** es un club nuevo y distinto de AC/CE Escaldes.
+- Ficticios de 1ª/2ª RFEF (alias eFootball) viven en `data/alias_ia.json` (gana sobre el campo `alias` de rivales_reales.json). Ourense CF ≠ UD Ourense: cada uno tiene su propio ficticio.
 - **Liga de Andorra — 3 clubes que NUNCA se fusionan ni se confunden (petición usuario 2026-11-08, "guárdatelo a fuego")**:
   - **CE Casa de Portugal** (Andorra, siglas CDP, verde/rojo) ≠ **CDP Porthmadog** (Gales). Que compartan siglas "CDP" NO los hace el mismo club: "Casa de Portugal"/"CE Casa de Portugal" PROHIBIDO como `nombresAlt` de Porthmadog.
   - **FC Santa Coloma** ≠ **UE Santa Coloma**: los dos juegan en la liga de Andorra, cada uno con su ficha. PROHIBIDO poner "FC Santa Coloma" como `nombresAlt` de UE Santa Coloma (ni al revés).

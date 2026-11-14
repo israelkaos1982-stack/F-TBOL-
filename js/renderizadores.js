@@ -18640,15 +18640,51 @@
   function _derbyEtiquetaRival(rival) {
     return (rival.misterEmoji ? rival.misterEmoji + " " : "") + escapeHTML(rival.mister);
   }
+  // v497: la caja muestra solo PJ · PG · PE · PP · % (más grande, estilo PES6).
   function _derbyFilaHtml(etiquetaHtml, c, claseExtra) {
     return (
       '<tr class="derbys-fila' + (claseExtra ? " " + claseExtra : "") + '">' +
       '<td class="clasificacion-equipo">' + etiquetaHtml + "</td>" +
       "<td>" + c.pj + "</td><td>" + c.pg + "</td><td>" + c.pe + "</td><td>" + c.pp + "</td>" +
-      "<td>" + c.gf + "</td><td>" + c.gc + "</td>" +
-      "<td>" + (c.dg > 0 ? "+" + c.dg : c.dg) + "</td>" +
-      "<td>" + c.pct + "%</td></tr>"
+      '<td class="derbys-pct">' + c.pct + "%</td></tr>"
     );
+  }
+  // v497 — DERBYS AUTOMÁTICOS: cada partido entre 2 clubes humanos (o sus
+  // selecciones) que se juegue en la web a partir de DERBY_AUTO_DESDE se
+  // SUMA solo a la fila del rival, en las cajas de LOS DOS mánagers. Lo
+  // anterior a esa fecha sigue saliendo del texto que pega el admin (✏️),
+  // así que nada se cuenta dos veces.
+  var DERBY_AUTO_DESDE = Date.UTC(2026, 10, 14, 0, 0, 0); // 14 nov 2026
+  function _derbysAutomaticos(datos, idClubActivo, rivales) {
+    var porRival = {};
+    var idsRival = {};
+    rivales.forEach(function (r) { idsRival[r.id] = true; });
+    var lista = [];
+    try { lista = window.Estado.listarPartidosResueltos(datos) || []; } catch (err) { lista = []; }
+    var vistos = {};
+    lista.forEach(function (p) {
+      if (!p || !p.jugado || !p.resultado || p._sinValor) return;
+      if ((p._actualizadoEn || 0) < DERBY_AUTO_DESDE) return;
+      if (vistos[p.id]) return;
+      var cl = _idClubDeEquipoId(p.local), cv = _idClubDeEquipoId(p.visitante);
+      var soyLocal = cl === idClubActivo, soyVisit = cv === idClubActivo;
+      if (soyLocal === soyVisit) return;
+      var rivalId = soyLocal ? cv : cl;
+      if (!idsRival[rivalId]) return;
+      vistos[p.id] = true;
+      var gp = soyLocal ? p.resultado.golesLocal : p.resultado.golesVisitante;
+      var gr = soyLocal ? p.resultado.golesVisitante : p.resultado.golesLocal;
+      var s = porRival[rivalId] = porRival[rivalId] || { pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0 };
+      s.pj++; s.gf += gp || 0; s.gc += gr || 0;
+      if (gp > gr) s.pg++;
+      else if (gp < gr) s.pp++;
+      else {
+        // Empate a los 90: si hubo penaltis, cuenta para quien ganó la tanda.
+        var penP = soyLocal ? (p.penL || 0) : (p.penV || 0), penR = soyLocal ? (p.penV || 0) : (p.penL || 0);
+        if (penP > penR) s.pg++; else if (penP < penR) s.pp++; else s.pe++;
+      }
+    });
+    return porRival;
   }
 
   function renderizarDerbys(contenedorId, idClubActivo) {
@@ -18686,8 +18722,12 @@
 
       var texto = window.Estado ? window.Estado.obtenerDerbysTexto(idClubActivo) : "";
       var porRival = parsearDerbysTexto(texto, rivales);
+      var autoRival = _derbysAutomaticos(datos, idClubActivo, rivales);
       var filas = rivales.map(function (r) {
-        var c = _derbyCalcFila(porRival[r.id] || {});
+        var base = porRival[r.id] || {}, auto = autoRival[r.id] || {};
+        var suma = {};
+        ["pj", "pg", "pe", "pp", "gf", "gc"].forEach(function (k) { suma[k] = (base[k] || 0) + (auto[k] || 0); });
+        var c = _derbyCalcFila(suma);
         c.rival = r;
         return c;
       });
@@ -18702,7 +18742,7 @@
       wrap.className = "clasificacion-wrap";
       var tablaHtml =
         '<table class="clasificacion-tabla derbys-tabla">' +
-        "<thead><tr><th>Rival</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>G+</th><th>G-</th><th>DG</th><th>%</th></tr></thead><tbody>" +
+        "<thead><tr><th>Rival</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>%</th></tr></thead><tbody>" +
         _derbyFilaHtml("🌐 GLOBAL", global, "derbys-fila--global") +
         filas.map(function (f) { return _derbyFilaHtml(_derbyEtiquetaRival(f.rival), f); }).join("") +
         "</tbody></table>";

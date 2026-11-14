@@ -2299,12 +2299,18 @@
       return { id: _nuevoIdEntradaLista(), nombre: nombreLegacy, desde: 0, hasta: null };
     }
     if (e && typeof e === "object" && typeof e.nombre === "string" && e.nombre.trim()) {
-      return {
+      var norm = {
         id: e.id || _nuevoIdEntradaLista(),
         nombre: e.nombre,
         desde: typeof e.desde === "number" ? e.desde : 0,
         hasta: typeof e.hasta === "number" ? e.hasta : null
       };
+      // v499: `pid` = partido en cuya previa se añadió (la vigencia se calcula
+      // por PARTIDO, no por número de orden — ver renderizadores.js::
+      // _entradaListaVigente). `quitado` = quitada con la ✕.
+      if (e.pid) norm.pid = String(e.pid);
+      if (e.quitado) norm.quitado = true;
+      return norm;
     }
     return null;
   }
@@ -2366,15 +2372,17 @@
   // _abrirPickerJugadorLista) para que una entrada nunca pueda quedarse
   // vigente para siempre por olvido — reporte usuario 2026-09-26,
   // sancionados sin ninguna tarjeta que llevaban así desde su alta.
-  function agregarJugadorALista(clubId, tipo, nombre, orden, hasta) {
+  function agregarJugadorALista(clubId, tipo, nombre, orden, hasta, partidoId) {
     nombre = String(nombre || "").trim();
     var lista = obtenerListaJugadores(clubId, tipo);
     if (!nombre) return lista;
-    lista.push({
+    var nueva = {
       id: _nuevoIdEntradaLista(), nombre: nombre,
       desde: typeof orden === "number" ? orden : 0,
       hasta: typeof hasta === "number" ? hasta : null
-    });
+    };
+    if (partidoId) nueva.pid = String(partidoId);
+    lista.push(nueva);
     _guardarListaJugadores(clubId, tipo, lista);
     return lista;
   }
@@ -2404,6 +2412,7 @@
       if (lista[i].id === entradaId) { entrada = lista[i]; break; }
     }
     if (!entrada) return lista;
+    if (entrada.pid) entrada.quitado = true;
     entrada.hasta = typeof orden === "number" ? orden : 0;
     _guardarListaJugadores(clubId, tipo, lista);
     return lista;

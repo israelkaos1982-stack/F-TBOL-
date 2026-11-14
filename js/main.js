@@ -2686,6 +2686,10 @@
       titulo: "💾 Espacio del navegador",
       render: function (id) { window.Renderizadores.renderizarAdminEspacio(id); }
     },
+    whatsapp: {
+      titulo: "📱 WhatsApp de este móvil",
+      render: function (id) { window.Renderizadores.renderizarAdminWhatsapp(id); }
+    },
     snapshots: {
       titulo: "🛟 Copias automáticas del servidor",
       render: function (id) { window.Renderizadores.renderizarAdminSnapshots(id); }

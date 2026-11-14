@@ -52,9 +52,39 @@
   // si no está instalada, cae al enlace normal.
   var WHATSAPP_GRUPO_LIGA_INTENT = "intent://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=" +
     encodeURIComponent(WHATSAPP_GRUPO_LIGA_URL) + ";end";
+  // v495: cada móvil elige su app (los demás usan WhatsApp normal; el admin
+  // usa WhatsApp Business). Se guarda SOLO en este dispositivo ("f7v_",
+  // fuera de la sincronización). Panel Admin → 📱 WhatsApp de este móvil.
+  var _WA_APP_KEY = "f7v_whatsapp_app_v1";
+  var _WA_PAQUETES = { normal: "com.whatsapp", business: "com.whatsapp.w4b" };
+  function _waAppDeEsteMovil() {
+    try { return localStorage.getItem(_WA_APP_KEY) === "business" ? "business" : "normal"; } catch (e) { return "normal"; }
+  }
   function _urlGrupoWhatsapp() {
-    try { if (/Android/i.test(navigator.userAgent || "")) return WHATSAPP_GRUPO_LIGA_INTENT; } catch (e) {}
+    try {
+      if (/Android/i.test(navigator.userAgent || "")) {
+        return WHATSAPP_GRUPO_LIGA_INTENT.replace("package=com.whatsapp;", "package=" + _WA_PAQUETES[_waAppDeEsteMovil()] + ";");
+      }
+    } catch (e) {}
     return WHATSAPP_GRUPO_LIGA_URL;
+  }
+  function renderizarAdminWhatsapp(contenedorId) {
+    var cont = document.getElementById(contenedorId);
+    if (!cont) return;
+    var actual = _waAppDeEsteMovil();
+    function opcion(id, txt) {
+      return '<button type="button" class="admin-wa-opcion' + (actual === id ? " is-active" : "") + '" data-wa-app="' + id + '">' +
+        (actual === id ? "✅ " : "⬜ ") + txt + "</button>";
+    }
+    cont.innerHTML =
+      '<p class="admin-wa-texto">Con qué app se abre el Grupo LIGA al compartir las capturas <b>en este móvil</b> (cada móvil lo elige por su cuenta).</p>' +
+      '<div class="admin-wa-opciones">' + opcion("normal", "WhatsApp") + opcion("business", "WhatsApp Business") + "</div>";
+    Array.prototype.forEach.call(cont.querySelectorAll("[data-wa-app]"), function (b) {
+      b.addEventListener("click", function () {
+        try { localStorage.setItem(_WA_APP_KEY, b.dataset.waApp); } catch (e) {}
+        renderizarAdminWhatsapp(contenedorId);
+      });
+    });
   }
 
   // ---------- Carga de datos (fetch una sola vez, caché en memoria) ----------
@@ -24481,6 +24511,7 @@
     // automática de "▶ Empezar partido" en "▶ Continuar 2ª parte" (ver
     // el propio js/acta.js) — un único punto de verdad, nada duplicado.
     capturarYCompartirPreviaWhatsapp: _capturarYCompartirPreviaWhatsapp,
+    renderizarAdminWhatsapp: renderizarAdminWhatsapp,
     whatsappGrupoLigaUrl: WHATSAPP_GRUPO_LIGA_URL
   };
 })();

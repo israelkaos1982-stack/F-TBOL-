@@ -1136,16 +1136,42 @@
     }, 400);
   }
 
+  // v508 — AHORRO de base de datos (Neon cobra por el tiempo que está
+  // despierta, no por partidos): tras INACTIVO_MS sin tocar la pantalla,
+  // el ciclo de cada minuto deja de preguntar al servidor y así la base de
+  // datos puede apagarse aunque alguien deje la pestaña abierta. Lo que se
+  // haya guardado en este móvil se sigue subiendo igual (solo se salta la
+  // consulta cuando no hay nada local pendiente). Al volver a tocar la
+  // pantalla se sincroniza al momento.
+  var INACTIVO_MS = 3 * 60 * 1000;
+  var _ultimaActividad = Date.now();
+  var _dormido = false;
+  function _marcarActividad() {
+    _ultimaActividad = Date.now();
+    if (_dormido) { _dormido = false; _ciclo(); }
+  }
+  ["pointerdown", "keydown", "touchstart", "wheel"].forEach(function (ev) {
+    document.addEventListener(ev, _marcarActividad, { passive: true, capture: true });
+  });
+  function _inactivo() { return Date.now() - _ultimaActividad > INACTIVO_MS; }
+  function _hayCambiosLocales() {
+    try {
+      _detectarCambiosLocales(_clavesLocales());
+      return Object.keys(_pendientes).length > 0;
+    } catch (err) { return true; }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     _ciclo();
     setInterval(function () {
       if (document.visibilityState === "hidden") return; // app en segundo plano: no despertar al servidor
+      if (_inactivo() && !_hayCambiosLocales()) { _dormido = true; return; }
       _ciclo();
     }, INTERVALO_MS);
     setTimeout(function () { _revisarVersion(true); }, 2500);
-    setInterval(function () { if (document.visibilityState !== "hidden") _revisarVersion(false); }, 10 * 60 * 1000);
+    setInterval(function () { if (document.visibilityState !== "hidden" && !_inactivo()) _revisarVersion(false); }, 10 * 60 * 1000);
     document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") _revisarVersion(true);
+      if (document.visibilityState === "visible") { _ultimaActividad = Date.now(); _dormido = false; _revisarVersion(true); }
       // Al pasar a segundo plano se intenta subir YA lo pendiente (la
       // petición normal suele alcanzar a salir antes de que el navegador
       // congele la pestaña); al volver, se sincroniza de inmediato.

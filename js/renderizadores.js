@@ -45,7 +45,17 @@
   // que la persona lo pegue ella misma, así que la imagen se copia
   // APARTE al portapapeles (ver _capturarYCompartirPreviaWhatsapp) para
   // poder pegarla con un solo toque una vez dentro del chat.
-  var WHATSAPP_GRUPO_LIGA_URL = "https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX?s=cl&p=a&mlu=4&ilr=4";
+  var WHATSAPP_GRUPO_LIGA_URL = "https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX";
+  // v494: en Android, Chrome mostraba la página "Te invitaron a unirte…" con
+  // el aviso "¿Ir a WhatsApp Business?" en vez de abrir el grupo. Con un
+  // enlace intent:// se abre DIRECTAMENTE la app de WhatsApp (com.whatsapp);
+  // si no está instalada, cae al enlace normal.
+  var WHATSAPP_GRUPO_LIGA_INTENT = "intent://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=" +
+    encodeURIComponent(WHATSAPP_GRUPO_LIGA_URL) + ";end";
+  function _urlGrupoWhatsapp() {
+    try { if (/Android/i.test(navigator.userAgent || "")) return WHATSAPP_GRUPO_LIGA_INTENT; } catch (e) {}
+    return WHATSAPP_GRUPO_LIGA_URL;
+  }
 
   // ---------- Carga de datos (fetch una sola vez, caché en memoria) ----------
   var _cacheFetch = {};
@@ -21266,7 +21276,7 @@
           .catch(function () {});
       }
     } catch (e) {}
-    try { window.open(WHATSAPP_GRUPO_LIGA_URL, "_blank"); } catch (e) {}
+    try { window.open(_urlGrupoWhatsapp(), "_blank"); } catch (e) {}
   }
 
   // Captura `el` (la previa/pantalla en vivo TAL CUAL se ve, con

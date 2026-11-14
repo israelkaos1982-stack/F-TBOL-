@@ -162,7 +162,7 @@
       // pantalla para reasignarla). La cabecera ℹ️ la resincroniza el
       // propio render (renderizarLiga1RefClasificacion →
       // _actualizarTituloModalLiga), no hace falta pintarla aquí.
-      _ligaNavActual = LIGA_FIJA_POR_CLUB[clubId] || window.Estado.obtenerDivisionClub(clubId);
+      _ligaNavActual = (window.Renderizadores.ligaPropiaClub && window.Renderizadores.ligaPropiaClub(clubId)) || window.Estado.obtenerDivisionClub(clubId);
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
@@ -1030,8 +1030,6 @@
   // editor vuelvan a la MISMA liga en la que se entró a editar, nunca a
   // 1ª REF por defecto.
   var _ligaNavActual = "1ref";
-  // v502: la caja de liga del PSG y del Manchester City abre siempre SU liga.
-  var LIGA_FIJA_POR_CLUB = { psg: "ligue1", "manchester-city": "premier" };
 
   // A diferencia del resto de editores del candado 646 (que viven en el
   // "✏️ Editar menú" aparte), este se abre desde un ✏️ pequeño DENTRO de

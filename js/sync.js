@@ -358,6 +358,10 @@
       var enMemoria = window.Estado.estadoLigaCrudoEnMemoria();
       if (typeof enMemoria === "string") claves[CLAVE_RESULTADOS] = enMemoria;
     }
+    // v509: el borrador del partido EN VIVO (ef7_vivo_v1_*) ya no viaja al
+    // servidor — se queda solo en este móvil (recargar la página lo sigue
+    // recuperando). Así un partido no mantiene la base de datos despierta.
+    Object.keys(claves).forEach(function (k) { if (k.indexOf(PREFIJO_VIVO) === 0) delete claves[k]; });
     return claves;
   }
 
@@ -843,6 +847,7 @@
         var huboSnapshotNuevo = false;
         Object.keys(resp.claves).forEach(function (k) {
           if (k.indexOf(PREFIJO) !== 0) return;
+          if (k.indexOf(PREFIJO_VIVO) === 0) return; // v509: borradores en vivo, solo locales
           if (_pendientes[k]) {
             // Hay un cambio local sin confirmar: el servidor NO lo pisa. Pero
             // para los RESULTADOS eso no puede significar "dejar de ver los
@@ -1144,11 +1149,18 @@
   // consulta cuando no hay nada local pendiente). Al volver a tocar la
   // pantalla se sincroniza al momento.
   var INACTIVO_MS = 3 * 60 * 1000;
+  var PREFIJO_VIVO = "ef7_vivo_v1_";
+  // v509: con un partido EN VIVO abierto no se consulta al servidor (el
+  // resultado se sube al terminar). Lo pendiente de antes sí se sube.
+  function _partidoEnVivoAbierto() {
+    var a = document.getElementById("partido-live-overlay");
+    return !!(a && !a.hidden);
+  }
   var _ultimaActividad = Date.now();
   var _dormido = false;
   function _marcarActividad() {
     _ultimaActividad = Date.now();
-    if (_dormido) { _dormido = false; _ciclo(); }
+    if (_dormido && !_partidoEnVivoAbierto()) { _dormido = false; _ciclo(); }
   }
   ["pointerdown", "keydown", "touchstart", "wheel"].forEach(function (ev) {
     document.addEventListener(ev, _marcarActividad, { passive: true, capture: true });
@@ -1165,7 +1177,7 @@
     _ciclo();
     setInterval(function () {
       if (document.visibilityState === "hidden") return; // app en segundo plano: no despertar al servidor
-      if (_inactivo() && !_hayCambiosLocales()) { _dormido = true; return; }
+      if ((_inactivo() || _partidoEnVivoAbierto()) && !_hayCambiosLocales()) { _dormido = true; return; }
       _ciclo();
     }, INTERVALO_MS);
     setTimeout(function () { _revisarVersion(true); }, 2500);

@@ -105,7 +105,7 @@
   function cargarPlantillasIA() {
     if (_plantillasIA) return Promise.resolve(_plantillasIA);
     if (!_plantillasIAPromesa) {
-      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=508")
+      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=509")
         .then(function (r) { if (!r.ok) throw new Error("plantillas_ia " + r.status); return r.json(); })
         .then(function (d) { _plantillasIA = d || {}; _plantillasIACache = {}; return _plantillasIA; })
         .catch(function () { _plantillasIAPromesa = null; return null; });
@@ -211,9 +211,6 @@
     } catch (err) { return "x"; }
   }
   function _claveVivo(club) { return VIVO_PREFIJO + club; }
-  function _pedirSync() {
-    if (window.Sync && typeof window.Sync.pedirSincronizacion === "function") window.Sync.pedirSincronizacion();
-  }
   function _persistirVivo() {
     try {
       var club = window._idManagerActivo;
@@ -227,7 +224,7 @@
         t: Date.now(),
         d: _idDispositivo()
       }));
-      _pedirSync();
+      // v509: solo local — no se avisa al sync (ahorro de base de datos).
     } catch (err) { /* cuota llena / modo privado: el borrador es best-effort */ }
   }
   function _borrarVivo() {
@@ -238,7 +235,6 @@
       var actual = localStorage.getItem(k);
       if (actual === null || actual.indexOf('"fin"') !== -1) return; // nada que borrar
       localStorage.setItem(k, JSON.stringify({ fin: Date.now() }));
-      _pedirSync();
     } catch (err) {}
   }
   var _restauracionHecha = false;

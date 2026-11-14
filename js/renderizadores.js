@@ -988,7 +988,7 @@
     liga: "Liga", hypermotion: "Hypermotion", copa: "Copa Rey", supercopa: "Supercopa España",
     promocion: "Promoción",
     champions: "Champions", "ucl-previa": "Previa Champions",
-    uel: "Europa", uecl: "Conference", nations: "Nations Cup", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía",
+    uel: "Europa", uecl: "Conference", nations: "Nations", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía",
     recopa: "Recopa", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO",
     intercontinental: "Intercontinental",
     verano: "Torneo de Verano",
@@ -10924,7 +10924,7 @@
     tituloRow.className = "liga1ref-titulo-row";
     tituloRow.innerHTML =
       '<span class="liga1ref-titulo-spacer"></span>' +
-      '<span class="liga1ref-titulo-actual">' + _nationsDivMeta().icono + ' Nations Cup · ' + _nationsDivMeta().label + '</span>' +
+      '<span class="liga1ref-titulo-actual">' + _nationsDivMeta().icono + ' Nations · ' + _nationsDivMeta().label + '</span>' +
       '<button type="button" class="liga1ref-editar-btn" data-accion="editar-nations-inline" data-club-id="' +
       (idClubActivo || "") + '" aria-label="Editar grupos">✏️</button>';
     contenedor.appendChild(tituloRow);
@@ -17917,7 +17917,7 @@
   };
   var RANK_NOMBRE_COMP = {
     copa: "Copa", supercopa: "Supercopa", champions: "Champions", uel: "Europa League", uecl: "Conference",
-    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO", mundialito: "Mundialito", nations: "Nations Cup", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía"
+    recopa: "Recopa", intercontinental: "Intercontinental", usc: "Supercopa Europa", kaocup: "KAO Cup", superekao: "SuperEKAO", mundialito: "Mundialito", nations: "Nations", roadeurocopa: "Road Eurocopa", eurocopa: "Eurocopa", roadmundial: "Road Mundial", mundialsel: "Mundial", roadamerica: "Road Copa América", roadafrica: "Road Copa África", roadasia: "Road Copa Asia-Oceanía"
   };
 
   // Puestos 1.º-17.º de la Escala B; del 18.º en adelante baja de 35 en 2 en

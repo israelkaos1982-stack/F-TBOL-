@@ -3117,6 +3117,39 @@
     var btnModalClose = document.getElementById("club-modal-close");
     if (btnModalClose) btnModalClose.addEventListener("click", cerrarModalClub);
 
+    // v496 — ✏️ azul de la cabecera (junto a la ✕): edita los textos de la
+    // competición abierta. Los ✏️ de cada caja/ronda se ocultan (CSS) y este
+    // botón pulsa el que esté a la vista en ese momento (la ronda/pestaña
+    // seleccionada); si no hay ninguno, el ✏️ de arriba no se muestra.
+    var btnModalEditar = document.getElementById("club-modal-editar");
+    var cuerpoModal = document.getElementById("club-modal-body");
+    function _lapizVisibleDelModal() {
+      if (!cuerpoModal) return null;
+      var candidatos = cuerpoModal.querySelectorAll(".copa-club-header .liga1ref-editar-btn, .liga1ref-titulo-row .liga1ref-editar-btn, .liga1ref-header .liga1ref-editar-btn");
+      for (var i = 0; i < candidatos.length; i++) {
+        var padre = candidatos[i].parentElement;
+        if (padre && padre.getClientRects().length) return candidatos[i];
+      }
+      return null;
+    }
+    function _actualizarLapizModal() {
+      if (btnModalEditar) btnModalEditar.hidden = !_lapizVisibleDelModal();
+    }
+    if (btnModalEditar) {
+      btnModalEditar.addEventListener("click", function () {
+        var destino = _lapizVisibleDelModal();
+        if (destino) destino.click();
+      });
+    }
+    if (cuerpoModal && window.MutationObserver) {
+      var _lapizPend = false;
+      new MutationObserver(function () {
+        if (_lapizPend) return;
+        _lapizPend = true;
+        setTimeout(function () { _lapizPend = false; _actualizarLapizModal(); }, 60);
+      }).observe(cuerpoModal, { childList: true, subtree: true, attributes: true, attributeFilter: ["hidden", "class"] });
+    }
+
     var modalOv = document.getElementById("club-modal-overlay");
     if (modalOv) {
       modalOv.addEventListener("click", function (ev) {

@@ -1879,14 +1879,20 @@
   function _esClubHibrido(id) { return !!_CLUBES_HIBRIDOS[id]; }
   // v505: PSG y Man City en verde (como equipo humano) en las tablas de
   // texto pegado de Ligue 1 / Premier y en sus estadísticas.
-  function _esNombreHumanoVerde(nombre) {
+  // v507: id del club (psg / manchester-city) si el nombre de texto pegado es
+  // él, para tratar su fila igual que la de cualquier humano (emoji + TÚ).
+  var _EMOJI_HUMANO_TEXTO = { psg: "🦆", "manchester-city": "🐲" };
+  function _idHumanoDeNombreTexto(nombre) {
     var n = _normNombre(nombre || "").replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim();
-    if (!n) return false;
-    return ["psg", "manchester-city"].some(function (id) {
-      return _ALIAS_CLUBES_HUMANOS[id].some(function (a) {
+    if (!n) return null;
+    var ids = Object.keys(_EMOJI_HUMANO_TEXTO);
+    for (var i = 0; i < ids.length; i++) {
+      var ok = _ALIAS_CLUBES_HUMANOS[ids[i]].some(function (a) {
         return _normNombre(a).replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim() === n;
       });
-    });
+      if (ok) return ids[i];
+    }
+    return null;
   }
   function _hibridoDeNombre(nombre, equiposHumanos) {
     return (equiposHumanos || []).filter(function (e) {
@@ -3800,8 +3806,9 @@
       var pg = f.pj - f.pe - f.pp;
       var zona = zonaFn(pos, filas.length);
       var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
-      if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
-      if (_esNombreHumanoVerde(f.nombreMostrado)) claseFila += " clasificacion-fila--humano";
+      var idTexto = f.equipoId ? null : _idHumanoDeNombreTexto(f.nombreMostrado);
+      var esTuFila = (f.equipoId && f.equipoId === idClubActivo) || (idTexto && idTexto === idClubActivo);
+      if (esTuFila) claseFila += " clasificacion-fila--activo";
 
       // % = victorias/PJ, siempre derivado (petición usuario, "en menos de
       // 1kb al final de cada clasificación pon el % de victorias").
@@ -3811,8 +3818,9 @@
       tr.className = claseFila;
       tr.innerHTML =
         '<td class="clasificacion-pos">' + pos + "</td>" +
-        '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
-        (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+        '<td class="clasificacion-equipo">' + (idTexto && f.nombreMostrado.indexOf(_EMOJI_HUMANO_TEXTO[idTexto]) === -1 ? _EMOJI_HUMANO_TEXTO[idTexto] : "") +
+        escapeHTML(f.nombreMostrado) +
+        (esTuFila ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
         '<td class="clasificacion-pts">' + f.pts + "</td>" +
         "<td>" + f.pj + "</td><td>" + pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
         "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
@@ -3969,10 +3977,10 @@
         // de equipos (clasificacion-fila--activo / clasificacion-tag), 0 KB
         // de CSS nuevo. Un jugador de la IA (sin equipoId, viene del texto
         // pegado) nunca lo lleva.
-        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo) ||
+          (!f.equipoId && !!idClubActivo && _idHumanoDeNombreTexto(f.equipo) === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "") +
-          (_esNombreHumanoVerde(f.equipo) ? " clasificacion-fila--humano" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
@@ -17005,10 +17013,10 @@
       tablaEl.innerHTML = "<thead><tr><th>#</th><th>Jugador</th><th>Equipo</th><th>" + escapeHTML(meta.columna) + '</th><th class="stat-pj-th">PJ</th><th class="stat-prom-th">Prom.</th></tr></thead>';
       var tbody = document.createElement("tbody");
       filas.forEach(function (f, i) {
-        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
+        var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo) ||
+          (!f.equipoId && !!idClubActivo && _idHumanoDeNombreTexto(f.equipo) === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "") +
-          (_esNombreHumanoVerde(f.equipo) ? " clasificacion-fila--humano" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +

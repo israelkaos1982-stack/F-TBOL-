@@ -17761,14 +17761,20 @@
     return "🎯";
   }
   function parsearObjetivosTexto(texto) {
-    var secciones = {}, orden = [], sobrantes = 0, actual = null;
+    var secciones = {}, orden = [], sobrantes = 0, actual = null, iconos = {};
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.replace(/\r/g, "").trim();
       if (!l) return;
       if (l.charAt(0) === "#") {
-        var nombre = l.replace(/^#+\s*/, "").trim() || "GENERAL";
-        actual = nombre.toUpperCase();
+        // "## LIGA" / "# # LIGA" valen igual que "# LIGA". Un emoji al
+        // principio ("# 🍇 SUPERLIGA") es el ICONO de esa competición.
+        var nombre = l.replace(/^[#\s]+/, "").trim();
+        var mIcono = nombre.match(/^([^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ]+)\s*(.*)$/);
+        var icono = "";
+        if (mIcono && mIcono[2]) { icono = mIcono[1].trim(); nombre = mIcono[2].trim(); }
+        actual = (nombre || "GENERAL").toUpperCase();
         if (!secciones[actual]) { secciones[actual] = []; orden.push(actual); }
+        if (icono) iconos[actual] = icono;
         return;
       }
       if (!actual) { actual = "GENERAL"; secciones[actual] = []; orden.push(actual); }
@@ -17787,9 +17793,9 @@
       if (secciones[actual].length >= OBJETIVOS_MAX_POR_COMP) { sobrantes++; return; }
       secciones[actual].push({ texto: txt, recompensa: recompensa, progreso: progreso, clave: _rankingNorm(actual + " " + txt) });
     });
-    return { secciones: secciones, orden: orden, sobrantes: sobrantes };
+    return { secciones: secciones, orden: orden, sobrantes: sobrantes, iconos: iconos };
   }
-  function _objTarjetaHTML(seccion, o, logrado, idClub, fallado) {
+  function _objTarjetaHTML(seccion, o, logrado, idClub, fallado, icono) {
     var completo = !fallado && (logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total));
     var clase = "obj-card " + _objColorClase(seccion) + (fallado ? " obj-card--ko" : (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : "")));
     var cuerpo = '<span class="obj-card-texto">' + escapeHTML(o.texto) + "</span>";
@@ -17804,7 +17810,7 @@
       '<button type="button" class="' + clase + '" data-accion="toggle-objetivo" data-club-id="' + (idClub || "") +
       '" data-clave="' + escapeHTML(o.clave) + '">' +
       '<span class="obj-card-tag">' + escapeHTML(seccion) + "</span>" +
-      '<span class="obj-card-icono">' + _objIcono(seccion) + "</span>" +
+      '<span class="obj-card-icono">' + (icono ? escapeHTML(icono) : _objIcono(seccion)) + "</span>" +
       '<span class="obj-card-cuerpo">' + cuerpo + "</span>" +
       '<span class="obj-card-rec">' +
       '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙<br>" + escapeHTML(o.recompensa) : "—") + "</span></span>" +
@@ -17837,7 +17843,7 @@
     }
     var html = '<div class="obj-lista">';
     parseo.orden.forEach(function (sec) {
-      parseo.secciones[sec].forEach(function (o) { html += _objTarjetaHTML(sec, o, !!logrados[o.clave], idClubActivo, !!fallados[o.clave]); });
+      parseo.secciones[sec].forEach(function (o) { html += _objTarjetaHTML(sec, o, !!logrados[o.clave], idClubActivo, !!fallados[o.clave], parseo.iconos[sec]); });
     });
     html += "</div>";
     if (parseo.sobrantes) {
@@ -17865,7 +17871,8 @@
     nota.textContent =
       'Una línea "# NOMBRE" abre una competición (LIGA, COPA, CHAMPIONS…) y debajo van sus objetivos, ' +
       'los que quieras. Formato: "Texto del objetivo - RECOMPENSA", p.ej. "Gana la liga - 20K". ' +
-      'Para una barra de progreso añade al final "- 4/8": "Gana o empata 8 partidos - 10K - 4/8".';
+      'Para una barra de progreso añade al final "- 4/8": "Gana o empata 8 partidos - 10K - 4/8". ' +
+      'Para cambiar el ICONO de una competición, ponlo delante de su nombre: "# 🍇 SUPERLIGA", "# 🏆 COPA".';
     contenedor.appendChild(nota);
     var textarea = document.createElement("textarea");
     textarea.id = "objetivos-textarea";

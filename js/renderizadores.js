@@ -20776,7 +20776,9 @@
   // antes una pantalla con el texto del ℹ️ de ese torneo. Solo una vez por
   // club, competición y temporada; después ya no vuelve a salir.
   // ============================================================
-  var _INTRO_TORNEO_KEY = "ef7_intro_torneo_v1_";
+  // v506: v2 — las marcas "visto" de antes (se ponían al MOSTRAR, no al jugar)
+  // escondían la información aunque el primer partido no se hubiera jugado.
+  var _INTRO_TORNEO_KEY = "ef7_intro_torneo_v2_";
   var _INTRO_FORMATO_FN = {
     copa: function () { return obtenerFormatoCopaTexto(); },
     recopa: function () { return obtenerFormatoRecopaTexto(); },

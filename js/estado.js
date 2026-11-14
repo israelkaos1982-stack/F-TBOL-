@@ -2655,26 +2655,50 @@
   // Toñín (y su espejo Toñín vs Isra) — 1 derbi más jugado desde
   // entonces. El resto de los 30 registros (6 mánagers × 5 rivales) sale
   // IDÉNTICO en esta 3ª entrega del Excel, comprobado celda a celda.
+  // Actualizado 2026-11-14 desde "Estadisticas_Derbys.xlsx" (entrega con
+  // Ángel 😈, Izan 🦆 y Rubén 🐲). Rubén aún no tiene derbys (todo a 0).
   var DERBYS_DEFAULT_TEXTO = {
     "atletico-madrid": [ // ISRA ✏️
-      "Álvaro 🐭: PJ 10 PG 7 PE 1 PP 2 G+ 30 G- 21",
-      "Acsa 🔨: PJ 8 PG 7 PE 0 PP 1 G+ 37 G- 9",
-      "Toñín 💡: PJ 15 PG 12 PE 1 PP 2 G+ 77 G- 23"
-    ].join("\n"),
-    arsenal: [ // ÁLVARO 🐭
-      "Acsa 🔨: PJ 8 PG 2 PE 0 PP 6 G+ 15 G- 27",
-      "Toñín 💡: PJ 11 PG 9 PE 1 PP 1 G+ 27 G- 8",
-      "Isra ✏️: PJ 10 PG 2 PE 1 PP 7 G+ 21 G- 30"
-    ].join("\n"),
-    "real-madrid": [ // ACSA 🔨
-      "Álvaro 🐭: PJ 8 PG 6 PE 0 PP 2 G+ 27 G- 15",
-      "Toñín 💡: PJ 12 PG 7 PE 1 PP 4 G+ 26 G- 19",
-      "Isra ✏️: PJ 8 PG 1 PE 0 PP 7 G+ 9 G- 37"
+      "Rubén 🐲: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Acsa 🔨: PJ 10 PG 8 PE 0 PP 2 G+ 43 G- 14",
+      "Toñín 💡: PJ 16 PG 13 PE 1 PP 2 G+ 88 G- 24",
+      "Ángel 😈: PJ 10 PG 8 PE 0 PP 2 G+ 40 G- 16",
+      "Izan 🦆: PJ 5 PG 4 PE 0 PP 1 G+ 18 G- 9"
     ].join("\n"),
     liverpool: [ // TOÑÍN 💡
-      "Álvaro 🐭: PJ 11 PG 1 PE 1 PP 9 G+ 8 G- 27",
-      "Acsa 🔨: PJ 12 PG 4 PE 1 PP 7 G+ 19 G- 26",
-      "Isra ✏️: PJ 15 PG 2 PE 1 PP 12 G+ 23 G- 77"
+      "Rubén 🐲: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Acsa 🔨: PJ 14 PG 4 PE 2 PP 8 G+ 23 G- 34",
+      "Ángel 😈: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
+      "Izan 🦆: PJ 5 PG 1 PE 1 PP 3 G+ 7 G- 14",
+      "Isra ✏️: PJ 16 PG 2 PE 1 PP 13 G+ 24 G- 88"
+    ].join("\n"),
+    "real-madrid": [ // ACSA 🔨
+      "Rubén 🐲: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Toñín 💡: PJ 14 PG 8 PE 2 PP 4 G+ 34 G- 23",
+      "Ángel 😈: PJ 8 PG 2 PE 1 PP 5 G+ 19 G- 25",
+      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Isra ✏️: PJ 10 PG 2 PE 0 PP 8 G+ 14 G- 42"
+    ].join("\n"),
+    "fc-barcelona": [ // ÁNGEL 😈
+      "Rubén 🐲: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Acsa 🔨: PJ 8 PG 5 PE 1 PP 2 G+ 25 G- 19",
+      "Toñín 💡: PJ 8 PG 2 PE 4 PP 2 G+ 16 G- 16",
+      "Izan 🦆: PJ 4 PG 3 PE 1 PP 0 G+ 9 G- 4",
+      "Isra ✏️: PJ 10 PG 2 PE 0 PP 8 G+ 16 G- 40"
+    ].join("\n"),
+    psg: [ // IZAN 🦆
+      "Rubén 🐲: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Acsa 🔨: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Toñín 💡: PJ 5 PG 3 PE 1 PP 1 G+ 14 G- 7",
+      "Ángel 😈: PJ 4 PG 0 PE 1 PP 3 G+ 4 G- 9",
+      "Isra ✏️: PJ 5 PG 3 PE 0 PP 2 G+ 9 G- 18"
+    ].join("\n"),
+    "manchester-city": [ // RUBÉN 🐲
+      "Acsa 🔨: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Toñín 💡: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Ángel 😈: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Izan 🦆: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0",
+      "Isra ✏️: PJ 0 PG 0 PE 0 PP 0 G+ 0 G- 0"
     ].join("\n")
   };
   function _derbysKey(clubId) { return "ef7_derbys_v1_" + clubId; }
@@ -2714,12 +2738,15 @@
   // conversación. Corre UNA vez por dispositivo; cualquier edición
   // manual POSTERIOR a esta migración (candado 646) se respeta con
   // normalidad, igual que siempre.
-  var DERBYS_FORZAR_MIGRACION_KEY = "ef7_derbys_forzar_v1";
+  // v2 (2026-11-14): vuelve a aplicar el Excel nuevo una vez por dispositivo.
+  var DERBYS_FORZAR_MIGRACION_KEY = "ef7_derbys_forzar_v2";
   function _forzarDerbysFabricaV1() {
     try {
       if (localStorage.getItem(DERBYS_FORZAR_MIGRACION_KEY)) return;
       Object.keys(DERBYS_DEFAULT_TEXTO).forEach(function (clubId) {
-        guardarDerbysTexto(clubId, DERBYS_DEFAULT_TEXTO[clubId]);
+        // Directo (sin el aviso "se encoge mucho": es la carga del Excel).
+        localStorage.setItem(_derbysKey(clubId), DERBYS_DEFAULT_TEXTO[clubId]);
+        if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar(_derbysKey(clubId));
       });
       localStorage.setItem(DERBYS_FORZAR_MIGRACION_KEY, "1");
     } catch (err) {

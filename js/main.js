@@ -1089,6 +1089,7 @@
   // por el que escriba el admin — ver el bloque de abajo. ----------
   var _infoOverlayClave = null; // clave de guardado del texto actual (Estado.obtenerFormatoOverride)
   var _infoOverlayReabrir = null; // función que re-resuelve+repinta el texto tras guardar
+  var _infoOverlayTexto = ""; // texto crudo (el cuerpo se pinta en HTML, no sirve textContent)
   function _abrirInfoOverlay(texto, clave, reabrirFn) {
     if (!texto) return;
     var ov = document.getElementById("liga-info-overlay");
@@ -1100,7 +1101,14 @@
     _infoOverlayReabrir = reabrirFn || null;
     if (editor) editor.hidden = true;
     body.hidden = false;
-    body.textContent = texto;
+    _infoOverlayTexto = texto;
+    var R = window.Renderizadores;
+    var titulo = document.getElementById("liga-info-titulo");
+    var btnOk = document.getElementById("liga-info-ok");
+    if (titulo) { titulo.textContent = R && R.infoTituloDeClave ? R.infoTituloDeClave(clave) : ""; titulo.hidden = false; }
+    if (btnOk) btnOk.hidden = false;
+    if (R && R.introTextoPes6HTML) body.innerHTML = R.introTextoPes6HTML(texto);
+    else body.textContent = texto;
     ov.hidden = false;
     // Se comprueba tras pintar (el navegador ya calculó scrollHeight).
     setTimeout(function () {
@@ -1178,8 +1186,10 @@
       var hint = document.getElementById("liga-info-hint");
       var ta = document.getElementById("liga-info-textarea");
       if (!body || !editor || !ta) return;
-      ta.value = body.textContent || "";
+      ta.value = _infoOverlayTexto || body.textContent || "";
       body.hidden = true;
+      var t1 = document.getElementById("liga-info-titulo"); if (t1) t1.hidden = true;
+      var b1 = document.getElementById("liga-info-ok"); if (b1) b1.hidden = true;
       if (hint) hint.hidden = true;
       editor.hidden = false;
     }, "🔒 Editar texto", "Introduce el PIN de administrador.");
@@ -1198,6 +1208,8 @@
     if (editor) editor.hidden = true;
     if (!body) return;
     body.hidden = false;
+    var t2 = document.getElementById("liga-info-titulo"); if (t2) t2.hidden = false;
+    var b2 = document.getElementById("liga-info-ok"); if (b2) b2.hidden = false;
     setTimeout(function () {
       if (hint) hint.hidden = body.scrollHeight <= body.clientHeight + 2;
     }, 0);
@@ -1992,7 +2004,7 @@
   }
   function mostrarInfoSlx() {
     if (!window.Renderizadores) return;
-    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSlxTexto(), "slx", mostrarInfoSlx);
+    _abrirInfoOverlay(window.Renderizadores.obtenerFormatoSlxTexto(), "superliga", mostrarInfoSlx);
   }
 
   // ---------- Road Eurocopa — MISMO PATRÓN EXACTO que Champions/
@@ -3159,6 +3171,8 @@
 
     var btnInfoClose = document.getElementById("liga-info-close");
     if (btnInfoClose) btnInfoClose.addEventListener("click", cerrarInfoLigaFormato);
+    var btnInfoOk = document.getElementById("liga-info-ok");
+    if (btnInfoOk) btnInfoOk.addEventListener("click", cerrarInfoLigaFormato);
     var infoOv = document.getElementById("liga-info-overlay");
     if (infoOv) {
       infoOv.addEventListener("click", function (ev) {

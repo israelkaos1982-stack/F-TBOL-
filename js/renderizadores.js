@@ -1877,6 +1877,17 @@
   // jugadores SUMAN lo pegado en texto + lo jugado en el calendario.
   var _CLUBES_HIBRIDOS = { "fc-barcelona": true, psg: true, "manchester-city": true };
   function _esClubHibrido(id) { return !!_CLUBES_HIBRIDOS[id]; }
+  // v505: PSG y Man City en verde (como equipo humano) en las tablas de
+  // texto pegado de Ligue 1 / Premier y en sus estadísticas.
+  function _esNombreHumanoVerde(nombre) {
+    var n = _normNombre(nombre || "").replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim();
+    if (!n) return false;
+    return ["psg", "manchester-city"].some(function (id) {
+      return _ALIAS_CLUBES_HUMANOS[id].some(function (a) {
+        return _normNombre(a).replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim() === n;
+      });
+    });
+  }
   function _hibridoDeNombre(nombre, equiposHumanos) {
     return (equiposHumanos || []).filter(function (e) {
       return _esClubHibrido(e.id) && _liga1RefNombresCoinciden(nombre, e.nombre);
@@ -3790,6 +3801,7 @@
       var zona = zonaFn(pos, filas.length);
       var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
       if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
+      if (_esNombreHumanoVerde(f.nombreMostrado)) claseFila += " clasificacion-fila--humano";
 
       // % = victorias/PJ, siempre derivado (petición usuario, "en menos de
       // 1kb al final de cada clasificación pon el % de victorias").
@@ -3959,7 +3971,8 @@
         // pegado) nunca lo lleva.
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "") +
+          (_esNombreHumanoVerde(f.equipo) ? " clasificacion-fila--humano" : "");
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
@@ -16994,7 +17007,8 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "") +
+          (_esNombreHumanoVerde(f.equipo) ? " clasificacion-fila--humano" : "");
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +

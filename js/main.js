@@ -1043,10 +1043,63 @@
       if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId, ligaId);
     }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
   }
+
+  // v505: pegar TODO de golpe (clasificación + ⚽ ⭐ 🟨 🟥 🧤) en cualquier
+  // editor de una liga lo reparte solo, cada bloque a su caja.
+  var _BLOQUE_STAT_CABECERAS = [["⚽", "pichichi"], ["⭐", "mvp"], ["🟨", "amarillas"], ["🟥", "rojas"], ["🧤", "zamora"]];
+  function _repartirBloqueLiga(texto) {
+    var out = { clasificacion: [] }, actual = "clasificacion", n = 0;
+    String(texto || "").split("\n").forEach(function (linea) {
+      var t = linea.trim();
+      for (var i = 0; i < _BLOQUE_STAT_CABECERAS.length; i++) {
+        if (t.indexOf(_BLOQUE_STAT_CABECERAS[i][0]) === 0) {
+          actual = _BLOQUE_STAT_CABECERAS[i][1];
+          if (!out[actual]) { out[actual] = []; n++; }
+          return;
+        }
+      }
+      out[actual].push(linea);
+    });
+    if (!n) return null;
+    Object.keys(out).forEach(function (k) { out[k] = out[k].join("\n").trim(); });
+    return out;
+  }
+  // Guarda cada trozo en su sitio. Devuelve false si algún guardado falló.
+  function _guardarBloqueLiga(ligaId, partes) {
+    var ok = true;
+    if (partes.clasificacion && /\d/.test(partes.clasificacion)) {
+      ok = (ligaId === "1ref" ? window.Estado.guardarLiga1RefTexto(partes.clasificacion) : window.Estado.guardarLigaExtraTexto(ligaId, partes.clasificacion)) && ok;
+    }
+    _BLOQUE_STAT_CABECERAS.forEach(function (c) {
+      if (!partes[c[1]]) return;
+      ok = (ligaId === "1ref" ? window.Estado.guardarLiga1RefStatTexto(c[1], partes[c[1]]) : window.Estado.guardarLigaExtraStatTexto(ligaId, c[1], partes[c[1]])) && ok;
+    });
+    return ok;
+  }
+  // Carga UNA vez los datos de la Ligue 1 que mandó el usuario (2026-11-14).
+  var _LIGUE1_SEMILLA_V1 = "Pos  Nombre               Pts  PJ  PE  PP  G+  G-  DG\n1    PSG                   81  34   3   5   90  31  +59\n2    Mónaco                75  34   3   7   67  32  +35\n3    Lyon                  67  34   4   9   68  37  +31\n4    Niza                  59  34  11   7   47  42   +5\n5    Lens                  56  34   8  10   62  51  +11\n6    Marsella              54  34   9  10   52  32  +20\n7    Lille                 54  34  12   8   52  37  +15\n8    Brest                 50  34  14   8   49  41   +8\n9    Rennes                44  34  14  10   46  45   +1\n10   Paris FC              44  34  11  12   45  48   -3\n11   Estrasburgo           40  34  10  14   46  46    0\n12   Auxerre               40  34   7  16   48  61  -13\n13   Lorient               34  34  10  16   37  54  -17\n14   Le Havre              33  34   9  17   41  59  -18\n15   Toulouse              32  34   8  18   35  55  -20\n16   Angers                29  34  11  17   36  60  -24\n17   Le Mans               29  34  11  17   34  76  -42\n18   Troyes                16  34   7  24   18  66  -48\n\n⚽ GOLEADORES · Ligue 1 (Francia)\n# Jugador · Equipo · Goles · PJ · Coef.\n1. Ferran Torres · PSG · 34 · 34 · 1.00\n2. Merah · Lyon · 28 · 34 · 0.82\n3. Wahi · Niza · 21 · 34 · 0.62\n4. Gouiri · Marsella · 19 · 34 · 0.56\n5. O. Dembélé · PSG · 15 · 34 · 0.44\n6. Haraldsson · Lille · 13 · 34 · 0.38\n7. Ivanovič · Lens · 13 · 34 · 0.38\n8. El Ouazzani · Angers · 11 · 34 · 0.32\n9. Archer · Auxerre · 10 · 34 · 0.29\n10. Faivre · Auxerre · 10 · 34 · 0.29\n11. Harder · Estrasburgo · 10 · 34 · 0.29\n12. André · Lille · 9 · 34 · 0.26\n13. Fati · Mónaco · 9 · 34 · 0.26\n14. Samatta · Le Havre · 9 · 34 · 0.26\n15. L. Mafouta · Le Mans · 8 · 34 · 0.24\n16. Thauvin · Lens · 8 · 34 · 0.24\n17. Tolisso · Lyon · 8 · 34 · 0.24\n18. Ajorque · Brest · 7 · 34 · 0.21\n19. Al-Tamari · Rennes · 7 · 34 · 0.21\n20. Brunner · Mónaco · 7 · 34 · 0.21\n\n⭐ MVP · Ligue 1 (Francia)\n# Jugador · Equipo · MVP · PJ · Coef.\n1. Ferran Torres · PSG · 16 · 34 · 0.47\n2. Merah · Lyon · 13 · 34 · 0.38\n3. Wahi · Niza · 10 · 34 · 0.29\n4. De Lange · Marsella · 9 · 34 · 0.26\n5. Diouf · Niza · 7 · 34 · 0.21\n6. Gouiri · Marsella · 7 · 34 · 0.21\n7. Selvik · Brest · 7 · 34 · 0.21\n8. Hrádecký · Mónaco · 6 · 34 · 0.18\n9. Ivanovič · Lens · 6 · 34 · 0.18\n10. N. Kocik · Le Mans · 6 · 34 · 0.18\n11. Samba · Rennes · 6 · 34 · 0.18\n12. Brunner · Mónaco · 5 · 34 · 0.15\n13. Dia · Rennes · 5 · 34 · 0.15\n14. Gallon · Le Havre · 5 · 34 · 0.15\n15. Magnetti · Brest · 5 · 34 · 0.15\n16. Nazinho · Mónaco · 5 · 34 · 0.15\n17. Özer · Lille · 5 · 34 · 0.15\n18. Risser · Lens · 5 · 34 · 0.15\n19. André · Lille · 4 · 34 · 0.12\n20. Archer · Auxerre · 4 · 34 · 0.12\n\n🟨 TARJETAS AMARILLAS · Ligue 1 (Francia)\n# Jugador · Equipo · Amarillas · PJ · Coef.\n1. Emerson · Marsella · 16 · 34 · 0.47\n2. Sigur · Toulouse · 16 · 34 · 0.47\n3. João Neves · PSG · 15 · 34 · 0.44\n4. Alexsandro · Lille · 13 · 34 · 0.38\n5. Danois · Auxerre · 13 · 34 · 0.38\n6. Arsène Kouassi · Lorient · 12 · 34 · 0.35\n7. Athekame · Lyon · 12 · 34 · 0.35\n8. Højbjerg · Marsella · 12 · 34 · 0.35\n9. Isak Steiner Jensen · Lorient · 12 · 34 · 0.35\n10. Moustapha Mbow · Paris FC · 12 · 34 · 0.35\n11. Tolisso · Lyon · 12 · 34 · 0.35\n12. A. Lauray · Le Mans · 11 · 34 · 0.32\n13. Adama Camara · Paris FC · 11 · 34 · 0.32\n14. Cásseres · Toulouse · 11 · 34 · 0.32\n15. Dønnum · Toulouse · 11 · 34 · 0.32\n16. Ebonog · Le Havre · 11 · 34 · 0.32\n17. Haïdara · Lens · 11 · 34 · 0.32\n18. Hein · Niza · 11 · 34 · 0.32\n19. Montassar Talbi · Lorient · 11 · 34 · 0.32\n20. Oso · Estrasburgo · 11 · 34 · 0.32\n\n🟥 TARJETAS ROJAS · Ligue 1 (Francia)\n# Jugador · Equipo · Rojas · PJ · Coef.\n1. N. Boissé · Le Mans · 4 · 34 · 0.12\n2. André · Lille · 3 · 34 · 0.09\n3. Arcus · Angers · 3 · 34 · 0.09\n4. Harder · Estrasburgo · 3 · 34 · 0.09\n5. Richardson · Le Havre · 3 · 34 · 0.09\n6. Tapé · Toulouse · 3 · 34 · 0.09\n7. Adama Camara · Paris FC · 2 · 34 · 0.06\n8. Baldé · Brest · 2 · 34 · 0.06\n9. Belkhdim · Angers · 2 · 34 · 0.06\n10. Dembo Sylla · Lorient · 2 · 34 · 0.06\n11. Makosso · Auxerre · 2 · 34 · 0.06\n12. Nagida · Rennes · 2 · 34 · 0.06\n13. Nicolaisen · Toulouse · 2 · 34 · 0.06\n14. Oso · Estrasburgo · 2 · 34 · 0.06\n15. Rouault · Rennes · 2 · 34 · 0.06\n16. Saud · Lens · 2 · 34 · 0.06\n17. Sigur · Toulouse · 2 · 34 · 0.06\n18. Touba · Le Havre · 2 · 34 · 0.06\n19. Weah · Marsella · 2 · 34 · 0.06\n20. A. Hakimi · PSG · 1 · 34 · 0.03\n\n🧤 ZAMORA · Ligue 1 (Francia)\n# Jugador · Equipo · Goles recib. · PJ · Coef.\n1. M. Safonov · PSG · 31 · 34 · 0.91\n2. De Lange · Marsella · 32 · 34 · 0.94\n3. Hrádecký · Mónaco · 32 · 34 · 0.94\n4. Greif · Lyon · 37 · 34 · 1.09\n5. Özer · Lille · 37 · 34 · 1.09\n6. Selvik · Brest · 41 · 34 · 1.21\n7. Diouf · Niza · 42 · 34 · 1.24\n8. Samba · Rennes · 45 · 34 · 1.32\n9. Jörgensen · Estrasburgo · 46 · 34 · 1.35\n10. Kevin Trapp · Paris FC · 48 · 34 · 1.41\n11. Risser · Lens · 51 · 34 · 1.50\n12. Yvon Mvogo · Lorient · 54 · 34 · 1.59\n13. Restes · Toulouse · 55 · 34 · 1.62\n14. Gallon · Le Havre · 59 · 34 · 1.74\n15. Lopes · Angers · 59 · 33 · 1.79\n16. Nardi · Auxerre · 61 · 34 · 1.79\n17. Patrick Beach · Troyes · 66 · 34 · 1.94\n18. N. Kocik · Le Mans · 76 · 34 · 2.24";
+  function _sembrarLigue1V1() {
+    try {
+      if (!window.Estado || localStorage.getItem("ef7_semilla_ligue1_v1")) return;
+      var partes = _repartirBloqueLiga(_LIGUE1_SEMILLA_V1);
+      if (!partes) return;
+      window.Estado.guardarLigaExtraTexto("ligue1", partes.clasificacion, { forzar: true });
+      _BLOQUE_STAT_CABECERAS.forEach(function (c) {
+        if (partes[c[1]]) localStorage.setItem("ef7_liga_ligue1_stat_" + c[1] + "_v1", partes[c[1]]);
+      });
+      localStorage.setItem("ef7_semilla_ligue1_v1", "1");
+    } catch (err) { console.error("[ligue1] semilla:", err); }
+  }
   function guardarLiga1Ref(clubId, ligaId) {
     var ta = document.getElementById("liga1ref-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
     ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    var bloque = _repartirBloqueLiga(ta.value);
+    if (bloque) {
+      if (!_guardarBloqueLiga(ligaId, bloque)) return;
+      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, ligaId);
+      return;
+    }
     var okGuardado = ligaId === "1ref"
       ? window.Estado.guardarLiga1RefTexto(ta.value)
       : window.Estado.guardarLigaExtraTexto(ligaId, ta.value);
@@ -1236,6 +1289,12 @@
     var ta = document.getElementById("liga1ref-stat-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
     ligaId = _ligaNavActual = ligaId || _ligaNavActual;
+    var bloqueStat = _repartirBloqueLiga(ta.value);
+    if (bloqueStat) {
+      if (!_guardarBloqueLiga(ligaId, bloqueStat)) return;
+      window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria, ligaId);
+      return;
+    }
     var okGuardadoStat = ligaId === "1ref"
       ? window.Estado.guardarLiga1RefStatTexto(categoria, ta.value)
       : window.Estado.guardarLigaExtraStatTexto(ligaId, categoria, ta.value);
@@ -2993,6 +3052,7 @@
 
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
+    _sembrarLigue1V1();
     if (window.Renderizadores) {
       window.Renderizadores.renderizarInicioEquipos();
       window.Renderizadores.pintarTemporada();

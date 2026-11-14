@@ -287,93 +287,136 @@
     return (_hashStr(String(seedStr)) % 100000) / 100000;
   }
 
-  function calcularClimaDinamicoPartido(jornadaActual, totalJornadasLiga, seedStr) {
+  // ============================================================
+  // v499 — MOTOR DEL CLIMA (petición usuario 2026-11-14)
+  // 1) Estación según el PROGRESO del calendario (vale para 30, 50 o 90
+  //    partidos): 0-25 % Verano inicial · 26-75 % Invierno · 76-100 % Verano final.
+  // 2) Zona climática del equipo LOCAL: frío/húmedo · templado · cálido
+  //    (sin zona conocida → templado).
+  // 3) Probabilidades:
+  //      VERANO   frío 75/25/0 · templado 90/10/0 · cálido 95/5/0   (sol/lluvia/nieve)
+  //      INVIERNO frío 50/44/6 · templado 75/22/3 · cálido 85/15/0
+  // 4) Excepción: FINAL o sede neutral → 95 % sol / 5 % lluvia.
+  // El sorteo es determinista por partido (mismo partido = mismo clima).
+  // ============================================================
+  var _CLIMA_PROBS = {
+    VERANO: { frio: [75, 25, 0], templado: [90, 10, 0], calido: [95, 5, 0] },
+    INVIERNO: { frio: [50, 44, 6], templado: [75, 22, 3], calido: [85, 15, 0] }
+  };
+  var _CLIMA_HUMANOS = {
+    liverpool: "frio", "manchester-city": "frio", arsenal: "frio", chelsea: "frio",
+    "real-madrid": "templado", "atletico-madrid": "templado", psg: "templado",
+    "fc-barcelona": "calido"
+  };
+  // Palabras del NOMBRE del club (normalizado) → zona. Cálido se mira
+  // primero (frases más concretas, p. ej. "sporting cp" antes que "sporting").
+  var _CLIMA_CALIDO = ["barcelona", "espanyol", "girona", "valencia", "levante", "villarreal", "castellon", "elche", "hercules",
+    "alicante", "eldense", "alcoyano", "murcia", "cartagena", "lorca", "yeclano", "sevilla", "betis", "malaga", "granada", "almeria",
+    "cadiz", "cordoba", "recreativo", "huelva", "jaen", "xerez", "algeciras", "marbella", "antequera", "linense", "sanluqueno",
+    "ceuta", "melilla", "mallorca", "ibiza", "baleares", "las palmas", "tenerife", "intercity", "nastic", "tarragona", "reus",
+    "sabadell", "terrassa", "europa", "cornella", "badalona", "alzira", "ontinyent", "poblense", "ilicitano", "orihuela",
+    "torrevieja", "mar menor", "aguilas", "motril", "estepona", "fuengirola", "torremolinos", "mestalla", "atzeneta", "gimnastic",
+    "sporting cp", "sporting lisboa", "benfica", "porto", "braga", "guimaraes", "boavista", "estoril", "olympiacos", "panathinaikos",
+    "aek", "paok", "napoli", "roma", "lazio", "palermo", "bari", "lecce", "cagliari", "salernitana", "galatasaray", "fenerbahce",
+    "besiktas", "marseille", "marsella", "monaco", "nice", "niza", "montpellier", "flamengo", "palmeiras", "boca", "river",
+    "santos", "al hilal", "al nassr", "al ittihad", "al ahli", "al sadd", "al ain", "inter miami", "la galaxy", "club america", "tigres"];
+  var _CLIMA_FRIO = ["athletic", "bilbao", "real sociedad", "osasuna", "alaves", "eibar", "celta", "deportivo", "coruna", "racing",
+    "santander", "sporting", "gijon", "oviedo", "lugo", "ourense", "compostela", "pontevedra", "ferrol", "langreo", "aviles", "luanco",
+    "torrelavega", "barakaldo", "arenas", "amorebieta", "real union", "sestao", "tudelano", "mirandes", "burgos", "logrones", "numancia",
+    "ponferradina", "leonesa", "laredo", "bergantinos", "arosa", "covadonga", "caudal", "portugalete", "basconia", "beasain", "durango",
+    "liverpool", "manchester", "arsenal", "chelsea", "tottenham", "everton", "newcastle", "aston villa", "west ham", "brighton",
+    "wolverhampton", "wolves", "fulham", "brentford", "crystal palace", "nottingham", "leicester", "leeds", "southampton",
+    "sunderland", "burnley", "celtic", "rangers", "aberdeen", "hearts", "hibernian", "bayern", "dortmund", "borussia", "leipzig",
+    "leverkusen", "schalke", "wolfsburg", "frankfurt", "stuttgart", "hamburg", "werder", "koln", "union berlin", "hertha", "mainz",
+    "freiburg", "hoffenheim", "augsburg", "ajax", "psv", "feyenoord", "alkmaar", "twente", "utrecht", "anderlecht", "brugge", "genk",
+    "gent", "standard", "aik", "ik start", "malmo", "djurgarden", "hammarby", "goteborg", "bodo", "molde", "rosenborg", "brann",
+    "copenhagen", "copenhague", "kobenhavn", "brondby", "midtjylland", "hjk", "helsinki", "dinamo", "dynamo", "spartak", "cska",
+    "zenit", "lokomotiv", "shakhtar", "legia", "lech", "slavia", "sparta praha", "plzen", "ferencvaros", "crvena zvezda", "red star",
+    "partizan", "steaua", "fcsb", "ludogorets", "trabzonspor", "salzburg", "rapid wien", "sturm graz", "basel", "young boys",
+    "zurich", "grasshopper"];
+  function _climaContiene(norm, lista) {
+    for (var i = 0; i < lista.length; i++) {
+      var p = lista[i];
+      var k = (" " + norm + " ").indexOf(" " + p + " ");
+      if (k !== -1) return true;
+    }
+    return false;
+  }
+  function _zonaClimaEquipo(equipo) {
+    if (!equipo) return "templado";
+    if (equipo.clima === "frio" || equipo.clima === "templado" || equipo.clima === "calido") return equipo.clima;
+    if (_CLIMA_HUMANOS[equipo.id]) return _CLIMA_HUMANOS[equipo.id];
+    var norm = _normSinPuntuacion(equipo.nombre || "");
+    if (!norm) return "templado";
+    if (_climaContiene(norm, _CLIMA_CALIDO)) return "calido";
+    if (_climaContiene(norm, _CLIMA_FRIO)) return "frio";
+    // Prefijos nórdicos/del este (IK, IF, BK, FK, SK…) → frío.
+    if (/^(ik|if|ifk|bk|fk|sk|hk|ks|nk|gks)\s/.test(norm)) return "frio";
+    return "templado";
+  }
+  // Roll del clima con mezcla extra (el hash simple daba porcentajes
+  // sesgados para ids parecidos: 64/36 en vez de 75/25).
+  function _rollClima(seedStr) {
+    var h = _hashStr(String(seedStr)) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967296;
+  }
+  function _climaSorteo(probs, roll) {
+    var r = roll * 100;
+    if (r < probs[0]) return "sol";
+    if (r < probs[0] + probs[1]) return "lluvia";
+    return "nieve";
+  }
+  function calcularClimaDinamicoPartido(jornadaActual, totalJornadasLiga, seedStr, zona) {
     var total = Number(totalJornadasLiga) || 1;
     var jornada = Number(jornadaActual) || 0;
     var progreso = jornada / total; // 0..1
-
-    var estacion, clima;
-    var roll = (seedStr !== undefined && seedStr !== null) ? _rollDeterminista(seedStr) : Math.random();
-
-    if (progreso <= 0.30 || progreso > 0.70) {
-      estacion = "VERANO";
-      clima = roll < 0.75 ? "sol" : "lluvia"; // nieve prohibida en verano
-    } else {
-      estacion = "INVIERNO";
-      if (roll < 0.50) clima = "sol";
-      else if (roll < 0.90) clima = "lluvia";
-      else clima = "nieve";
-    }
-
-    return {
-      estacion: estacion,
-      clima: clima,
-      icono: CLIMA_ICONO[clima],
-      label: CLIMA_LABEL[clima]
-    };
+    var roll = (seedStr !== undefined && seedStr !== null) ? _rollClima(seedStr) : Math.random();
+    var estacion = (progreso <= 0.25 || progreso > 0.75) ? "VERANO" : "INVIERNO";
+    var probs = _CLIMA_PROBS[estacion][zona || "templado"] || _CLIMA_PROBS[estacion].templado;
+    var clima = _climaSorteo(probs, roll);
+    return { estacion: estacion, clima: clima, icono: CLIMA_ICONO[clima], label: CLIMA_LABEL[clima] };
   }
 
-  // Envoltorio: resuelve jornadaActual/totalJornadasLiga a partir de un
-  // partido real (liga -> su propia jornada; torneos KO sin jornada ->
-  // posición proporcional dentro de la temporada por fecha) y aplica las
-  // 2 excepciones "siempre sol" pedidas por el usuario, ANTES de entrar
-  // al motor estacional:
-  //  1) Partido HUMANO vs HUMANO (local Y visitante, los 2 lados
-  //     controlados por un mister) — nunca juega bajo lluvia/nieve.
-  //     Humano vs IA / IA vs Humano NO entra aquí — sigue el motor
-  //     estacional normal (30/40/30 estaciones, 75/25 y 50/40/10 clima),
-  //     exactamente igual que un partido IA vs IA.
-  //  2) Cualquier ronda a PARTIDO ÚNICO fuera de Liga (Copa/competición
-  //     europea sin ida-vuelta: final, ronda eliminatoria a partido
-  //     único…) — sea IA o humano. Solo las eliminatorias a DOBLE
-  //     partido (ida-vuelta) sin que sea Humano vs Humano entran en el
-  //     motor estacional con lluvia/nieve, igual que la Liga.
-  // `local`/`visitante` son los equipos ya resueltos por el caller (para
-  // no volver a buscarlos aquí) — opcionales, sin ellos se asume "sin
-  // humano" (el único caller real, abrirPreviaPartido, siempre los pasa).
+  // Envoltorio: resuelve el progreso del partido dentro de la temporada
+  // (Liga → su jornada; Calendario extra sin fecha → posición del partido
+  // en el calendario del club; con fecha → posición por fecha) y aplica
+  // las excepciones antes del motor.
   function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs, local, visitante) {
-    // Superliga: condición FIJA de la competición (petición usuario) —
-    // siempre ☀️ Soleado, nunca entra en el motor estacional aleatorio.
+    // Superliga: condición FIJA de la competición — siempre ☀️.
     if (partido.competicion === "superliga") {
       return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
     }
-
-    var esHumanoVsHumano = !!(local && local.mister) && !!(visitante && visitante.mister);
-    var modo = detectarModoPartido(partido);
-    if (esHumanoVsHumano || modo === "eliminatoria-unica") {
-      return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
-    }
-
     var seed = "clima|" + (partido.id != null ? partido.id
       : (partido.local + "|" + partido.visitante + "|" + partido.jornada + "|" + partido.ronda));
 
+    // Progreso de temporada (0..1).
+    var progreso;
     if (partido.competicion === "liga" && typeof partido.jornada === "number") {
-      return calcularClimaDinamicoPartido(partido.jornada, totalJornadasLiga, seed);
+      progreso = partido.jornada / (Number(totalJornadasLiga) || 1);
+    } else {
+      var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;
+      if (!isFinite(fechaCruda) && typeof partido._ordenClub === "number" && partido._totalClubCalendario) {
+        progreso = (partido._ordenClub + 1) / partido._totalClubCalendario;
+      } else {
+        var fechaMs = isFinite(fechaCruda) ? fechaCruda : fechaInicioMs;
+        var rango = Math.max(1, fechaFinMs - fechaInicioMs);
+        progreso = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
+      }
     }
-    // Partido de Calendario extra SIN fecha real tecleada (el caso normal:
-    // el admin casi nunca escribe una fecha por línea, ver
-    // parsearPartidosExtraTexto — "fecha" solo se rellena si hay una 4ª
-    // parte tras "Competición - Ronda - Rival"). Con `partido.fecha` vacío,
-    // `new Date(null).getTime()` da el EPOCH (1970) — SIEMPRE muy anterior
-    // a fechaInicioMs de la temporada real, así que el ratio se clampeaba
-    // a 0 -> progreso 0 -> SIEMPRE "VERANO", para CUALQUIER partido sin
-    // fecha (Liga, Copa a doble partido, Promoción…). Es la causa exacta
-    // del bug reportado por el usuario ("la estación siempre es verano, no
-    // sale invierno") con un calendario de Calendario extra sin fechas.
-    // Fallback: la posición CRONOLÓGICA de este partido dentro del propio
-    // calendario del club (_ordenClub/_totalClubCalendario, calculados en
-    // generarCalendarioLateralDerecho para el mismo propósito de "orden de
-    // temporada") sustituye a la fecha ausente — reparte el clima a lo
-    // largo de TODA la temporada real del club en vez de clavarlo al
-    // principio.
-    var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;
-    if (!isFinite(fechaCruda) && typeof partido._ordenClub === "number" && partido._totalClubCalendario) {
-      return calcularClimaDinamicoPartido(partido._ordenClub + 1, partido._totalClubCalendario, seed);
+    var estacionFinal = (progreso <= 0.25 || progreso > 0.75) ? "VERANO" : "INVIERNO";
+
+    // FINAL o sede neutral: 95 % sol / 5 % lluvia, sin mirar al local.
+    var compKey = _resolverCompKeyBalon(partido.competicion);
+    var cfgSede = _SEDES_COMP[compKey];
+    var esFinal = /\bfinal\b/.test(_normNombre(partido.ronda || "")) && !/semi|cuartos|octavos|dieciseisavos/.test(_normNombre(partido.ronda || ""));
+    if (esFinal || (cfgSede && cfgSede.sedes && cfgSede.sedes.length)) {
+      var climaN = _climaSorteo([95, 5, 0], _rollDeterminista(seed));
+      return { estacion: estacionFinal, clima: climaN, icono: CLIMA_ICONO[climaN], label: CLIMA_LABEL[climaN] };
     }
-    var fechaMs = isFinite(fechaCruda) ? fechaCruda : fechaInicioMs;
-    var rango = Math.max(1, fechaFinMs - fechaInicioMs);
-    var ratio = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
-    return calcularClimaDinamicoPartido(Math.round(ratio * 1000), 1000, seed);
+    return calcularClimaDinamicoPartido(progreso * 1000, 1000, seed, _zonaClimaEquipo(local));
   }
 
   // Regla especial de balones: nieve -> fuerza el balón de alta visibilidad,
@@ -20403,6 +20446,43 @@
     }
     return p._ordenClub || 0;
   }
+  // v499 — vigencia por PARTIDO (ya no por número de orden, que cambiaba
+  // al tocar el calendario y hacía "saltar" lesionados a otros partidos):
+  //  · Lesionado (⬇️): el partido donde se marcó + el SIGUIENTE partido del
+  //    calendario contra un equipo IA (los partidos contra humanos no
+  //    tienen lesionados: ahí puede jugar y la baja pasa al siguiente IA).
+  //  · Sancionado manual: solo el partido donde se añadió.
+  //  · Entradas antiguas (sin partido guardado) ya no se muestran.
+  function _rivalEsHumano(p, clubId, datos) {
+    var cl = _idClubDeEquipoId(p.local), cv = _idClubDeEquipoId(p.visitante);
+    var clubBase = _idClubDeEquipoId(clubId);
+    var rival = cl === clubBase ? p.visitante : p.local;
+    return _esClubHumano(rival, datos);
+  }
+  function _entradaListaVigente(entrada, tipo, partido, clubId, datos) {
+    if (!entrada || entrada.quitado || !entrada.pid || !partido) return false;
+    if (entrada.pid === String(partido.id)) return true;
+    if (tipo !== "lesionados") return false;
+    var lista = [];
+    try { lista = _partidosOrdenadosDelClub(clubId, datos); } catch (err) { lista = []; }
+    var idx = -1;
+    for (var i = 0; i < lista.length; i++) { if (String(lista[i].id) === entrada.pid) { idx = i; break; } }
+    if (idx === -1) return false;
+    for (var k = idx + 1; k < lista.length; k++) {
+      if (lista[k]._sinValor) continue;
+      if (_rivalEsHumano(lista[k], clubId, datos)) continue;
+      return String(lista[k].id) === String(partido.id);
+    }
+    return false;
+  }
+  function _listaVigentePrevia(tipo) {
+    var id = _idHumanoPrevia();
+    if (!id || !window.Estado || !_ultimoContexto) return [];
+    var datos = _ultimoContexto.datos;
+    return window.Estado.obtenerListaJugadores(id, tipo).filter(function (e) {
+      return _entradaListaVigente(e, tipo, _previaPartidoActual, id, datos);
+    });
+  }
   function _renderListaJugadores(tipo, contId, vacioTxt) {
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !window.Estado) return;
@@ -20411,7 +20491,7 @@
     // del club, que puede incluir lesiones/sanciones ya cerradas antes
     // de este partido o que todavía no empezaban en su momento.
     var orden = _ordenPrevia();
-    var lista = window.Estado.obtenerListaJugadoresActivosPara(_idHumanoPrevia(), tipo, orden);
+    var lista = _listaVigentePrevia(tipo);
     var htmlManual = lista.map(function (entrada) { return _filaJugadorLista(entrada, tipo); }).join("");
     // Sancionados AUTOMÁTICOS por tarjetas (roja/doble amarilla/ciclo de
     // 3) — se calculan SIEMPRE, además de lo que el admin haya añadido a
@@ -22120,7 +22200,9 @@
   // anterior" (el siguiente partido del jugador ya no lo mira).
   function calcularSancionadosAutomaticosPara(clubId, ordenPartidoActual, datos) {
     if (typeof ordenPartidoActual !== "number" || ordenPartidoActual <= 0) return [];
-    var _COMPS_EXCLUIDAS = { superliga: true, verano: true };
+    // v499: cuenta CUALQUIER competición (también Superliga y Torneo de
+    // Verano, y los partidos entre humanos); solo los amistosos no.
+    var _COMPS_EXCLUIDAS = { amistosos: true, amistoso: true };
     var partidosClub = _partidosOrdenadosDelClub(clubId, datos);
     var anterior = null;
     // v459: un partido ⚠️ sin valor nunca genera sanciones (ver bucle de abajo).
@@ -23200,7 +23282,7 @@
           // partido para el que se añade (ver estado.js::agregarJugadorALista).
           var ordenAlta = _ordenPrevia();
           var hastaAlta = ordenAlta + (tipoLista === "lesionados" ? 2 : 1);
-          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoLista, jug.nombre, ordenAlta, hastaAlta);
+          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoLista, jug.nombre, ordenAlta, hastaAlta, _previaPartidoActual && _previaPartidoActual.id);
         }
         renderListasJugadores();
       }
@@ -24029,7 +24111,7 @@
           // normal.
           var ordenAlta = _ordenPrevia();
           var hastaAlta = ordenAlta + (tipoPicker === "lesionados" ? 2 : 1);
-          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoPicker, nombreElegido, ordenAlta, hastaAlta);
+          window.Estado.agregarJugadorALista(_idHumanoPrevia(), tipoPicker, nombreElegido, ordenAlta, hastaAlta, _previaPartidoActual && _previaPartidoActual.id);
         }
       }
       renderListasJugadores();

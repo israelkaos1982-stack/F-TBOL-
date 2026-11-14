@@ -11908,8 +11908,13 @@
     "👥️HUMANOS: Liverpool, Real Madrid y Atlético Madrid.",
     "🤖IA: los 5 equipos que añadas manualmente en la pestaña Grupos."
   ].join("\n");
+  // Una sola clave de guardado para el ℹ️ de Superliga ("superliga"): la
+  // pantalla vieja guardaba en "superliga" y la nueva leía "slx", así que
+  // lo editado nunca se veía. "slx" queda como respaldo de lo guardado antes.
   function obtenerFormatoSlxTexto() {
-    var override = window.Estado ? window.Estado.obtenerFormatoOverride("slx") : "";
+    var override = window.Estado
+      ? (window.Estado.obtenerFormatoOverride("superliga") || window.Estado.obtenerFormatoOverride("slx"))
+      : "";
     return override || FORMATO_SLX_TEXTO;
   }
 
@@ -20824,6 +20829,18 @@
     }
     if (btn) btn.addEventListener("click", seguir);
   }
+  // Título del panel ℹ️ (mismo estilo PES6) a partir de la clave de guardado.
+  function infoTituloDeClave(clave) {
+    clave = String(clave || "");
+    if (clave.indexOf("liga_") === 0) {
+      var meta = LIGA_NAV_META[clave.slice(5)];
+      return meta ? (meta.tituloLargo || ("Liga " + meta.corta)) : "Liga";
+    }
+    var MAPA = { sce: "supercopa", slx: "superliga" };
+    if (clave === "puntuacion") return "Cómo se puntúa";
+    if (clave === "verano") return "Torneos de Verano";
+    return COMP_LABEL[MAPA[clave] || clave] || clave;
+  }
   // Entrada desde el botón PREVIA de las cards: muestra la información del
   // torneo si toca y después abre la previa de siempre.
   function abrirPreviaConIntroTorneo(partidoId) {
@@ -20837,7 +20854,8 @@
           if (_introYaJugoTorneo(partido, clubId, info, ctx.datos)) {
             _introMarcarVisto(clubId, info.clave);
           } else {
-            _introMarcarVisto(clubId, info.clave);
+            // No se marca como visto aquí: vuelve a salir cada vez que se
+            // abra la PREVIA hasta que el partido tenga resultado.
             _mostrarIntroTorneo(info, function () { abrirPreviaPartido(partidoId); });
             return;
           }
@@ -24619,6 +24637,8 @@
     pintarEditorSlxStat: pintarEditorSlxStat,
     pintarEditorSlxPlayoff: pintarEditorSlxPlayoff,
     obtenerFormatoSlxTexto: obtenerFormatoSlxTexto,
+    infoTituloDeClave: infoTituloDeClave,
+    introTextoPes6HTML: _introTextoPes6HTML,
     renderizarNations: renderizarNations,
     irNationsTab: irNationsTab,
     renderizarNationsStatDetalle: renderizarNationsStatDetalle,

@@ -1762,8 +1762,8 @@
   // Supercopa de España, solo contra otro humano). Sin selección.
   var MENU_CLUB_EXCLUIDOS_POR_CLUB = {
     "fc-barcelona": { verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
-    psg: { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
-    "manchester-city": { liga1ref: true, copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
+    psg: { copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true },
+    "manchester-city": { copadelrey: true, supercopaespana: true, kaocup: true, verano: true, nations: true, seltorneos: true, roadeurocopa: true, eurocopa: true, roadmundial: true, mundialsel: true, roadamerica: true, roadafrica: true, roadasia: true }
   };
   // Por defecto, la tarjeta "copadelrey" de PSG se llama "Coupe de France"
   // en vez de "Copa del Rey" — PSG no juega en España, juega su propia
@@ -1771,7 +1771,13 @@
   // renderizadores.js). Sigue siendo un valor DE FÁBRICA: si el admin la
   // edita a mano (candado 646), su edición (overridesFabrica) gana igual
   // que con cualquier otra tarjeta — este mapa solo sustituye el DEFAULT.
-  var MENU_CLUB_BUILTIN_POR_CLUB = {};
+  // v502: PSG y Manchester City tienen su caja de liga, pero es la de SU
+  // país (Ligue 1 / Premier League), no la pirámide española — ver
+  // main.js::LIGA_FIJA_POR_CLUB, que la abre directamente en esa liga.
+  var MENU_CLUB_BUILTIN_POR_CLUB = {
+    psg: { liga1ref: { icono: "🇫🇷", etiqueta: "Ligue 1" } },
+    "manchester-city": { liga1ref: { icono: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", etiqueta: "Premier League" } }
+  };
   function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
   function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
   function _menuClubDefault() {

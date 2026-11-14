@@ -162,7 +162,7 @@
       // pantalla para reasignarla). La cabecera ℹ️ la resincroniza el
       // propio render (renderizarLiga1RefClasificacion →
       // _actualizarTituloModalLiga), no hace falta pintarla aquí.
-      _ligaNavActual = window.Estado.obtenerDivisionClub(clubId);
+      _ligaNavActual = LIGA_FIJA_POR_CLUB[clubId] || window.Estado.obtenerDivisionClub(clubId);
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId, _ligaNavActual);
     } else if (vista === "copadelrey") {
       body.innerHTML = '<div id="copa-content"></div>';
@@ -426,7 +426,7 @@
   // clubes que no cabe sin recortarse por elipsis en un móvil normal.
   // El resto (Liverpool/Arsenal/Real Madrid/FC Barcelona/PSG) ya caben
   // enteros — no hace falta acortarlos.
-  var NOMBRES_CORTOS_CABECERA = { "Atlético Madrid": "Atl. Madrid" };
+  var NOMBRES_CORTOS_CABECERA = { "Atlético Madrid": "Atl. Madrid", "Manchester City": "Man City" };
   function _nombreCabeceraClub(nombre) {
     return NOMBRES_CORTOS_CABECERA[nombre] || nombre;
   }
@@ -1030,6 +1030,8 @@
   // editor vuelvan a la MISMA liga en la que se entró a editar, nunca a
   // 1ª REF por defecto.
   var _ligaNavActual = "1ref";
+  // v502: la caja de liga del PSG y del Manchester City abre siempre SU liga.
+  var LIGA_FIJA_POR_CLUB = { psg: "ligue1", "manchester-city": "premier" };
 
   // A diferencia del resto de editores del candado 646 (que viven en el
   // "✏️ Editar menú" aparte), este se abre desde un ✏️ pequeño DENTRO de

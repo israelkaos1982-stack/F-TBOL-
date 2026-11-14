@@ -18701,6 +18701,8 @@
       '<tr class="derbys-fila' + (claseExtra ? " " + claseExtra : "") + '">' +
       '<td class="clasificacion-equipo">' + etiquetaHtml + "</td>" +
       "<td>" + c.pj + "</td><td>" + c.pg + "</td><td>" + c.pe + "</td><td>" + c.pp + "</td>" +
+      '<td class="derbys-extra">' + c.gf + '</td><td class="derbys-extra">' + c.gc + '</td>' +
+      '<td class="derbys-extra">' + (c.dg > 0 ? "+" : "") + c.dg + "</td>" +
       '<td class="derbys-pct">' + c.pct + "%</td></tr>"
     );
   }
@@ -18764,6 +18766,7 @@
       var header = document.createElement("div");
       header.className = "liga1ref-header";
       header.innerHTML =
+        '<button type="button" class="derbys-mas-btn" aria-label="Ver más datos">🅰️</button>' +
         '<span class="liga1ref-leyenda-mini liga1ref-leyenda-mini--derbys">' + tituloDerbys + "</span>" +
         '<button type="button" class="liga1ref-editar-btn" data-accion="editar-derbys-inline" data-club-id="' +
         (idClubActivo || "") + '" aria-label="Editar derbys">✏️</button>';
@@ -18797,12 +18800,30 @@
       wrap.className = "clasificacion-wrap";
       var tablaHtml =
         '<table class="clasificacion-tabla derbys-tabla">' +
-        "<thead><tr><th>Rival</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th><th>%</th></tr></thead><tbody>" +
+        "<thead><tr><th>Rival</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
+        '<th class="derbys-extra">G+</th><th class="derbys-extra">G-</th><th class="derbys-extra">DG</th><th>%</th></tr></thead><tbody>' +
         _derbyFilaHtml("🌐 GLOBAL", global, "derbys-fila--global") +
         filas.map(function (f) { return _derbyFilaHtml(_derbyEtiquetaRival(f.rival), f); }).join("") +
         "</tbody></table>";
       wrap.innerHTML = tablaHtml;
       contenedor.appendChild(wrap);
+      // 🅰️ — muestra/oculta G+ · G- · DG (se recuerda en este dispositivo).
+      var _derbyCompleta = false;
+      try { _derbyCompleta = localStorage.getItem("derbys_completa_v1") === "1"; } catch (err) {}
+      var btnMas = header.querySelector(".derbys-mas-btn");
+      var aplicarMas = function () {
+        wrap.classList.toggle("derbys--completa", _derbyCompleta);
+        if (btnMas) {
+          btnMas.classList.toggle("derbys-mas-btn--on", _derbyCompleta);
+          btnMas.title = _derbyCompleta ? "Ver menos datos" : "Ver más datos (G+, G-, DG)";
+        }
+      };
+      if (btnMas) btnMas.addEventListener("click", function () {
+        _derbyCompleta = !_derbyCompleta;
+        try { localStorage.setItem("derbys_completa_v1", _derbyCompleta ? "1" : "0"); } catch (err) {}
+        aplicarMas();
+      });
+      aplicarMas();
 
       // Rival más temido/cómodo — solo entre rivales con partidos jugados;
       // con todos a 0 (club recién estrenado) no se muestra nada.

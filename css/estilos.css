@@ -6005,3 +6005,23 @@ button { font-family: inherit; cursor: pointer; }
 
 /* v492 — botón de pausa en modo PENALTIS (eliminatorias con prórroga). */
 #partido-live-overlay .live-card .live-evt-btn.live-evt-btn--penaltis { background: linear-gradient(160deg, #c0392b, #7a1b12); border-bottom-color: #ffd24a; }
+
+/* v493 — Previa / partido en vivo: ✕ más pequeña, pegada arriba a la
+   derecha; el título del torneo sube a la MISMA línea que la ✕; en la
+   previa, el icono del torneo (el de su tarjeta del menú) a su izquierda. */
+#previa-card, #partido-live-overlay .live-card { padding-top: 6px; }
+#previa-card .previa-close, #partido-live-overlay .live-card .previa-close {
+  top: 4px; right: 4px; width: 24px; height: 24px; font-size: 11px;
+}
+#previa-card .previa-comp, #partido-live-overlay .live-card .previa-comp {
+  margin-top: 0; margin-right: 26px; font-size: 15px; padding: 6px 10px;
+}
+#previa-card.previa-card--con-icono .previa-comp { margin-right: 54px; }
+#previa-card .previa-comp-ir {
+  position: absolute; top: 4px; right: 32px; z-index: 2;
+  width: 24px; height: 24px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--cc, var(--line)); background: #0d2370;
+  font-size: 13px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+#previa-card .previa-comp-ir[hidden] { display: none; }

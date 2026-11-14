@@ -406,8 +406,17 @@
   }
   function cerrarModalClub() {
     var ov = document.getElementById("club-modal-overlay");
+    var estabaAbierto = !!(ov && !ov.hidden);
     if (ov) ov.hidden = true;
+    // v493: si la competición se abrió desde el icono de una PREVIA, al
+    // volver se reabre esa misma previa en vez de quedarse en el menú.
+    var idPrevia = window._volverAPreviaId;
+    window._volverAPreviaId = null;
+    if (estabaAbierto && idPrevia && window.Renderizadores && window.Renderizadores.abrirPreviaPartido) {
+      window.Renderizadores.abrirPreviaPartido(idPrevia);
+    }
   }
+  window.abrirModalClub = function (vista) { abrirModalClub(vista); };
 
   // Nombres largos que se acortan SOLO en la cabecera de la caja del
   // club (data/equipos.json sigue guardando el nombre real, así que

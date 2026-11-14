@@ -1561,7 +1561,7 @@
   // pulsar 📌 manualmente para fijarla (un valor ya guardado en
   // localStorage SIGUE ganando siempre — ver obtenerDivisionClub).
   // v417: el FC Barcelona (híbrido) solo juega como humano la Liga EA Sports.
-  var LIGA_DIVISION_DEFECTO_POR_CLUB = { "fc-barcelona": "easports" };
+  var LIGA_DIVISION_DEFECTO_POR_CLUB = { "fc-barcelona": "easports", liverpool: "easports", "real-madrid": "easports", "atletico-madrid": "easports" };
   // Clave LEGACY del blob {clubId: divisionId} que usaba el botón de la
   // pestaña "⚙️ Ajustes" (obtenerDivisionHumano/guardarDivisionHumano, más
   // abajo) — hasta 2026-09-22 era un sistema COMPLETAMENTE APARTE de este

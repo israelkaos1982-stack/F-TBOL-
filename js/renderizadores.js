@@ -3392,20 +3392,33 @@
   // abre esa liga "en solitario" (ver _ligaTituloRowHTML) y esta fila
   // se re-pinta con las 3 que quedan.
   var _LIGA_TAB_SUB = { "2ref": "Segunda RFEF", "1ref": "Primera RFEF", hypermotion: "Segunda", easports: "Primera" };
+  // Liga de cada club humano (la que se abre al pulsar su caja de liga).
+  var LIGA_PROPIA_POR_CLUB = {
+    liverpool: "easports", "real-madrid": "easports", "atletico-madrid": "easports", "fc-barcelona": "easports",
+    psg: "ligue1", "manchester-city": "premier"
+  };
+  function ligaPropiaClub(clubId) {
+    return LIGA_PROPIA_POR_CLUB[clubId] || (clubId ? _divisionActualClub(clubId) : "") || "";
+  }
   function _ligaTabBoxesHTML(ligaId, idClubActivo) {
     // Las 4 divisiones SIEMPRE en fila (petición usuario: "que entren
     // las 4 en horizontal") — incluida la activa, marcada con
     // --activa para distinguirla a simple vista sin tener que leer el
     // título centrado de arriba.
     var html = '<div class="liga-tab-boxes liga-tab-boxes--grid4">';
-    LIGA_NAV_ORDEN.forEach(function (id) {
+    // v504: tras Ea Sports, Ligue 1 y Premier League; y la liga PROPIA del
+    // club activo va la PRIMERA de la fila.
+    var orden = LIGA_NAV_ORDEN.concat(["ligue1", "premier"]);
+    var propia = ligaPropiaClub(idClubActivo);
+    if (propia && orden.indexOf(propia) !== -1) orden = [propia].concat(orden.filter(function (x) { return x !== propia; }));
+    orden.forEach(function (id) {
       var meta = LIGA_NAV_META[id];
       var activa = id === ligaId;
       html += '<button type="button" class="liga-tab-box ' + meta.boxClase +
         (activa ? " liga-tab-box--activa" : "") +
         '" data-accion="liga-nav-ir" data-liga-id="' + id + '" data-club-id="' +
         (idClubActivo || "") + '" aria-label="' + escapeHTML(meta.corta) + '">' +
-        escapeHTML(meta.chip || meta.corta) +
+        escapeHTML(id === "ligue1" || id === "premier" ? meta.corta : (meta.chip || meta.corta)) +
         (_LIGA_TAB_SUB[id] ? "<small>" + _LIGA_TAB_SUB[id] + "</small>" : "") + "</button>";
     });
     return html + "</div>";
@@ -24665,6 +24678,7 @@
     pintarEditorSlxStat: pintarEditorSlxStat,
     pintarEditorSlxPlayoff: pintarEditorSlxPlayoff,
     obtenerFormatoSlxTexto: obtenerFormatoSlxTexto,
+    ligaPropiaClub: ligaPropiaClub,
     infoTituloDeClave: infoTituloDeClave,
     introTextoPes6HTML: _introTextoPes6HTML,
     renderizarNations: renderizarNations,

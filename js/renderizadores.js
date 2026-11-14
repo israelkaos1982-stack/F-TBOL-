@@ -20765,6 +20765,7 @@
     document.getElementById("previa-comp").textContent =
       ((_previaCompKey === "supercopa" ? _labelCompPartido(partido) : COMP_LABEL[_previaCompKey]) || COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " - " + _uneRondaConGuion(_previaCompKey, partido.ronda) : (partido.jornada ? " - Jornada " + partido.jornada : ""));
+    _pintarIconoTorneoPrevia(_previaCompKey);
 
     document.getElementById("previa-estadio").textContent = estadio
       ? estadio.nombre
@@ -20811,6 +20812,28 @@
     _ajustarTituloComp(document.getElementById("previa-comp"));
   }
 
+  // v493 — icono del torneo arriba a la derecha de la previa (junto a la ✕):
+  // el MISMO icono que su tarjeta del menú del club. Al pulsarlo abre esa
+  // tarjeta; al cerrarla se vuelve a esta misma previa (ver main.js,
+  // cerrarModalClub + window._volverAPreviaId).
+  var _MENU_ID_LIGA_PREVIA = { liga: "liga1ref", hypermotion: "liga1ref", "2ref": "liga1ref" };
+  function _pintarIconoTorneoPrevia(compKey) {
+    var btn = document.getElementById("previa-comp-ir");
+    var card = document.getElementById("previa-card");
+    if (!btn) return;
+    var clubId = window._idManagerActivo;
+    var menuId = _MENU_ID_LIGA_PREVIA[compKey] || _MENU_ID_POR_COMP_PLANTILLA[compKey];
+    var tarjeta = null;
+    if (clubId && menuId && window.Estado && window.Estado.obtenerMenuClub) {
+      tarjeta = window.Estado.obtenerMenuClub(clubId).filter(function (c) { return c.id === menuId; })[0] || null;
+    }
+    btn.hidden = !tarjeta;
+    if (card) card.classList.toggle("previa-card--con-icono", !!tarjeta);
+    if (!tarjeta) return;
+    btn.textContent = compKey === "superliga" ? "👥" : (tarjeta.icono || "🏆");
+    btn.dataset.menuId = menuId;
+    btn.title = "Ir a " + (tarjeta.etiqueta || "la competición");
+  }
   function cerrarPreviaPartido() {
     var ov = document.getElementById("previa-overlay");
     if (ov) ov.hidden = true;
@@ -22206,6 +22229,34 @@
       .replace(/^./, function (c) { return c.toUpperCase(); });
   }
 
+  // v493: nombre del trofeo de verano tal cual lo tecleó el admin en el
+  // calendario ("☀️ T. Carranza" -> "Trofeo Carranza"); vacío si es el
+  // genérico "Torneo de Verano".
+  function _nombreTrofeoVerano(lista) {
+    for (var i = 0; i < lista.length; i++) {
+      var crudo = String(lista[i]._competicionCruda || "").replace(_EMOJI_RE, "").replace(/[\uFE0F\u200D]/g, "").trim();
+      if (!crudo || /^torneos? de verano$/i.test(crudo) || /^verano$/i.test(crudo)) continue;
+      return crudo.replace(/^T\.\s*/i, "Trofeo ").replace(/^T\s+/i, "Trofeo ");
+    }
+    return "";
+  }
+  function _siguienteRondaVerano(ronda) {
+    var orden = ["1/32", "Dieciseisavos", "Octavos", "Cuartos", "Semifinales", "Final"];
+    var actual = _rondaLargaVerano(ronda);
+    var i = orden.indexOf(actual);
+    if (i === -1) return /\b(1|primera)\s*[ªa]?\s*ronda\b/.test(_normNombre(ronda || "")) ? "Octavos" : actual;
+    return orden[Math.min(i + 1, orden.length - 1)];
+  }
+  function _rondaLargaVerano(ronda) {
+    var n = _normNombre(ronda || "");
+    if (/semi/.test(n)) return "Semifinales";
+    if (/cuartos/.test(n)) return "Cuartos";
+    if (/octavos/.test(n)) return "Octavos";
+    if (/dieciseisavos|1\s*\/\s*16/.test(n)) return "Dieciseisavos";
+    if (/1\s*\/\s*32/.test(n)) return "1/32";
+    if (/\bfinal\b/.test(n)) return "Final";
+    return ronda || "—";
+  }
   function _filasCompeticionesClub(clubId, datos) {
     var filas = [];
     var pos = _posicionLigaClub(clubId, datos);
@@ -22257,7 +22308,23 @@
       if (!jugadosComp && /promoci|ascenso|descenso/.test(_normNombre(nombre))) return;
       var tieneRondasKO = lista.some(function (p) { return /dieciseisavos|octavos|cuartos|semi|\bfinal\b/.test(_normNombre(p.ronda || "")); });
       var r;
-      if (_COMPS_ELIM_PLANTILLA[k] || (!conocida && tieneRondasKO)) {
+      if (k === "verano") {
+        // v493: Torneo de Verano = eliminatorias. Nombre del TROFEO de este
+        // año ("T. Carranza" -> "Trofeo Carranza") y estado como
+        // "En Semifinales" / "Eliminado 1ª Ronda" / "Campeón 🏆".
+        var trofeo = _nombreTrofeoVerano(lista);
+        if (trofeo) nombre = trofeo;
+        if (!jugadosComp) return;
+        r = _estadoEliminatoriaClub(clubId, k, lista, datos);
+        if (r.campeon) {
+          // tal cual
+        } else if (r.eliminado) {
+          r = { estado: "Eliminado " + _rondaLargaVerano(r.rk && r.rk.ronda), eliminado: true, rk: r.rk };
+        } else if (r.rk && (r.rk.kind === "alive" || r.rk.kind === "superada")) {
+          var rondaVer = r.rk.kind === "superada" ? _siguienteRondaVerano(r.rk.ronda) : _rondaLargaVerano(r.rk.ronda);
+          r = { estado: "En " + rondaVer, rk: r.rk };
+        }
+      } else if (_COMPS_ELIM_PLANTILLA[k] || (!conocida && tieneRondasKO)) {
         r = _estadoEliminatoriaClub(clubId, k, lista, datos);
       } else if (_SEL_COMPS_GRUPOS[k]) {
         // Nations Cup (selecciones): jornadas de grupo (11 grupos de 5) y
@@ -23673,6 +23740,14 @@
 
     if (ev.target.id === "previa-close" || ev.target.id === "previa-overlay") {
       cerrarPreviaPartido();
+      return;
+    }
+    var btnIrTorneo = ev.target.closest && ev.target.closest("#previa-comp-ir");
+    if (btnIrTorneo && btnIrTorneo.dataset.menuId && window.abrirModalClub) {
+      var idVolver = _previaPartidoActual && _previaPartidoActual.id;
+      cerrarPreviaPartido();
+      window._volverAPreviaId = idVolver || null;
+      window.abrirModalClub(btnIrTorneo.dataset.menuId);
       return;
     }
 

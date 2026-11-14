@@ -20914,6 +20914,61 @@
     btn.dataset.menuId = menuId;
     btn.title = "Ir a " + (tarjeta.etiqueta || "la competición");
   }
+  // v498 — "Activa Twitch" (petición usuario): FC Barcelona (Ángel) y
+  // Manchester City (Rubén) contra un equipo IA.
+  var _CLUBES_TWITCH = { "fc-barcelona": true, "manchester-city": true };
+  function _clubTwitchDePartido(partidoId) {
+    var ctx = _ultimoContexto;
+    var partido = ctx ? _resolverPartidoPorId(partidoId, ctx) : null;
+    if (!partido) return null;
+    var datos = ctx.datos;
+    var idL = _idClubDeEquipoId(partido.local), idV = _idClubDeEquipoId(partido.visitante);
+    var club = _CLUBES_TWITCH[idL] ? idL : (_CLUBES_TWITCH[idV] ? idV : null);
+    if (!club) return null;
+    var rivalId = club === idL ? partido.visitante : partido.local;
+    if (_esClubHumano(rivalId, datos)) return null; // solo contra IA
+    return buscarEquipoPorId(club, datos);
+  }
+  function _mostrarAvisoTwitch(club, alConfirmar) {
+    var ov = document.getElementById("pes6-twitch-overlay");
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "pes6-twitch-overlay";
+      ov.className = "pes6-intro-overlay";
+      document.body.appendChild(ov);
+    }
+    var nombre = _escHtmlIntro(String(club.nombre || "").toUpperCase());
+    var mister = _escHtmlIntro(String(club.mister || "").toUpperCase());
+    ov.innerHTML =
+      '<div class="pes6-intro-panel pes6-twitch-panel" role="dialog" aria-modal="true">' +
+        '<div class="pes6-intro-tab">ANTES DE EMPEZAR</div>' +
+        '<div class="pes6-intro-titulo">' + (club.misterEmoji ? club.misterEmoji + " " : "") + nombre + "</div>" +
+        '<button type="button" class="pes6-twitch-check" id="pes6-twitch-check" aria-pressed="false">' +
+          '<span class="pes6-twitch-texto">' + mister + ' <b>Activa Twitch</b></span>' +
+          '<span class="pes6-twitch-caja" id="pes6-twitch-caja">🔳</span>' +
+        "</button>" +
+        '<button type="button" class="pes6-intro-btn" id="pes6-twitch-ok" disabled>▶ EMPEZAR PARTIDO</button>' +
+        '<button type="button" class="pes6-twitch-cancelar" id="pes6-twitch-cancelar">Cancelar</button>' +
+      "</div>";
+    ov.hidden = false;
+    var marcado = false;
+    var chk = document.getElementById("pes6-twitch-check");
+    var caja = document.getElementById("pes6-twitch-caja");
+    var ok = document.getElementById("pes6-twitch-ok");
+    chk.addEventListener("click", function () {
+      marcado = !marcado;
+      caja.textContent = marcado ? "✅" : "🔳";
+      chk.classList.toggle("is-on", marcado);
+      chk.setAttribute("aria-pressed", marcado ? "true" : "false");
+      ok.disabled = !marcado;
+    });
+    ok.addEventListener("click", function () {
+      if (!marcado) return;
+      ov.hidden = true;
+      alConfirmar();
+    });
+    document.getElementById("pes6-twitch-cancelar").addEventListener("click", function () { ov.hidden = true; });
+  }
   function cerrarPreviaPartido() {
     var ov = document.getElementById("previa-overlay");
     if (ov) ov.hidden = true;
@@ -23878,6 +23933,16 @@
             "este partido de VUELTA puede decidir la eliminatoria si hay empate global."
           );
         }
+        return;
+      }
+      // v498: FC Barcelona / Manchester City contra IA — antes de empezar,
+      // pantalla PES6 "<MISTER> Activa Twitch 🔳" que hay que marcar ✅.
+      var clubTwitch = _clubTwitchDePartido(btnEmpezar.dataset.partidoId);
+      if (clubTwitch && btnEmpezar.dataset.twitchOk !== btnEmpezar.dataset.partidoId) {
+        _mostrarAvisoTwitch(clubTwitch, function () {
+          btnEmpezar.dataset.twitchOk = btnEmpezar.dataset.partidoId;
+          btnEmpezar.click();
+        });
         return;
       }
       if (btnEmpezar.dataset.enCurso) return; // evita doble-toque mientras se genera la captura

@@ -2321,8 +2321,30 @@
   // extra a la que se haya ascendido/descendido un club (ver
   // calcularLigaExtraFilasConHumano, más abajo) — mismo criterio exacto,
   // solo cambia QUÉ humanos y QUÉ texto pegado se le pasan.
+  // v515: ¿el texto pegado YA trae los partidos jugados contra los humanos?
+  // Pasa si trae la fila de un humano "puro" (Liverpool/Real Madrid/
+  // Atlético) con partidos jugados: la tabla del editor es COMPLETA y la
+  // línea de cada IA (Getafe 12 PJ) ya cuenta sus partidos contra humanos.
+  // En ese caso la web NO vuelve a sumárselos a los rivales IA (Getafe
+  // salía con 14 PJ, reporte usuario 2026-11-15) ni a los híbridos (Barça
+  // trae su línea completa). Las filas de los humanos SIEMPRE las calcula
+  // la web (su línea del texto es solo para cotejar).
+  function _textoTraeHumanos(filasTexto, equiposHumanos) {
+    return filasTexto.some(function (f) {
+      if (!(f.pj > 0)) return false;
+      var e = equiposHumanos.filter(function (h) { return _liga1RefNombresCoinciden(f.nombre, h.nombre); })[0];
+      return !!(e && !_esClubHibrido(e.id));
+    });
+  }
+  // Mismo criterio para Pichichi/MVP/Tarjetas/Zamora: con tabla completa
+  // solo se suman automáticamente los jugadores de los humanos puros.
+  function _autoSegunTexto(filasAuto, textoClasif, equiposHumanos) {
+    if (!_textoTraeHumanos(parsearLiga1RefTexto(textoClasif), equiposHumanos)) return filasAuto;
+    return filasAuto.filter(function (it) { return _esIdHumano(it.equipoId) && !_esClubHibrido(it.equipoId); });
+  }
   function _combinarClasificacionConHumanos(equiposHumanos, texto, datos, compKeyEsperado) {
     compKeyEsperado = compKeyEsperado || "liga";
+    var _tablaCompleta = _textoTraeHumanos(parsearLiga1RefTexto(texto), equiposHumanos);
     var idsHumanos = {};
     equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
     var filas = [];
@@ -2367,6 +2389,7 @@
         _liga1RefSumar(propia, _liga1RefResultadoLado(golesE, golesRival));
 
         if (idsHumanos[oponenteId]) return; // HvH: la fila del rival humano la aporta SU PROPIA iteración
+        if (_tablaCompleta) return; // v515: la línea del rival IA ya trae este partido
 
         var rival = buscarEquipoPorId(oponenteId, datos);
         var nombreRival = rival ? rival.nombre : oponenteId;
@@ -2381,7 +2404,12 @@
         if (destino.grupo) cuentaGrupos[destino.grupo] = (cuentaGrupos[destino.grupo] || 0) + 1;
       });
 
-      _pushFilaHumana(filas, e, propia);
+      if (_tablaCompleta && _esClubHibrido(e.id)) {
+        // v515: el híbrido (Barça) ya trae en su línea los partidos contra humanos.
+        _pushFilaHumana(filas, e, { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 });
+      } else {
+        _pushFilaHumana(filas, e, propia);
+      }
       var gHum = Object.keys(cuentaGrupos).sort(function (a, b) { return cuentaGrupos[b] - cuentaGrupos[a]; })[0];
       var filaHum = filas.filter(function (f) { return f.equipoId === e.id; })[0];
       if (filaHum && !filaHum.grupo && gHum) filaHum.grupo = gHum;
@@ -3088,7 +3116,8 @@
     var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
     var filas = _fusionarStatFilasConOverride(
       _filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
-      calcularLiga1RefStatsHumanos(datos)[categoria] || []
+      _autoSegunTexto(calcularLiga1RefStatsHumanos(datos)[categoria] || [],
+        window.Estado ? window.Estado.obtenerLiga1RefTexto() : "", _liga1RefEquiposHumanos(datos))
     );
     if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, "1ref"));
 
@@ -3931,7 +3960,9 @@
     var texto = window.Estado ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria) : "";
     var statsHumanos = datos ? calcularLigaExtraStatsHumanos(ligaId, datos) : null;
     var filas = statsHumanos
-      ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos), statsHumanos[categoria] || [])
+      ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
+          _autoSegunTexto(statsHumanos[categoria] || [], window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "",
+            _equiposHumanosEnDivisionExtra(ligaId, datos)))
       : parsearLiga1RefStatTexto(texto);
     if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, ligaId));
     filas.sort(function (a, b) {

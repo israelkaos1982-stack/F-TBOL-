@@ -608,7 +608,7 @@
   // (_SEL_HUECO_DE_CLUB). Sin mover ni una clave guardada.
   var SELECCIONES_HUMANAS = {
     liverpool: { nombre: "Francia", bandera: "🇫🇷", siglas: "FRA", c1: "#0055a4", c2: "#ef4135" },
-    "real-madrid": { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#aa151b", c2: "#f1bf00" },
+    "real-madrid": { nombre: "España", bandera: "🇪🇸", siglas: "ESP", c1: "#aa151b", c2: "#f1bf00", estadio: "spotify-camp-nou" }, // v517: España juega en casa en el Camp Nou
     "atletico-madrid": { nombre: "Inglaterra", bandera: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", siglas: "ING", c1: "#ffffff", c2: "#ce1124" }
   };
   var _SEL_HUECO_DE_CLUB = { liverpool: "liverpool", "real-madrid": "atletico-madrid", "atletico-madrid": "real-madrid" };
@@ -651,6 +651,7 @@
       mister: club.mister || "Mánager",
       misterEmoji: club.misterEmoji || "",
       valoracionPoder: club.valoracionPoder || 90,
+      estadioId: def.estadio || undefined,
       ligaActual: null
     };
   }

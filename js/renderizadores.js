@@ -2321,8 +2321,48 @@
   // extra a la que se haya ascendido/descendido un club (ver
   // calcularLigaExtraFilasConHumano, más abajo) — mismo criterio exacto,
   // solo cambia QUÉ humanos y QUÉ texto pegado se le pasan.
+  // v512: ¿el texto pegado YA trae los partidos de los humanos? Pasa si
+  // trae la fila de un humano "puro" (Liverpool/Real Madrid/Atlético) con
+  // partidos jugados — p.ej. un texto copiado antes de que el editor dejara
+  // fuera los partidos jugados a mano. En ese caso la tabla sale TAL CUAL
+  // del texto y la web no suma nada (si no, Getafe salía con 14 PJ en vez
+  // de 12, reporte usuario 2026-11-15).
+  function _textoTraeHumanos(filasTexto, equiposHumanos) {
+    return filasTexto.some(function (f) {
+      if (!(f.pj > 0)) return false;
+      var e = equiposHumanos.filter(function (h) { return _liga1RefNombresCoinciden(f.nombre, h.nombre); })[0];
+      return !!(e && !_esClubHibrido(e.id));
+    });
+  }
+  // Mismo criterio para Pichichi/MVP/Tarjetas/Zamora: si la clasificación
+  // pegada ya trae los partidos de los humanos, sus rivales IA NO suman lo
+  // jugado contra humanos (ya viene en su línea del texto); solo se dejan
+  // las cifras automáticas de los jugadores de Liverpool/Real Madrid/Atlético.
+  function _autoSegunTexto(filasAuto, textoClasif, equiposHumanos) {
+    if (!_textoTraeHumanos(parsearLiga1RefTexto(textoClasif), equiposHumanos)) return filasAuto;
+    return filasAuto.filter(function (it) { return _esIdHumano(it.equipoId) && !_esClubHibrido(it.equipoId); });
+  }
+  function _clasificacionSoloTexto(filasTexto, equiposHumanos) {
+    var filas = filasTexto.map(function (f) {
+      var e = equiposHumanos.filter(function (h) { return _liga1RefNombresCoinciden(f.nombre, h.nombre); })[0];
+      return {
+        nombre: f.nombre, nombreMostrado: e ? (e.misterEmoji || "") + e.nombre : f.nombre, equipoId: e ? e.id : null,
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc, grupo: f.grupo
+      };
+    });
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return _ordenarFilasPorGrupo(filas);
+  }
   function _combinarClasificacionConHumanos(equiposHumanos, texto, datos, compKeyEsperado) {
     compKeyEsperado = compKeyEsperado || "liga";
+    var _filasTxt = parsearLiga1RefTexto(texto);
+    if (_textoTraeHumanos(_filasTxt, equiposHumanos)) return _clasificacionSoloTexto(_filasTxt, equiposHumanos);
     var idsHumanos = {};
     equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
     var filas = [];
@@ -3088,7 +3128,8 @@
     var texto = window.Estado ? window.Estado.obtenerLiga1RefStatTexto(categoria) : "";
     var filas = _fusionarStatFilasConOverride(
       _filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
-      calcularLiga1RefStatsHumanos(datos)[categoria] || []
+      _autoSegunTexto(calcularLiga1RefStatsHumanos(datos)[categoria] || [],
+        window.Estado ? window.Estado.obtenerLiga1RefTexto() : "", _liga1RefEquiposHumanos(datos))
     );
     if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, "1ref"));
 
@@ -3931,7 +3972,9 @@
     var texto = window.Estado ? window.Estado.obtenerLigaExtraStatTexto(ligaId, categoria) : "";
     var statsHumanos = datos ? calcularLigaExtraStatsHumanos(ligaId, datos) : null;
     var filas = statsHumanos
-      ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos), statsHumanos[categoria] || [])
+      ? _fusionarStatFilasConOverride(_filtrarLineasClubesActasReales(parsearLiga1RefStatTexto(texto), datos),
+          _autoSegunTexto(statsHumanos[categoria] || [], window.Estado ? window.Estado.obtenerLigaExtraTexto(ligaId) : "",
+            _equiposHumanosEnDivisionExtra(ligaId, datos)))
       : parsearLiga1RefStatTexto(texto);
     if (categoria === "zamora") return _zamoraOrdenar(_statFilasConPJ(filas, "liga", datos, ligaId));
     filas.sort(function (a, b) {

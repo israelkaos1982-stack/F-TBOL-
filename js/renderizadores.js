@@ -19398,6 +19398,15 @@
     var selId = incluirSeleccion ? _idSeleccionDeClub(clubId) : null;
     var equipo = buscarEquipoPorId(clubId, datos);
     var ligaActual = equipo ? equipo.ligaActual : null;
+    // v514: una SELECCIÓN (sel-real-madrid = España) no tiene texto propio:
+    // sus partidos los teclea el club que la dirige (atletico-madrid), así
+    // que la posición del texto vive en _fallbackPorClub[clubBase].
+    var clubBaseFb = (_esIdSeleccionHumana(clubId) && _idClubDeEquipoId(clubId)) || clubId;
+    function _fbPos(p) {
+      var m = p._fallbackPorClub || {};
+      if (typeof m[clubId] === "number") return m[clubId];
+      return m[clubBaseFb];
+    }
     var todosLosPartidos = window.Estado
       ? window.Estado.listarPartidosResueltos(datos, { incluirSinValor: true }) // v459: el calendario SÍ los muestra (⚠️)
       : (datos.partidos.partidos || []);
@@ -19413,7 +19422,7 @@
       // v442: un cruce humano-vs-humano del Calendario extra que SOLO está en
       // el texto de OTRO humano (este club ya no lo tiene en el suyo) es de
       // una temporada pasada: no se muestra en el calendario de este club.
-      if (p._fallbackPorClub && typeof p._fallbackPorClub[clubId] !== "number") return false;
+      if (p._fallbackPorClub && typeof _fbPos(p) !== "number") return false;
       return true;
     });
     // Posición de cada partido SIN fecha en el texto de ESTE club: un cruce
@@ -19421,7 +19430,7 @@
     // trae la posición de cada club en `_fallbackPorClub` (estado.js).
     function _posClub(p) {
       if (p.fecha) return new Date(p.fecha).getTime();
-      if (p._fallbackPorClub && typeof p._fallbackPorClub[clubId] === "number") return p._fallbackPorClub[clubId];
+      if (p._fallbackPorClub && typeof _fbPos(p) === "number") return _fbPos(p);
       return p._fechaFallbackMs || 0;
     }
     partidosDelClub.sort(function (a, b) { return _posClub(a) - _posClub(b); });

@@ -20781,6 +20781,9 @@
   }
   function _previaAliasHTML(equipo, lado) {
     if (!equipo || equipo.crest) return ""; // los 8 humanos siempre existen en el juego
+    // v516 (petición usuario): las SELECCIONES nunca llevan ficticio —
+    // todas existen en eFootball. Sin botón, ni alias de fábrica ni "Añadir".
+    if (/^sel-/.test(String(equipo.id || ""))) return "";
     var clave = _claveAliasEquipo(equipo);
     if (!clave) return "";
     var actual = (window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "") || _aliasEfootballDefault(clave);

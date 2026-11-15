@@ -900,6 +900,12 @@
       var mJor = n.match(/\d+/);
       return mJor ? ("j" + mJor[0]) : n;
     }
+    // v511: CUALQUIER competición con jornadas (Nations Cup, Road Eurocopa/
+    // Mundial/América/África/Asia, fases de grupos…) juega el MISMO par 2
+    // veces (ida y vuelta) — sin el número de jornada, la Jornada 7 cogía el
+    // resultado de la Jornada 2 (España–Chipre, reporte usuario 2026-11-15).
+    var mJ = n.match(/(\d+)\s*(?:a|ª|º)?\s*jornada|\bjornada\s*(\d+)|\bj\s*(\d+)\b/);
+    if (mJ) return "j" + (mJ[1] || mJ[2] || mJ[3]);
     return "";
   }
   function _identidadFallbackKey(competicion, ronda, nombreA, nombreB) {

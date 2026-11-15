@@ -1901,6 +1901,14 @@
   }
   // Mete la fila del club humano: si es híbrido y su fila del texto ya está
   // (marcada _hib), se le SUMA lo jugado en el calendario.
+  // v510: el texto del editor ("🌐 Copiar para la web") ya trae TODOS los
+  // partidos de Barça/PSG/City contra IA en sus competiciones nacionales; la
+  // web solo les suma los que juegan contra OTRO humano (jugados a mano).
+  function _cuentaParaHibrido(clubId, p) {
+    if (!_esClubHibrido(clubId)) return true;
+    var rival = p.local === clubId ? p.visitante : p.local;
+    return _esIdHumano(rival);
+  }
   function _pushFilaHumana(filas, e, propia) {
     var base = _esClubHibrido(e.id) ? filas.filter(function (f) { return f._hib === e.id; })[0] : null;
     if (base) {
@@ -2344,7 +2352,7 @@
       // partidos de ESTE club, cada partido se cuenta UNA sola vez.
       var partidos = todosPartidos.filter(function (p) {
         return p.jugado && p.resultado && _partidoPerteneceADivision(p, e, compKeyEsperado) &&
-          (p.local === e.id || p.visitante === e.id);
+          (p.local === e.id || p.visitante === e.id) && _cuentaParaHibrido(e.id, p);
       });
 
       var propia = { pj: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
@@ -2750,7 +2758,7 @@
       // también en el bucle de los otros 4, multiplicando el conteo.
       var partidos = _partidosParaStats(datos).filter(function (p) {
         return p.jugado && _partidoPerteneceADivision(p, e, compKeyEsperado) &&
-          (p.local === e.id || p.visitante === e.id);
+          (p.local === e.id || p.visitante === e.id) && _cuentaParaHibrido(e.id, p);
       });
 
       partidos.forEach(function (p) {
@@ -2858,16 +2866,17 @@
         }).length;
       }
       if (compKey === "supercopa" && typeof _scePartidosDelClub === "function") {
-        return _scePartidosDelClub(datos, equipoId).filter(function (p) { return p.jugado; }).length;
+        return _scePartidosDelClub(datos, equipoId).filter(function (p) { return p.jugado && _cuentaParaHibrido(equipoId, p); }).length;
       }
       var todos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : [];
       if (compKey === "liga") {
         var e = buscarEquipoPorId(equipoId, datos) || { id: equipoId };
         var ck = _compKeyEsperadoParaDivision(ligaId || "1ref");
-        return todos.filter(function (p) { return p.jugado && _partidoPerteneceADivision(p, e, ck); }).length;
+        return todos.filter(function (p) { return p.jugado && _partidoPerteneceADivision(p, e, ck) && _cuentaParaHibrido(equipoId, p); }).length;
       }
       return todos.filter(function (p) {
-        return p.jugado && p.competicion === compKey && (p.local === equipoId || p.visitante === equipoId);
+        return p.jugado && p.competicion === compKey && (p.local === equipoId || p.visitante === equipoId) &&
+          (compKey === "copa" || compKey === "kaocup" || compKey === "superekao" ? _cuentaParaHibrido(equipoId, p) : true);
       }).length;
     } catch (err) { return 0; }
   }
@@ -4184,7 +4193,7 @@
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
       todosStats.filter(function (p) {
-        return p.jugado && p.competicion === "copa" && (p.local === e.id || p.visitante === e.id);
+        return p.jugado && p.competicion === "copa" && (p.local === e.id || p.visitante === e.id) && _cuentaParaHibrido(e.id, p);
       }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.jug || []).forEach(function (fila) {
@@ -6605,7 +6614,7 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-      _kaocupPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+      _kaocupPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado && _cuentaParaHibrido(e.id, p); }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;
@@ -7143,7 +7152,7 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-      _superekaoPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+      _superekaoPartidosDelClub(datos, e.id).filter(function (p) { return p.jugado && _cuentaParaHibrido(e.id, p); }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;
@@ -7660,7 +7669,7 @@
       var nombresPorId = {};
       obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-      _scePartidosDelClub(datos, e.id).filter(function (p) { return p.jugado; }).forEach(function (p) {
+      _scePartidosDelClub(datos, e.id).filter(function (p) { return p.jugado && _cuentaParaHibrido(e.id, p); }).forEach(function (p) {
         var oponenteId = p.local === e.id ? p.visitante : p.local;
         (p.jug || []).forEach(function (fila) {
           if (!fila.j) return;

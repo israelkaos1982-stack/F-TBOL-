@@ -2901,7 +2901,12 @@
       if (compKey === "liga") {
         var e = buscarEquipoPorId(equipoId, datos) || { id: equipoId };
         var ck = _compKeyEsperadoParaDivision(ligaId || "1ref");
-        return todos.filter(function (p) { return p.jugado && _partidoPerteneceADivision(p, e, ck) && _cuentaParaHibrido(equipoId, p); }).length;
+        // v521: SOLO los partidos de ESTE equipo (antes contaba todos los de
+        // la división: Valencia salía con 23 PJ y Julián Álvarez con 13).
+        return todos.filter(function (p) {
+          return p.jugado && (p.local === equipoId || p.visitante === equipoId) &&
+            _partidoPerteneceADivision(p, e, ck) && _cuentaParaHibrido(equipoId, p);
+        }).length;
       }
       return todos.filter(function (p) {
         return p.jugado && p.competicion === compKey && (p.local === equipoId || p.visitante === equipoId) &&

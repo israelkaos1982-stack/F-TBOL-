@@ -12435,7 +12435,7 @@
         wrap.appendChild(tablaEl);
         contenedor.appendChild(wrap);
       });
-      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span></div>'));
+      contenedor.insertAdjacentHTML("beforeend", _leyendaDetailsHTML('<div class="liga1ref-leyenda-grid"><span>🟦 1º y 2º de grupo: clasifican a la siguiente fase</span><span>🟨 3º de grupo: Repesca</span></div>'));
     }
 
     _roadeurocopaAppendStatsGrid(contenedor, idClubActivo);

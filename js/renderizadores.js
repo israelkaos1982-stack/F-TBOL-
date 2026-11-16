@@ -20780,12 +20780,23 @@
     }
     return (r && r.alias) || "";
   }
+  var _ALIAS_SELECCIONES = {
+    "moldavia": "NorteAmérica - Selección - Curazao",
+    "islas feroe": "África - Selección - Cabo Verde",
+    "feroe": "África - Selección - Cabo Verde"
+  };
   function _previaAliasHTML(equipo, lado) {
     if (!equipo || equipo.crest) return ""; // los 8 humanos siempre existen en el juego
     // v516 (petición usuario): las SELECCIONES nunca llevan ficticio —
     // todas existen en eFootball. Sin botón, ni alias de fábrica ni "Añadir".
-    if (/^sel-/.test(String(equipo.id || ""))) return "";
     var clave = _claveAliasEquipo(equipo);
+    // v519: solo las selecciones de esta lista llevan ficticio (sin "Añadir"
+    // ni búsqueda aproximada en los alias de clubes, que le daba a Gales uno).
+    if (/^sel-/.test(String(equipo.id || ""))) {
+      var aliasSel = _ALIAS_SELECCIONES[clave] || _ALIAS_SELECCIONES[_normSinPuntuacion(clave)];
+      if (!aliasSel) return "";
+      return '<span class="previa-team-alias">🎮 ' + escapeHTML(aliasSel) + "</span>";
+    }
     if (!clave) return "";
     var actual = (window.Estado ? window.Estado.obtenerAliasEfootball(clave) : "") || _aliasEfootballDefault(clave);
     var claveAttr = escapeHTML(clave);

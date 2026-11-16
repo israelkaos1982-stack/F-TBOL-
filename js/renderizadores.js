@@ -20781,9 +20781,22 @@
     return (r && r.alias) || "";
   }
   var _ALIAS_SELECCIONES = {
-    "moldavia": "NorteAmérica - Selección - Curazao",
-    "islas feroe": "África - Selección - Cabo Verde",
-    "feroe": "África - Selección - Cabo Verde"
+    "moldavia": "Norteamérica - Selección - Curazao",
+    "islas feroe": "África - Selección - Somalia",
+    "islas feroes": "África - Selección - Somalia",
+    "feroe": "África - Selección - Somalia",
+    "armenia": "África - Selección - RD Congo",
+    "luxemburgo": "Asia - Selección - Tailandia",
+    "gibraltar": "Asia - Selección - Timor Oriental",
+    "estonia": "Norteamérica - Selección - Guatemala",
+    "ciudad vaticano": "África - CAF - Comoras",
+    "ciudad del vaticano": "África - CAF - Comoras",
+    "vaticano": "África - CAF - Comoras",
+    "lituania": "África - CAF - Benín",
+    "letonia": "Asia - Selección - Qatar",
+    "bielorrusia": "Asia - Selección - Filipinas",
+    "san marino": "África - CAF - Botsuana",
+    "liechtenstein": "Asia - Selección - Indonesia"
   };
   function _previaAliasHTML(equipo, lado) {
     if (!equipo || equipo.crest) return ""; // los 8 humanos siempre existen en el juego

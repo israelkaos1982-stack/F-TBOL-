@@ -17836,6 +17836,23 @@
     if (/espana|liga|hypermotion|primera/.test(n)) return "obj-card--c-liga";
     return "";
   }
+  // v522: clave de competición de una sección de objetivos ("Liga",
+  // "Coupe France", "KAO CUP"…) para pintarla con el MISMO color que sus
+  // cards del calendario (clases comp-XXX).
+  function _objCompClase(nombre) {
+    var n = _rankingNorm(nombre);
+    if (/global|general|titulo/.test(n)) return "";
+    var k = _resolverCompKeyBalon(nombre);
+    if (!COMP_CLASE.hasOwnProperty(k)) {
+      if (/coupe|coppa|fa cup|copa/.test(n)) k = "copa";
+      else if (/supercoupe|supercoppa|community/.test(n)) k = "supercopa";
+      else if (/kao/.test(n) && /super/.test(n)) k = "superekao";
+      else if (/kao/.test(n)) k = "kaocup";
+      else if (/premier|ligue|serie a|liga/.test(n)) k = "liga";
+      else if (/seleccion/.test(n)) k = "selecciones";
+    }
+    return COMP_CLASE.hasOwnProperty(k) ? "objc-" + COMP_CLASE[k] : "";
+  }
   function _objIcono(nombre) {
     var n = _rankingNorm(nombre);
     for (var i = 0; i < _OBJ_ICONOS.length; i++) if (n.indexOf(_OBJ_ICONOS[i][0]) !== -1) return _OBJ_ICONOS[i][1];
@@ -17878,7 +17895,7 @@
   }
   function _objTarjetaHTML(seccion, o, logrado, idClub, fallado, icono) {
     var completo = !fallado && (logrado || (o.progreso && o.progreso.total > 0 && o.progreso.actual >= o.progreso.total));
-    var clase = "obj-card " + _objColorClase(seccion) + (fallado ? " obj-card--ko" : (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : "")));
+    var clase = "obj-card " + _objColorClase(seccion) + " " + _objCompClase(seccion) + (fallado ? " obj-card--ko" : (completo ? " obj-card--ok" : (o.progreso ? " obj-card--prog" : "")));
     var cuerpo = '<span class="obj-card-texto">' + escapeHTML(o.texto) + "</span>";
     if (o.progreso && o.progreso.total > 0) {
       var pct = Math.max(0, Math.min(100, Math.round(o.progreso.actual * 100 / o.progreso.total)));
@@ -17894,7 +17911,7 @@
       '<span class="obj-card-icono">' + (icono ? escapeHTML(icono) : _objIcono(seccion)) + "</span>" +
       '<span class="obj-card-cuerpo">' + cuerpo + "</span>" +
       '<span class="obj-card-rec">' +
-      '<span class="obj-card-rec-val">' + (o.recompensa ? "🪙<br>" + escapeHTML(o.recompensa) : "—") + "</span></span>" +
+      '<span class="obj-card-rec-val">' + (o.recompensa ? escapeHTML(String(o.recompensa).replace(/🪙|\s*monedas?/gi, "").trim()) : "—") + "</span></span>" +
       "</button>"
     );
   }

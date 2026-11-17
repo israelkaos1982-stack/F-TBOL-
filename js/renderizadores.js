@@ -22032,19 +22032,32 @@
       if (!l || /^-{3,}$/.test(l)) return;
       var sec = _rosterPosDeSeccion(l);
       if (sec) { posSeccion = sec; return; }
+      // v523: el dorsal es OPCIONAL («* Marc Roca») y puede repetirse
+      // («15. Gavi» y «15. Álex Baena»): antes esas líneas se descartaban en
+      // silencio (Fabián Ruiz, Dani Olmo… no aparecían en la plantilla).
       var m = l.match(/^[*\-•]?\s*#?\s*(\d+)\s*[.)\-]?\s+(.+?)\s*$/);
-      if (!m) return;
-      var dorsal = Number(m[1]);
-      var resto = m[2];
+      var dorsal = null, resto;
+      if (m) { dorsal = Number(m[1]); resto = m[2]; }
+      else {
+        var m2 = l.match(/^[*\-•]\s*(.+?)\s*$/);
+        if (!m2 || !posSeccion && !/\((por|def|med|del)\)/i.test(m2[1])) return;
+        resto = m2[1];
+      }
       var posicion = null;
       var mp = resto.match(/^(.*?)\s*\(\s*(por|def|med|del)\s*\)\s*(.*)$/i);
       if (mp) { posicion = _ROSTER_POS_MAP[mp[2].toLowerCase()]; resto = (mp[1] + " " + mp[3]).trim(); }
       else posicion = posSeccion;
       var marcas = (resto.match(_ROSTER_MARCAS_RE) || [""])[0];
-      var nombre = resto.replace(_ROSTER_MARCAS_RE, "").trim();
-      if (!nombre || !posicion || vistos[dorsal]) return;
-      vistos[dorsal] = true;
-      var it = { id: clubId + "-" + dorsal, dorsal: dorsal, nombre: nombre, posicion: posicion };
+      var nombre = resto.replace(_ROSTER_MARCAS_RE, "").replace(/[|¦]+\s*$/, "").trim();
+      if (!nombre || !posicion) return;
+      var claveNom = _normNombre(nombre);
+      if (vistos["n:" + claveNom]) return;
+      vistos["n:" + claveNom] = true;
+      // Mismo id de siempre para el primero con ese dorsal (no se pierden
+      // estadísticas); el resto, por nombre.
+      var idJ = dorsal !== null && !vistos["d:" + dorsal] ? clubId + "-" + dorsal : clubId + "-n-" + claveNom.replace(/\s+/g, "-");
+      if (dorsal !== null) vistos["d:" + dorsal] = true;
+      var it = { id: idJ, dorsal: dorsal === null ? "–" : dorsal, nombre: nombre, posicion: posicion };
       if (/\bC\b|\(C\)/.test(marcas)) it.capitan = true;
       if (/⭐|🌟/.test(marcas)) it.estrella = true;
       if (/⚾/.test(marcas)) it.goleadorNato = true;
@@ -22053,7 +22066,7 @@
       if (/\bP\b/.test(marcas)) it.penaltis = true;
       items.push(it);
     });
-    items.sort(function (a, b) { return a.dorsal - b.dorsal; });
+    items.sort(function (a, b) { return (typeof a.dorsal === "number" ? a.dorsal : 999) - (typeof b.dorsal === "number" ? b.dorsal : 999); });
     return items;
   }
 

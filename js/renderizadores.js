@@ -18318,8 +18318,11 @@
   // "10 pts", "8 puntos"); "20K" / "300" son MONEDAS 🪙 del objetivo y no
   // suman al Ranking (el PSG salía con +76.180 al marcar sus objetivos).
   function _objetivoPuntos(recompensa) {
-    var r = String(recompensa || "");
-    if (!/\d\s*(pt|pts|puntos?)\b/i.test(r)) return 0;
+    var r = String(recompensa || "").trim();
+    // v529: la recompensa ya NO lleva 🪙 (v522): un número a secas ("10",
+    // "5") son PUNTOS de ranking. Solo "20K" / "🪙" / "monedas" son monedas.
+    if (/🪙|moneda/i.test(r) || /\d\s*k\b/i.test(r)) return 0;
+    if (!/\d\s*(pt|pts|puntos?)\b/i.test(r) && !/^\+?\d+([.,]\d+)?$/.test(r)) return 0;
     var m = r.match(/(\d[\d.,]*)\s*(k)?/i);
     if (!m) return 0;
     var v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));
@@ -18569,7 +18572,7 @@
       var cols = f.texto.split(/\t| {2,}/);
       var nombre = cols[0], extra = cols.slice(1).join(" ");
       var propia = est.fila === f;
-      var conDesglose = !!(f.humano && f.hid && f.bonus);
+      var conDesglose = false; // v530: sin desglose visible, solo la cifra final
       html +=
         '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") +
         (conDesglose ? ' ranking-fila--toca" data-accion="ranking-desglose-toggle' : "") + '">' +
@@ -18577,7 +18580,7 @@
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") +
         (propia ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
-        (f.bonus ? ' <span class="ranking-fila-bonus">(+' + _fmtPts(f.bonus) + ")</span>" : "") + "</span></div>";
+        "</span></div>"; // v530: solo la cifra final (la suma de objetivos va por dentro, sin "(+N)")
       // v453: tocar un club humano despliega DE DÓNDE salen sus puntos extra
       // (petición usuario: "¿por qué el PSG tiene +180?").
       if (conDesglose) {

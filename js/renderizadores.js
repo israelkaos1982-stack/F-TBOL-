@@ -18572,7 +18572,7 @@
       var cols = f.texto.split(/\t| {2,}/);
       var nombre = cols[0], extra = cols.slice(1).join(" ");
       var propia = est.fila === f;
-      var conDesglose = !!(f.humano && f.hid && f.bonus);
+      var conDesglose = false; // v530: sin desglose visible, solo la cifra final
       html +=
         '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") +
         (conDesglose ? ' ranking-fila--toca" data-accion="ranking-desglose-toggle' : "") + '">' +
@@ -18580,7 +18580,7 @@
         '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") +
         (propia ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
-        (f.bonus ? ' <span class="ranking-fila-bonus">(+' + _fmtPts(f.bonus) + ")</span>" : "") + "</span></div>";
+        "</span></div>"; // v530: solo la cifra final (la suma de objetivos va por dentro, sin "(+N)")
       // v453: tocar un club humano despliega DE DÓNDE salen sus puntos extra
       // (petición usuario: "¿por qué el PSG tiene +180?").
       if (conDesglose) {

@@ -18330,7 +18330,12 @@
     if (/seleccion|mundial|nations|eurocopa|road|copa america|copa africa|copa asia/.test(n)) return "seleccion";
     if (/champions|conference|europa|uefa|recopa|intercontinental/.test(n)) return "europa";
     if (/espana|liga|copa|supercopa|hypermotion|1 ref|primera/.test(n)) return "espana";
-    return null;
+    // v533: el resto de competiciones del CLUB (KAO Cup, SuperKAO, Superliga,
+    // Coupe de France, FA Cup, Premier, Ligue 1, Torneo de Verano…) suman en
+    // ESPAÑA (o en la caja país del PSG/City). Antes devolvía null y sus
+    // objetivos logrados no sumaban en ningún ranking.
+    if (/global|general|titulo/.test(n)) return null;
+    return "espana";
   }
   // "5 pt" -> 5. v454: SOLO cuentan las recompensas en PUNTOS ("5 pt",
   // "10 pts", "8 puntos"); "20K" / "300" son MONEDAS 🪙 del objetivo y no

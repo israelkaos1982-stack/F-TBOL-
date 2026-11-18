@@ -18306,7 +18306,10 @@
   // Qué ranking suma un objetivo según el nombre de su competición.
   function _objetivoRankingTipo(seccion) {
     var n = _rankingNorm(seccion);
-    if (/seleccion|mundial|nations/.test(n)) return "seleccion";
+    // v527: objetivos de la SELECCIÓN (Nations, Road Eurocopa, Eurocopa,
+    // Mundial, Copa América/África/Asia…) cuentan SOLO en el ranking de
+    // SELECCIÓN — antes "Road Eurocopa" caía en ESPAÑA por la palabra "copa".
+    if (/seleccion|mundial|nations|eurocopa|road|copa america|copa africa|copa asia/.test(n)) return "seleccion";
     if (/champions|conference|europa|uefa|recopa|intercontinental/.test(n)) return "europa";
     if (/espana|liga|copa|supercopa|hypermotion|1 ref|primera/.test(n)) return "espana";
     return null;

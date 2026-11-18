@@ -2587,6 +2587,34 @@
       if (cont) window.Renderizadores.pintarEditorRankingLista(cont, clubId, tab);
     }, "🔒 Editar clasificación", "Introduce el PIN de administrador.");
   }
+  // v527: hasta ahora el ✏️ azul del Ranking abría el ℹ️ "Cómo se puntúa"
+  // y la lista pegada se guardaba ahí. Si ese texto trae listas de ranking
+  // ("⭐ RANKING ESPAÑA / SELECCIÓN / EUROPA / GLOBAL…"), se mueven a su
+  // clasificación y "Cómo se puntúa" vuelve al texto de fábrica.
+  function _rescatarRankingsDeComoSePuntua() {
+    try {
+      var E = window.Estado;
+      if (!E || !E.obtenerFormatoOverride) return;
+      var txt = E.obtenerFormatoOverride("puntuacion");
+      if (!txt || !/RANKING\s+(ESPA|EUROPA|GLOBAL|SELECCI|FRANCIA|INGLATERRA)/i.test(txt)) return;
+      var MAPA = { espa: "espana", europa: "europa", global: "global", selecci: "seleccion", francia: "francia", inglaterra: "inglaterra" };
+      var bloques = {}, actual = null;
+      txt.split("\n").forEach(function (l) {
+        var m = l.match(/RANKING\s+(ESPA|EUROPA|GLOBAL|SELECCI|FRANCIA|INGLATERRA)/i);
+        if (m) { actual = MAPA[m[1].toLowerCase()]; bloques[actual] = [l]; return; }
+        if (actual) bloques[actual].push(l);
+      });
+      Object.keys(bloques).forEach(function (tipo) {
+        var k = "ef7_ranking_lista_v1_" + tipo;
+        localStorage.setItem(k, bloques[tipo].join("\n").trim());
+        if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar(k);
+      });
+      localStorage.setItem("ef7_formato_override_puntuacion_v1", "");
+      if (window.Sync && window.Sync.marcarParaForzar) window.Sync.marcarParaForzar("ef7_formato_override_puntuacion_v1");
+    } catch (err) {
+      console.error("[main] rescate rankings:", err);
+    }
+  }
   function guardarRankingLista(clubId, tab) {
     var ta = document.getElementById("ranking-lista-textarea");
     if (!ta || !window.Estado || !window.Renderizadores) return;
@@ -3053,6 +3081,7 @@
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
     _sembrarLigue1V1();
+    _rescatarRankingsDeComoSePuntua();
     if (window.Renderizadores) {
       window.Renderizadores.renderizarInicioEquipos();
       window.Renderizadores.pintarTemporada();
@@ -3198,11 +3227,18 @@
     function _lapizVisibleDelModal() {
       if (!cuerpoModal) return null;
       var candidatos = cuerpoModal.querySelectorAll(".copa-club-header .liga1ref-editar-btn, .liga1ref-titulo-row .liga1ref-editar-btn, .liga1ref-header .liga1ref-editar-btn");
+      // v527: en una misma cabecera puede haber varios botones (Ranking:
+      // ℹ️ Cómo se puntúa · 🎯 Mi objetivo · ✏️ Clasificación). El ✏️ azul de
+      // arriba debe abrir SIEMPRE el ✏️ — antes pulsaba el ℹ️ y la lista
+      // pegada acababa guardada en el texto de "Cómo se puntúa".
+      var primero = null;
       for (var i = 0; i < candidatos.length; i++) {
         var padre = candidatos[i].parentElement;
-        if (padre && padre.getClientRects().length) return candidatos[i];
+        if (!padre || !padre.getClientRects().length) continue;
+        if (!primero) primero = candidatos[i];
+        if (candidatos[i].textContent.indexOf("✏") !== -1) return candidatos[i];
       }
-      return null;
+      return primero;
     }
     function _actualizarLapizModal() {
       if (btnModalEditar) btnModalEditar.hidden = !_lapizVisibleDelModal();

@@ -18469,9 +18469,12 @@
       humanos.forEach(function (h) {
         var f = filaDe[h];
         if (!f) return;
-        var bonus = _rankingBonusClub(tipo, h);
+        // v526: si la lista pegada YA trae la fila de este humano con sus
+        // puntos (el editor calcula los de sus competiciones), solo se le
+        // suman los OBJETIVOS; si no viene en la lista, se le suma todo.
+        var bonus = f.sintetica ? _rankingBonusClub(tipo, h) : _rankingBonusObjetivos(tipo, h);
         var total = _ptsNum(f) + bonus;
-        var nueva = { pos: f.pos, texto: f.texto, norm: f.norm, ptsNum: total, pts: _fmtPts(total), bonus: bonus, humano: true, hid: h };
+        var nueva = { pos: f.pos, texto: f.texto, norm: f.norm, ptsNum: total, pts: _fmtPts(total), bonus: bonus, humano: true, hid: h, sintetica: !!f.sintetica };
         reemplazo.set(f, nueva);
         filaDe[h] = nueva;
       });
@@ -18497,9 +18500,9 @@
       fila: fila,
       puesto: fila ? fila.pos : null,
       objetivo: objetivo,
-      bonus: fila ? _rankingBonusClub(tipo, clubId) : 0,
+      bonus: fila ? (fila.sintetica ? _rankingBonusClub(tipo, clubId) : _rankingBonusObjetivos(tipo, clubId)) : 0,
       bonusObj: fila ? _rankingBonusObjetivos(tipo, clubId) : 0,
-      comp: fila ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
+      comp: fila && fila.sintetica ? _rankingPuntosComp(tipo, clubId) : { total: 0, filas: [] },
       noParticipa: tipo === "europa" && !!_rankingPuntosCache[clubId] && !_rankingPuntosCache[clubId].juegaEuropa && !_rankingPuntosCache[clubId].europa.filas.length,
       cumplido: !!fila && objetivo !== null && fila.pos <= objetivo
     };

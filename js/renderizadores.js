@@ -3481,9 +3481,12 @@
     var html = '<div class="liga-tab-boxes liga-tab-boxes--grid4">';
     // v504: tras Ea Sports, Ligue 1 y Premier League; y la liga PROPIA del
     // club activo va la PRIMERA de la fila.
-    var orden = LIGA_NAV_ORDEN.concat(["ligue1", "premier"]);
+    // v531: orden fijo por club (petición usuario).
     var propia = ligaPropiaClub(idClubActivo);
-    if (propia && orden.indexOf(propia) !== -1) orden = [propia].concat(orden.filter(function (x) { return x !== propia; }));
+    var orden = propia === "ligue1" ? ["ligue1", "easports", "premier", "hypermotion", "1ref", "2ref"]
+      : propia === "premier" ? ["premier", "easports", "ligue1", "hypermotion", "1ref", "2ref"]
+      : ["easports", "hypermotion", "1ref", "2ref", "ligue1", "premier"];
+    if (propia && orden.indexOf(propia) === -1) orden = [propia].concat(orden);
     orden.forEach(function (id) {
       var meta = LIGA_NAV_META[id];
       var activa = id === ligaId;

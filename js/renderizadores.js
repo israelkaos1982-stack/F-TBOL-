@@ -969,6 +969,8 @@
     cargarTodo().then(function (datos) {
       var frag = document.createDocumentFragment();
 
+      var indiceTit = null;
+      try { indiceTit = _titulosCatalogoIndexado(datos); } catch (eT) { indiceTit = null; }
       (datos.equipos.equipos || []).forEach(function (eq) {
         var btn = document.createElement("button");
         btn.type = "button";
@@ -981,13 +983,23 @@
 
         // Sin la bandera de selección (petición usuario) — solo emoji + mister.
         var misterLinea = [eq.misterEmoji, eq.mister].filter(Boolean).join(" ");
+        // v524: total de títulos del entrenador (misma suma que su pantalla Títulos).
+        var totalTit = null;
+        if (indiceTit && window.Estado) {
+          try {
+            totalTit = parsearTitulosTexto(window.Estado.obtenerTitulosTexto(eq.id), indiceTit)
+              .reduce(function (acc, g) { return acc + g.veces; }, 0);
+          } catch (eT2) { totalTit = null; }
+        }
 
         btn.innerHTML =
           '<div class="team-box-inner">' +
           crearEscudoHTML(eq, "escudo--lg") +
           '<div class="team-box-meta">' +
           '<span class="team-box-club">' + eq.nombre + "</span>" +
-          (misterLinea ? '<span class="team-box-mister">· ' + misterLinea + "</span>" : "") +
+          (misterLinea ? '<span class="team-box-mister">' + misterLinea +
+            (totalTit !== null ? ' - <b class="team-box-titulos">' + totalTit + " " + (totalTit === 1 ? "título" : "títulos") + "</b>" : "") +
+            "</span>" : "") +
           "</div>" +
           "</div>";
 

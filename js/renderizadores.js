@@ -18574,7 +18574,8 @@
         '<div class="ranking-fila' + (f.humano && !propia ? " ranking-fila--humano" : "") + (propia ? (est.cumplido ? " ranking-fila--propia-ok" : " ranking-fila--propia") : "") +
         (conDesglose ? ' ranking-fila--toca" data-accion="ranking-desglose-toggle' : "") + '">' +
         '<span class="ranking-fila-pos">' + f.pos + ".</span>" +
-        '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") + "</span>" +
+        '<span class="ranking-fila-nom">' + escapeHTML(nombre) + (extra ? ' <span class="ranking-fila-extra">' + escapeHTML(extra) + "</span>" : "") +
+        (propia ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</span>" +
         '<span class="ranking-fila-pts">' + escapeHTML(f.pts) +
         (f.bonus ? ' <span class="ranking-fila-bonus">(+' + _fmtPts(f.bonus) + ")</span>" : "") + "</span></div>";
       // v453: tocar un club humano despliega DE DÓNDE salen sus puntos extra
@@ -18582,7 +18583,7 @@
       if (conDesglose) {
         var desg = _rankingDesgloseHTML({
           fila: f,
-          comp: _rankingPuntosComp(est.tipo, f.hid),
+          comp: f.sintetica ? _rankingPuntosComp(est.tipo, f.hid) : { total: 0, filas: [] },
           bonusObj: _rankingBonusObjetivos(est.tipo, f.hid)
         }, (_rankingNombresClub[f.hid] || nombre));
         if (desg) html += '<div class="ranking-fila-desglose" hidden>' + desg + "</div>";

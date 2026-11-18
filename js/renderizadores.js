@@ -1895,6 +1895,21 @@
   // v507: id del club (psg / manchester-city) si el nombre de texto pegado es
   // él, para tratar su fila igual que la de cualquier humano (emoji + TÚ).
   var _EMOJI_HUMANO_TEXTO = { psg: "🦆", "manchester-city": "🐲" };
+  // v532: jugador de OTRO equipo humano (club o selección humana) en las
+  // estadísticas — se pinta en amarillo (el propio ya va en verde con TÚ).
+  function _filaStatDeOtroHumano(f) {
+    if (!f) return false;
+    if (f.equipoId && (_humanosIdsSet[f.equipoId] || _esIdSeleccionHumana(f.equipoId))) return true;
+    var n = _normNombre(f.equipo || "").replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim();
+    if (!n) return false;
+    for (var id in _ALIAS_CLUBES_HUMANOS) {
+      if (_ALIAS_CLUBES_HUMANOS[id].some(function (a) { return _normNombre(a).replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim() === n; })) return true;
+    }
+    for (var h in SELECCIONES_HUMANAS) {
+      if (_normNombre(SELECCIONES_HUMANAS[h].nombre) === n) return true;
+    }
+    return false;
+  }
   function _idHumanoDeNombreTexto(nombre) {
     var n = _normNombre(nombre || "").replace(/[.\-]/g, " ").replace(/\s+/g, " ").trim();
     if (!n) return null;
@@ -4041,7 +4056,7 @@
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo) ||
           (!f.equipoId && !!idClubActivo && _idHumanoDeNombreTexto(f.equipo) === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
@@ -4785,7 +4800,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -5374,7 +5389,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -5858,7 +5873,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -6520,7 +6535,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -7057,7 +7072,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -7534,7 +7549,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -8049,7 +8064,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -9037,7 +9052,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -9734,7 +9749,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -10437,7 +10452,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -11190,7 +11205,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _nationsIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -11887,7 +11902,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _slxIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -12556,7 +12571,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadeurocopaIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -13222,7 +13237,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _eurocopaIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -13885,7 +13900,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadmundialIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -14553,7 +14568,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _mundialselIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -15217,7 +15232,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadamericaIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -15875,7 +15890,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadafricaIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -16533,7 +16548,7 @@
       filas.forEach(function (f, i) {
         var esTuyo = !!(f.equipoId && f.equipoId === _roadasiaIdActivo(idClubActivo));
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
           '<td class="clasificacion-equipo">' + escapeHTML(f.nombre) +
@@ -17077,7 +17092,7 @@
         var esTuyo = !!(f.equipoId && f.equipoId === idClubActivo) ||
           (!f.equipoId && !!idClubActivo && _idHumanoDeNombreTexto(f.equipo) === idClubActivo);
         var tr = document.createElement("tr");
-        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : "");
+        tr.className = "clasificacion-fila" + (esTuyo ? " clasificacion-fila--activo" : (_filaStatDeOtroHumano(f) ? " clasificacion-fila--humano-ajeno" : ""));
         var valor = meta.decimales ? Number(f.cantidad).toFixed(2) : f.cantidad;
         tr.innerHTML =
           '<td class="clasificacion-pos">' + (i + 1) + "</td>" +

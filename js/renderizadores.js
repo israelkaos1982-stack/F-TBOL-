@@ -18318,8 +18318,11 @@
   // "10 pts", "8 puntos"); "20K" / "300" son MONEDAS 🪙 del objetivo y no
   // suman al Ranking (el PSG salía con +76.180 al marcar sus objetivos).
   function _objetivoPuntos(recompensa) {
-    var r = String(recompensa || "");
-    if (!/\d\s*(pt|pts|puntos?)\b/i.test(r)) return 0;
+    var r = String(recompensa || "").trim();
+    // v529: la recompensa ya NO lleva 🪙 (v522): un número a secas ("10",
+    // "5") son PUNTOS de ranking. Solo "20K" / "🪙" / "monedas" son monedas.
+    if (/🪙|moneda/i.test(r) || /\d\s*k\b/i.test(r)) return 0;
+    if (!/\d\s*(pt|pts|puntos?)\b/i.test(r) && !/^\+?\d+([.,]\d+)?$/.test(r)) return 0;
     var m = r.match(/(\d[\d.,]*)\s*(k)?/i);
     if (!m) return 0;
     var v = parseFloat(m[1].replace(/\./g, "").replace(",", "."));

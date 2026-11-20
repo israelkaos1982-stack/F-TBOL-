@@ -3238,7 +3238,16 @@
         if (!primero) primero = candidatos[i];
         if (candidatos[i].textContent.indexOf("✏") !== -1) return candidatos[i];
       }
-      return primero;
+      if (primero) return primero;
+      // v535: el ✏️ azul de arriba se queda FIJO en cualquier ronda/pestaña —
+      // si el ✏️ de la ronda abierta no está a la vista (la cabecera con el
+      // editor vive en otra ronda), se usa el ✏️ del editor de la competición
+      // que haya en la pantalla aunque esté oculto.
+      var todos = cuerpoModal.querySelectorAll(".liga1ref-editar-btn, .copa-club-header .liga1ref-editar-btn");
+      for (var j = 0; j < todos.length; j++) {
+        if (todos[j].textContent.indexOf("✏") !== -1) return todos[j];
+      }
+      return null;
     }
     function _actualizarLapizModal() {
       if (btnModalEditar) btnModalEditar.hidden = !_lapizVisibleDelModal();

@@ -20325,7 +20325,27 @@
   // — así se leen de un vistazo sin cruzar equipos. Devuelve null si el
   // partido no es una vuelta o su ida todavía no se ha jugado.
   function _datosIdaDeVuelta(partido, datos) {
-    if (!partido || !window.Estado || !partido.eliminatoria) return null;
+    if (!partido || !window.Estado) return null;
+    // v534: vuelta tecleada en el Calendario extra ("Octavos Vuelta") sin
+    // objeto `eliminatoria`: su ida es el partido de la MISMA competición y
+    // ronda ("Octavos Ida") entre los MISMOS 2 equipos.
+    if (!partido.eliminatoria) {
+      if (_faseIdaVuelta(partido) !== "vuelta") return null;
+      var baseR = _normNombre(partido.ronda || "").replace(/\b(vuelta|vta)\b/g, "").replace(/\s+/g, " ").trim();
+      var compR = _resolverCompKeyBalon(partido.competicion);
+      var idaX = window.Estado.listarPartidosResueltos(datos).filter(function (p) {
+        if (p === partido || !p.jugado || !p.resultado || _faseIdaVuelta(p) !== "ida") return false;
+        if (_resolverCompKeyBalon(p.competicion) !== compR) return false;
+        if (!((p.local === partido.local && p.visitante === partido.visitante) || (p.local === partido.visitante && p.visitante === partido.local))) return false;
+        var b = _normNombre(p.ronda || "").replace(/\bida\b/g, "").replace(/\s+/g, " ").trim();
+        return b === baseR;
+      })[0];
+      if (!idaX) return null;
+      var gI = {};
+      gI[idaX.local] = idaX.resultado.golesLocal;
+      gI[idaX.visitante] = idaX.resultado.golesVisitante;
+      return { local: gI[partido.local], visitante: gI[partido.visitante] };
+    }
     if (partido.eliminatoria.fase !== "vuelta" || !partido.eliminatoria.grupoId) return null;
     var ida = window.Estado.listarPartidosResueltos(datos).filter(function (p) {
       return p.eliminatoria && p.eliminatoria.grupoId === partido.eliminatoria.grupoId &&
@@ -20375,6 +20395,21 @@
     }
     if (_COMPS_CLASIF_EUROPA[key] && _esFaseDeGruposEuropea(partido)) {
       return key === "champions" ? calcularChampionsCombinada(datos) : (key === "uel" ? calcularUelCombinada(datos) : calcularUeclCombinada(datos));
+    }
+    // v534: Nº/PJ/PTS/% también en las fases de grupos de selecciones
+    // (Nations, Road Eurocopa/Mundial/América/África/Asia, Eurocopa, Mundial).
+    if (_SEL_COMPS_GRUPOS[key] && !/dieciseisavos|octavos|cuartos|semi|\bfinal\b|repesca|play-?offs?/.test(_normNombre(partido.ronda || ""))) {
+      var _fs = [];
+      _SEL_COMPS_GRUPOS[key](datos).forEach(function (g, gi) {
+        (g.filas || []).forEach(function (f) {
+          _fs.push({ equipoId: f.equipoId, nombre: f.nombre, pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc, grupo: g.nombre || ("g" + gi) });
+        });
+      });
+      return _fs;
+    }
+    // v534: ligas por nombre propio (Hypermotion, 1ª/2ª REF, Ligue 1, Premier…)
+    if (key && key !== "liga" && LIGA_NAV_META && LIGA_NAV_META[key]) {
+      try { var _fx = key === "1ref" ? calcularLiga1RefCombinada(datos) : calcularLigaExtraFilasConHumano(key, datos); if (_fx && _fx.length) return _fx; } catch (eX) {}
     }
     var esLigaLegacy = partido.competicion === "liga";
     var compNorm = _normNombre(partido.competicion);

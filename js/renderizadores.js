@@ -264,9 +264,15 @@
     return obtenerEstadioDelEquipo(local);
   }
 
+  // v536: estadio REAL de equipos IA concretos (sin estadioId), por nombre.
+  var _ESTADIO_IA_POR_NOMBRE = {
+    "inter": "giuseppe-meazza", "inter de milan": "giuseppe-meazza", "inter milan": "giuseppe-meazza",
+    "internazionale": "giuseppe-meazza", "fc internazionale": "giuseppe-meazza", "fc internazionale milano": "giuseppe-meazza"
+  };
   function obtenerEstadioDelEquipo(equipo) {
-    if (equipo && equipo.estadioId && _estadiosLista && _estadiosLista.length) {
-      var fijo = _estadiosLista.find(function (e) { return e.id === equipo.estadioId; });
+    var idFijo = equipo && (equipo.estadioId || _ESTADIO_IA_POR_NOMBRE[_normNombre(equipo.nombre).replace(/[.]/g, "")]);
+    if (idFijo && _estadiosLista && _estadiosLista.length) {
+      var fijo = _estadiosLista.find(function (e) { return e.id === idFijo; });
       if (fijo) return fijo;
     }
     return obtenerEstadioCorrelativoAjustado(equipo ? equipo.valoracionPoder : null);
@@ -384,6 +390,22 @@
   // (Liga → su jornada; Calendario extra sin fecha → posición del partido
   // en el calendario del club; con fecha → posición por fecha) y aplica
   // las excepciones antes del motor.
+  function _ordenClimaDePartido(partido) {
+    try {
+      var ctx = _ultimoContexto; if (!ctx || !ctx.datos) return null;
+      var hum = _humanosIdsSet || {};
+      var cands = [partido.local, partido.visitante].map(function (id) {
+        return _esIdSeleccionHumana(id) ? id : ((hum && hum[id]) ? id : null);
+      }).filter(Boolean);
+      for (var i = 0; i < cands.length; i++) {
+        var lista = _partidosOrdenadosDelClub(cands[i], ctx.datos, false);
+        for (var k = 0; k < lista.length; k++) {
+          if (lista[k].id === partido.id) return { orden: k, total: lista.length };
+        }
+      }
+    } catch (e) {}
+    return null;
+  }
   function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs, local, visitante) {
     // Superliga: condición FIJA de la competición — siempre ☀️.
     if (partido.competicion === "superliga") {
@@ -394,7 +416,14 @@
 
     // Progreso de temporada (0..1).
     var progreso;
-    if (partido.competicion === "liga" && typeof partido.jornada === "number") {
+    // v536: si el partido es de un club humano, la estación sigue el
+    // calendario COMPLETO de ese club (todas las competiciones en orden),
+    // así dos partidos seguidos (Liga J10 → Superliga J3) nunca saltan de
+    // Invierno a Verano.
+    var ordInfo = _ordenClimaDePartido(partido);
+    if (ordInfo) {
+      progreso = (ordInfo.orden + 1) / ordInfo.total;
+    } else if (partido.competicion === "liga" && typeof partido.jornada === "number") {
       progreso = partido.jornada / (Number(totalJornadasLiga) || 1);
     } else {
       var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;

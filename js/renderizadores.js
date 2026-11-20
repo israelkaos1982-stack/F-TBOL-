@@ -20750,7 +20750,7 @@
     if (tipo === "sancionados" && _ultimoContexto && _ultimoContexto.datos) {
       var nombresManual = {};
       lista.forEach(function (e) { nombresManual[_normNombre(e.nombre)] = true; });
-      var autos = calcularSancionadosAutomaticosPara(_idHumanoPrevia(), orden, _ultimoContexto.datos);
+      var autos = calcularSancionadosAutomaticosPara(_idHumanoPrevia(), orden, _ultimoContexto.datos, _previaPartidoActual && _previaPartidoActual.id);
       htmlAuto = autos
         .filter(function (a) { return !nombresManual[_normNombre(a.nombre)]; })
         .map(_filaJugadorListaAuto)
@@ -22502,55 +22502,78 @@
   // (_ordenClub === ordenPartidoActual - 1) del calendario del club, la
   // sanción desaparece sola en cuanto ese partido dejó de ser "el
   // anterior" (el siguiente partido del jugador ya no lo mira).
-  function calcularSancionadosAutomaticosPara(clubId, ordenPartidoActual, datos) {
-    if (typeof ordenPartidoActual !== "number" || ordenPartidoActual <= 0) return [];
-    // v499: cuenta CUALQUIER competición (también Superliga y Torneo de
-    // Verano, y los partidos entre humanos); solo los amistosos no.
+  function calcularSancionadosAutomaticosPara(clubId, ordenPartidoActual, datos, partidoActualId) {
+    // v537: cuenta CUALQUIER competición salvo los amistosos. El partido
+    // actual se localiza por su ID en el calendario del club (antes se usaba
+    // un número de orden guardado en el objeto, que podía estar desfasado y
+    // dejaba las sanciones sin aplicar). La sanción se cumple en el
+    // SIGUIENTE partido oficial del calendario: se busca hacia atrás el
+    // último partido JUGADO (saltando pospuestos/sin valor/amistosos).
     var _COMPS_EXCLUIDAS = { amistosos: true, amistoso: true };
+    function _excl(p) { return !!(_COMPS_EXCLUIDAS[p.competicion] || _COMPS_EXCLUIDAS[_resolverCompKeyBalon(p.competicion)]); }
     var partidosClub = _partidosOrdenadosDelClub(clubId, datos);
-    var anterior = null;
-    // v459: un partido ⚠️ sin valor nunca genera sanciones (ver bucle de abajo).
-    for (var i = 0; i < partidosClub.length; i++) {
-      if (partidosClub[i]._ordenClub === ordenPartidoActual - 1) { anterior = partidosClub[i]; break; }
+    var idxActual = -1;
+    if (partidoActualId != null) {
+      for (var i = 0; i < partidosClub.length; i++) { if (String(partidosClub[i].id) === String(partidoActualId)) { idxActual = i; break; } }
     }
-    if (!anterior || anterior._sinValor || !anterior.jugado || _COMPS_EXCLUIDAS[anterior.competicion] || !anterior.jug || !anterior.jug.length) return [];
+    if (idxActual === -1 && typeof ordenPartidoActual === "number") idxActual = ordenPartidoActual;
+    if (idxActual <= 0 || idxActual > partidosClub.length) return [];
+    if (partidosClub[idxActual] && _excl(partidosClub[idxActual])) return [];
+    var idxAnterior = -1;
+    for (var k = idxActual - 1; k >= 0; k--) {
+      var q = partidosClub[k];
+      if (!q || q._sinValor || _excl(q) || !q.jugado) continue;
+      idxAnterior = k; break;
+    }
+    if (idxAnterior === -1) return [];
+    var anterior = partidosClub[idxAnterior];
+    if (!anterior.jug || !anterior.jug.length) return [];
 
     var nombresPorId = {};
     obtenerJugadoresClub(clubId).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
 
-    // Amarillas TOTALES del jugador contando SOLO hasta (e incluyendo)
-    // `anterior` — necesarias para saber si fue precisamente ESE partido
-    // el que hizo cruzar un múltiplo de 3, y no uno ya sancionado antes.
+    // Amarillas TOTALES hasta (e incluyendo) `anterior`, en todas las
+    // competiciones oficiales: si ese partido hizo cruzar un múltiplo de 3
+    // (3, 6, 9, 12…) el jugador se pierde el siguiente.
     var amarillasHastaAnterior = {};
-    partidosClub.forEach(function (p) {
-      if (p._ordenClub > ordenPartidoActual - 1 || !p.jugado || _COMPS_EXCLUIDAS[p.competicion]) return;
-      (p.jug || []).forEach(function (row) {
+    for (var m = 0; m <= idxAnterior; m++) {
+      var pm = partidosClub[m];
+      if (!pm.jugado || pm._sinValor || _excl(pm)) continue;
+      var enPartido = {};
+      (pm.jug || []).forEach(function (row) {
         if (!row.j || row.e !== clubId) return;
         var key = _normNombre(_nombreFilaJugadorConFallback(nombresPorId, row));
-        amarillasHastaAnterior[key] = (amarillasHastaAnterior[key] || 0) + (row.a || 0);
+        enPartido[key] = (enPartido[key] || 0) + (row.a || 0);
       });
-    });
+      Object.keys(enPartido).forEach(function (key) {
+        amarillasHastaAnterior[key] = (amarillasHastaAnterior[key] || 0) + enPartido[key];
+      });
+    }
 
-    var vistos = {};
-    var sancionados = [];
+    // Agrupa las filas del partido anterior por jugador (un mismo jugador
+    // puede venir en varias filas si cambió el id/dorsal).
+    var porJugador = {};
     anterior.jug.forEach(function (row) {
       if (!row.j || row.e !== clubId) return;
       var nombre = _nombreFilaJugadorConFallback(nombresPorId, row);
       var key = _normNombre(nombre);
-      if (vistos[key]) return;
+      var f = porJugador[key] || (porJugador[key] = { nombre: nombre, a: 0, r: 0 });
+      f.a += (row.a || 0); f.r += (row.r || 0);
+    });
+    var sancionados = [];
+    Object.keys(porJugador).forEach(function (key) {
+      var f = porJugador[key];
       var motivo = null;
-      if ((row.r || 0) >= 1) {
-        motivo = "🟥 Roja directa";
-      } else if ((row.a || 0) >= 2) {
-        motivo = "🟨🟨 2 amarillas en el mismo partido";
-      } else if ((row.a || 0) >= 1) {
+      if (f.a >= 2) {
+        motivo = "🟨🟨 Expulsado (2 amarillas)";
+      } else if (f.r >= 1) {
+        motivo = "🟥 Expulsado (roja directa)";
+      } else if (f.a >= 1) {
         var total = amarillasHastaAnterior[key] || 0;
-        if (total > 0 && total % 3 === 0) motivo = total + "ª amarilla acumulada";
+        var antes = total - f.a;
+        if (Math.floor(total / 3) > Math.floor(antes / 3)) motivo = (Math.floor(total / 3) * 3) + " amarillas acumuladas";
       }
-      if (motivo) {
-        vistos[key] = true;
-        sancionados.push({ nombre: nombre, motivo: motivo });
-      }
+      if (motivo) sancionados.push({ nombre: f.nombre, motivo: motivo });
     });
     return sancionados;
   }

@@ -23543,6 +23543,27 @@
   // chapa de color y filas dorsal+nombre que la pantalla Plantilla. Sustituye
   // al <select> nativo (Lesionados/Sancionados y jugador del acta en vivo).
   // opts: { titulo, jugadores:[{id,dorsal,nombre,posicion}], valor, onElegir(j), onCerrar() }
+  // v538: equivalencia jugador REAL = jugador del juego (petición usuario),
+  // por club. Se muestra en el picker de eventos tras "=" en gris-blanco.
+  var _EQUIV_JUEGO_POR_CLUB = {
+    psg: {
+      "lucas chevalier": "Donnarumma", "m. safonov": "Keylor Navas", "alessandro longoni": "A. Letellier",
+      "a. hakimi": "Hakimi", "nuno mendes": "Nuno Mendes", "marquinhos": "Marquinhos",
+      "willian pacho": "Sergio Ramos", "i. zabarnyi": "Kimpembe", "lucas beraldo": "Danilo Pereira",
+      "lucas hernandez": "Abdou Diallo", "lucas digne": "Juan Bernat", "david boly": "E. Bitshiabu",
+      "vitinha": "Vitinha", "fabian": "Fabián", "zaire-emery": "Zaïre-Emery", "joao neves": "Verratti",
+      "dro fernandez": "Carlos Soler", "s. mayulu": "Renato Sanches",
+      "o. dembele": "Mbappé", "k. kvaratskhelia": "Messi", "desire doue": "Neymar",
+      "ferran torres": "Ekitiké", "m. akliouche": "Sarabia", "mika godts": "Gharbi", "q. ndjantou": "Housni"
+    }
+  };
+  function _equivJuego(j) {
+    var id = String(j && j.id || "");
+    var club = Object.keys(_EQUIV_JUEGO_POR_CLUB).filter(function (c) { return id.indexOf(c + "-") === 0; })[0];
+    if (!club) return "";
+    var k = _normNombre(j.nombre).replace(/\s+/g, " ").replace(/[\u00ef]/g, "i");
+    return _EQUIV_JUEGO_POR_CLUB[club][k] || "";
+  }
   function abrirPickerJugadorPES(opts) {
     var viejo = document.getElementById("pes-picker-overlay");
     if (viejo) viejo.remove();
@@ -23558,7 +23579,8 @@
           var sel = String(j.id) === String(opts.valor) ? " is-selected" : "";
           return '<button type="button" class="pes-picker-fila' + sel + '" data-pes-id="' + escapeHTML(String(j.id)) + '">' +
             '<span class="plantilla-dorsal">' + escapeHTML(String(j.dorsal)) + "</span>" +
-            '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>" +
+            '<span class="plantilla-nombre">' + escapeHTML(j.nombre) +
+            (_equivJuego(j) ? '<span class="pes-picker-equiv"> = ' + escapeHTML(_equivJuego(j)) + "</span>" : "") + "</span>" +
             '<span class="pes-picker-marca">' + (sel ? "◀" : "") + "</span></button>";
         }).join("") + "</div>";
     }).join("");

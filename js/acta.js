@@ -105,7 +105,7 @@
   function cargarPlantillasIA() {
     if (_plantillasIA) return Promise.resolve(_plantillasIA);
     if (!_plantillasIAPromesa) {
-      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=539")
+      _plantillasIAPromesa = fetch("data/plantillas_ia.json?v=540")
         .then(function (r) { if (!r.ok) throw new Error("plantillas_ia " + r.status); return r.json(); })
         .then(function (d) { _plantillasIA = d || {}; _plantillasIACache = {}; return _plantillasIA; })
         .catch(function () { _plantillasIAPromesa = null; return null; });
@@ -735,6 +735,28 @@
     _prepararBotonJugador(sel, jugadores);
   }
 
+  // v540: lesionados/sancionados/expulsados del equipo elegido para ESTE
+  // partido, y los eventos del acta ya añadidos a cada jugador.
+  function _equipoPickerActual() {
+    if (!_partidoActivo) return null;
+    return _partidoActivo.lado === "local" ? _partidoActivo.local : _partidoActivo.visitante;
+  }
+  function _estadosJugadoresPicker() {
+    var R = window.Renderizadores, eq = _equipoPickerActual();
+    if (!R || !R.estadoJugadoresParaPartido || !eq) return {};
+    return R.estadoJugadoresParaPartido(eq.id, _partidoActivo.partido, _partidoActivo.datos);
+  }
+  function _eventosPorJugadorPicker() {
+    var out = {}, eq = _equipoPickerActual();
+    (actaTemporal || []).slice().sort(function (a, b) { return (Number(a.minuto) || 0) - (Number(b.minuto) || 0); }).forEach(function (ev) {
+      if (!ev || !ev.jugador_id || (eq && ev.equipo_id && ev.equipo_id !== eq.id)) return;
+      var meta = TIPOS_EVENTO[ev.tipo];
+      if (!meta) return;
+      var k = String(ev.jugador_id);
+      out[k] = (out[k] ? out[k] + " " : "") + meta.emoji;
+    });
+    return out;
+  }
   function _prepararBotonJugador(sel, jugadores) {
     var btn = document.getElementById("live-jugador-btn");
     if (!btn) {
@@ -750,6 +772,8 @@
           titulo: "Elige jugador",
           jugadores: btn._jugadores || [],
           valor: sel.value,
+          estados: _estadosJugadoresPicker(),
+          eventosPorId: _eventosPorJugadorPicker(),
           onElegir: function (j) { sel.value = j.id; _pintarBotonJugador(sel, btn); }
         });
       });

@@ -20724,6 +20724,30 @@
     }
     return false;
   }
+  // v540: estado de cada jugador del club para UN partido concreto (lo usa el
+  // selector "Elige jugador" del partido en vivo): lesionado, sancionado
+  // por acumulación de amarillas o expulsado (roja / doble amarilla).
+  // Devuelve { nombreNormalizado: "lesion" | "acum" | "roja" }.
+  function estadoJugadoresParaPartido(clubId, partido, datos) {
+    var out = {};
+    if (!clubId || !partido || !datos || !window.Estado) return out;
+    try {
+      window.Estado.obtenerListaJugadores(clubId, "lesionados").forEach(function (e) {
+        if (_entradaListaVigente(e, "lesionados", partido, clubId, datos)) out[_normNombre(e.nombre)] = "lesion";
+      });
+      window.Estado.obtenerListaJugadores(clubId, "sancionados").forEach(function (e) {
+        if (!_entradaListaVigente(e, "sancionados", partido, clubId, datos)) return;
+        var k = _normNombre(e.nombre);
+        if (!out[k]) out[k] = /roja|expuls|🟥/i.test(String(e.motivo || "")) ? "roja" : "acum";
+      });
+      calcularSancionadosAutomaticosPara(clubId, null, datos, partido.id).forEach(function (a) {
+        var k = _normNombre(a.nombre);
+        if (out[k] === "lesion") return;
+        out[k] = /expuls/i.test(a.motivo) ? "roja" : (out[k] === "roja" ? "roja" : "acum");
+      });
+    } catch (err) { /* sin estados: el selector sigue funcionando */ }
+    return out;
+  }
   function _listaVigentePrevia(tipo) {
     var id = _idHumanoPrevia();
     if (!id || !window.Estado || !_ultimoContexto) return [];
@@ -23577,10 +23601,16 @@
         '<div class="plantilla-grupo-titulo"><span class="plantilla-grupo-nombre">' + escapeHTML(LABEL_POSICION[pos]) + " · " + lista.length + "</span></div>" +
         lista.map(function (j) {
           var sel = String(j.id) === String(opts.valor) ? " is-selected" : "";
-          return '<button type="button" class="pes-picker-fila' + sel + '" data-pes-id="' + escapeHTML(String(j.id)) + '">' +
+          var est = (opts.estados || {})[_normNombre(j.nombre)] || "";
+          var icoEst = est === "lesion" ? '<span class="pes-picker-est">❌</span>'
+            : est === "roja" ? '<span class="pes-picker-est">🟥</span>'
+            : est === "acum" ? '<span class="pes-picker-est">🟨</span>' : "";
+          var evs = (opts.eventosPorId || {})[String(j.id)] || "";
+          return '<button type="button" class="pes-picker-fila' + sel + (est ? " pes-picker-fila--" + est : "") + '" data-pes-id="' + escapeHTML(String(j.id)) + '">' +
             '<span class="plantilla-dorsal">' + escapeHTML(String(j.dorsal)) + "</span>" +
             '<span class="plantilla-nombre">' + escapeHTML(j.nombre) +
-            (_equivJuego(j) ? '<span class="pes-picker-equiv"> = ' + escapeHTML(_equivJuego(j)) + "</span>" : "") + "</span>" +
+            (_equivJuego(j) ? '<span class="pes-picker-equiv"> = ' + escapeHTML(_equivJuego(j)) + "</span>" : "") +
+            (evs ? '<span class="pes-picker-evs"> ' + escapeHTML(evs) + "</span>" : "") + icoEst + "</span>" +
             '<span class="pes-picker-marca">' + (sel ? "◀" : "") + "</span></button>";
         }).join("") + "</div>";
     }).join("");
@@ -24805,6 +24835,7 @@
     calcularStatsRosterClub: calcularStatsRosterClub,
     calcularCopaStatsCombinado: calcularCopaStatsCombinado,
     calcularSancionadosAutomaticosPara: calcularSancionadosAutomaticosPara,
+    estadoJugadoresParaPartido: estadoJugadoresParaPartido,
     parsearRenombresTexto: parsearRenombresTexto,
     resolverRenombreJugador: resolverRenombreJugador,
     pintarEditorRenombresPlantilla: pintarEditorRenombresPlantilla,

@@ -20656,7 +20656,7 @@
   // empezar el partido.
   function _filaJugadorLista(entrada, tipo) {
     return (
-      '<div class="live-acta-item' + (tipo === "lesionados" ? " live-acta-item--lesion" : "") + '"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) + "</span>" +
+      '<div class="live-acta-item' + (tipo === "lesionados" ? " live-acta-item--lesion" : (tipo === "sancionados" ? " live-acta-item--sancion" : "")) + '"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) + "</span>" +
       '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-entrada-id="' + escapeHTML(entrada.id) + '" aria-label="Quitar">✕</button></div>'
     );
   }
@@ -20665,7 +20665,7 @@
   // acta ya jugada, y se levanta sola al pasar este partido.
   function _filaJugadorListaAuto(entrada) {
     return (
-      '<div class="live-acta-item live-acta-item--auto"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) +
+      '<div class="live-acta-item live-acta-item--auto live-acta-item--sancion"><span class="live-acta-jugador">' + escapeHTML(entrada.nombre) +
       '<span class="live-acta-auto-motivo"> — ' + escapeHTML(entrada.motivo) + "</span></span></div>"
     );
   }

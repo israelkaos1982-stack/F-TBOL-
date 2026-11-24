@@ -406,33 +406,68 @@
     } catch (e) {}
     return null;
   }
+  function _jornadaNumClima(p) {
+    if (typeof p.jornada === "number" && p.jornada > 0) return p.jornada;
+    var m = /(\d+)\s*[ªaº]?\s*jornada|jornada\s*(\d+)|^j\s*(\d+)\b/.exec(_normNombre(p.ronda || ""));
+    return m ? Number(m[1] || m[2] || m[3]) : 0;
+  }
+  function _jornadaLigaCercanaClima(partido) {
+    try {
+      var ctx = _ultimoContexto; if (!ctx || !ctx.datos) return 0;
+      var hum = _humanosIdsSet || {};
+      var cands = [partido.local, partido.visitante].filter(function (id) { return hum[id] || _esIdSeleccionHumana(id); });
+      for (var i = 0; i < cands.length; i++) {
+        var lista = _partidosOrdenadosDelClub(cands[i], ctx.datos, false);
+        var idx = -1;
+        for (var k = 0; k < lista.length; k++) { if (lista[k].id === partido.id) { idx = k; break; } }
+        if (idx === -1) continue;
+        for (var d = 1; d < lista.length; d++) {
+          var prev = lista[idx - d], next = lista[idx + d];
+          if (prev && _resolverCompKeyBalon(prev.competicion) === "liga" && _jornadaNumClima(prev)) return _jornadaNumClima(prev);
+          if (next && _resolverCompKeyBalon(next.competicion) === "liga" && _jornadaNumClima(next)) return _jornadaNumClima(next);
+          if (!prev && !next) break;
+        }
+      }
+    } catch (e) {}
+    return 0;
+  }
   function calcularClimaParaPartido(partido, totalJornadasLiga, fechaInicioMs, fechaFinMs, local, visitante) {
     // Superliga: condición FIJA de la competición — siempre ☀️.
     if (partido.competicion === "superliga") {
       return { estacion: "VERANO", clima: "sol", icono: "☀️", label: "Soleado" };
     }
-    var seed = "clima|" + (partido.id != null ? partido.id
-      : (partido.local + "|" + partido.visitante + "|" + partido.jornada + "|" + partido.ronda));
+    // v541: MISMO clima para TODOS los partidos de la MISMA jornada/ronda de
+    // la MISMA competición (petición usuario: "mismo clima misma jornada
+    // misma competición"). La semilla ya no es el id del partido ni la zona
+    // del equipo local (eso hacía que un club tuviera nieve y el resto sol).
+    var compKeyClima = _resolverCompKeyBalon(partido.competicion) || String(partido.competicion || "");
+    var jornadaNum = _jornadaNumClima(partido);
+    var claveJornada = compKeyClima + "|" + (compKeyClima === "liga" ? (partido.liga || "") : "") + "|" +
+      (jornadaNum ? "J" + jornadaNum : _normNombre(partido.ronda || ""));
+    var seed = "clima|" + claveJornada;
 
-    // Progreso de temporada (0..1).
+    // Progreso de temporada (0..1). La Liga manda: su jornada marca la
+    // estación. El resto de competiciones toma la estación de la jornada de
+    // Liga más cercana en el calendario del club humano (así es correlativo:
+    // Liga J10 en invierno → el siguiente partido de copa/Europa también).
+    var totalLiga = Number(totalJornadasLiga) || 38;
     var progreso;
-    // v536: si el partido es de un club humano, la estación sigue el
-    // calendario COMPLETO de ese club (todas las competiciones en orden),
-    // así dos partidos seguidos (Liga J10 → Superliga J3) nunca saltan de
-    // Invierno a Verano.
-    var ordInfo = _ordenClimaDePartido(partido);
-    if (ordInfo) {
-      progreso = (ordInfo.orden + 1) / ordInfo.total;
-    } else if (partido.competicion === "liga" && typeof partido.jornada === "number") {
-      progreso = partido.jornada / (Number(totalJornadasLiga) || 1);
+    if (compKeyClima === "liga" && jornadaNum) {
+      progreso = jornadaNum / totalLiga;
     } else {
-      var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;
-      if (!isFinite(fechaCruda) && typeof partido._ordenClub === "number" && partido._totalClubCalendario) {
-        progreso = (partido._ordenClub + 1) / partido._totalClubCalendario;
+      var jLigaCerca = _jornadaLigaCercanaClima(partido);
+      if (jLigaCerca) {
+        progreso = jLigaCerca / totalLiga;
       } else {
-        var fechaMs = isFinite(fechaCruda) ? fechaCruda : fechaInicioMs;
-        var rango = Math.max(1, fechaFinMs - fechaInicioMs);
-        progreso = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
+        var ordInfo = _ordenClimaDePartido(partido);
+        if (ordInfo) {
+          progreso = (ordInfo.orden + 1) / ordInfo.total;
+        } else {
+          var fechaCruda = partido.fecha ? new Date(partido.fecha).getTime() : NaN;
+          var fechaMs = isFinite(fechaCruda) ? fechaCruda : fechaInicioMs;
+          var rango = Math.max(1, fechaFinMs - fechaInicioMs);
+          progreso = Math.min(1, Math.max(0, (fechaMs - fechaInicioMs) / rango));
+        }
       }
     }
     var estacionFinal = (progreso <= 0.25 || progreso > 0.75) ? "VERANO" : "INVIERNO";
@@ -445,7 +480,7 @@
       var climaN = _climaSorteo([95, 5, 0], _rollDeterminista(seed));
       return { estacion: estacionFinal, clima: climaN, icono: CLIMA_ICONO[climaN], label: CLIMA_LABEL[climaN] };
     }
-    return calcularClimaDinamicoPartido(progreso * 1000, 1000, seed, _zonaClimaEquipo(local));
+    return calcularClimaDinamicoPartido(progreso * 1000, 1000, seed, "templado");
   }
 
   // Regla especial de balones: nieve -> fuerza el balón de alta visibilidad,
@@ -23602,7 +23637,7 @@
         lista.map(function (j) {
           var sel = String(j.id) === String(opts.valor) ? " is-selected" : "";
           var est = (opts.estados || {})[_normNombre(j.nombre)] || "";
-          var icoEst = est === "lesion" ? '<span class="pes-picker-est">❌</span>'
+          var icoEst = est === "lesion" ? '<span class="pes-picker-est pes-picker-est--cruz"><svg viewBox="0 0 24 24" width="20" height="20" aria-label="Lesionado"><circle cx="12" cy="12" r="12" fill="#ececec"/><rect x="9.6" y="4" width="4.8" height="16" fill="#e00000"/><rect x="4" y="9.6" width="16" height="4.8" fill="#e00000"/></svg></span>'
             : est === "roja" ? '<span class="pes-picker-est">🟥</span>'
             : est === "acum" ? '<span class="pes-picker-est">🟨</span>' : "";
           var evs = (opts.eventosPorId || {})[String(j.id)] || "";

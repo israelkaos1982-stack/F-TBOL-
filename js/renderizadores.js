@@ -23637,7 +23637,7 @@
         lista.map(function (j) {
           var sel = String(j.id) === String(opts.valor) ? " is-selected" : "";
           var est = (opts.estados || {})[_normNombre(j.nombre)] || "";
-          var icoEst = est === "lesion" ? '<span class="pes-picker-est pes-picker-est--cruz"><svg viewBox="0 0 24 24" width="20" height="20" aria-label="Lesionado"><circle cx="12" cy="12" r="12" fill="#ececec"/><rect x="9.6" y="4" width="4.8" height="16" fill="#e00000"/><rect x="4" y="9.6" width="16" height="4.8" fill="#e00000"/></svg></span>'
+          var icoEst = est === "lesion" ? '<span class="pes-picker-est pes-picker-est--cruz"><svg viewBox="0 0 24 24" width="20" height="20" aria-label="Lesionado"><rect x="9.6" y="4" width="4.8" height="16" fill="#e00000"/><rect x="4" y="9.6" width="16" height="4.8" fill="#e00000"/></svg></span>'
             : est === "roja" ? '<span class="pes-picker-est">🟥</span>'
             : est === "acum" ? '<span class="pes-picker-est">🟨</span>' : "";
           var evs = (opts.eventosPorId || {})[String(j.id)] || "";
